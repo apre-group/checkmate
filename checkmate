@@ -1,0 +1,921 @@
+#!/usr/bin/env python3
+
+# allow type annotations for the current class
+# minimum version: 3.7, will be default in future
+from __future__ import annotations
+
+from abc import ABCMeta, abstractmethod
+from argparse import ArgumentParser
+import itertools
+import json
+import logging
+import operator
+import sys
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union
+import z3
+
+Real = Union[float, z3.ArithRef]
+Boolean = Union[bool, z3.BoolRef]
+LabelFn = Optional[Callable[[Real, Real, bool], z3.BoolRef]]
+
+
+def negation(negated: Boolean) -> z3.BoolRef:
+    """negate a Z3 expression while satisfying the typechecker"""
+    negation = z3.Not(negated)
+    assert isinstance(negation, z3.BoolRef)
+    return negation
+
+
+def disjunction(*disjuncts: Boolean) -> z3.BoolRef:
+    """build a Z3 disjuncts while satisfying the typechecker"""
+    disjunction = z3.Or(disjuncts)
+    assert isinstance(disjunction, z3.BoolRef)
+    return disjunction
+
+
+def conjunction(*conjuncts: Boolean) -> z3.BoolRef:
+    """build a Z3 conjunction while satisfying the typechecker"""
+    conjunction = z3.And(conjuncts)
+    assert isinstance(conjunction, z3.BoolRef)
+    return conjunction
+
+
+def implication(left: Boolean, right: Boolean) -> z3.BoolRef:
+    """build a Z3 implication while satisfying the typechecker"""
+    return z3.Implies(left, right)
+
+
+def label(
+        left: Real,
+        right: Real,
+        op: Callable[[Real, Real], Boolean],
+        label_fn: LabelFn,
+        real: bool
+) -> Boolean:
+    """
+    build the expression `(label => op(left, right))`
+
+    `label_fn(left, right, real)` is called to supply `label`
+    """
+    comparison = op(left, right)
+    if label_fn is None:
+        return comparison
+    label = label_fn(left, right, real)
+    return implication(label, comparison)
+
+
+def binary_op_with_id(
+        left: Real,
+        right: Real,
+        op: Callable[[Real, Real], Real],
+        id: float
+) -> Real:
+    """
+    build the expression `op(left, right)`
+
+    optimisation: if either side is `id`, this returns the other side
+    """
+    if type(left) == float and left == id:
+        return right
+    elif type(right) == float and right == id:
+        return left
+    else:
+        return op(left, right)
+
+
+class Utility:
+    """
+    a (real, infinitesimal) pair
+
+    mostly just an adapter pattern for parsing via `eval()`
+    and generating Z3 expressions by operator overloading
+    """
+    real: Real
+    inf: Real
+
+    def __init__(self, real: Real, inf: Real):
+        """construct from real and infinitesimal parts"""
+        self.real = real
+        self.inf = inf
+
+    @staticmethod
+    def from_int(value: int) -> Utility:
+        """convert an integer into a real utility with zero infinitesimal"""
+        return Utility(float(value), 0.0)
+
+    @staticmethod
+    def from_name(name: str, real: bool) -> Utility:
+        """convert a string into a utility, either `real` or infinitesimal"""
+        variable = z3.Real(name)
+        return Utility(variable, 0.0) if real else Utility(0.0, variable)
+
+    def __repr__(self) -> str:
+        return f"<{self.real}, {self.inf}>"
+
+    def __neg__(self) -> Utility:
+        return Utility(-self.real, -self.inf)
+
+    # TODO __radd__, __rsub__?
+    def __add__(self, other: Union[int, Utility]) -> Utility:
+        return self._binary_expression(other, operator.add, 0.0)
+
+    def __sub__(self, other: Union[int, Utility]) -> Utility:
+        return self._binary_expression(-other, operator.add, 0.0)
+
+    def __mul__(self, other: Union[int, Utility]) -> Utility:
+        return self._binary_expression(other, operator.mul, 1.0)
+
+    def __rmul__(self, other: Union[int, Utility]) -> Utility:
+        """useful when parsing e.g. 2 * p"""
+        return self.__mul__(other)
+
+    def __eq__(
+            self,
+            other: Union[int, Utility],
+            label_fn: LabelFn = None
+    ) -> z3.BoolRef:
+        """
+        generate a Z3 constraint `left == right`
+
+        when `label_fn` is supplied, label generated comparisons for unsat cores
+        """
+        if isinstance(other, int):
+            other = Utility.from_int(other)
+
+        return conjunction(
+            label(self.real, other.real, operator.eq, label_fn, True),
+            label(self.inf, other.inf, operator.eq, label_fn, False)
+        )
+
+    def __ne__(
+            self,
+            other: Union[int, Utility],
+            label_fn: LabelFn = None
+    ) -> z3.BoolRef:
+        """`z3.Not(left == right)`"""
+        return negation(self.__eq__(other, label_fn))
+
+    def __gt__(
+            self,
+            other: Union[int, Utility],
+            label_fn: LabelFn = None
+    ) -> z3.BoolRef:
+        """
+        generate a Z3 constraint `left > right`
+
+        when `label_fn` is supplied, label generated comparisons for unsat cores
+        """
+        return self._binary_comparison(
+            other, operator.gt, operator.gt, label_fn
+        )
+
+    def __ge__(
+            self,
+            other: Union[int, Utility],
+            label_fn: LabelFn = None
+    ) -> z3.BoolRef:
+        """
+        generate a Z3 constraint `left >= right`
+
+        when `label_fn` is supplied, label generated comparisons for unsat cores
+        """
+        return self._binary_comparison(
+            other, operator.gt, operator.ge, label_fn
+        )
+
+    def _binary_expression(
+            self,
+            other: Union[int, Utility],
+            op: Callable[[Real, Real], Real],
+            id: float
+    ) -> Utility:
+        """generate a Z3 expression `left op right` via `binary_op_with_id`"""
+        if isinstance(other, int):
+            other = Utility.from_int(other)
+
+        return Utility(
+            binary_op_with_id(self.real, other.real, op, id),
+            binary_op_with_id(self.inf, other.inf, op, id)
+        )
+
+    def _binary_comparison(
+            self,
+            other: Union[int, Utility],
+            real_op: Callable[[Real, Real], Boolean],
+            inf_op: Callable[[Real, Real], Boolean],
+            label_fn: LabelFn = None
+    ) -> z3.BoolRef:
+        """
+        generate a Z3 constraint `left op right` using `real_op` and `inf_op` parts
+
+        when `label_fn` is supplied, label generated comparisons for unsat cores
+        """
+        if isinstance(other, int):
+            other = Utility.from_int(other)
+
+        return disjunction(
+            label(self.real, other.real, real_op, label_fn, True),
+            conjunction(
+                label(self.real, other.real, operator.eq, label_fn, True),
+                label(self.inf, other.inf, inf_op, label_fn, False)
+            )
+        )
+
+
+ZERO = Utility.from_int(0)
+"""the zero utility, <0.0, 0.0>"""
+
+
+class Tree(metaclass=ABCMeta):
+    """base class for game trees"""
+
+    @abstractmethod
+    def get_utility_of_terminal_history(self, history: List[str]) -> Dict[str, Utility]:
+        pass
+
+
+class Leaf(Tree):
+    """a leaf node"""
+    utility: Dict[str, Utility]
+
+    def get_utility_of_terminal_history(self, history: List[str]) -> Dict[str, Utility]:
+        assert not history
+        return self.utilities
+
+    def __init__(self, utilities: Dict[str, Utility]):
+        """initialise from a set of player utilities"""
+        self.utilities = utilities
+
+    def __repr__(self) -> str:
+        return '\n'.join(
+            f"{player}: {utility}"
+            for player, utility in self.utilities.items()
+        )
+
+
+class Branch(Tree):
+    """a non-leaf node with children"""
+    player: str
+    actions: Dict[str, Tree]
+
+    def get_utility_of_terminal_history(self, history: List[str]) -> Dict[str, Utility]:
+        assert len(history) > 0
+        return self.actions[history[0]].get_utility_of_terminal_history(history[1:])
+
+    def __init__(self, player: str, actions: Dict[str, Tree]):
+        """initialise from a player (whose turn it is) and a set of actions"""
+        self.player = player
+        self.actions = actions
+
+    def __repr__(self) -> str:
+        # magic for pretty trees
+        def pad(x: Iterable[str]) -> str:
+            return '\n'.join(f"| {line}" for line in x)
+
+        actions = '\n'.join(
+            f"`>{action}\n{pad(repr(tree).splitlines())}"
+            for action, tree in self.actions.items()
+        )
+        return f"{self.player}\n{actions}"
+
+
+class Input:
+    """an input problem"""
+    players: List[str]
+    actions: List[str]
+    constants: Dict[str, Utility]
+    initial_constraints: List[Boolean]
+    weak_immunity_constraints: List[Boolean]
+    collusion_resilience_constraints: List[Boolean]
+    practicality_constraints: List[Boolean]
+    honest_histories: List[List[str]]
+    tree: Tree
+
+    def __init__(self, path: str):
+        """try to load the file at `path`"""
+        obj = json.load(open(path))
+        self.players = obj['players']
+        self.actions = obj['actions']
+        # map from names to Utility, used for eval() later
+        self.constants = {
+            constant: Utility.from_name(constant, real)
+            for constant, real in
+            itertools.chain(
+                ((constant, True) for constant in obj['constants']),
+                ((constant, False) for constant in obj['infinitesimals'])
+            )
+        }
+        self.initial_constraints = [
+            self._load_constraint(constraint)
+            for constraint in obj['initial_constraints']
+        ]
+        self.weak_immunity_constraints = [
+            self._load_constraint(constraint)
+            for constraint in obj['property_constraints']['weak_immunity']
+        ]
+        self.collusion_resilience_constraints = [
+            self._load_constraint(constraint)
+            for constraint in obj['property_constraints']['collusion_resilience']
+        ]
+        self.practicality_constraints = [
+            self._load_constraint(constraint)
+            for constraint in obj['property_constraints']['practicality']
+        ]
+        self.honest_histories = obj['honest_histories']
+        self.tree = self._load_tree(obj['tree'])
+
+    def __repr__(self) -> str:
+        return (
+            f"players: {self.players}\n"
+            f"actions: {self.actions}\n"
+            f"constants: {list(self.constants)}\n"
+            f"initial constraints: {self.initial_constraints}\n"
+            f"weak immunity constraints: {self.weak_immunity_constraints}\n"
+            f"collusion resilience constraints: {self.collusion_resilience_constraints}\n"
+            f"practicality constraints: {self.practicality_constraints}\n"
+            f"honest histories: {self.honest_histories}\n"
+            f"tree:\n{self.tree}"
+        )
+
+    def _load_utility(self, utility: Union[int, str]) -> Utility:
+        """load a string expression or an integer into a Utility, via `eval()`"""
+        if isinstance(utility, int):
+            return Utility.from_int(utility)
+
+        utility = eval(utility, {}, self.constants)
+        # NB: "2 * 2" is a possibility
+        if isinstance(utility, int):
+            return Utility.from_int(utility)
+
+        assert isinstance(utility, Utility)
+        return utility
+
+    def _load_constraint(self, source: str) -> Boolean:
+        """load a string expression into a Boolean constraint, via `eval()`"""
+        return eval(source, {'OR': z3.Or}, self.constants)
+
+    def _load_tree(self, tree: Dict[str, Any]) -> Tree:
+        """recursively load subtrees in the input"""
+        if 'player' in tree:
+            player = tree['player']
+            children = {
+                child['action']: self._load_tree(child['child'])
+                for child in tree['children']
+            }
+            return Branch(player, children)
+        else:
+            utilities = {
+                utility['player']: self._load_utility(utility['value'])
+                for utility in tree['utility']
+            }
+            return Leaf(utilities)
+
+
+class StrategySolver(metaclass=ABCMeta):
+    """
+    base class for generating strategies from constraints
+
+    subclasses override a few functions and use provided methods
+    to implement e.g. weak immunity
+    """
+    input: Input
+    _solver: z3.Solver
+    _pair2label: Dict[Tuple[Real, Real], z3.FuncDeclRef]
+    # note extra boolean to partition comparisons into real/infinitesimal
+    _label2pair: Dict[z3.FuncDeclRef, Tuple[Real, Real, bool]]
+    _action_variables: Dict[z3.FuncDeclRef, Tuple[List[str], str]]
+    _utility_variables: Set[Real]
+
+    @abstractmethod
+    def _property_initial_constraints(self) -> List[Boolean]:
+        pass
+
+    @abstractmethod
+    def _property_constraint_impl(self) -> Boolean:
+        pass
+
+    def __init__(self, input: Input, checked_history: List[str]):
+        """create a solver for a certain input and checked history"""
+        self.input = input
+        self.checked_history = checked_history
+        self._solver = z3.Solver()
+        self._solver.set("unsat_core", True)
+        self._solver.set("core.minimize", True)
+        # maintain a bijection from (left, right) expression pairs and Z3 labels
+        self._pair2label = {}
+        self._label2pair = {}
+        # mapping from action variables to (history, action) pairs
+        self._action_variables = {}
+        # the set of utility variables so that we exclude them from case splits
+        self._utility_variables = set()
+
+        self._add_action_constraints([], input.tree)
+        self._add_history_constraints(self.checked_history)
+
+    def solve(self, output: bool) -> List[Dict[str, Any]]:
+        """
+        the main solving routine
+
+        if `not output` or we failed to find a solution, return empty list
+        otherwise, returns a solution to report later
+        """
+
+        result = []
+        # a solver that manages case splits, AVATAR style
+        case_solver = z3.Solver()
+        # it should know about initial constraints for the property we're trying
+        for constraint in itertools.chain(
+                self.input.initial_constraints,
+                self._property_initial_constraints()
+        ):
+            case_solver.add(constraint)
+
+        # there is no point in comparing e.g. p_A > epsilon
+        # therefore, partition case splits into real and infinitesimal parts
+        reals = set()
+        infinitesimals = set()
+
+        while case_solver.check() == z3.sat:
+            # an assignment of variables to concrete real values
+            model = case_solver.model()
+
+            # we can use this model to decide whether
+            # left > right, left = right or left < right
+            def split(left, right):
+                if model.evaluate(left > right, True):
+                    return left > right
+                elif model.evaluate(left == right, True):
+                    return left == right
+                else:
+                    return right > left
+
+            # the current case is the conjunction of all known expression comparisons
+            case = [
+                split(left, right)
+                for left, right in itertools.chain(
+                    itertools.combinations(reals, 2),
+                    itertools.combinations(infinitesimals, 2)
+                )
+                # no point in providing e.g. 2.0 > 1.0
+                if type(left) != float or type(right) != float
+            ]
+            logging.info(f"current case assumes {case}")
+
+            if self._solver.check(self._property_constraint(case)) == z3.sat:
+                logging.info("case solved")
+                if output:
+                    result.append(self._extract_strategy(case))
+
+                # we solved this case, now add a conflict to move on
+                case_solver.add(disjunction(*(
+                    negation(spl) for spl in case
+                )))
+            else:
+                # we need to compare more expressions
+                logging.info("no solution, trying case split")
+
+                # track whether we actually found any more
+                new_expression = False
+                for item in self._solver.unsat_core():
+                    # sometimes solver generates garbage for some reason, exclude it
+                    if isinstance(item, z3.BoolRef) and z3.is_app(item):
+                        label = item.decl()
+
+                        if label in self._label2pair:
+                            # `left op right` was in an unsat core
+                            left, right, real = self._label2pair[label]
+                            # partition reals/infinitesimals
+                            add_to = reals if real else infinitesimals
+
+                            for x in (left, right):
+                                # exclude utility variables
+                                if x in self._utility_variables:
+                                    continue
+                                # found one we didn't know about yet
+                                if x not in add_to:
+                                    logging.info(f"new expression: {x}")
+                                    add_to.add(x)
+                                    new_expression = True
+
+                # we saturated, give up
+                if not new_expression:
+                    logging.error("no more splits, failed")
+                    return []
+
+        # there are no more possible models, i.e. no more cases to be discharged
+        logging.info("no more cases, done")
+        return result
+
+    def _add_action_constraints(self, history: List[str], tree: Tree):
+        """exactly one action must be taken at this subtree"""
+        if isinstance(tree, Leaf):
+            return
+
+        assert isinstance(tree, Branch)
+        actions = [
+            self._action_variable(history, action)
+            for action in tree.actions
+        ]
+        self._solver.add(disjunction(*actions))
+        for (left, right) in itertools.combinations(actions, 2):
+            self._solver.add(disjunction(negation(left), negation(right)))
+
+        for action, tree in tree.actions.items():
+            self._add_action_constraints(history + [action], tree)
+
+    def _add_history_constraints(self, checked_history: List[str]):
+        """we only care about this history"""
+        for i in range(len(checked_history)):
+            self._solver.add(self._action_variable(
+                checked_history[:i], checked_history[i]
+            ))
+
+    def _define_utility_variable(
+            self,
+            constraints: List[z3.BoolRef],
+            starting_from: List[str],
+            player: str,
+            tree: Tree
+    ) -> Utility:
+        """
+        define a utility variable for a player starting at a subtree
+
+        a new variable is registered and constraints are added to `constraints`
+        """
+        variable = self._utility_variable(starting_from, player)
+        self._add_utility_constraints(
+            constraints,
+            variable,
+            player,
+            starting_from,
+            [],
+            tree
+        )
+        return variable
+
+    def _add_utility_constraints(
+            self,
+            constraints: List[z3.BoolRef],
+            variable: Utility,
+            player: str,
+            history: List[str],
+            decisions: List[z3.BoolRef],
+            tree: Tree
+    ):
+        """add constraints to give the semantics of a utility variable"""
+        if isinstance(tree, Leaf):
+            utility = tree.utilities[player]
+            # if we take `decisions` to a leaf, the utility variable has a known value
+            constraints.append(implication(
+                conjunction(*decisions),
+                Utility.__eq__(variable, utility, self._label)
+            ))
+            return
+
+        assert isinstance(tree, Branch)
+        for action, child in tree.actions.items():
+            self._add_utility_constraints(
+                constraints,
+                variable,
+                player,
+                history + [action],
+                decisions + [self._action_variable(history, action)],
+                child
+            )
+
+    def _property_constraint(self, case: List[Boolean]) -> z3.BoolRef:
+        """
+        create a universally-quantified constraint for a given property of the form
+        ```
+        forall <input constants>.
+            <initial constraints> &&
+            self._property_initial_constraints() &&
+            <case split> => self._property_constraint_impl()
+        ```
+        """
+        constraint = self._property_constraint_impl()
+        return self._quantify_constants(implication(
+            conjunction(
+                *self.input.initial_constraints,
+                *self._property_initial_constraints(),
+                *case
+            ),
+            constraint
+        ))
+
+    def _quantify_constants(self, constraint: z3.BoolRef) -> z3.BoolRef:
+        """quantify `constraint` with the input constants"""
+        if len(self.input.constants) == 0:
+            return constraint
+
+        return z3.ForAll(
+            [z3.Real(constant) for constant in self.input.constants],
+            constraint
+        )
+
+    def _action_variable(self, history: List[str], action: str) -> z3.BoolRef:
+        """the variable representing taking `action` after `history`"""
+        tag = ';'.join(history)
+        func = z3.Function(f'a[{tag}][{action}]', z3.BoolSort())
+        self._action_variables[func] = (history, action)
+        return func()
+
+    def _utility_variable(self, starting_from: List[str], player: str) -> Utility:
+        """create real/infinitesimal variables to represent a utility"""
+        tag = ''.join(starting_from)
+        utility = Utility(
+            z3.Real(f'ur[{tag}][{player}]'),
+            z3.Real(f'ui[{tag}][{player}]')
+        )
+        self._utility_variables.update((utility.real, utility.inf))
+        return utility
+
+    def _label(
+            self,
+            left: Real,
+            right: Real,
+            real: bool
+    ) -> z3.BoolRef:
+        """label comparisons for unsat cores"""
+        label = self._pair2label.get((left, right))
+        if label is None:
+            label = z3.Function(f'l[{left}][{right}]', z3.BoolSort())
+            self._pair2label[(left, right)] = label
+            # store whether the comparison is real-valued for partition later
+            self._label2pair[label] = (left, right, real)
+            # also assert them here
+            expr = label()
+            self._solver.assert_and_track(expr, expr)
+        else:
+            expr = label()
+
+        return expr
+
+    def _extract_strategy(self, case: List[z3.BoolRef]) -> Dict[str, Any]:
+        strategy = {}
+        model = self._solver.model()
+        for name in model:
+            if name not in self._label2pair and model[name]:
+                history, action = self._action_variables[name]
+                strategy[';'.join(history)] = action
+
+        return {
+            "case": [repr(c) for c in case],
+            "strategy": strategy
+        }
+
+
+class WeakImmuneStrategySolver(StrategySolver):
+    """solver for weak immunity"""
+
+    def _property_initial_constraints(self) -> List[Boolean]:
+        return self.input.weak_immunity_constraints
+
+    def _property_constraint_impl(self) -> z3.BoolRef:
+        constraints = []
+        for player in self.input.players:
+            self._collect_weak_immunity_constraints(
+                constraints, player, [], [], self.input.tree
+            )
+        return conjunction(*constraints)
+
+    def _collect_weak_immunity_constraints(
+            self,
+            constraints: List[z3.BoolRef],
+            player: str,
+            player_decisions: List[z3.BoolRef],
+            history: List[str],
+            tree: Tree
+    ):
+        if isinstance(tree, Leaf):
+            constraints.append(implication(
+                conjunction(*player_decisions),
+                Utility.__ge__(tree.utilities[player], ZERO, self._label)
+            ))
+            return
+
+        assert isinstance(tree, Branch)
+        player_decision = tree.player == player
+        for action, child in tree.actions.items():
+            action_variable = [self._action_variable(history, action)] \
+                if player_decision \
+                else []
+            self._collect_weak_immunity_constraints(
+                constraints,
+                player,
+                player_decisions + action_variable,
+                history + [action],
+                child
+            )
+
+
+class CollusionResilienceStrategySolver(StrategySolver):
+    """solver for collusion resilience"""
+
+    def _property_initial_constraints(self) -> List[Boolean]:
+        return self.input.collusion_resilience_constraints
+
+    def _property_constraint_impl(self) -> z3.BoolRef:
+        utilities_of_checked_history = self.input.tree.get_utility_of_terminal_history(self.checked_history)
+
+        constraints = []
+        for group_size in range(1, len(self.input.players)):
+            for colluding_group in itertools.combinations(self.input.players, group_size):
+                old_utility = sum((
+                    utilities_of_checked_history[player]
+                    for player in colluding_group
+                ), start=ZERO)
+                self._collect_collusion_resilience_constraints(
+                    constraints,
+                    old_utility,
+                    colluding_group,
+                    [],
+                    [],
+                    self.input.tree
+                )
+
+        return conjunction(*constraints)
+
+    def _collect_collusion_resilience_constraints(
+            self,
+            constraints: List[z3.BoolRef],
+            old_utility: Utility,
+            colluding_group: Tuple[str],
+            nongroup_decisions: List[z3.BoolRef],
+            history: List[str],
+            tree: Tree
+    ):
+        if isinstance(tree, Leaf):
+            colluding_utility = sum((
+                tree.utilities[player]
+                for player in colluding_group
+            ), start=ZERO)
+            constraints.append(implication(
+                conjunction(*nongroup_decisions),
+                Utility.__ge__(old_utility, colluding_utility, self._label)
+            ))
+            return
+
+        assert isinstance(tree, Branch)
+        group_decision = tree.player in colluding_group
+        for action, child in tree.actions.items():
+            action_variable = [] \
+                if group_decision \
+                else [self._action_variable(history, action)]
+            self._collect_collusion_resilience_constraints(
+                constraints,
+                old_utility,
+                colluding_group,
+                nongroup_decisions + action_variable,
+                history + [action],
+                child
+            )
+
+
+class PracticalityStrategySolver(StrategySolver):
+    """solver for practicality"""
+
+    def _property_initial_constraints(self) -> List[Boolean]:
+        return self.input.practicality_constraints
+
+    def _property_constraint_impl(self) -> z3.BoolRef:
+        constraints = []
+        self._practicality_constraints(constraints, [], self.input.tree)
+        return conjunction(*constraints)
+
+    def _practicality_constraints(
+            self,
+            constraints: List[z3.BoolRef],
+            history: List[str],
+            tree: Tree
+    ):
+        if isinstance(tree, Leaf):
+            return
+
+        assert isinstance(tree, Branch)
+        utility_constraints = []
+        utility_variables = {
+            player: self._define_utility_variable(
+                utility_constraints,
+                history,
+                player,
+                tree
+            )
+            for player in input.players
+        }
+
+        nash_constraints = []
+        for player in self.input.players:
+            self._nash_constraints(
+                nash_constraints,
+                utility_variables[player],
+                player,
+                history,
+                [],
+                tree
+            )
+
+        constraints.append(z3.ForAll(
+            [
+                var
+                for value in utility_variables.values()
+                for var in (value.real, value.inf)
+            ],
+            implication(
+                conjunction(*utility_constraints),
+                conjunction(*nash_constraints)
+            )
+        ))
+
+        for action, child in tree.actions.items():
+            self._practicality_constraints(
+                constraints,
+                history + [action],
+                child
+            )
+
+    def _nash_constraints(
+            self,
+            constraints: List[z3.BoolRef],
+            old_utility: Utility,
+            player: str,
+            history: List[str],
+            nonplayer_decisions: List[z3.BoolRef],
+            tree: Tree
+    ):
+        if isinstance(tree, Leaf):
+            deviating_utility = tree.utilities[player]
+            constraints.append(implication(
+                conjunction(*nonplayer_decisions),
+                Utility.__ge__(old_utility, deviating_utility, self._label)
+            ))
+            return
+
+        assert isinstance(tree, Branch)
+        player_decision = player == tree.player
+        for action, child in tree.actions.items():
+            action_variable = [] \
+                if player_decision \
+                else [self._action_variable(history, action)]
+            self._nash_constraints(
+                constraints,
+                old_utility,
+                player,
+                history + [action],
+                nonplayer_decisions + action_variable,
+                child
+            )
+
+
+if __name__ == '__main__':
+    logging.basicConfig(
+        level=logging.INFO,
+        format='[%(levelname)s] %(message)s'
+    )
+    parser = ArgumentParser(
+        description="check game-theoretic security properties of off-chain protocols"
+    )
+    parser.add_argument(
+        'PATH',
+        type=str,
+        help="path to input file"
+    )
+    parser.add_argument(
+        '--output-strategies',
+        action='store_true',
+        help="print strategies as JSON"
+    )
+    args = parser.parse_args()
+    output = args.output_strategies
+    input = Input(args.PATH)
+    logging.info(
+        f"input OK, checking {len(input.honest_histories)} histories..."
+    )
+
+    strategies = []
+    for honest_history in input.honest_histories:
+        result: Dict[str, Any] = {"history": honest_history}
+        logging.info(f"history {honest_history}")
+
+        logging.info("checking weak immunity")
+        result["weak_immunity"] = WeakImmuneStrategySolver(
+            input,
+            honest_history
+        ).solve(output)
+
+        logging.info("checking collusion resilience")
+        result["collusion_resilience"] = CollusionResilienceStrategySolver(
+            input,
+            honest_history
+        ).solve(output)
+
+        logging.info("checking practicality")
+        result["practicality"] = PracticalityStrategySolver(
+            input,
+            honest_history
+        ).solve(output)
+
+        strategies.append(result)
+
+    if output:
+        json.dump({"strategies": strategies}, fp=sys.stdout, indent=4)

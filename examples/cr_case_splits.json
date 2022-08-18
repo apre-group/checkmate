@@ -1,0 +1,99 @@
+{
+  "players": [
+    "A",
+    "C"
+  ],
+  "actions": [
+    "n",
+    "a",
+    "o",
+    "d"
+  ],
+  "infinitesimals": [],
+  "constants": [
+    "t",
+    "j",
+    "f"
+  ],
+  "initial_constraints": [
+    "t > 0",
+    "OR(j > t, f > t)",
+    "OR(t > j, t > f)"
+  ],
+  "property_constraints": {
+    "weak_immunity": [],
+    "collusion_resilience": [],
+    "practicality": []
+  },
+  "honest_histories": [
+    [
+      "n"
+    ],
+    [
+      "a",
+      "o"
+    ],
+    [
+      "a",
+      "d"
+    ]
+  ],
+  "tree": {
+    "player": "A",
+    "children": [
+      {
+        "action": "n",
+        "child": {
+          "utility": [
+            {
+              "player": "A",
+              "value": "t"
+            },
+            {
+              "player": "C",
+              "value": 0
+            }
+          ]
+        }
+      },
+      {
+        "action": "a",
+        "child": {
+          "player": "C",
+          "children": [
+            {
+              "action": "o",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "j"
+                  },
+                  {
+                    "player": "C",
+                    "value": 0
+                  }
+                ]
+              }
+            },
+            {
+              "action": "d",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "f"
+                  },
+                  {
+                    "player": "C",
+                    "value": 0
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
