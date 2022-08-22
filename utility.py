@@ -127,6 +127,34 @@ class Utility:
             other, operator.gt, operator.ge, label_fn
         )
 
+    def __lt__(
+            self,
+            other: Union[int, Utility],
+            label_fn: LabelFn = None
+    ) -> z3.BoolRef:
+        """
+        generate a Z3 constraint `left < right`
+
+        when `label_fn` is supplied, label generated comparisons for unsat cores
+        """
+        return self._binary_comparison(
+            other, operator.lt, operator.lt, label_fn
+        )
+
+    def __le__(
+            self,
+            other: Union[int, Utility],
+            label_fn: LabelFn = None
+    ) -> z3.BoolRef:
+        """
+        generate a Z3 constraint `left <= right`
+
+        when `label_fn` is supplied, label generated comparisons for unsat cores
+        """
+        return self._binary_comparison(
+            other, operator.lt, operator.le, label_fn
+        )
+
     def _binary_expression(
             self,
             other: Union[int, Utility],
