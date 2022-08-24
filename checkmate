@@ -40,7 +40,7 @@ class StrategySolver(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def _property_constraint_impl(self) -> Boolean:
+    def _property_constraint_implementation(self) -> Boolean:
         pass
 
     def __init__(self, input: Input, checked_history: List[str]):
@@ -198,10 +198,10 @@ class StrategySolver(metaclass=ABCMeta):
         forall <input constants>.
             <initial constraints> &&
             self._property_initial_constraints() &&
-            <case split> => self._property_constraint_impl()
+            <case split> => self._property_constraint_implementation()
         ```
         """
-        constraint = self._property_constraint_impl()
+        constraint = self._property_constraint_implementation()
         return self._quantify_constants(implication(
             conjunction(
                 *self.input.initial_constraints,
@@ -271,7 +271,7 @@ class WeakImmuneStrategySolver(StrategySolver):
     def _property_initial_constraints(self) -> List[Boolean]:
         return self.input.weak_immunity_constraints
 
-    def _property_constraint_impl(self) -> z3.BoolRef:
+    def _property_constraint_implementation(self) -> z3.BoolRef:
         constraints = []
         for player in self.input.players:
             self._collect_weak_immunity_constraints(
@@ -317,7 +317,7 @@ class CollusionResilienceStrategySolver(StrategySolver):
     def _property_initial_constraints(self) -> List[Boolean]:
         return self.input.collusion_resilience_constraints
 
-    def _property_constraint_impl(self) -> z3.BoolRef:
+    def _property_constraint_implementation(self) -> z3.BoolRef:
         utilities_of_checked_history = self.input.tree.get_utility_of_terminal_history(self.checked_history)
 
         constraints = []
@@ -383,7 +383,7 @@ class PracticalityStrategySolver(StrategySolver):
     def _property_initial_constraints(self) -> List[Boolean]:
         return self.input.practicality_constraints
 
-    def _property_constraint_impl(self) -> z3.BoolRef:
+    def _property_constraint_implementation(self) -> z3.BoolRef:
         constraints = []
         self._practicality_constraints(constraints, [], self.input.tree)
         return conjunction(*constraints)
