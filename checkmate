@@ -9,11 +9,13 @@ from argparse import ArgumentParser
 import itertools
 import json
 import logging
+from pickletools import optimize
 import sys
+from textwrap import shorten
 from typing import Any, Dict, List, Set, Tuple
 import z3
 
-from auxfunz3 import Real, Boolean, negation, conjunction, disjunction, implication
+from auxfunz3 import Real, Boolean, negation, conjunction, disjunction, implication, minimize
 from utility import Utility, ZERO
 from trees import Tree, Leaf, Branch, Input
 
@@ -59,7 +61,7 @@ class StrategySolver(metaclass=ABCMeta):
         self._add_action_constraints([], input.tree)
         self._add_history_constraints(self.checked_history)
 
-    def solve(self, output: bool) -> List[Dict[str, Any]]:
+    def solve(self, output: bool, generate_preconditions : bool) -> List[Dict[str, Any]]:
         """
         the main solving routine
 
@@ -147,7 +149,19 @@ class StrategySolver(metaclass=ABCMeta):
                 # we saturated, give up
                 if not new_expression:
                     logging.error("no more splits, failed")
-                    return []
+                    if not generate_preconditions:
+                        return []
+                    else:
+                        optimizer = z3.Solver()
+                        for constraint in itertools.chain(
+                                self.input.initial_constraints,
+                                self._property_initial_constraints()
+                        ):
+                            optimizer.add(constraint)
+                        short_case = [spl for spl in case if optimizer.check(negation(spl)) == z3.sat]
+                        shorter_case = minimize(optimizer,set(short_case))
+                        logging.error(f"here is a case I cannot solve: {shorter_case}")
+                        return []
 
         # there are no more possible models, i.e. no more cases to be discharged
         logging.info("no more cases, done")
@@ -548,8 +562,14 @@ if __name__ == '__main__':
         action='store_true',
         help="print strategies as JSON"
     )
+    parser.add_argument(
+        '--generate-preconditions',
+        action='store_true',
+        help="print strategies as JSON"
+    )
     args = parser.parse_args()
     output = args.output_strategies
+    generate_preconditions = args.generate_preconditions
     input = Input(args.PATH)
     logging.info(
         f"input OK, checking {len(input.honest_histories)} histories..."
@@ -564,19 +584,19 @@ if __name__ == '__main__':
         result["weak_immunity"] = WeakImmuneStrategySolver(
             input,
             honest_history
-        ).solve(output)
+        ).solve(output, generate_preconditions)
 
         logging.info("checking collusion resilience")
         result["collusion_resilience"] = CollusionResilienceStrategySolver(
             input,
             honest_history
-        ).solve(output)
+        ).solve(output, generate_preconditions)
 
         logging.info("checking practicality")
         result["practicality"] = PracticalityStrategySolver(
             input,
             honest_history
-        ).solve(output)
+        ).solve(output, generate_preconditions)
 
         strategies.append(result)
 
