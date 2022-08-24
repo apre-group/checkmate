@@ -2,7 +2,7 @@
 # minimum version: 3.7, will be default in future
 from __future__ import annotations
 
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Union, Set
 import z3
 
 Real = Union[float, z3.ArithRef]
@@ -53,3 +53,12 @@ def label(
         return comparison
     label = label_fn(left, right, real)
     return implication(label, comparison)
+
+
+def minimize(solver: z3.Solver, constraints: Set[z3.BoolRef]) -> Set[z3.BoolRef]:
+    to_elim = set()
+    for constr in constraints:
+        to_check = constraints - to_elim - {constr} | {negation(constr)}
+        if solver.check(*to_check) == z3.unsat:
+            to_elim.add(constr)
+    return constraints - to_elim
