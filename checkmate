@@ -584,21 +584,36 @@ if __name__ == '__main__':
         result["weak_immunity"] = WeakImmuneStrategySolver(
             input,
             honest_history
-        ).solve(output, generate_preconditions)
+        ).solve(True, generate_preconditions)
 
         logging.info("checking collusion resilience")
         result["collusion_resilience"] = CollusionResilienceStrategySolver(
             input,
             honest_history
-        ).solve(output, generate_preconditions)
+        ).solve(True, generate_preconditions)
 
         logging.info("checking practicality")
         result["practicality"] = PracticalityStrategySolver(
             input,
             honest_history
-        ).solve(output, generate_preconditions)
+        ).solve(True, generate_preconditions)
 
         strategies.append(result)
+
+    # nice summary of the check
+    logging.info("####### Summary: ######")
+    for hh in strategies:
+        logging.info(f"Honest history {hh['history']}")
+        for pr in ["weak_immunity", "collusion_resilience", "practicality"]:
+            strats = hh[pr]
+            if len(strats) == 0:
+                logging.info(f"-- doesn't have {pr.replace('_', ' ')}")
+            elif len(strats) == 1:
+                logging.info(f"-- has {pr.replace('_', ' ')} (one strategy)")
+            else:
+                logging.info(f"-- has {pr.replace('_', ' ')} with different strategies for cases")
+                for i, c in enumerate(strats):
+                    logging.info(f"---- case {i}: {c['case']}")
 
     if output:
         json.dump({"strategies": strategies}, fp=sys.stdout, indent=4)
