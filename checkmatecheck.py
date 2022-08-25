@@ -24,15 +24,17 @@ class StrategyChecker(metaclass=ABCMeta):
     input: Input
     _solver: z3.Solver
 
-    def __init__(self, input: Input, honest_history: List[str], strategy: Dict[str, str], cases: List[Boolean]) -> None:
+    def __init__(self, input: Input, honest_history: List[str], strategy: Dict[str, str], cases: List[Boolean], generated_preconditions: List[Boolean]) -> None:
         self.input = input
         self.honest_history = honest_history
         self.strategy = strategy
         self.cases = cases
+        self.generated_preconditions = generated_preconditions
         self._solver = z3.Solver()
 
         self._solver.add(self.input.initial_constraints)
         self._solver.add(self.cases)
+        self._solver.add(self.generated_preconditions)
 
     @abstractmethod
     def utility_function(self, ut: Dict[str, Utility], players: Set[str]) -> List[Utility]:
@@ -186,39 +188,37 @@ if __name__ == '__main__':
     )
 
     for honest_history in strategies:
-
-        logging.info(f"checking weak immunity of history {honest_history['history']}")
-        for case in honest_history['weak_immunity']:
-            logging.info(f"case {case['case']}")
-            case_constraints = [input._load_constraint(c) for c in case['case']]
-            result = WeakImuneStrategyChecker(
-                input,
-                honest_history['history'],
-                case['strategy'],
-                case_constraints
-            ).check()
-            print(result)
-
-        logging.info(f"checking collusion resilience of history {honest_history['history']}")
-        for case in honest_history['collusion_resilience']:
-            logging.info(f"case {case['case']}")
-            case_constraints = [input._load_constraint(c) for c in case['case']]
-            result = CollusionResilienceStrategyChecker(
-                input,
-                honest_history['history'],
-                case['strategy'],
-                case_constraints
-            ).check()
-            print(result)
-
-        logging.info(f"checking practicality of history {honest_history['history']}")
-        for case in honest_history['practicality']:
-            logging.info(f"case {case['case']}")
-            case_constraints = [input._load_constraint(c) for c in case['case']]
-            result = PracticalityStrategyChecker(
-                input,
-                honest_history['history'],
-                case['strategy'],
-                case_constraints
-            ).check()
-            print(result)
+        for pr in ["weak_immunity", "collusion_resilience", "practicality"]:
+            logging.info(f"checking {pr.replace('_', ' ')} of history {honest_history['history']}")
+            gen_prec_str = honest_history[pr]["generated_preconditions"]
+            generated_preconditions = [input._load_constraint(c) for c in gen_prec_str]
+            for case in honest_history[pr]["cases"]:
+                logging.info(f"case {case['case']}")
+                case_constraints = [input._load_constraint(c) for c in case['case']]
+                if pr == "weak_immunity":
+                    result = WeakImuneStrategyChecker(
+                        input,
+                        honest_history['history'],
+                        case['strategy'],
+                        case_constraints,
+                        generated_preconditions
+                    ).check()
+                    print(result)
+                elif pr == "collusion_resilience":
+                    result = CollusionResilienceStrategyChecker(
+                        input,
+                        honest_history['history'],
+                        case['strategy'],
+                        case_constraints,
+                        generated_preconditions
+                    ).check()
+                    print(result)
+                elif pr == "practicality":
+                    result = PracticalityStrategyChecker(
+                        input,
+                        honest_history['history'],
+                        case['strategy'],
+                        case_constraints,
+                        generated_preconditions
+                    ).check()
+                    print(result)
