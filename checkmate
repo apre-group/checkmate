@@ -15,7 +15,7 @@ from textwrap import shorten
 from typing import Any, Dict, List, Set, Tuple
 import z3
 
-from auxfunz3 import Real, Boolean, negation, conjunction, disjunction, implication, minimize, negate_comparison
+from auxfunz3 import Real, Boolean, negation, conjunction, disjunction, implication, minimize
 from utility import Utility, ZERO
 from trees import Tree, Leaf, Branch, Input
 
@@ -171,7 +171,7 @@ class StrategySolver(metaclass=ABCMeta):
                             logging.info("failed case is implied by preconditions.")
                             return {"generated_preconditions": list(self._generated_preconditions),
                                     "cases": []}
-                        self._generated_preconditions |= {z3.simplify(negation(constr)) for constr in shorter_case}
+                        self._generated_preconditions.add(disjunction(*(z3.simplify(negation(constr)) for constr in shorter_case)))
                         logging.error(f"here is a case I cannot solve: {shorter_case}")
                         logging.info(f"here are the generated preconditions: {self._generated_preconditions}")
                         logging.info("Restarting with a generated set of preconditions.")
