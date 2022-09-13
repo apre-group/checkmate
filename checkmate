@@ -12,7 +12,7 @@ import logging
 from pickletools import optimize
 import sys
 from textwrap import shorten
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, Iterable, List, Set, Tuple
 import z3
 
 from auxfunz3 import Real, Boolean, negation, conjunction, disjunction, implication, minimize, simplify_boolean
@@ -72,8 +72,10 @@ class StrategySolver(metaclass=ABCMeta):
         otherwise, returns a solution to report later
         """
 
-        result = {"generated_preconditions": list(self._generated_preconditions),
-                  "cases": []}
+        result = {
+            "generated_preconditions": list(self._generated_preconditions),
+            "cases": []
+        }
         # a solver that manages case splits, AVATAR style
         case_solver = z3.Solver()
         # it should know about initial constraints for the property we're trying
@@ -104,7 +106,7 @@ class StrategySolver(metaclass=ABCMeta):
                     return right > left
 
             # the current case is the conjunction of all known expression comparisons
-            case = [
+            case = {
                 split(left, right)
                 for left, right in itertools.chain(
                     itertools.combinations(reals, 2),
@@ -112,11 +114,22 @@ class StrategySolver(metaclass=ABCMeta):
                 )
                 # no point in providing e.g. 2.0 > 1.0
                 if type(left) != float or type(right) != float
-            ]
+            }
             logging.info(f"current case assumes {case}")
 
             if self._solver.check(self._property_constraint(case)) == z3.sat:
-                logging.info("case solved")
+                logging.info("case solved, minimising...")
+                remove = set()
+                for split in case:
+                    logging.info(f"trying to remove {split}...")
+                    if self._solver.check(self._property_constraint(case - remove - {split})) == z3.sat:
+                        remove.add(split)
+                        logging.info(f"{split} unnecessary, removed")
+                    else:
+                        logging.info(f"{split} necessary, retained")
+
+                case = case - remove
+                logging.info(f"final case is {case}")
                 if output:
                     result["cases"].append(self._extract_strategy(case))
 
@@ -216,7 +229,7 @@ class StrategySolver(metaclass=ABCMeta):
                 checked_history[:i], checked_history[i]
             ))
 
-    def _property_constraint(self, case: List[Boolean]) -> z3.BoolRef:
+    def _property_constraint(self, case: Iterable[Boolean]) -> z3.BoolRef:
         """
         create a universally-quantified constraint for a given property of the form
         ```
@@ -278,7 +291,7 @@ class StrategySolver(metaclass=ABCMeta):
         assert isinstance(expr, z3.BoolRef)
         return expr
 
-    def _extract_strategy(self, case: List[z3.BoolRef]) -> Dict[str, Any]:
+    def _extract_strategy(self, case: Iterable[z3.BoolRef]) -> Dict[str, Any]:
         """Extracting strategies from the solver for the current case split."""
         strategy = {}
         model = self._solver.model()
