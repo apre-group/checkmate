@@ -41,12 +41,7 @@
     "d_A > 0",
     "d_B > 0",
     "p_A > 0",
-    "p_B > 0",
-    "a >= d_B",
-    "b >= d_A",
-    "a >= p_B",
-    "b >= p_A",
-    "b >= c"
+    "p_B > 0"
   ],
   "property_constraints": {
     "weak_immunity": [
