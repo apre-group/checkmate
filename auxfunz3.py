@@ -36,6 +36,13 @@ def implication(left: Boolean, right: Boolean) -> z3.BoolRef:
     return z3.Implies(left, right)
 
 
+def simplify_boolean(expr: z3.BoolRef) -> z3.BoolRef:
+    """simplify the Boolean `expr` while satisfying the typechecker"""
+    simplified = z3.simplify(expr)
+    assert isinstance(simplified, z3.BoolRef)
+    return simplified
+
+
 def label(
         left: Real,
         right: Real,
@@ -56,6 +63,7 @@ def label(
 
 
 def minimize(solver: z3.Solver, constraints: Set[z3.BoolRef]) -> Set[z3.BoolRef]:
+    """compute a greedy consequence elimination of `constraints` wrt `solver`"""
     to_elim = set()
     for constr in constraints:
         to_check = constraints - to_elim - {constr} | {negation(constr)}

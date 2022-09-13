@@ -15,7 +15,7 @@ from textwrap import shorten
 from typing import Any, Dict, List, Set, Tuple
 import z3
 
-from auxfunz3 import Real, Boolean, negation, conjunction, disjunction, implication, minimize
+from auxfunz3 import Real, Boolean, negation, conjunction, disjunction, implication, minimize, simplify_boolean
 from utility import Utility, ZERO
 from trees import Tree, Leaf, Branch, Input
 
@@ -165,16 +165,27 @@ class StrategySolver(metaclass=ABCMeta):
                                 self._property_initial_constraints()
                         ):
                             optimizer.add(constraint)
-                        short_case = {spl for spl in case if optimizer.check(negation(spl)) == z3.sat}
-                        shorter_case = minimize(optimizer, short_case)
-                        if len(shorter_case) == 0:
-                            logging.info("failed case is implied by preconditions.")
-                            return {"generated_preconditions": list(self._generated_preconditions),
-                                    "cases": []}
-                        self._generated_preconditions.add(disjunction(*(z3.simplify(negation(constr)) for constr in shorter_case)))
-                        logging.error(f"here is a case I cannot solve: {shorter_case}")
-                        logging.info(f"here are the generated preconditions: {self._generated_preconditions}")
-                        logging.info("Restarting with a generated set of preconditions.")
+                        minimised = minimize(optimizer, set(case))
+                        if len(minimised) == 0:
+                            logging.info(
+                                "failed case is implied by preconditions."
+                            )
+                            return {
+                                "generated_preconditions": list(self._generated_preconditions),
+                                "cases": []
+                            }
+                        self._generated_preconditions.add(disjunction(*(
+                            simplify_boolean(negation(constr)) for constr in minimised
+                        )))
+                        logging.error(
+                            f"here is a case I cannot solve: {minimised}"
+                        )
+                        logging.info(
+                            f"here are the generated preconditions: {self._generated_preconditions}"
+                        )
+                        logging.info(
+                            "restarting with a generated set of preconditions"
+                        )
                         return self.solve(output, generate_preconditions)
 
         # there are no more possible models, i.e. no more cases to be discharged
@@ -241,7 +252,9 @@ class StrategySolver(metaclass=ABCMeta):
         tag = ';'.join(history)
         func = z3.Function(f'a[{tag}][{action}]', z3.BoolSort())
         self._action_variables[func] = (history, action)
-        return func()
+        variable = func()
+        assert isinstance(variable, z3.BoolRef)
+        return variable
 
     def _label(
             self,
@@ -262,6 +275,7 @@ class StrategySolver(metaclass=ABCMeta):
         else:
             expr = label()
 
+        assert isinstance(expr, z3.BoolRef)
         return expr
 
     def _extract_strategy(self, case: List[z3.BoolRef]) -> Dict[str, Any]:
@@ -270,7 +284,7 @@ class StrategySolver(metaclass=ABCMeta):
         model = self._solver.model()
         for name in model:
             # Only take action variables for strategies
-            if name in self._action_variables and model[name]:
+            if isinstance(name, z3.FuncDeclRef) and name in self._action_variables and model[name]:
                 history, action = self._action_variables[name]
                 strategy[';'.join(history)] = action
 
@@ -333,7 +347,9 @@ class CollusionResilienceStrategySolver(StrategySolver):
         return self.input.collusion_resilience_constraints
 
     def _property_constraint_implementation(self) -> z3.BoolRef:
-        utilities_of_checked_history = self.input.tree.get_utility_of_terminal_history(self.checked_history)
+        utilities_of_checked_history = self.input.tree.get_utility_of_terminal_history(
+            self.checked_history
+        )
 
         constraints = []
         for group_size in range(1, len(self.input.players)):
@@ -580,7 +596,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--generate-preconditions',
         action='store_true',
-        help="print strategies as JSON"
+        help="generate preconditions if a case fails"
     )
     args = parser.parse_args()
     output = args.output_strategies
@@ -626,14 +642,22 @@ if __name__ == '__main__':
                 logging.info(f"-- doesn't have {pr.replace('_', ' ')}")
             elif len(strats) == 1:
                 if len(gen_precond) == 0:
-                    logging.info(f"-- has {pr.replace('_', ' ')} (one strategy)")
+                    logging.info(
+                        f"-- has {pr.replace('_', ' ')} (one strategy)"
+                    )
                 else:
-                    logging.info(f"-- has {pr.replace('_', ' ')} if {gen_precond} (one strategy)")
+                    logging.info(
+                        f"-- has {pr.replace('_', ' ')} if {gen_precond} (one strategy)"
+                    )
             else:
                 if len(gen_precond) == 0:
-                    logging.info(f"-- has {pr.replace('_', ' ')} with different strategies for cases")
+                    logging.info(
+                        f"-- has {pr.replace('_', ' ')} with different strategies for cases"
+                    )
                 else:
-                    logging.info(f"-- has {pr.replace('_', ' ')} if {gen_precond} with different strategies for cases")
+                    logging.info(
+                        f"-- has {pr.replace('_', ' ')} if {gen_precond} with different strategies for cases"
+                    )
                 for i, c in enumerate(strats):
                     logging.info(f"---- case {i}: {c['case']}")
 
@@ -641,5 +665,7 @@ if __name__ == '__main__':
         for hh in strategies:
             for pr in ["weak_immunity", "collusion_resilience", "practicality"]:
                 gen_precond = hh[pr]["generated_preconditions"]
-                hh[pr]["generated_preconditions"] = [str(precond) for precond in gen_precond]
+                hh[pr]["generated_preconditions"] = [
+                    str(precond) for precond in gen_precond
+                ]
         json.dump({"strategies": strategies}, fp=sys.stdout, indent=4)
