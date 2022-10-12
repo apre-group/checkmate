@@ -126,12 +126,12 @@ class Input:
     def _load_utility(self, utility: Union[int, str]) -> Utility:
         """load a string expression or an integer into a Utility, via `eval()`"""
         if isinstance(utility, int):
-            return Utility.from_int(utility)
+            return Utility.from_value(utility)
 
         utility = eval(utility, {}, self.constants)
         # NB: "2 * 2" is a possibility
         if isinstance(utility, int):
-            return Utility.from_int(utility)
+            return Utility.from_value(utility)
 
         assert isinstance(utility, Utility)
         return utility
