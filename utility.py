@@ -7,6 +7,8 @@ import z3
 import operator
 from auxfunz3 import Real, Boolean, LabelFn, negation, conjunction, disjunction, label
 
+def flip(op: Callable[[Real, Real], Real]) -> Callable[[Real, Real], Real]:
+    return lambda x, y: op(y, x)
 
 def binary_op_with_id(
         left: Real,
@@ -43,9 +45,9 @@ class Utility:
         self.inf = inf
 
     @staticmethod
-    def from_int(value: int) -> Utility:
-        """convert an integer into a real utility with zero infinitesimal"""
-        return Utility(float(value), 0.0)
+    def from_value(value: Union[int, float]) -> Utility:
+        """convert a numeric value into a real utility with zero infinitesimal"""
+        return Utility(value, 0.0)
 
     @staticmethod
     def from_name(name: str, real: bool) -> Utility:
@@ -59,23 +61,30 @@ class Utility:
     def __neg__(self) -> Utility:
         return Utility(-self.real, -self.inf)
 
-    # TODO __radd__, __rsub__?
-    def __add__(self, other: Union[int, Utility]) -> Utility:
+    def __add__(self, other: Union[int, float, Utility]) -> Utility:
         return self._binary_expression(other, operator.add, 0.0)
 
-    def __sub__(self, other: Union[int, Utility]) -> Utility:
-        return self._binary_expression(-other, operator.add, 0.0)
+    def __radd__(self, other: Union[int, float, Utility]) -> Utility:
+        """useful when parsing e.g. 2 + p"""
+        return self._binary_expression(other, flip(operator.add), 0.0)
 
-    def __mul__(self, other: Union[int, Utility]) -> Utility:
+    def __sub__(self, other: Union[int, float, Utility]) -> Utility:
+        return self._binary_expression(other, operator.sub, 0.0)
+
+    def __rsub__(self, other: Union[int, float, Utility]) -> Utility:
+        """useful when parsing e.g. 2 - p"""
+        return self._binary_expression(other, flip(operator.sub), 0.0)
+
+    def __mul__(self, other: Union[int, float, Utility]) -> Utility:
         return self._binary_expression(other, operator.mul, 1.0)
 
-    def __rmul__(self, other: Union[int, Utility]) -> Utility:
+    def __rmul__(self, other: Union[int, float, Utility]) -> Utility:
         """useful when parsing e.g. 2 * p"""
-        return self.__mul__(other)
+        return self._binary_expression(other, flip(operator.mul), 1.0)
 
     def __eq__(
             self,
-            other: Union[int, Utility],
+            other: Union[int, float, Utility],
             label_fn: LabelFn = None
     ) -> z3.BoolRef:
         """
@@ -83,8 +92,8 @@ class Utility:
 
         when `label_fn` is supplied, label generated comparisons for unsat cores
         """
-        if isinstance(other, int):
-            other = Utility.from_int(other)
+        if isinstance(other, int) or isinstance(other, float):
+            other = Utility.from_value(other)
 
         return conjunction(
             label(self.real, other.real, operator.eq, label_fn, True),
@@ -93,7 +102,7 @@ class Utility:
 
     def __ne__(
             self,
-            other: Union[int, Utility],
+            other: Union[int, float, Utility],
             label_fn: LabelFn = None
     ) -> z3.BoolRef:
         """`z3.Not(left == right)`"""
@@ -101,7 +110,7 @@ class Utility:
 
     def __gt__(
             self,
-            other: Union[int, Utility],
+            other: Union[int, float, Utility],
             label_fn: LabelFn = None
     ) -> z3.BoolRef:
         """
@@ -115,7 +124,7 @@ class Utility:
 
     def __ge__(
             self,
-            other: Union[int, Utility],
+            other: Union[int, float, Utility],
             label_fn: LabelFn = None
     ) -> z3.BoolRef:
         """
@@ -129,7 +138,7 @@ class Utility:
 
     def __lt__(
             self,
-            other: Union[int, Utility],
+            other: Union[int, float, Utility],
             label_fn: LabelFn = None
     ) -> z3.BoolRef:
         """
@@ -143,7 +152,7 @@ class Utility:
 
     def __le__(
             self,
-            other: Union[int, Utility],
+            other: Union[int, float, Utility],
             label_fn: LabelFn = None
     ) -> z3.BoolRef:
         """
@@ -157,13 +166,13 @@ class Utility:
 
     def _binary_expression(
             self,
-            other: Union[int, Utility],
+            other: Union[int, float, Utility],
             op: Callable[[Real, Real], Real],
             id: float
     ) -> Utility:
         """generate a Z3 expression `left op right` via `binary_op_with_id`"""
-        if isinstance(other, int):
-            other = Utility.from_int(other)
+        if isinstance(other, int) or isinstance(other, float):
+            other = Utility.from_value(other)
 
         return Utility(
             binary_op_with_id(self.real, other.real, op, id),
@@ -172,7 +181,7 @@ class Utility:
 
     def _binary_comparison(
             self,
-            other: Union[int, Utility],
+            other: Union[int, float, Utility],
             real_op: Callable[[Real, Real], Boolean],
             inf_op: Callable[[Real, Real], Boolean],
             label_fn: LabelFn = None
@@ -182,8 +191,8 @@ class Utility:
 
         when `label_fn` is supplied, label generated comparisons for unsat cores
         """
-        if isinstance(other, int):
-            other = Utility.from_int(other)
+        if isinstance(other, int) or isinstance(other, float):
+            other = Utility.from_value(other)
 
         return disjunction(
             label(self.real, other.real, real_op, label_fn, True),
@@ -194,5 +203,5 @@ class Utility:
         )
 
 
-ZERO = Utility.from_int(0)
+ZERO = Utility.from_value(0.0)
 """the zero utility, <0.0, 0.0>"""
