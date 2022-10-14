@@ -1,3 +1,4 @@
+from xmlrpc.client import ExpatParser
 from dsl import *
 
 A, E1, I, E2, B = players('A', 'E1', 'I', 'E2', 'B')
@@ -35,6 +36,33 @@ mathfracS_1 = todo
 mathfracS_2 = todo
 mathfracS_3 = todo
 mathfracS_4 = todo
+
+mathfracS_5 = branch(E1, {
+    J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -epsilon, -m, rho),
+    U: branch(B, {
+        J: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho),
+        S_SI: branch(I, {
+            J: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho),
+            U: leaf5(rho, f, m+f+f-epsilon, -m, rho)
+        })
+    }),
+    S_SI: branch(I, {
+        J: branch(E1, {
+            J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -epsilon, -m, rho),
+            U: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho)
+        }),
+        U: branch(E1, {
+            J: leaf5(m+f+f+f+rho-epsilon, -m-f-f, m+f+f-epsilon, -m, rho),
+            U: leaf5(rho, f, m+f+f-epsilon, -m, rho)
+        })
+    })
+})
+
+mathfracS_6 = branch(E1, {
+    J: leaf5(m+f+f+f+rho-epsilon, -epsilon, epsilon, -m, rho),
+    U: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho)
+})
+
 serifS_1 = todo
 serifS_2 = todo
 serifS_3 = todo
@@ -43,6 +71,27 @@ boldS_1 = todo
 boldS_2 = todo
 boldS_3 = todo
 boldS_4 = todo
+
+wormhole = branch(E1, {
+            J: leaf5(m + f + f + f + rho - epsilon, - epsilon, - epsilon, - m, rho),
+            U: branch(B, {
+                J: leaf5(rho, m + f + f + f - epsilon, - epsilon, - m, rho),
+                S_SI: branch(I, {
+                    J: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho),
+                    U: leaf5(rho, f,m+f+f-epsilon, -m, rho)
+                })
+            }),
+            S_SI: branch(I, {
+                J: branch(E1, {
+                    J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -epsilon, -m, rho),
+                    U: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho)
+                }),
+                U: branch(E1, {
+                    J: leaf5(m+f+f+f+rho-epsilon, -m-f-f, m+f+f-epsilon, -m, rho),
+                    U: leaf5(rho, f, m+f+f-epsilon, -m, rho)
+                })
+            })
+        })
 
 
 tree(
@@ -73,33 +122,43 @@ tree(
                             J: leaf5(- epsilon, - epsilon, - epsilon, - epsilon, 0),
                             S_S: mathfracS_2,
                             U: branch(E2, {
-                                J: todo,
-                                S_S: mathfracS_3,
-                                S_SE1: branch(E1, {
-                                    J: leaf5(m + f + f + f + rho - epsilon, - epsilon, - epsilon, - m, rho ),
-                                    U: branch(B, {
-                                        J: leaf5(rho, m + f + f + f - epsilon, - epsilon, - m, rho),
-                                        S_SI: branch(I, {
-                                            J: leaf5(rho, m+ f+f+f-epsilon, -epsilon,-m, rho),
-                                            U: leaf5(rho, f,m+f+f-epsilon,-m,rho)
-                                        })
-                                    }),
+                                J: branch(B, {
+                                    J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -epsilon, -m, rho),
+                                    S_SE1: mathfracS_5,
                                     S_SI: branch(I, {
-                                        J: branch(E1, {
-                                            J: leaf5(m+f+f+f+rho-epsilon,-epsilon,-epsilon,-m,rho),
-                                            U: leaf5(rho,m+f+f+f-epsilon,-epsilon,-m,rho)
-                                        }),
+                                        S_SE1: mathfracS_6,
                                         U: branch(E1, {
-                                            J: leaf5(m+f+f+f+rho-epsilon,-m-f-f,m+f+f-epsilon,-m,rho),
-                                            U: leaf5(rho,f,m+f+f-epsilon,-m,rho)
+                                            J: leaf5(m+f+f+f+rho-epsilon, -m-f-f, m+f+f-epsilon, -m, rho),
+                                            U: leaf5(rho, f, m+f+f+epsilon, -m, rho)
+                                        }),
+                                        J: branch(B, {
+                                            J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -epsilon, -m, rho),
+                                            S_SE1: branch(E1, {
+                                                J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -epsilon, -m, rho),
+                                                U: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho)
+                                            })
                                         })
                                     })
                                 }),
+                                S_S: mathfracS_3,
+                                S_SE1: wormhole,
                                 U: branch(I, {
-                                    J: todo,
+                                    J: branch(E2, {
+                                        S_SE1: branch(E1, {
+                                            J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -m-f, f, rho),
+                                            U: leaf5(rho, m+f+f+f-epsilon, -m-f, f, rho)
+                                        }),
+                                        J: branch(B, {
+                                            J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -m-f, f, rho),
+                                            S_SE1: branch(E1, {
+                                                J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -m-f, f, rho),
+                                                U: leaf5(rho, m+f+f+f-epsilon, -m-f, f, rho)
+                                            })
+                                        }),
+                                    }),
                                     S_S: mathfracS_4,
                                     U: branch(E1, {
-                                        J: leaf5(m + f + f+ f + rho - epsilon, - m - f - f, f, f, rho),
+                                        J: leaf5(m + f + f + f + rho - epsilon, - m - f - f, f, f, rho),
                                         U: leaf5(rho, f, f, f, rho)
                                     })
                                 })
