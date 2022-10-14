@@ -1,8 +1,8 @@
 from dsl import *
 
 A, E1, I, E2, B = players('A', 'E1', 'I', 'E2', 'B')
-S_H, L, U, J, S_S, L_T, L_H, L_A, S_SE1 = actions(
-    'S_H', 'L', 'U', 'J', 'S_S', 'L_T', 'L_H', 'L_A', 'S_SE1'
+S_H, L, U, J, S_S, L_T, L_H, L_A, S_SE1, S_SI = actions(
+    'S_H', 'L', 'U', 'J', 'S_S', 'L_T', 'L_H', 'L_A', 'S_SE1', 'S_SI'
 )
 epsilon, rho, todoo = infinitesimals('epsilon', 'rho', 'todo')
 m, f = constants('m', 'f')
@@ -75,7 +75,26 @@ tree(
                             U: branch(E2, {
                                 J: todo,
                                 S_S: mathfracS_3,
-                                S_SE1: todo,
+                                S_SE1: branch(E1, {
+                                    J: leaf5(m + f + f + f + rho - epsilon, - epsilon, - epsilon, - m, rho ),
+                                    U: branch(B, {
+                                        J: leaf5(rho, m + f + f + f - epsilon, - epsilon, - m, rho),
+                                        S_SI: branch(I, {
+                                            J: leaf5(rho, m+ f+f+f-epsilon, -epsilon,-m, rho),
+                                            U: leaf5(rho, f,m+f+f-epsilon,-m,rho)
+                                        })
+                                    }),
+                                    S_SI: branch(I, {
+                                        J: branch(E1, {
+                                            J: leaf5(m+f+f+f+rho-epsilon,-epsilon,-epsilon,-m,rho),
+                                            U: leaf5(rho,m+f+f+f-epsilon,-epsilon,-m,rho)
+                                        }),
+                                        U: branch(E1, {
+                                            J: leaf5(m+f+f+f+rho-epsilon,-m-f-f,m+f+f-epsilon,-m,rho),
+                                            U: leaf5(rho,f,m+f+f-epsilon,-m,rho)
+                                        })
+                                    })
+                                }),
                                 U: branch(I, {
                                     J: todo,
                                     S_S: mathfracS_4,
