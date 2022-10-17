@@ -1,5 +1,5 @@
-from xmlrpc.client import ExpatParser
 from dsl import *
+from typing import Union
 
 A, E1, I, E2, B = players('A', 'E1', 'I', 'E2', 'B')
 S_H, L, U, J, S_S, L_T, L_H, L_A, S_SE1, S_SI = actions(
@@ -21,8 +21,7 @@ practicality_constraints()
 
 honest_histories((S_H, L, L, L, L, U, U, U, U))
 
-
-def leaf5(a: Expr, b: Expr, c: Expr, d: Expr, e: Expr) -> Leaf:
+def leaf5(a: LExpr, b: LExpr, c: LExpr, d: LExpr, e: LExpr) -> Leaf:
     return leaf({A: a, E1: b, I: c, E2: d, B: e})
 
 
