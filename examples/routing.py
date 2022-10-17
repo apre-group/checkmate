@@ -28,6 +28,81 @@ def leaf5(a: Expr, b: Expr, c: Expr, d: Expr, e: Expr) -> Leaf:
 
 todo = leaf5(todoo, todoo, todoo, todoo, todoo)
 
+
+def prev_player(player):
+    players = [A, E1, I, E2, B]
+    i = players.index(player)
+    return players[i-1]
+
+
+def next_player(player):
+    players = [A, E1, I, E2, B]
+    i = players.index(player)
+    return players[i+1]
+
+
+def final(state):
+    for p in state:
+        if state[p][0] == "locked":
+            return False
+    return True
+
+
+class Utility_leaf:
+
+    def __init__(self, t: Tuple[Expr]) -> None:
+        self.utility = t
+
+    def __add__(self, other):
+        pointwise_add = [self.utility[i] + other.utility[i] for i in range(len(self.utility))]
+        return Utility_leaf(tuple(pointwise_add))
+
+
+def utility_leaf(state):
+    ut = Utility_leaf((0,0,0,0,0))
+    if state[B][0] == "unlocked":
+        ut = ut + Utility_leaf((rho+m+3*f,0,0,-m,rho))
+    elif state[B][0] == "expired":
+        ut = ut + Utility_leaf((0,0,0,-epsilon,0))
+    if state[E2][0] == "unlocked":
+        ut = ut + Utility_leaf((0,0,-m-f,m+f,0))
+    elif state[E2][0] == "expired":
+        ut = ut + Utility_leaf((0,0,-epsilon,0,0))
+    if state[I][0] == "unlocked":
+        ut = ut + Utility_leaf((0,-m-2*f,m+2*f,0,0))
+    elif state[I][0] == "expired":
+        ut = ut + Utility_leaf((0,-epsilon,0,0,0))
+    if state[E1][0] == "unlocked":
+        ut = ut + Utility_leaf((-m-3*f,m+3*f,0,0,0))
+    elif state[E1][0] == "expired":
+        ut = ut + Utility_leaf((-epsilon,0,0,0,0))
+    return ut
+
+
+def generate_routing_unlocking(player, state):
+    if final(state):
+        return utility_leaf(state)
+    else:
+        pass
+
+initial_state = {
+    A : ("null", False),
+    E1 : ("locked", False),
+    I : ("locked", False),
+    E2 : ("locked", False),
+    B : ("locked", True),
+}
+
+intermediate_state = {
+    A : ("null", False),
+    E1 : ("unlocked", False),
+    I : ("unlocked", False),
+    E2 : ("unlocked", False),
+    B : ("unlocked", True),
+}
+
+unlocking_tree = generate_routing_unlocking(B, initial_state)
+
 mathbbS_1 = todo
 mathbbS_2 = todo
 mathbbS_3 = todo
