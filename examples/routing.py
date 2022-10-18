@@ -1,9 +1,10 @@
 from dsl import *
 from typing import Union
+import copy
 
 A, E1, I, E2, B = players('A', 'E1', 'I', 'E2', 'B')
-S_H, L, U, J, S_S, L_T, L_H, L_A, S_SE1, S_SI = actions(
-    'S_H', 'L', 'U', 'J', 'S_S', 'L_T', 'L_H', 'L_A', 'S_SE1', 'S_SI'
+S_H, L, U, J, S_S, L_T, L_H, L_A, S_SE1, S_SI, I_L, I_U, I_S = actions(
+    'S_H', 'L', 'U', 'J', 'S_S', 'L_T', 'L_H', 'L_A', 'S_SE1', 'S_SI', 'I_L', 'I_U', 'I_S'
 )
 epsilon, rho, todoo = infinitesimals('epsilon', 'rho', 'todo')
 m, f = constants('m', 'f')
@@ -34,10 +35,20 @@ def prev_player(player):
     return players[i-1]
 
 
+def next_players(player):
+    players = [A, E1, I, E2, B]
+    i = players.index(player)
+    return players[i + 1:]
+
+
 def next_player(player):
     players = [A, E1, I, E2, B]
     i = players.index(player)
     return players[i+1]
+
+
+def players_right_to_left():
+    return [A, E1, I, E2, B][::-1]
 
 
 def final(state):
@@ -49,7 +60,7 @@ def final(state):
 
 class Utility_leaf:
 
-    def __init__(self, t: Tuple[Expr]) -> None:
+    def __init__(self, t: Tuple[LExpr]) -> None:
         self.utility = t
 
     def __add__(self, other):
@@ -79,25 +90,53 @@ def utility_leaf(state):
 
 
 def generate_routing_unlocking(player, state):
+    # we can assume that current player p knows the secret.
+    # initially B knows and always next player knows.
     if final(state):
-        return utility_leaf(state)
+        return leaf5(*utility_leaf(state).utility)
     else:
-        pass
+        branch_actions = {}
+        if state[player][0] == "locked":
+            # Action unlock
+            state1 = copy.deepcopy(state)
+            state1[player][0] = "unlocked"
+            state1[prev_player(player)][1] = True
+            branch_actions[U] = generate_routing_unlocking(prev_player(player), state1)
+            # Ignoring unlock
+            state2 = copy.deepcopy(state)
+            state2[player][0] = "expired"
+            for p in next_players(player):
+                if state[p][0] == "locked":
+                    state2[p][0] = "expired"
+            # teh next player is the rightmost one who knows the secret and has not ignored sharing with everyone who doesn't know
+            next_p = None
+            for p in players_right_to_left():
+                if state[p][1]:
+                    if not ({q for q in state.keys() if not state[q][1]}.issubset(set(state[p][2]))):
+                        next_p = p
+                        break
+            if next_p is None:
+                for p in state:
+                    if state2[p][0] == "locked":
+                        state2[p][0] = "expired"
+            branch_actions[I_U] = generate_routing_unlocking(next_p, state2)
+        return branch(player, branch_actions)
+
 
 initial_state = {
-    A : ("null", False),
-    E1 : ("locked", False),
-    I : ("locked", False),
-    E2 : ("locked", False),
-    B : ("locked", True),
+    A : ("null", False, []),
+    E1 : ("locked", False, []),
+    I : ("locked", False, []),
+    E2 : ("locked", False, []),
+    B : ("locked", True, []),
 }
 
 intermediate_state = {
-    A : ("null", False),
-    E1 : ("unlocked", False),
-    I : ("unlocked", False),
-    E2 : ("unlocked", False),
-    B : ("unlocked", True),
+    A : ("null", False, []),
+    E1 : ("unlocked", False, []),
+    I : ("expired", False, []),
+    E2 : ("unlocked", False, []),
+    B : ("unlocked", True, []),
 }
 
 unlocking_tree = generate_routing_unlocking(B, initial_state)
