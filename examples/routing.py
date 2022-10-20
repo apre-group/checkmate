@@ -22,6 +22,7 @@ practicality_constraints()
 
 honest_histories((S_H, L, L, L, L, U, U, U, U))
 
+
 def leaf5(a: LExpr, b: LExpr, c: LExpr, d: LExpr, e: LExpr) -> Leaf:
     return leaf({A: a, E1: b, I: c, E2: d, B: e})
 
@@ -89,7 +90,30 @@ def utility_leaf(state):
     return ut
 
 
-def generate_routing_unlocking(player, state):
+def copy_state(state):
+    state1 = {}
+    for key, value in state.items():
+        ps = [x for x in value[2]]
+        state1[key] = [value[0], value[1], ps]
+    return state1
+
+
+def player_knows_secret_possibly_share(state):
+    next_p = None
+    state2 = copy_state(state)
+    for p in players_right_to_left():
+        if state[p][1]:
+            if not ({q for q in state.keys() if not state[q][1]}.issubset(set(state[p][2]))):
+                next_p = p
+                break
+    if next_p is None:
+        for p in state:
+            if state2[p][0] == "locked":
+                state2[p][0] = "expired"
+    return next_p, state2
+
+
+def generate_routing_unlocking(player: Player, state):
     # we can assume that current player p knows the secret.
     # initially B knows and always next player knows.
     if final(state):
@@ -98,192 +122,51 @@ def generate_routing_unlocking(player, state):
         branch_actions = {}
         if state[player][0] == "locked":
             # Action unlock
-            state1 = copy.deepcopy(state)
+            state1 = copy_state(state)
             state1[player][0] = "unlocked"
             state1[prev_player(player)][1] = True
             branch_actions[U] = generate_routing_unlocking(prev_player(player), state1)
             # Ignoring unlock
-            state2 = copy.deepcopy(state)
+            state2 = copy_state(state)
             state2[player][0] = "expired"
             for p in next_players(player):
                 if state[p][0] == "locked":
                     state2[p][0] = "expired"
             # teh next player is the rightmost one who knows the secret and has not ignored sharing with everyone who doesn't know
-            next_p = None
-            for p in players_right_to_left():
-                if state[p][1]:
-                    if not ({q for q in state.keys() if not state[q][1]}.issubset(set(state[p][2]))):
-                        next_p = p
-                        break
-            if next_p is None:
-                for p in state:
-                    if state2[p][0] == "locked":
-                        state2[p][0] = "expired"
+            next_p, state2 = player_knows_secret_possibly_share(state)
             branch_actions[I_U] = generate_routing_unlocking(next_p, state2)
+        else:
+            # Ignoring sharing
+            state1 = copy_state(state)
+            ps = [A, E1, I, E2, B]
+            ps.remove(player)
+            state1[player][2] = ps
+            next_p, state2 = player_knows_secret_possibly_share(state1)
+            branch_actions[I_S] = generate_routing_unlocking(next_p, state2)
+            # Sharing is caring
+
         return branch(player, branch_actions)
 
 
 initial_state = {
-    A : ("null", False, []),
-    E1 : ("locked", False, []),
-    I : ("locked", False, []),
-    E2 : ("locked", False, []),
-    B : ("locked", True, []),
+    A: ("null", False, []),
+    E1: ("locked", False, []),
+    I: ("locked", False, []),
+    E2: ("locked", False, []),
+    B: ("locked", True, []),
 }
 
 intermediate_state = {
-    A : ("null", False, []),
-    E1 : ("unlocked", False, []),
-    I : ("expired", False, []),
-    E2 : ("unlocked", False, []),
-    B : ("unlocked", True, []),
+    A: ("null", False, []),
+    E1: ("locked", False, []),
+    I: ("locked", False, []),
+    E2: ("expired", True, []),
+    B: ("unlocked", True, [A, E1, I, E2]),
 }
 
-unlocking_tree = generate_routing_unlocking(B, initial_state)
+# unlocking_tree = generate_routing_unlocking(B, initial_state)
+my_tree = generate_routing_unlocking(E2, intermediate_state)
 
-mathbbS_1 = todo
-mathbbS_2 = todo
-mathbbS_3 = todo
-mathbbS_4 = todo
-mathfracS_1 = todo
-mathfracS_2 = todo
-mathfracS_3 = todo
-mathfracS_4 = todo
-
-mathfracS_5 = branch(E1, {
-    J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -epsilon, -m, rho),
-    U: branch(B, {
-        J: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho),
-        S_SI: branch(I, {
-            J: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho),
-            U: leaf5(rho, f, m+f+f-epsilon, -m, rho)
-        })
-    }),
-    S_SI: branch(I, {
-        J: branch(E1, {
-            J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -epsilon, -m, rho),
-            U: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho)
-        }),
-        U: branch(E1, {
-            J: leaf5(m+f+f+f+rho-epsilon, -m-f-f, m+f+f-epsilon, -m, rho),
-            U: leaf5(rho, f, m+f+f-epsilon, -m, rho)
-        })
-    })
-})
-
-mathfracS_6 = branch(E1, {
-    J: leaf5(m+f+f+f+rho-epsilon, -epsilon, epsilon, -m, rho),
-    U: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho)
-})
-
-serifS_1 = todo
-serifS_2 = todo
-serifS_3 = todo
-serifS_4 = todo
-boldS_1 = todo
-boldS_2 = todo
-boldS_3 = todo
-boldS_4 = todo
-
-wormhole = branch(E1, {
-            J: leaf5(m + f + f + f + rho - epsilon, - epsilon, - epsilon, - m, rho),
-            U: branch(B, {
-                J: leaf5(rho, m + f + f + f - epsilon, - epsilon, - m, rho),
-                S_SI: branch(I, {
-                    J: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho),
-                    U: leaf5(rho, f,m+f+f-epsilon, -m, rho)
-                })
-            }),
-            S_SI: branch(I, {
-                J: branch(E1, {
-                    J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -epsilon, -m, rho),
-                    U: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho)
-                }),
-                U: branch(E1, {
-                    J: leaf5(m+f+f+f+rho-epsilon, -m-f-f, m+f+f-epsilon, -m, rho),
-                    U: leaf5(rho, f, m+f+f-epsilon, -m, rho)
-                })
-            })
-        })
-
-
-tree(
-    branch(B, {
-        J: leaf5(0, 0, 0, 0, 0),
-        S_S: mathfracS_1,
-        S_H: branch(A, {
-            J: leaf5(0, 0, 0, 0, 0),
-            L_A: mathbbS_1,
-            L_T: boldS_1,
-            L_H: serifS_1,
-            L: branch(E1, {
-                J: leaf5(- epsilon, 0, 0, 0, 0),
-                L_A: mathbbS_2,
-                L_H: serifS_2,
-                L_T: boldS_2,
-                L: branch(I, {
-                    J: leaf5(- epsilon, - epsilon, 0, 0, 0),
-                    L_A: mathbbS_3,
-                    L_H: serifS_3,
-                    L_T: boldS_3,
-                    L: branch(E2, {
-                        J: leaf5(- epsilon, - epsilon, - epsilon, 0, 0),
-                        L_A: mathbbS_4,
-                        L_H: serifS_4,
-                        L_T: boldS_4,
-                        L: branch(B, {
-                            J: leaf5(- epsilon, - epsilon, - epsilon, - epsilon, 0),
-                            S_S: mathfracS_2,
-                            U: branch(E2, {
-                                J: branch(B, {
-                                    J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -epsilon, -m, rho),
-                                    S_SE1: mathfracS_5,
-                                    S_SI: branch(I, {
-                                        S_SE1: mathfracS_6,
-                                        U: branch(E1, {
-                                            J: leaf5(m+f+f+f+rho-epsilon, -m-f-f, m+f+f-epsilon, -m, rho),
-                                            U: leaf5(rho, f, m+f+f+epsilon, -m, rho)
-                                        }),
-                                        J: branch(B, {
-                                            J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -epsilon, -m, rho),
-                                            S_SE1: branch(E1, {
-                                                J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -epsilon, -m, rho),
-                                                U: leaf5(rho, m+f+f+f-epsilon, -epsilon, -m, rho)
-                                            })
-                                        })
-                                    })
-                                }),
-                                S_S: mathfracS_3,
-                                S_SE1: wormhole,
-                                U: branch(I, {
-                                    J: branch(E2, {
-                                        S_SE1: branch(E1, {
-                                            J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -m-f, f, rho),
-                                            U: leaf5(rho, m+f+f+f-epsilon, -m-f, f, rho)
-                                        }),
-                                        J: branch(B, {
-                                            J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -m-f, f, rho),
-                                            S_SE1: branch(E1, {
-                                                J: leaf5(m+f+f+f+rho-epsilon, -epsilon, -m-f, f, rho),
-                                                U: leaf5(rho, m+f+f+f-epsilon, -m-f, f, rho)
-                                            })
-                                        }),
-                                    }),
-                                    S_S: mathfracS_4,
-                                    U: branch(E1, {
-                                        J: leaf5(m + f + f + f + rho - epsilon, - m - f - f, f, f, rho),
-                                        U: leaf5(rho, f, f, f, rho)
-                                    })
-                                })
-                            })
-                        })
-                    })
-                })
-            })
-
-        })
-    }
-    ))
-
+tree(my_tree)
 
 finish()
