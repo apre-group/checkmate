@@ -1,10 +1,13 @@
 from dsl import *
 from typing import Union
 import copy
+import sys
+
+sys.setrecursionlimit(10000)
 
 A, E1, I, E2, B = players('A', 'E1', 'I', 'E2', 'B')
-S_H, L, U, J, S_S, L_T, L_H, L_A, S_SE1, S_SI, I_L, I_U, I_S = actions(
-    'S_H', 'L', 'U', 'J', 'S_S', 'L_T', 'L_H', 'L_A', 'S_SE1', 'S_SI', 'I_L', 'I_U', 'I_S'
+S_H, L, U, J, S_S, L_T, L_H, L_A, S_SE1, S_SI, I_L, I_U, I_S, S_SA, S_SE2, S_SB = actions(
+    'S_H', 'L', 'U', 'J', 'S_S', 'L_T', 'L_H', 'L_A', 'S_SE1', 'S_SI', 'I_L', 'I_U', 'I_S', 'S_SA', 'S_SE2', 'S_SB'
 )
 epsilon, rho, todoo = infinitesimals('epsilon', 'rho', 'todo')
 m, f = constants('m', 'f')
@@ -93,17 +96,30 @@ def utility_leaf(state):
 def copy_state(state):
     state1 = {}
     for key, value in state.items():
-        ps = [x for x in value[2]]
-        state1[key] = [value[0], value[1], ps]
+        state1[key] = [v for v in value]
     return state1
+
+
+def players_who_know_secret(state):
+    knowers = set()
+    for p in state:
+        if state[p][1]:
+            knowers.add(p)
+    return knowers
 
 
 def player_knows_secret_possibly_share(state):
     next_p = None
     state2 = copy_state(state)
+    if players_who_know_secret(state) == {A, E1, I, E2, B}:
+        for p in players_right_to_left():
+            if state[p][0] == "locked":
+                next_p = p
+                break
+        return next_p, state2
     for p in players_right_to_left():
         if state[p][1]:
-            if not ({q for q in state.keys() if not state[q][1]}.issubset(set(state[p][2]))):
+            if not state[p][2]:
                 next_p = p
                 break
     if next_p is None:
@@ -113,12 +129,29 @@ def player_knows_secret_possibly_share(state):
     return next_p, state2
 
 
+def share_secret_action(player):
+    if player == A:
+        return S_SA
+    elif player == E1:
+        return S_SE1
+    elif player == I:
+        return S_SI
+    elif player == E2:
+        return S_SE2
+    elif player == B:
+        return S_SB
+    else:
+        raise Exception("weird player")
+
+
 def generate_routing_unlocking(player: Player, state):
     # we can assume that current player p knows the secret.
     # initially B knows and always next player knows.
     if final(state):
         return leaf5(*utility_leaf(state).utility)
     else:
+        if state[player][2]:
+            raise Exception(f"It should not be player {player}'s turn, because they have ignored sharing secrets.")
         branch_actions = {}
         if state[player][0] == "locked":
             # Action unlock
@@ -132,41 +165,45 @@ def generate_routing_unlocking(player: Player, state):
             for p in next_players(player):
                 if state[p][0] == "locked":
                     state2[p][0] = "expired"
-            # teh next player is the rightmost one who knows the secret and has not ignored sharing with everyone who doesn't know
+            # the next player is the rightmost one who knows the secret and has not ignored sharing with everyone who doesn't know
             next_p, state2 = player_knows_secret_possibly_share(state)
             branch_actions[I_U] = generate_routing_unlocking(next_p, state2)
+
         else:
             # Ignoring sharing
             state1 = copy_state(state)
-            ps = [A, E1, I, E2, B]
-            ps.remove(player)
-            state1[player][2] = ps
+            state1[player][2] = True
             next_p, state2 = player_knows_secret_possibly_share(state1)
             branch_actions[I_S] = generate_routing_unlocking(next_p, state2)
-            # Sharing is caring
-
+        # Sharing is caring
+        for p in state:
+            if not state[p][1]:
+                state1 = copy_state(state)
+                state1[p][1] = True
+                next_p, state2 = player_knows_secret_possibly_share(state1)
+                branch_actions[share_secret_action(p)] = generate_routing_unlocking(next_p, state2)
         return branch(player, branch_actions)
 
 
 initial_state = {
-    A: ("null", False, []),
-    E1: ("locked", False, []),
-    I: ("locked", False, []),
-    E2: ("locked", False, []),
-    B: ("locked", True, []),
+    A: ["null", False, False],
+    E1: ["locked", False, False],
+    I: ["locked", False, False],
+    E2: ["locked", False, False],
+    B: ["locked", True, False],
 }
 
 intermediate_state = {
-    A: ("null", False, []),
-    E1: ("locked", False, []),
-    I: ("locked", False, []),
-    E2: ("expired", True, []),
-    B: ("unlocked", True, [A, E1, I, E2]),
+    A: ["null", False, False],
+    E1: ["locked", False, False],
+    I: ["locked", False, False],
+    E2: ["expired", True, False],
+    B: ["unlocked", True, True],
 }
 
-# unlocking_tree = generate_routing_unlocking(B, initial_state)
-my_tree = generate_routing_unlocking(E2, intermediate_state)
+unlocking_tree = generate_routing_unlocking(B, initial_state)
+# my_tree = generate_routing_unlocking(E2, intermediate_state)
 
-tree(my_tree)
+tree(unlocking_tree)
 
 finish()
