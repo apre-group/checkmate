@@ -1,9 +1,6 @@
 from dsl import *
 from typing import Union
 import copy
-import sys
-
-sys.setrecursionlimit(10000)
 
 A, E1, I, E2, B = players('A', 'E1', 'I', 'E2', 'B')
 S_H, L, U, J, S_S, L_T, L_H, L_A, S_SE1, S_SI, I_L, I_U, I_S, S_SA, S_SE2, S_SB = actions(
@@ -16,14 +13,14 @@ initial_constraints(
     rho > 0,
     epsilon > 0,
     f > 0,
-    m > f
+    m > 0
 )
 
 weak_immunity_constraints()
 collusion_resilience_constraints()
 practicality_constraints()
 
-honest_histories((S_H, L, L, L, L, U, U, U, U))
+honest_histories((U, U, U, U))
 
 
 def leaf5(a: LExpr, b: LExpr, c: LExpr, d: LExpr, e: LExpr) -> Leaf:
@@ -32,6 +29,7 @@ def leaf5(a: LExpr, b: LExpr, c: LExpr, d: LExpr, e: LExpr) -> Leaf:
 
 todo = leaf5(todoo, todoo, todoo, todoo, todoo)
 
+recursion_depth = 0
 
 def prev_player(player):
     players = [A, E1, I, E2, B]
@@ -144,9 +142,13 @@ def share_secret_action(player):
         raise Exception("weird player")
 
 
-def generate_routing_unlocking(player: Player, state):
+def generate_routing_unlocking(player: Player, state, history):
     # we can assume that current player p knows the secret.
     # initially B knows and always next player knows.
+    global recursion_depth
+    depth = len(history.split(";"))
+    if depth > recursion_depth:
+        recursion_depth = depth
     if final(state):
         return leaf5(*utility_leaf(state).utility)
     else:
@@ -158,30 +160,35 @@ def generate_routing_unlocking(player: Player, state):
             state1 = copy_state(state)
             state1[player][0] = "unlocked"
             state1[prev_player(player)][1] = True
-            branch_actions[U] = generate_routing_unlocking(prev_player(player), state1)
+            if state1[prev_player(player)][2] == True:
+                next_p, state2 = player_knows_secret_possibly_share(state1)
+            else:
+                next_p = prev_player(player)
+                state2 = state1
+            branch_actions[U] = generate_routing_unlocking(next_p, state2, history + str(player) + ".U;")
             # Ignoring unlock
-            state2 = copy_state(state)
-            state2[player][0] = "expired"
+            state3 = copy_state(state)
+            state3[player][0] = "expired"
             for p in next_players(player):
                 if state[p][0] == "locked":
-                    state2[p][0] = "expired"
+                    state3[p][0] = "expired"
             # the next player is the rightmost one who knows the secret and has not ignored sharing with everyone who doesn't know
-            next_p, state2 = player_knows_secret_possibly_share(state)
-            branch_actions[I_U] = generate_routing_unlocking(next_p, state2)
+            next_p, state4 = player_knows_secret_possibly_share(state3)
+            branch_actions[I_U] = generate_routing_unlocking(next_p, state4, history + str(player) + ".I_U;")
 
         else:
             # Ignoring sharing
             state1 = copy_state(state)
             state1[player][2] = True
             next_p, state2 = player_knows_secret_possibly_share(state1)
-            branch_actions[I_S] = generate_routing_unlocking(next_p, state2)
+            branch_actions[I_S] = generate_routing_unlocking(next_p, state2, history + str(player) + ".I_S;")
         # Sharing is caring
         for p in state:
             if not state[p][1]:
                 state1 = copy_state(state)
                 state1[p][1] = True
                 next_p, state2 = player_knows_secret_possibly_share(state1)
-                branch_actions[share_secret_action(p)] = generate_routing_unlocking(next_p, state2)
+                branch_actions[share_secret_action(p)] = generate_routing_unlocking(next_p, state2, history + str(player) + "." + str(share_secret_action(p)) + ";")
         return branch(player, branch_actions)
 
 
@@ -201,7 +208,7 @@ intermediate_state = {
     B: ["unlocked", True, True],
 }
 
-unlocking_tree = generate_routing_unlocking(B, initial_state)
+unlocking_tree = generate_routing_unlocking(B, initial_state, "")
 # my_tree = generate_routing_unlocking(E2, intermediate_state)
 
 tree(unlocking_tree)
