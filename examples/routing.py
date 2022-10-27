@@ -1,3 +1,4 @@
+from os import stat
 from dsl import *
 from typing import Union
 import copy
@@ -31,6 +32,9 @@ todo = leaf5(todoo, todoo, todoo, todoo, todoo)
 
 recursion_depth = 0
 
+ps = [A, E1, I, E2, B]
+
+
 def prev_player(player):
     players = [A, E1, I, E2, B]
     i = players.index(player)
@@ -54,8 +58,8 @@ def players_right_to_left():
 
 
 def final(state):
-    for p in state:
-        if state[p][0] == "locked":
+    for p in ps:
+        if state[p]["contract"] == "locked":
             return False
     return True
 
@@ -72,29 +76,34 @@ class Utility_leaf:
 
 def utility_leaf(state):
     ut = Utility_leaf((0,0,0,0,0))
-    if state[B][0] == "unlocked":
+    if state[B]["contract"] == "unlocked":
         ut = ut + Utility_leaf((rho+m+3*f,0,0,-m,rho))
-    elif state[B][0] == "expired":
+    elif state[B]["contract"] == "expired":
         ut = ut + Utility_leaf((0,0,0,-epsilon,0))
-    if state[E2][0] == "unlocked":
+    if state[E2]["contract"] == "unlocked":
         ut = ut + Utility_leaf((0,0,-m-f,m+f,0))
-    elif state[E2][0] == "expired":
+    elif state[E2]["contract"] == "expired":
         ut = ut + Utility_leaf((0,0,-epsilon,0,0))
-    if state[I][0] == "unlocked":
+    if state[I]["contract"] == "unlocked":
         ut = ut + Utility_leaf((0,-m-2*f,m+2*f,0,0))
-    elif state[I][0] == "expired":
+    elif state[I]["contract"] == "expired":
         ut = ut + Utility_leaf((0,-epsilon,0,0,0))
-    if state[E1][0] == "unlocked":
+    if state[E1]["contract"] == "unlocked":
         ut = ut + Utility_leaf((-m-3*f,m+3*f,0,0,0))
-    elif state[E1][0] == "expired":
+    elif state[E1]["contract"] == "expired":
         ut = ut + Utility_leaf((-epsilon,0,0,0,0))
     return ut
 
 
 def copy_state(state):
     state1 = {}
-    for key, value in state.items():
-        state1[key] = [v for v in value]
+    state1["time_orderings"] = state["time_orderings"][:]
+    state1["eq_secrets"] = {{p for p in s} for s in state["eq_secrets"]}
+    for player in ps:
+        state1[player] = {}
+        state1[player]["contract"] = state[player]["contract"]
+        state1[player]["secrets"] = {p: state[player]["secrets"][p] for p in ps}
+        state1[player]["ignoreshare"] = {p: state[player]["ignoreshare"][p] for p in ps}
     return state1
 
 
@@ -142,6 +151,18 @@ def share_secret_action(player):
         raise Exception("weird player")
 
 
+def align_secret_knowledge(state):
+    def update_dict(d, eq_classes):
+        for eq_class in eq_classes:
+            tmp = [d[p] for p in d if p in eq_class]
+            if any(tmp):
+                for p in eq_class:
+                    d[p] = True
+    for player in ps:
+        update_dict(state[player]["secrets"], state["eq_secrets"])
+        update_dict(state[player]["ignoreshare"], state["eq_secrets"])
+
+
 def generate_routing_unlocking(player: Player, state, history):
     # we can assume that current player p knows the secret.
     # initially B knows and always next player knows.
@@ -152,14 +173,15 @@ def generate_routing_unlocking(player: Player, state, history):
     if final(state):
         return leaf5(*utility_leaf(state).utility)
     else:
-        if state[player][2]:
+        if all(state[player]["ignoreshare"].values()):
             raise Exception(f"It should not be player {player}'s turn, because they have ignored sharing secrets.")
         branch_actions = {}
-        if state[player][0] == "locked":
+        if state[player]["contract"] == "locked" and state[player]["secrets"][prev_player(player)]:
             # Action unlock
             state1 = copy_state(state)
-            state1[player][0] = "unlocked"
-            state1[prev_player(player)][1] = True
+            state1[player]["contract"] = "unlocked"
+            state1[prev_player(player)]["secrets"][prev_player(player)] = True
+            align_secret_knowledge(state1)
             if state1[prev_player(player)][2] == True:
                 next_p, state2 = player_knows_secret_possibly_share(state1)
             else:
@@ -191,22 +213,51 @@ def generate_routing_unlocking(player: Player, state, history):
                 branch_actions[share_secret_action(p)] = generate_routing_unlocking(next_p, state2, history + str(player) + "." + str(share_secret_action(p)) + ";")
         return branch(player, branch_actions)
 
+# state[p] = [<state of the contract>,<knowledge of secrets>,<igoresharing secrets>,<equivalence classes of secrets>]
+# secrets are represented by players who wrote the HTCL contract with this hash
+# ignoresharing with key p, means not sharing the secret that p used to lock their contract with anyone
+
 
 initial_state = {
-    A: ["null", False, False],
-    E1: ["locked", False, False],
-    I: ["locked", False, False],
-    E2: ["locked", False, False],
-    B: ["locked", True, False],
+    "eq_secrets":  {{p for p in ps}},
+    "time_orderings": None,
+    A: {"contract": "null",
+        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
+        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
+    E1: {"contract": "locked",
+         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
+         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
+    I: {"contract": "locked",
+        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
+        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
+    E2: {"contract": "locked",
+         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
+         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
+    B: {"contract": "locked",
+        "secrets": {A: False, E1: False, I: False, E2: False, B: True},
+        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
 }
 
 intermediate_state = {
-    A: ["null", False, False],
-    E1: ["locked", False, False],
-    I: ["locked", False, False],
-    E2: ["expired", True, False],
-    B: ["unlocked", True, True],
+    "eq_secrets":  {{p for p in ps}},
+    "time_orderings": None,
+    A: {"contract": "null",
+        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
+        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
+    E1: {"contract": "locked",
+         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
+         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
+    I: {"contract": "locked",
+        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
+        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
+    E2: {"contract": "expired",
+         "secrets": {A: True, E1: True, I: True, E2: True, B: True},
+         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
+    B: {"contract": "unlocked",
+        "secrets": {A: True, E1: True, I: True, E2: True, B: True},
+        "ignoreshare": {A: True, E1: True, I: True, E2: True, B: True}}
 }
+
 
 unlocking_tree = generate_routing_unlocking(B, initial_state, "")
 # my_tree = generate_routing_unlocking(E2, intermediate_state)
