@@ -1,6 +1,5 @@
 from __future__ import annotations
 import json
-import sys
 from typing import Dict, Tuple, Union
 from enum import IntEnum
 
@@ -13,10 +12,12 @@ WEAK_IMMUNITY_CONSTRAINTS = ()
 COLLUSION_RESILIENCE_CONSTRAINTS = ()
 PRACTICALITY_CONSTRAINTS = ()
 HONEST_HISTORIES = ()
-TREE = {}
+TREE = ()
 
 
 class StringThing:
+    value: str
+
     def __init__(self, value: str):
         self.value = value
 
@@ -24,7 +25,7 @@ class StringThing:
         return self.value
 
     def json(self):
-        return self.value
+        return repr(self)
 
 
 class Action(StringThing):
@@ -35,81 +36,133 @@ class Player(StringThing):
     pass
 
 
-class Constraint(StringThing):
-    pass
-
-
 class Precedence(IntEnum):
     ADDITION = 0,
     MULTIPLICATION = 1,
-    LITERAL = 2
+    HIGHEST = 2
 
 
-class Expr(StringThing):
-    _precedence: Precedence
+class Expr:
+    precedence: Precedence
 
-    def __init__(self, value: str, precedence: Precedence):
-        super().__init__(value)
-        self._precedence = precedence
-
-    @staticmethod
-    def precedence(expr: Union[Expr, float, int]) -> Precedence:
-        if isinstance(expr, Expr):
-            return expr._precedence
-        else:
-            return Precedence.LITERAL
-
-    @staticmethod
-    def parenthesise(expr: Union[Expr, float, int], precedence: Precedence) -> Union[Expr, float, int]:
-        return expr if precedence <= Expr.precedence(expr) else Expr(f"({expr})", Precedence.LITERAL)
-
-    @staticmethod
-    def unary(expr: Union[Expr, float, int], precedence: Precedence, op: str) -> Expr:
-        expr = Expr.parenthesise(expr, precedence)
-        return Expr(f"{op}{expr}", precedence)
-
-    @staticmethod
-    def binary(left: Union[Expr, float, int], right: Union[Expr, float, int], precedence: Precedence, op: str) -> Expr:
-        left = Expr.parenthesise(left, precedence)
-        right = Expr.parenthesise(right, precedence)
-        return Expr(f"{left} {op} {right}", precedence)
+    def __init__(self, precedence: Precedence):
+        self.precedence = precedence
 
     def __add__(self, other: Union[Expr, float, int]) -> Expr:
-        return Expr.binary(self, other, Precedence.ADDITION, '+')
+        return binary_expr(self, other, '+')
 
     def __radd__(self, other: Union[Expr, float, int]) -> Expr:
-        return Expr.binary(other, self, Precedence.ADDITION, '+')
+        return binary_expr(other, self, '+')
 
     def __sub__(self, other: Union[Expr, float, int]) -> Expr:
-        return Expr.binary(self, other, Precedence.ADDITION, '-')
+        return binary_expr(self, other, '-')
 
     def __rsub__(self, other: Union[Expr, float, int]) -> Expr:
-        return Expr.binary(other, self, Precedence.ADDITION, '-')
+        return binary_expr(other, self, '-')
 
     def __mul__(self, other: Union[Expr, float, int]) -> Expr:
-        return Expr.binary(self, other, Precedence.MULTIPLICATION, '*')
+        return binary_expr(self, other, '*')
 
     def __rmul__(self, other: Union[Expr, float, int]) -> Expr:
-        return Expr.binary(other, self, Precedence.MULTIPLICATION, '*')
+        return binary_expr(other, self, '*')
 
     def __neg__(self) -> Expr:
-        return Expr.unary(self, Precedence.LITERAL, '-')
+        return negate_expr(self)
 
     def __ne__(self, other: Union[Expr, float, int]) -> Constraint:
-        return Constraint(f"{self} != {other}")
+        return DisequationConstraint('!=', self, other)
 
     def __gt__(self, other: Union[Expr, float, int]) -> Constraint:
-        return Constraint(f"{self} > {other}")
+        return DisequationConstraint('>', self, other)
 
     def __ge__(self, other: Union[Expr, float, int]) -> Constraint:
-        return Constraint(f"{self} >= {other}")
+        return DisequationConstraint('>=', self, other)
+
+    def json(self):
+        return repr(self)
 
 
 LExpr = Union[Expr, float, int]
 
 
+def precedence_of(expr: LExpr) -> Precedence:
+    return expr.precedence if isinstance(expr, Expr) else Precedence.HIGHEST
+
+
+class NameExpr(Expr):
+    name: str
+
+    def __init__(self, name: str):
+        super().__init__(Precedence.HIGHEST)
+        self.name = name
+
+    def __repr__(self):
+        return self.name
+
+
+class ParenExpr(Expr):
+    expr: LExpr
+
+    def __init__(self, expr: LExpr):
+        super().__init__(Precedence.HIGHEST)
+        self.expr = expr
+
+    def __repr__(self):
+        return f"({self.expr})"
+
+
+def parenthesise_expr(expr: LExpr, precedence: Precedence) -> Union[Expr, float, int]:
+    return expr if precedence <= precedence_of(expr) else ParenExpr(expr)
+
+
+class NegateExpr(Expr):
+    expr: LExpr
+
+    def __init__(self, expr: LExpr):
+        super().__init__(Precedence.HIGHEST)
+        self.expr = expr
+
+    def __repr__(self):
+        return f"-{self.expr}"
+
+
+def negate_expr(expr: LExpr) -> Expr:
+    expr = parenthesise_expr(expr, Precedence.HIGHEST)
+    return NegateExpr(expr)
+
+
+BINARY_OP_PRECEDENCES = {
+    '+': Precedence.ADDITION,
+    '-': Precedence.ADDITION,
+    '*': Precedence.MULTIPLICATION
+}
+
+
+class BinaryExpr(Expr):
+    op: str
+    left: LExpr
+    right: LExpr
+
+    def __init__(self, op: str, precedence: Precedence, left: LExpr, right: LExpr):
+        super().__init__(precedence)
+        self.op = op
+        self.left = left
+        self.right = right
+
+    def __repr__(self):
+        return f"{self.left} {self.op} {self.right}"
+
+
+def binary_expr(left: LExpr, right: LExpr, op: str) -> Expr:
+    precedence = BINARY_OP_PRECEDENCES[op]
+    left = parenthesise_expr(left, precedence)
+    right = parenthesise_expr(right, precedence)
+    return BinaryExpr(op, precedence, left, right)
+
+
 class Tree:
-    pass
+    def graphviz(self):
+        raise NotImplementedError()
 
 
 class Leaf(Tree):
@@ -123,6 +176,12 @@ class Leaf(Tree):
                 for player, utility in self.utilities.items()
             ]
         }
+
+    def graphviz(self):
+        print(f'\tn{id(self)} [label="*"];')
+        for player, utility in self.utilities.items():
+            print(f'\tn{id(self)}_{player} [label="{utility}"];')
+            print(f'\tn{id(self)} -> n{id(self)}_{player} [label="{player}"];')
 
 
 def leaf(utilities: Dict[Player, LExpr]) -> Leaf:
@@ -143,6 +202,12 @@ class Branch(Tree):
             ]
         }
 
+    def graphviz(self):
+        print(f'\tn{id(self)} [label="{self.player}"];')
+        for (action, child) in self.actions.items():
+            child.graphviz()
+            print(f'\tn{id(self)} -> n{id(child)} [label="{action}"];')
+
 
 def branch(player: Player, actions: Dict[Action, Tree]) -> Branch:
     return Branch(player, actions)
@@ -162,15 +227,33 @@ def actions(*actions: str) -> Tuple[Action, ...]:
 
 def infinitesimals(*infs: str) -> Tuple[Expr, ...]:
     global INFINITESIMALS
-    INFINITESIMALS = tuple(Expr(inf, Precedence.LITERAL) for inf in infs)
+    INFINITESIMALS = tuple(NameExpr(inf) for inf in infs)
     return INFINITESIMALS
 
 
 def constants(*constants: str) -> Tuple[Expr, ...]:
     global CONSTANTS
-    CONSTANTS = tuple(Expr(constant, Precedence.LITERAL)
-                      for constant in constants)
+    CONSTANTS = tuple(NameExpr(constant) for constant in constants)
     return CONSTANTS
+
+
+class Constraint:
+    def json(self):
+        return repr(self)
+
+
+class DisequationConstraint(Constraint):
+    op: str
+    left: LExpr
+    right: LExpr
+
+    def __init__(self, op: str, left: LExpr, right: LExpr):
+        self.op = op
+        self.left = left
+        self.right = right
+
+    def __repr__(self):
+        return f"{self.left} {self.op} {self.right}"
 
 
 def initial_constraints(*constraints: Constraint):
@@ -204,17 +287,27 @@ def tree(tree: Tree):
 
 
 def finish():
-    json.dump({
-        'players': PLAYERS,
-        'actions': ACTIONS,
-        'infinitesimals': INFINITESIMALS,
-        'constants': CONSTANTS,
-        'initial_constraints': INITIAL_CONSTRAINTS,
-        'property_constraints': {
-            'weak_immunity': WEAK_IMMUNITY_CONSTRAINTS,
-            'collusion_resilience': COLLUSION_RESILIENCE_CONSTRAINTS,
-            'practicality': PRACTICALITY_CONSTRAINTS
-        },
-        'honest_histories': HONEST_HISTORIES,
-        'tree': TREE
-    }, default=lambda x: x.json(), fp=sys.stdout, indent=2)
+    import sys
+    mode = sys.argv[1] if len(sys.argv) >= 2 else ''
+    if mode == 'graphviz':
+        assert isinstance(TREE, Tree)
+        print("digraph tree {")
+        TREE.graphviz()
+        print("}")
+    else:
+        json.dump({
+            'players': PLAYERS,
+            'actions': ACTIONS,
+            'infinitesimals': INFINITESIMALS,
+            'constants': CONSTANTS,
+            'initial_constraints': INITIAL_CONSTRAINTS,
+            'property_constraints': {
+                'weak_immunity': WEAK_IMMUNITY_CONSTRAINTS,
+                'collusion_resilience': COLLUSION_RESILIENCE_CONSTRAINTS,
+                'practicality': PRACTICALITY_CONSTRAINTS
+            },
+            'honest_histories': HONEST_HISTORIES,
+            'tree': TREE
+        }, default=lambda x: x.json(), fp=sys.stdout, indent=2)
+
+    sys.exit(0)
