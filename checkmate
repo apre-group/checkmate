@@ -52,6 +52,8 @@ class StrategySolver(metaclass=ABCMeta):
         # maintain a bijection from (left, right) expression pairs and Z3 labels
         self._pair2label = {}
         self._label2pair = {}
+        self._subtree2label = {}
+        self._label2subtree = {}
         # mapping from action variables to (history, action) pairs
         self._action_variables = {}
         # the set of utility variables so that we exclude them from case splits
@@ -59,18 +61,21 @@ class StrategySolver(metaclass=ABCMeta):
         # the set of generated preconditions in case the game is not secure per se
         self._generated_preconditions = set()
 
+        self._generate_counterexamples = False
+
         self._add_action_constraints([], input.tree)
         self._add_history_constraints(self.checked_history)
 
-    def solve(self, output: bool, generate_preconditions: bool) -> Dict[str, Any]:
+    def solve(self, output: bool, generate_preconditions: bool, generate_counterexamples: bool) -> Dict[str, Any]:
         """
         the main solving routine
 
         if `not output` or we failed to find a solution, return empty list
         otherwise, returns a solution to report later
         """
-
+        self._generate_counterexamples = generate_counterexamples
         result = {"generated_preconditions": list(self._generated_preconditions),
+                  "counterexamples": [],
                   "cases": []}
         # a solver that manages case splits, AVATAR style
         case_solver = z3.Solver()
@@ -128,6 +133,7 @@ class StrategySolver(metaclass=ABCMeta):
 
                 # track whether we actually found any more
                 new_expression = False
+                counterexamples = []
                 for item in self._solver.unsat_core():
                     # sometimes solver generates garbage for some reason, exclude it
                     if isinstance(item, z3.BoolRef) and z3.is_app(item):
@@ -149,42 +155,53 @@ class StrategySolver(metaclass=ABCMeta):
                                     add_to.add(x)
                                     new_expression = True
 
+                        if self._generate_counterexamples and label in self._label2subtree:
+                            counterexamples.append(self._label2subtree[label])
+
                 # we saturated, give up
                 if not new_expression:
                     logging.error("no more splits, failed")
+
+                    optimizer = z3.Solver()
+                    for constraint in itertools.chain(
+                            self.input.initial_constraints,
+                            self._generated_preconditions,
+                            self._property_initial_constraints()
+                    ):
+                        optimizer.add(constraint)
+                    minimized = list(minimize(optimizer, set(case)))
+
+                    logging.error(f"here is a case I cannot solve: {minimized}")
+
+                    if self._generate_counterexamples:
+                        logging.info(f"counterexamples: {counterexamples}")
+
                     if not generate_preconditions:
-                        return {"generated_preconditions": list(self._generated_preconditions),
-                                "cases": []}
+                        return {
+                            "generated_preconditions": list(self._generated_preconditions),
+                            "counterexamples": counterexamples,
+                            "cases": []
+                        }
                     else:
-                        optimizer = z3.Solver()
-                        for constraint in itertools.chain(
-                                self.input.initial_constraints,
-                                self._generated_preconditions,
-                                self._property_initial_constraints()
-                        ):
-                            optimizer.add(constraint)
-                        minimised = minimize(optimizer, set(case))
-                        if len(minimised) == 0:
+                        if len(minimized) == 0:
                             logging.info(
                                 "failed case is implied by preconditions."
                             )
                             return {
                                 "generated_preconditions": list(self._generated_preconditions),
+                                "counterexamples": counterexamples,
                                 "cases": []
                             }
                         self._generated_preconditions.add(disjunction(*(
-                            simplify_boolean(negation(constr)) for constr in minimised
+                            simplify_boolean(negation(constr)) for constr in minimized
                         )))
-                        logging.error(
-                            f"here is a case I cannot solve: {minimised}"
-                        )
                         logging.info(
                             f"here are the generated preconditions: {self._generated_preconditions}"
                         )
                         logging.info(
                             "restarting with a generated set of preconditions"
                         )
-                        return self.solve(output, generate_preconditions)
+                        return self.solve(output, generate_preconditions, generate_counterexamples)
 
         # there are no more possible models, i.e. no more cases to be discharged
         logging.info("no more cases, done")
@@ -276,6 +293,25 @@ class StrategySolver(metaclass=ABCMeta):
         assert isinstance(expr, z3.BoolRef)
         return expr
 
+    def _subtree_label(
+            self,
+            players: str,
+            subtree_history: List[str]
+    ) -> z3.BoolRef:
+        history_str = '[' + ','.join(subtree_history) + ']'
+        label = self._subtree2label.get((players, history_str))
+        if label is None:
+            label = z3.Function(f'ce[{players}][{history_str}]', z3.BoolSort())
+            self._subtree2label[(players, history_str)] = label
+            self._label2subtree[label] = (players, history_str)
+            expr = label()
+            self._solver.assert_and_track(expr, expr)
+        else:
+            expr = label()
+
+        assert isinstance(expr, z3.BoolRef)
+        return expr
+
     def _extract_strategy(self, case: List[z3.BoolRef]) -> Dict[str, Any]:
         """Extracting strategies from the solver for the current case split."""
         strategy = {}
@@ -316,10 +352,12 @@ class WeakImmuneStrategySolver(StrategySolver):
     ):
         # if the player makes player_decisions, then its utility should be more than 0.
         if isinstance(tree, Leaf):
-            constraints.append(implication(
+            impl = implication(
                 conjunction(*player_decisions),
                 Utility.__ge__(tree.utilities[player], ZERO, self._label)
-            ))
+            )
+            constraints.append(
+                implication(self._subtree_label(player, history), impl) if self._generate_counterexamples else impl)
             return
 
         # walk the tree and collect player's decisions
@@ -384,10 +422,12 @@ class CollusionResilienceStrategySolver(StrategySolver):
                 tree.utilities[player]
                 for player in colluding_group
             ), start=ZERO)
-            constraints.append(implication(
+            impl = implication(
                 conjunction(*nongroup_decisions),
                 Utility.__ge__(old_utility, colluding_utility, self._label)
-            ))
+            )
+            constraints.append(implication(self._subtree_label(','.join(colluding_group), history),
+                                           impl) if self._generate_counterexamples else impl)
             return
 
         assert isinstance(tree, Branch)
@@ -549,10 +589,12 @@ class PracticalityStrategySolver(StrategySolver):
         # player should not benefit from deviating in this subtree.
         if isinstance(tree, Leaf):
             deviating_utility = tree.utilities[player]
-            constraints.append(implication(
+            impl = implication(
                 conjunction(*nonplayer_decisions),
                 Utility.__ge__(old_utility, deviating_utility, self._label)
-            ))
+            )
+            constraints.append(
+                implication(self._subtree_label(player, history), impl) if self._generate_counterexamples else impl)
             return
 
         # all the other players have the strategy fixed (nonplayer_decisions)
@@ -606,9 +648,15 @@ if __name__ == '__main__':
         action='store_true',
         help="generate preconditions if a case fails"
     )
+    parser.add_argument(
+        '--generate-counterexamples',
+        action='store_true',
+        help="generate counterexamples if a case fails"
+    )
     args = parser.parse_args()
     output = args.output_strategies
     generate_preconditions = args.generate_preconditions
+    generate_counterexamples = args.generate_counterexamples
     input = Input(args.PATH)
     logging.info(
         f"input OK, checking {len(input.honest_histories)} histories..."
@@ -623,19 +671,19 @@ if __name__ == '__main__':
         result["weak_immunity"] = WeakImmuneStrategySolver(
             input,
             honest_history
-        ).solve(True, generate_preconditions)
+        ).solve(True, generate_preconditions, generate_counterexamples)
 
         logging.info("checking collusion resilience")
         result["collusion_resilience"] = CollusionResilienceStrategySolver(
             input,
             honest_history
-        ).solve(True, generate_preconditions)
+        ).solve(True, generate_preconditions, generate_counterexamples)
 
         logging.info("checking practicality")
         result["practicality"] = PracticalityStrategySolver(
             input,
             honest_history
-        ).solve(True, generate_preconditions)
+        ).solve(True, generate_preconditions, generate_counterexamples)
 
         strategies.append(result)
 
@@ -675,5 +723,9 @@ if __name__ == '__main__':
                 gen_precond = hh[pr]["generated_preconditions"]
                 hh[pr]["generated_preconditions"] = [
                     str(precond) for precond in gen_precond
+                ]
+                counterexamples = hh[pr]["counterexamples"]
+                hh[pr]["counterexamples"] = [
+                    {"player": player, "history": history.split(',')} for player, history in counterexamples
                 ]
         json.dump({"strategies": strategies}, fp=sys.stdout, indent=4)
