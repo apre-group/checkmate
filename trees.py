@@ -9,7 +9,7 @@ import json
 from typing import Any, Dict, Iterable, List, Union
 import z3
 from auxfunz3 import Boolean
-from utility import Utility, ZERO
+from utility import Utility
 
 
 class Tree(metaclass=ABCMeta):

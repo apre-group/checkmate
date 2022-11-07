@@ -7,8 +7,10 @@ import z3
 import operator
 from auxfunz3 import Real, Boolean, LabelFn, negation, conjunction, disjunction, label
 
+
 def flip(op: Callable[[Real, Real], Real]) -> Callable[[Real, Real], Real]:
     return lambda x, y: op(y, x)
+
 
 def binary_op_with_id(
         left: Real,

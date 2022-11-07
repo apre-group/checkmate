@@ -9,9 +9,7 @@ from argparse import ArgumentParser
 import itertools
 import json
 import logging
-from pickletools import optimize
 import sys
-from textwrap import shorten
 from typing import Any, Dict, List, Set, Tuple
 import z3
 

@@ -24,7 +24,8 @@ class StrategyChecker(metaclass=ABCMeta):
     input: Input
     _solver: z3.Solver
 
-    def __init__(self, input: Input, honest_history: List[str], strategy: Dict[str, str], cases: List[Boolean], generated_preconditions: List[Boolean]) -> None:
+    def __init__(self, input: Input, honest_history: List[str], strategy: Dict[str, str], cases: List[Boolean],
+                 generated_preconditions: List[Boolean]) -> None:
         self.input = input
         self.honest_history = honest_history
         self.strategy = strategy
@@ -44,7 +45,7 @@ class StrategyChecker(metaclass=ABCMeta):
     def _property_constraints(self) -> None:
         pass
 
-    def _get_utilities(self, tree: Tree, players: Set[str], history: str, utilities: List[Utility])-> List[Utility]:
+    def _get_utilities(self, tree: Tree, players: Set[str], history: str, utilities: List[Utility]) -> List[Utility]:
         if isinstance(tree, Branch):
             if tree.player in players:
                 # it's one of the fixed players' turn
@@ -58,7 +59,7 @@ class StrategyChecker(metaclass=ABCMeta):
                 for action, child in tree.actions.items():
                     history1 = history + ";" + action if history else action
                     utilities.extend(
-                       self._get_utilities(child, players, history1, utilities))
+                        self._get_utilities(child, players, history1, utilities))
 
         elif isinstance(tree, Leaf):
             # leaf node -> apply function to node
@@ -113,7 +114,9 @@ class CollusionResilienceStrategyChecker(StrategyChecker):
         disj = False
 
         for player_subset in self.strict_subgroups(set(self.input.players)):
-            sum_old_utility = sum([self.input.tree.get_utility_of_terminal_history(self.honest_history)[pl] for pl in player_subset], start=ZERO)
+            sum_old_utility = sum(
+                [self.input.tree.get_utility_of_terminal_history(self.honest_history)[pl] for pl in player_subset],
+                start=ZERO)
             sum_new_utility = self._get_utilities(self.input.tree, set(self.input.players) - set(player_subset), '', [])
 
             for sum_utility in sum_new_utility:
