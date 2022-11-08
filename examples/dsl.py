@@ -1,10 +1,10 @@
 from __future__ import annotations
 import json
-from typing import Dict, Tuple, Union
+from typing import Dict, Tuple, Union, List
 from enum import IntEnum
 
 PLAYERS = ()
-ACTIONS = ()
+ACTIONS = []
 INFINITESIMALS = ()
 CONSTANTS = ()
 INITIAL_CONSTRAINTS = ()
@@ -22,6 +22,9 @@ class StringThing:
         self.value = value
 
     def __repr__(self):
+        return self.value
+
+    def __str__(self):
         return self.value
 
     def json(self):
@@ -219,9 +222,9 @@ def players(*players: str) -> Tuple[Player, ...]:
     return PLAYERS
 
 
-def actions(*actions: str) -> Tuple[Action, ...]:
+def actions(*actions: str) -> List[Action]:
     global ACTIONS
-    ACTIONS = tuple(Action(action) for action in actions)
+    ACTIONS = [Action(action) for action in actions]
     return ACTIONS
 
 
