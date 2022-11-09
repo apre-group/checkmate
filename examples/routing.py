@@ -259,15 +259,15 @@ intermediate_state = {
         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     E2: {"contract": "expired",
-         "secrets": {A: True, E1: True, I: True, E2: True, B: True},
+         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
          "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     B: {"contract": "unlocked",
         "secrets": {A: True, E1: True, I: True, E2: True, B: True},
-        "ignoreshare": {A: True, E1: True, I: True, E2: True, B: True}}
+        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
 }
 
 
-unlocking_tree = generate_routing_unlocking(B, initial_state, "")
+unlocking_tree = generate_routing_unlocking(B, intermediate_state, "")
 # my_tree = generate_routing_unlocking(E2, intermediate_state)
 
 tree(unlocking_tree)
