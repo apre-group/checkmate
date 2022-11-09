@@ -34,6 +34,11 @@ recursion_depth = 0
 
 ps = [A, E1, I, E2, B]
 
+for player in ps:
+    for p in ps:
+        # sharing player's secret with p
+        ACTIONS.append(Action(f"S_S{p}_{player}"))
+
 
 def prev_player(player):
     players = [A, E1, I, E2, B]
@@ -137,19 +142,11 @@ def next_player(state):
     return next_p, state2
 
 
-def share_secret_action(player):
-    if player == A:
-        return S_SA
-    elif player == E1:
-        return S_SE1
-    elif player == I:
-        return S_SI
-    elif player == E2:
-        return S_SE2
-    elif player == B:
-        return S_SB
-    else:
-        raise Exception("weird player")
+def share_secret_action(player, secret):
+    # Delete me
+    #if secret != A and secret != B:
+    #    raise Exception("We are not using the representative for the secret!")
+    return Action(f"S_S{player}_{secret}")
 
 
 def align_secret_knowledge(state):
@@ -165,9 +162,9 @@ def align_secret_knowledge(state):
 
 
 def generate_routing_unlocking(player: Player, state, history):
-    print(history)
-    print(player)
-    print(state)
+    # print(history)
+    # print(player)
+    # print(state)
     # we can assume that current player p knows the secret.
     # initially B knows and always next player knows.
     global recursion_depth
@@ -183,8 +180,12 @@ def generate_routing_unlocking(player: Player, state, history):
         # Sharing is caring
         secrets_player_knows = {pl for pl in ps if state[player]["secrets"][pl]}
         secrets_to_share = secrets_player_knows - {pl for pl in ps if state[player]["ignoreshare"][pl]}
+        secrets_to_share_representatives = []
+        for eq_class in state["eq_secrets"]:
+            if eq_class[0] in secrets_to_share:
+                secrets_to_share_representatives.append(eq_class[0])
         # sharing_dict = {s: [] for s in secrets_to_share}
-        for secret in secrets_to_share:
+        for secret in secrets_to_share_representatives:
             for p in set(ps) - {player}:
                 if not state[p]["secrets"][secret]:
                     # sharing_dict[secret].append(p)
@@ -192,7 +193,7 @@ def generate_routing_unlocking(player: Player, state, history):
                     state1[p]["secrets"][secret] = True
                     align_secret_knowledge(state1)
                     next_p, state2 = next_player(state1)
-                    branch_actions[share_secret_action(p)] = generate_routing_unlocking(next_p, state2, history + str(player) + "." + str(share_secret_action(p)) + ";")
+                    branch_actions[share_secret_action(p, secret)] = generate_routing_unlocking(next_p, state2, history + str(player) + "." + str(share_secret_action(p, secret)) + ";")
         if state[player]["contract"] == "locked" and state[player]["secrets"][prev_player(player)]:
             # Action unlock
             state1 = copy_state(state)
@@ -229,7 +230,7 @@ initial_state = {
     "eq_secrets": [[A, I], [B, E1, E2]],
     "time_orderings": [],
     A: {"contract": "null",
-        "secrets": {A: True, E1: False, I: False, E2: False, B: False},
+        "secrets": {A: True, E1: False, I: True, E2: False, B: False},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     E1: {"contract": "locked",
          "secrets": {A: False, E1: False, I: False, E2: False, B: False},
@@ -241,12 +242,12 @@ initial_state = {
          "secrets": {A: False, E1: False, I: False, E2: False, B: False},
          "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     B: {"contract": "locked",
-        "secrets": {A: False, E1: False, I: False, E2: False, B: True},
+        "secrets": {A: False, E1: True, I: False, E2: True, B: True},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
 }
 
 intermediate_state = {
-    "eq_secrets": [[p for p in ps]],
+    "eq_secrets": [[A, B, E1, I, E2]],
     "time_orderings": [],
     A: {"contract": "null",
         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
@@ -258,15 +259,15 @@ intermediate_state = {
         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     E2: {"contract": "expired",
-         "secrets": {A: True, E1: True, I: True, E2: True, B: True},
+         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
          "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     B: {"contract": "unlocked",
         "secrets": {A: True, E1: True, I: True, E2: True, B: True},
-        "ignoreshare": {A: True, E1: True, I: True, E2: True, B: True}}
+        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
 }
 
 
-unlocking_tree = generate_routing_unlocking(B, initial_state, "")
+unlocking_tree = generate_routing_unlocking(B, intermediate_state, "")
 # my_tree = generate_routing_unlocking(E2, intermediate_state)
 
 tree(unlocking_tree)
