@@ -193,6 +193,19 @@ def recognise_kaput(state):
             state[ps[i+1]]["contract"] = "kaput"
 
 
+def remove_pointless_sharing(state, secrets_to_share_representatives):
+    # secrets of contracts that are unlocked or expired are pointless to share
+    useful = []
+    for eq_class in state["eq_secrets"]:
+        if eq_class[0] in secrets_to_share_representatives:
+            for secret in eq_class:
+                i = ps.index(secret)
+                if not i == len(ps)-1 and state[ps[i+1]]["contract"] == "locked":
+                    useful.append(eq_class[0])
+                    break
+    return useful
+
+
 def generate_routing_unlocking(player: Player, state, history):
     # print(history)
     # print(player)
@@ -216,6 +229,7 @@ def generate_routing_unlocking(player: Player, state, history):
         for eq_class in state["eq_secrets"]:
             if eq_class[0] in secrets_to_share:
                 secrets_to_share_representatives.append(eq_class[0])
+        secrets_to_share_representatives = remove_pointless_sharing(state, secrets_to_share_representatives)
         if history:
             pprev_player, prev_action = history[:-1].split(";")[-1].split(".")
         else:
@@ -274,7 +288,7 @@ initial_state = {
     "eq_secrets": [[A, I], [B, E1, E2]],
     "time_orderings": [],
     A: {"contract": "null",
-        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
+        "secrets": {A: True, E1: False, I: False, E2: False, B: False},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     E1: {"contract": "locked",
          "secrets": {A: False, E1: False, I: False, E2: False, B: False},
@@ -291,7 +305,7 @@ initial_state = {
 }
 
 intermediate_state = {
-    "eq_secrets": [[A], [B], [E1], [I], [E2]],
+    "eq_secrets": [[A, B, E1, I, E2]],
     "time_orderings": [],
     A: {"contract": "null",
         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
@@ -314,9 +328,8 @@ align_secret_knowledge(initial_state)
 recognise_kaput(initial_state)
 align_secret_knowledge(intermediate_state)
 recognise_kaput(intermediate_state)
-print(intermediate_state)
 
-unlocking_tree = generate_routing_unlocking(B, intermediate_state, "")
+unlocking_tree = generate_routing_unlocking(B, initial_state, "")
 # my_tree = generate_routing_unlocking(E2, intermediate_state)
 
 tree(unlocking_tree)
