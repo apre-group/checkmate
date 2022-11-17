@@ -78,6 +78,9 @@ def final(state):
     for p in ps:
         if state[p]["contract"] == "locked":
             return False
+    for p in ps:
+        if state[p]["contract"] == "kaput":
+            state[p]["contract"] = "expired"
     return True
 
 
@@ -177,8 +180,21 @@ def align_secret_knowledge(state):
         update_dict(state[player]["ignoreshare"], state["eq_secrets"])
 
 
+def recognise_kaput(state):
+    # recognise which contracts are kaput
+    for i in range(len(ps)-1):
+        player = ps[i]
+        flag = False
+        for p in ps:
+            if state[p]["secrets"][player]:
+                flag = True
+                break
+        if not flag:
+            state[ps[i+1]]["contract"] = "kaput"
+
+
 def generate_routing_unlocking(player: Player, state, history):
-    print(history)
+    # print(history)
     # print(player)
     # print(state)
     # we can assume that current player p knows the secret.
@@ -258,7 +274,7 @@ initial_state = {
     "eq_secrets": [[A, I], [B, E1, E2]],
     "time_orderings": [],
     A: {"contract": "null",
-        "secrets": {A: True, E1: False, I: True, E2: False, B: False},
+        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     E1: {"contract": "locked",
          "secrets": {A: False, E1: False, I: False, E2: False, B: False},
@@ -290,15 +306,20 @@ intermediate_state = {
          "secrets": {A: False, E1: False, I: False, E2: False, B: False},
          "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     B: {"contract": "locked",
-        "secrets": {A: False, E1: False, I: False, E2: False, B: True},
+        "secrets": {A: True, E1: False, I: False, E2: False, B: True},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
 }
 
+align_secret_knowledge(initial_state)
+recognise_kaput(initial_state)
+align_secret_knowledge(intermediate_state)
+recognise_kaput(intermediate_state)
+print(intermediate_state)
 
 unlocking_tree = generate_routing_unlocking(B, intermediate_state, "")
 # my_tree = generate_routing_unlocking(E2, intermediate_state)
 
-#tree(unlocking_tree)
+tree(unlocking_tree)
 
-#finish()
+finish()
 
