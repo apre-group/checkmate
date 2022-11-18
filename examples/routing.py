@@ -1,4 +1,3 @@
-import dsl
 from dsl import *
 import itertools
 
@@ -349,7 +348,6 @@ unlocking_tree = generate_routing_unlocking(B, intermediate_state, "")
 tree(unlocking_tree)
 
 for act in actions_for_sharing_secrets:
-    dsl.ACTIONS.append(Action(act))
-
+    ACTIONS.append(Action(act))
 finish()
 

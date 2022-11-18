@@ -224,7 +224,8 @@ def players(*players: str) -> Tuple[Player, ...]:
 
 def actions(*actions: str) -> List[Action]:
     global ACTIONS
-    ACTIONS = [Action(action) for action in actions]
+    for action in actions:
+        ACTIONS.append(Action(action))
     return ACTIONS
 
 
