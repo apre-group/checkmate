@@ -1,7 +1,5 @@
-from os import stat
+import dsl
 from dsl import *
-from typing import Union
-import copy
 import itertools
 
 A, E1, I, E2, B = players('A', 'E1', 'I', 'E2', 'B')
@@ -35,15 +33,7 @@ recursion_depth = 0
 
 ps = [A, E1, I, E2, B]
 
-
-#Actions for sharing secrets: S_S_[[],[],[A, B], [], [E1]]
 actions_for_sharing_secrets = set()
-# powerset = [subset
-#             for length in range(len(ps)+1)
-#             for subset in itertools.combinations(ps, length)]
-# for ll in itertools.product(powerset, repeat=5):
-#     ACTIONS.append(Action(f"S_S_{ll}"))
-
 
 def secret_sharing_sets(secrets_to_share: Dict[Player, List[Player]]):
     powersets = []
@@ -163,6 +153,7 @@ def next_player(state):
 
 
 def share_secret_action(sharing_instance):
+    # Actions for sharing secrets: S_S_[[],[],[A, B], [], [E1]]
     return Action(f"S_S{sharing_instance}")
 
 
@@ -352,12 +343,13 @@ recognise_kaput(intermediate_state)
 align_secret_knowledge(intermediate_state1)
 recognise_kaput(intermediate_state1)
 
-unlocking_tree = generate_routing_unlocking(B, intermediate_state1, "")
+unlocking_tree = generate_routing_unlocking(B, intermediate_state, "")
 # my_tree = generate_routing_unlocking(E2, intermediate_state)
 
 tree(unlocking_tree)
 
 for act in actions_for_sharing_secrets:
-    ACTIONS.append(Action(act))
+    dsl.ACTIONS.append(Action(act))
+
 finish()
 
