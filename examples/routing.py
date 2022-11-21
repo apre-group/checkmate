@@ -52,6 +52,12 @@ def prev_player(player):
     return players[i-1]
 
 
+def player_plus_one(player):
+    i = ps.index(player)
+    ii = (i + 1) % len(ps)
+    return ps[ii]
+
+
 def next_players(player, state):
     i = state["time_orderings"].index(player)
     return state["time_orderings"][:i]
@@ -262,7 +268,7 @@ def generate_routing_unlocking(player: Player, state, history):
 # ignoresharing with key p, means not sharing the secret that p used to lock their contract with anyone
 
 
-initial_state = {
+initial_unlocking_state = {
     "eq_secrets": [[A, I], [B, E1, E2]],
     "time_orderings": [B, E2, I, E1, A],
     A: {"contract": "null",
@@ -337,19 +343,102 @@ intermediate_state1 = {
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
 }
 
-align_secret_knowledge(initial_state)
-recognise_kaput(initial_state)
+align_secret_knowledge(initial_unlocking_state)
+recognise_kaput(initial_unlocking_state)
 align_secret_knowledge(intermediate_state)
 recognise_kaput(intermediate_state)
 align_secret_knowledge(intermediate_state1)
 recognise_kaput(intermediate_state1)
 
-unlocking_tree = generate_routing_unlocking(B, intermediate_state, "")
-# my_tree = generate_routing_unlocking(E2, intermediate_state)
 
-tree(unlocking_tree)
+# unlocking_tree = generate_routing_unlocking(B, intermediate_state, "")
+# my_tree = generate_routing_unlocking(E2, intermediate_state)
 
 for act in actions_for_sharing_secrets:
     ACTIONS.append(Action(act))
-finish()
 
+initial_state = {
+    "eq_secrets": [],
+    "time_orderings": [None for p in ps],
+    A: {"contract": "null",
+        "amount_to_unlock": None,
+        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
+        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
+    E1: {"contract": "null",
+         "amount_to_unlock": None,
+         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
+         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
+    I: {"contract": "null",
+        "amount_to_unlock": None,
+        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
+        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
+    E2: {"contract": "null",
+         "amount_to_unlock": None,
+         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
+         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
+    B: {"contract": "null",
+        "amount_to_unlock": None,
+        "secrets": {A: False, E1: False, I: False, E2: False, B: True},
+        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
+}
+
+
+def locking_action(deviator, slot, eq_class):
+    return f"L_({deviator},{slot},{eq_class})"
+
+
+def generate_routing_locking(player, state, deviator, history):
+    branch_actions = {}
+
+    def aux_locking(player, new_state, deviator, history):
+        # time orderings
+        positions = [i for i in range(len(ps)) if state["time_orderings"][i] is None]
+        for i in positions:
+            new_state1 = copy_state(new_state)
+            new_state1["time_orderings"][i] = player
+            # eq classes of secrets
+            for j in range(len(state["eq_secrets"])):
+                new_state2 = copy_state(new_state1)
+                new_state2["eq_secrets"][j].append(player)
+                action = locking_action(deviator, i, new_state2["eq_secrets"][j])
+                if player == E2:
+                    align_secret_knowledge(new_state2)
+                    # branch_actions[Action(action)] = generate_routing_unlocking(B, new_state2, history + str(player) + f".{action};")
+                    print(history + str(player) + f".{action};")
+                    branch_actions[Action(action)] = todo
+                else:
+                    branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state2, deviator, history + str(player) + f".{action};")
+            # I am my own eq class therefore I know my own secret
+            new_state1["eq_secrets"].append([player])
+            new_state1[player]["secrets"][player] = True
+            action = locking_action(deviator, i, new_state1["eq_secrets"][-1])
+            if player == E2:
+                align_secret_knowledge(new_state1)
+                # branch_actions[Action(action)] = generate_routing_unlocking(B, new_state1, history + str(player) + f".{action};")
+                print(history + str(player) + f".{action};")
+                branch_actions[Action(action)] = todo
+            else:
+                branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state1, deviator, history + str(player) + f".{action};")
+    if deviator is None:
+        # case honest amount
+        state1 = copy_state(state)
+        i = ps.index(player)
+        state1[ps[i+1]]["amount_to_unlock"] = m + (len(ps) - 2 - i) * f
+        aux_locking(player, state1, deviator, history)
+        deviator = player
+    # case dishonest amount
+    state2 = copy_state(state)
+    i = ps.index(player)
+    state2[ps[i+1]]["amount_to_unlock"] = NameExpr(f"a_{deviator}_{player}")
+    # CONSTANTS.append(NameExpr(f"a_{deviator}_{player}"))
+    aux_locking(player, state2, deviator, history)
+    # case ignore locking
+    branch_actions[I_L] = todo
+    print(history + str(player) + ".I_L;")
+    return branch(player, branch_actions)
+
+
+locking_tree = generate_routing_locking(A, initial_state, None, "")
+tree(locking_tree)
+
+# finish()
