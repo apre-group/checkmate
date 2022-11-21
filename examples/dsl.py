@@ -6,7 +6,7 @@ from enum import IntEnum
 PLAYERS = ()
 ACTIONS = []
 INFINITESIMALS = ()
-CONSTANTS = ()
+CONSTANTS = []
 INITIAL_CONSTRAINTS = ()
 WEAK_IMMUNITY_CONSTRAINTS = ()
 COLLUSION_RESILIENCE_CONSTRAINTS = ()
@@ -235,9 +235,10 @@ def infinitesimals(*infs: str) -> Tuple[Expr, ...]:
     return INFINITESIMALS
 
 
-def constants(*constants: str) -> Tuple[Expr, ...]:
+def constants(*constants: str) -> List[Expr]:
     global CONSTANTS
-    CONSTANTS = tuple(NameExpr(constant) for constant in constants)
+    for const in constants:
+        CONSTANTS.append(NameExpr(const))
     return CONSTANTS
 
 
