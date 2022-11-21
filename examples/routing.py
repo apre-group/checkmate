@@ -34,6 +34,7 @@ ps = [A, E1, I, E2, B]
 
 actions_for_sharing_secrets = set()
 
+
 def secret_sharing_sets(secrets_to_share: Dict[Player, List[Player]]):
     powersets = []
     for key in secrets_to_share:
@@ -43,10 +44,6 @@ def secret_sharing_sets(secrets_to_share: Dict[Player, List[Player]]):
         powersets.append(powerset)
     for ll in itertools.product(*powersets):
         yield ll
-
-
-# for x in secret_sharing_sets({A: [], E1: [A], I: [], E2: [], B: [E1, E2]}):
-#     print(x)
 
 
 def prev_player(player):
@@ -70,34 +67,23 @@ def final(state):
     return True
 
 
-class Utility_leaf:
-
-    def __init__(self, t: Tuple[LExpr]) -> None:
-        self.utility = t
-
-    def __add__(self, other):
-        pointwise_add = [self.utility[i] + other.utility[i] for i in range(len(self.utility))]
-        return Utility_leaf(tuple(pointwise_add))
-
-
 def utility_leaf(state):
-    ut = Utility_leaf((0,0,0,0,0))
-    if state[B]["contract"] == "unlocked":
-        ut = ut + Utility_leaf((rho+m+3*f,0,0,-m,rho))
-    elif state[B]["contract"] == "expired":
-        ut = ut + Utility_leaf((0,0,0,-epsilon,0))
-    if state[E2]["contract"] == "unlocked":
-        ut = ut + Utility_leaf((0,0,-m-f,m+f,0))
-    elif state[E2]["contract"] == "expired":
-        ut = ut + Utility_leaf((0,0,-epsilon,0,0))
-    if state[I]["contract"] == "unlocked":
-        ut = ut + Utility_leaf((0,-m-2*f,m+2*f,0,0))
-    elif state[I]["contract"] == "expired":
-        ut = ut + Utility_leaf((0,-epsilon,0,0,0))
-    if state[E1]["contract"] == "unlocked":
-        ut = ut + Utility_leaf((-m-3*f,m+3*f,0,0,0))
-    elif state[E1]["contract"] == "expired":
-        ut = ut + Utility_leaf((-epsilon,0,0,0,0))
+    ut = {player: 0 for player in ps}
+    for player in ps:
+        if player == B:
+            if state[B]["contract"] == "unlocked":
+                ut[B] = ut[B] + rho
+                ut[E2] = ut[E2] - state[B]["amount_to_unlock"]
+                ut[A] = ut[A] + rho + state[E1]["amount_to_unlock"]
+            elif state[B]["contract"] == "expired":
+                ut[prev_player(player)] = ut[prev_player(player)] - epsilon
+
+        else:
+            if state[player]["contract"] == "unlocked":
+                ut[player] = ut[player] + state[player]["amount_to_unlock"]
+                ut[prev_player(player)] = ut[prev_player(player)] - state[player]["amount_to_unlock"]
+            elif state[player]["contract"] == "expired":
+                ut[prev_player(player)] = ut[prev_player(player)] - epsilon
     return ut
 
 
@@ -108,6 +94,7 @@ def copy_state(state):
     for player in ps:
         state1[player] = {}
         state1[player]["contract"] = state[player]["contract"]
+        state1[player]["amount_to_unlock"] = state[player]["amount_to_unlock"]
         state1[player]["secrets"] = {p: state[player]["secrets"][p] for p in ps}
         state1[player]["ignoreshare"] = {p: state[player]["ignoreshare"][p] for p in ps}
     return state1
@@ -205,7 +192,7 @@ def generate_routing_unlocking(player: Player, state, history):
     if depth > recursion_depth:
         recursion_depth = depth
     if final(state):
-        return leaf5(*utility_leaf(state).utility)
+        return leaf(utility_leaf(state))
     else:
         # if all(state[player]["ignoreshare"].values()):
         #     raise Exception(f"It should not be player {player}'s turn, because they have ignored sharing secrets.")
@@ -279,18 +266,23 @@ initial_state = {
     "eq_secrets": [[A, I], [B, E1, E2]],
     "time_orderings": [B, E2, I, E1, A],
     A: {"contract": "null",
+        "amount_to_unlock": None,
         "secrets": {A: True, E1: False, I: False, E2: False, B: False},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     E1: {"contract": "locked",
+         "amount_to_unlock": m + 3*f,
          "secrets": {A: False, E1: False, I: False, E2: False, B: False},
          "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     I: {"contract": "locked",
+        "amount_to_unlock": m + 2*f,
         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     E2: {"contract": "locked",
+         "amount_to_unlock": m + f,
          "secrets": {A: False, E1: False, I: False, E2: False, B: False},
          "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     B: {"contract": "locked",
+        "amount_to_unlock": m,
         "secrets": {A: False, E1: True, I: False, E2: True, B: True},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
 }
@@ -299,18 +291,23 @@ intermediate_state = {
     "eq_secrets": [[A, B, E1, I, E2]],
     "time_orderings": [B, E2, I, E1, A],
     A: {"contract": "null",
+        "amount_to_unlock": None,
         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     E1: {"contract": "locked",
+         "amount_to_unlock": m + 3*f,
          "secrets": {A: False, E1: False, I: False, E2: False, B: False},
          "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     I: {"contract": "locked",
+        "amount_to_unlock": m + 2*f,
         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     E2: {"contract": "locked",
+         "amount_to_unlock": m + f,
          "secrets": {A: False, E1: False, I: False, E2: False, B: False},
          "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     B: {"contract": "locked",
+        "amount_to_unlock": m,
         "secrets": {A: True, E1: False, I: False, E2: False, B: True},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
 }
@@ -319,18 +316,23 @@ intermediate_state1 = {
     "eq_secrets": [[A, B, E1, I, E2]],
     "time_orderings": [E2, I, B, E1, A],
     A: {"contract": "null",
+        "amount_to_unlock": None,
         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     E1: {"contract": "locked",
+         "amount_to_unlock": m + 3*f,
          "secrets": {A: False, E1: False, I: False, E2: False, B: False},
          "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     I: {"contract": "locked",
+        "amount_to_unlock": m + 2*f,
         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     E2: {"contract": "locked",
+         "amount_to_unlock": m + f,
          "secrets": {A: False, E1: False, I: False, E2: False, B: False},
          "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
     B: {"contract": "locked",
+        "amount_to_unlock": m,
         "secrets": {A: True, E1: False, I: False, E2: False, B: True},
         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
 }
