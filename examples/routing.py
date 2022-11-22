@@ -33,6 +33,7 @@ recursion_depth = 0
 ps = [A, E1, I, E2, B]
 
 actions_for_sharing_secrets = set()
+constants_for_wrong_amounts = set()
 
 
 def secret_sharing_sets(secrets_to_share: Dict[Player, List[Player]]):
@@ -359,7 +360,7 @@ for act in actions_for_sharing_secrets:
 
 initial_state = {
     "eq_secrets": [],
-    "time_orderings": [None for p in ps],
+    "time_orderings": [None for _ in ps],
     A: {"contract": "null",
         "amount_to_unlock": None,
         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
@@ -403,9 +404,8 @@ def generate_routing_locking(player, state, deviator, history):
                 action = locking_action(deviator, i, new_state2["eq_secrets"][j])
                 if player == E2:
                     align_secret_knowledge(new_state2)
-                    # branch_actions[Action(action)] = generate_routing_unlocking(B, new_state2, history + str(player) + f".{action};")
-                    print(history + str(player) + f".{action};")
-                    branch_actions[Action(action)] = todo
+                    branch_actions[Action(action)] = generate_routing_unlocking(B, new_state2, history + str(player) + f".{action};")
+                    # branch_actions[Action(action)] = todo
                 else:
                     branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state2, deviator, history + str(player) + f".{action};")
             # I am my own eq class therefore I know my own secret
@@ -414,11 +414,11 @@ def generate_routing_locking(player, state, deviator, history):
             action = locking_action(deviator, i, new_state1["eq_secrets"][-1])
             if player == E2:
                 align_secret_knowledge(new_state1)
-                # branch_actions[Action(action)] = generate_routing_unlocking(B, new_state1, history + str(player) + f".{action};")
-                print(history + str(player) + f".{action};")
-                branch_actions[Action(action)] = todo
+                branch_actions[Action(action)] = generate_routing_unlocking(B, new_state1, history + str(player) + f".{action};")
+                # branch_actions[Action(action)] = todo
             else:
                 branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state1, deviator, history + str(player) + f".{action};")
+
     if deviator is None:
         # case honest amount
         state1 = copy_state(state)
@@ -430,15 +430,29 @@ def generate_routing_locking(player, state, deviator, history):
     state2 = copy_state(state)
     i = ps.index(player)
     state2[ps[i+1]]["amount_to_unlock"] = NameExpr(f"a_{deviator}_{player}")
-    # CONSTANTS.append(NameExpr(f"a_{deviator}_{player}"))
+    constants_for_wrong_amounts.add(f"a_{deviator}_{player}")
     aux_locking(player, state2, deviator, history)
     # case ignore locking
-    branch_actions[I_L] = todo
-    print(history + str(player) + ".I_L;")
+    ut = {}
+    for j in range(len(ps)):
+        if j < i:
+            ut[ps[j]] = - epsilon
+        else:
+            ut[ps[j]] = 0
+    branch_actions[I_L] = leaf(ut)
     return branch(player, branch_actions)
 
 
 locking_tree = generate_routing_locking(A, initial_state, None, "")
-tree(locking_tree)
 
-# finish()
+for const in constants_for_wrong_amounts:
+    CONSTANTS.append(NameExpr(const))
+
+routing_tree = branch(B, {
+    J : leaf5(0, 0, 0, 0, 0),
+    S_H : locking_tree
+})
+
+tree(routing_tree)
+
+finish()
