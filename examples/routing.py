@@ -359,7 +359,7 @@ for act in actions_for_sharing_secrets:
     ACTIONS.append(Action(act))
 
 initial_state = {
-    "eq_secrets": [],
+    "eq_secrets": [[B]],
     "time_orderings": [None for _ in ps],
     A: {"contract": "null",
         "amount_to_unlock": None,
@@ -401,22 +401,38 @@ def generate_routing_locking(player, state, deviator, history):
             for j in range(len(state["eq_secrets"])):
                 new_state2 = copy_state(new_state1)
                 new_state2["eq_secrets"][j].append(player)
+                new_state2[player_plus_one(player)]["contract"] = "locked"
                 action = locking_action(deviator, i, new_state2["eq_secrets"][j])
                 if player == E2:
                     align_secret_knowledge(new_state2)
+                    # print(history + str(player) + f".{action};")
+                    if new_state2["time_orderings"].count(None) != 1:
+                        raise Exception("Locking phase went wrong, there are several or zero positions unspecified in time orderings")
+                    else:
+                        position = new_state2["time_orderings"].index(None)
+                        new_state2["time_orderings"][position] = B
                     branch_actions[Action(action)] = generate_routing_unlocking(B, new_state2, history + str(player) + f".{action};")
                     # branch_actions[Action(action)] = todo
                 else:
+                    # print(history + str(player) + f".{action};")
                     branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state2, deviator, history + str(player) + f".{action};")
             # I am my own eq class therefore I know my own secret
             new_state1["eq_secrets"].append([player])
             new_state1[player]["secrets"][player] = True
+            new_state1[player_plus_one(player)]["contract"] = "locked"
             action = locking_action(deviator, i, new_state1["eq_secrets"][-1])
             if player == E2:
                 align_secret_knowledge(new_state1)
+                # print(history + str(player) + f".{action};")
+                if new_state1["time_orderings"].count(None) != 1:
+                    raise Exception("Locking phase went wrong, there are several or zero positions unspecified in time orderings")
+                else:
+                    position = new_state1["time_orderings"].index(None)
+                    new_state1["time_orderings"][position] = B
                 branch_actions[Action(action)] = generate_routing_unlocking(B, new_state1, history + str(player) + f".{action};")
                 # branch_actions[Action(action)] = todo
             else:
+                # print(history + str(player) + f".{action};")
                 branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state1, deviator, history + str(player) + f".{action};")
 
     if deviator is None:
@@ -440,6 +456,7 @@ def generate_routing_locking(player, state, deviator, history):
         else:
             ut[ps[j]] = 0
     branch_actions[I_L] = leaf(ut)
+    # print(history + str(player) + f".I_L;")
     return branch(player, branch_actions)
 
 
@@ -453,6 +470,6 @@ routing_tree = branch(B, {
     S_H : locking_tree
 })
 
-tree(routing_tree)
+tree(locking_tree)
 
 finish()
