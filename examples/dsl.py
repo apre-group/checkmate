@@ -41,8 +41,9 @@ class Player(StringThing):
 
 class Precedence(IntEnum):
     ADDITION = 0,
-    MULTIPLICATION = 1,
-    HIGHEST = 2
+    SUBTRACTION = 1,
+    MULTIPLICATION = 2,
+    HIGHEST = 3
 
 
 class Expr:
@@ -135,9 +136,9 @@ def negate_expr(expr: LExpr) -> Expr:
 
 
 BINARY_OP_PRECEDENCES = {
-    '+': Precedence.ADDITION,
-    '-': Precedence.ADDITION,
-    '*': Precedence.MULTIPLICATION
+    '+': (Precedence.ADDITION, Precedence.ADDITION, Precedence.ADDITION),
+    '-': (Precedence.ADDITION, Precedence.SUBTRACTION, Precedence.ADDITION),
+    '*': (Precedence.MULTIPLICATION, Precedence.MULTIPLICATION, Precedence.MULTIPLICATION)
 }
 
 
@@ -157,9 +158,9 @@ class BinaryExpr(Expr):
 
 
 def binary_expr(left: LExpr, right: LExpr, op: str) -> Expr:
-    precedence = BINARY_OP_PRECEDENCES[op]
-    left = parenthesise_expr(left, precedence)
-    right = parenthesise_expr(right, precedence)
+    lprec, rprec, precedence = BINARY_OP_PRECEDENCES[op]
+    left = parenthesise_expr(left, lprec)
+    right = parenthesise_expr(right, rprec)
     return BinaryExpr(op, precedence, left, right)
 
 

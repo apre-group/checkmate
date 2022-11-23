@@ -574,6 +574,16 @@ class PracticalityStrategySolver(StrategySolver):
 
 
 if __name__ == '__main__':
+    # set a signal handler so that console interrupts behave as expected
+    # this only partially works as Z3 does not like to be interrupted
+    from signal import SIGINT, signal
+    from sys import exit
+    def interrupted(*_):
+        z3.main_ctx().interrupt()
+        print('exit')
+        exit(0)
+    signal(SIGINT, interrupted)
+
     logging.basicConfig(
         level=logging.INFO,
         format='[%(levelname)s] %(message)s'
