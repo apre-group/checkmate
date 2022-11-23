@@ -1,11 +1,11 @@
 from dsl import *
 import itertools
 
-A, E1, I, E2, B = players('A', 'E1', 'I', 'E2', 'B')
-S_H, L, U, J, S_S, L_T, L_H, L_A, S_SE1, S_SI, I_L, I_U, I_S, S_SA, S_SE2, S_SB = actions(
-    'S_H', 'L', 'U', 'J', 'S_S', 'L_T', 'L_H', 'L_A', 'S_SE1', 'S_SI', 'I_L', 'I_U', 'I_S', 'S_SA', 'S_SE2', 'S_SB'
-)
-epsilon, rho, todoo = infinitesimals('epsilon', 'rho', 'todo')
+PRINT_HISTORIES = False
+
+ps = list(players('A', 'I', 'B'))
+S_H, U, J, I_L, I_U, I_S = actions('S_H', 'U', 'J', 'I_L', 'I_U', 'I_S')
+epsilon, rho = infinitesimals('epsilon', 'rho')
 m, f = constants('m', 'f')
 
 initial_constraints(
@@ -19,20 +19,10 @@ weak_immunity_constraints()
 collusion_resilience_constraints()
 practicality_constraints()
 
-honest_histories((U, U, U, U))
-
-
-def leaf5(a: LExpr, b: LExpr, c: LExpr, d: LExpr, e: LExpr) -> Leaf:
-    return leaf({A: a, E1: b, I: c, E2: d, B: e})
-
-
-todo = leaf5(todoo, todoo, todoo, todoo, todoo)
-
 recursion_depth = 0
 
-ps = [A, E1, I, E2, B]
-
 actions_for_sharing_secrets = set()
+actions_for_locking = set()
 constants_for_wrong_amounts = set()
 
 
@@ -48,9 +38,8 @@ def secret_sharing_sets(secrets_to_share: Dict[Player, List[Player]]):
 
 
 def prev_player(player):
-    players = [A, E1, I, E2, B]
-    i = players.index(player)
-    return players[i-1]
+    i = ps.index(player)
+    return ps[i-1]
 
 
 def player_plus_one(player):
@@ -77,12 +66,12 @@ def final(state):
 def utility_leaf(state):
     ut = {player: 0 for player in ps}
     for player in ps:
-        if player == B:
-            if state[B]["contract"] == "unlocked":
-                ut[B] = ut[B] + rho
-                ut[E2] = ut[E2] - state[B]["amount_to_unlock"]
-                ut[A] = ut[A] + rho + state[E1]["amount_to_unlock"]
-            elif state[B]["contract"] == "expired":
+        if player == ps[-1]:
+            if state[player]["contract"] == "unlocked":
+                ut[player] = ut[player] + rho
+                ut[prev_player(player)] = ut[prev_player(player)] - state[player]["amount_to_unlock"]
+                ut[ps[0]] = ut[ps[0]] + rho + state[ps[1]]["amount_to_unlock"]
+            elif state[player]["contract"] == "expired":
                 ut[prev_player(player)] = ut[prev_player(player)] - epsilon
 
         else:
@@ -189,7 +178,8 @@ def remove_pointless_sharing(state, secrets_to_share_representatives):
 
 
 def generate_routing_unlocking(player: Player, state, history):
-    # print(history)
+    if PRINT_HISTORIES:
+        print(history)
     # print(player)
     # print(state)
     # we can assume that current player p knows the secret.
@@ -269,126 +259,13 @@ def generate_routing_unlocking(player: Player, state, history):
 # ignoresharing with key p, means not sharing the secret that p used to lock their contract with anyone
 
 
-initial_unlocking_state = {
-    "eq_secrets": [[A, I], [B, E1, E2]],
-    "time_orderings": [B, E2, I, E1, A],
-    A: {"contract": "null",
-        "amount_to_unlock": None,
-        "secrets": {A: True, E1: False, I: False, E2: False, B: False},
-        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    E1: {"contract": "locked",
-         "amount_to_unlock": m + 3*f,
-         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    I: {"contract": "locked",
-        "amount_to_unlock": m + 2*f,
-        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    E2: {"contract": "locked",
-         "amount_to_unlock": m + f,
-         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    B: {"contract": "locked",
-        "amount_to_unlock": m,
-        "secrets": {A: False, E1: True, I: False, E2: True, B: True},
-        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
-}
-
-intermediate_state = {
-    "eq_secrets": [[A, B, E1, I, E2]],
-    "time_orderings": [B, E2, I, E1, A],
-    A: {"contract": "null",
-        "amount_to_unlock": None,
-        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    E1: {"contract": "locked",
-         "amount_to_unlock": m + 3*f,
-         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    I: {"contract": "locked",
-        "amount_to_unlock": m + 2*f,
-        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    E2: {"contract": "locked",
-         "amount_to_unlock": m + f,
-         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    B: {"contract": "locked",
-        "amount_to_unlock": m,
-        "secrets": {A: True, E1: False, I: False, E2: False, B: True},
-        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
-}
-
-intermediate_state1 = {
-    "eq_secrets": [[A, B, E1, I, E2]],
-    "time_orderings": [E2, I, B, E1, A],
-    A: {"contract": "null",
-        "amount_to_unlock": None,
-        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    E1: {"contract": "locked",
-         "amount_to_unlock": m + 3*f,
-         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    I: {"contract": "locked",
-        "amount_to_unlock": m + 2*f,
-        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    E2: {"contract": "locked",
-         "amount_to_unlock": m + f,
-         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    B: {"contract": "locked",
-        "amount_to_unlock": m,
-        "secrets": {A: True, E1: False, I: False, E2: False, B: True},
-        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
-}
-
-align_secret_knowledge(initial_unlocking_state)
-recognise_kaput(initial_unlocking_state)
-align_secret_knowledge(intermediate_state)
-recognise_kaput(intermediate_state)
-align_secret_knowledge(intermediate_state1)
-recognise_kaput(intermediate_state1)
-
-
-# unlocking_tree = generate_routing_unlocking(B, intermediate_state, "")
-# my_tree = generate_routing_unlocking(E2, intermediate_state)
-
-for act in actions_for_sharing_secrets:
-    ACTIONS.append(Action(act))
-
-initial_state = {
-    "eq_secrets": [[B]],
-    "time_orderings": [None for _ in ps],
-    A: {"contract": "null",
-        "amount_to_unlock": None,
-        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    E1: {"contract": "null",
-         "amount_to_unlock": None,
-         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    I: {"contract": "null",
-        "amount_to_unlock": None,
-        "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    E2: {"contract": "null",
-         "amount_to_unlock": None,
-         "secrets": {A: False, E1: False, I: False, E2: False, B: False},
-         "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}},
-    B: {"contract": "null",
-        "amount_to_unlock": None,
-        "secrets": {A: False, E1: False, I: False, E2: False, B: True},
-        "ignoreshare": {A: False, E1: False, I: False, E2: False, B: False}}
-}
-
-
 def locking_action(deviator, slot, eq_class):
     return f"L_({deviator},{slot},{eq_class})"
 
 
 def generate_routing_locking(player, state, deviator, history):
+    if PRINT_HISTORIES:
+        print(history)
     branch_actions = {}
 
     def aux_locking(player, new_state, deviator, history):
@@ -403,36 +280,33 @@ def generate_routing_locking(player, state, deviator, history):
                 new_state2["eq_secrets"][j].append(player)
                 new_state2[player_plus_one(player)]["contract"] = "locked"
                 action = locking_action(deviator, i, new_state2["eq_secrets"][j])
-                if player == E2:
+                actions_for_locking.add(action)
+                if player == ps[-2]:
                     align_secret_knowledge(new_state2)
-                    # print(history + str(player) + f".{action};")
                     if new_state2["time_orderings"].count(None) != 1:
                         raise Exception("Locking phase went wrong, there are several or zero positions unspecified in time orderings")
                     else:
                         position = new_state2["time_orderings"].index(None)
-                        new_state2["time_orderings"][position] = B
-                    branch_actions[Action(action)] = generate_routing_unlocking(B, new_state2, history + str(player) + f".{action};")
-                    # branch_actions[Action(action)] = todo
+                        new_state2["time_orderings"][position] = ps[-1]
+                    branch_actions[Action(action)] = generate_routing_unlocking(ps[-1], new_state2, history + str(player) + f".{action};")
                 else:
-                    # print(history + str(player) + f".{action};")
                     branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state2, deviator, history + str(player) + f".{action};")
             # I am my own eq class therefore I know my own secret
             new_state1["eq_secrets"].append([player])
             new_state1[player]["secrets"][player] = True
             new_state1[player_plus_one(player)]["contract"] = "locked"
             action = locking_action(deviator, i, new_state1["eq_secrets"][-1])
-            if player == E2:
+            actions_for_locking.add(action)
+            if player == ps[-2]:
                 align_secret_knowledge(new_state1)
                 # print(history + str(player) + f".{action};")
                 if new_state1["time_orderings"].count(None) != 1:
                     raise Exception("Locking phase went wrong, there are several or zero positions unspecified in time orderings")
                 else:
                     position = new_state1["time_orderings"].index(None)
-                    new_state1["time_orderings"][position] = B
-                branch_actions[Action(action)] = generate_routing_unlocking(B, new_state1, history + str(player) + f".{action};")
-                # branch_actions[Action(action)] = todo
+                    new_state1["time_orderings"][position] = ps[-1]
+                branch_actions[Action(action)] = generate_routing_unlocking(ps[-1], new_state1, history + str(player) + f".{action};")
             else:
-                # print(history + str(player) + f".{action};")
                 branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state1, deviator, history + str(player) + f".{action};")
 
     if deviator is None:
@@ -456,20 +330,70 @@ def generate_routing_locking(player, state, deviator, history):
         else:
             ut[ps[j]] = 0
     branch_actions[I_L] = leaf(ut)
-    # print(history + str(player) + f".I_L;")
+    if PRINT_HISTORIES:
+        print(history + str(player) + f".I_L;")
     return branch(player, branch_actions)
 
 
-locking_tree = generate_routing_locking(A, initial_state, None, "")
+initial_state = {
+    "eq_secrets": [[ps[-1]]],
+    "time_orderings": [None for _ in ps]
+    }
+for player in ps:
+    initial_state[player] = {}
+    initial_state[player]["contract"] = "null"
+    initial_state[player]["amount_to_unlock"] = None
+    initial_state[player]["secrets"] = {p: False for p in ps}
+    initial_state[player]["ignoreshare"] = {p: False for p in ps}
+initial_state[ps[-1]]["secrets"][ps[-1]] = True
+
+honest = ["S_H"]
+eq_cl = [ps[-1]]
+for i in range(len(ps)-1):
+    eq_cl.append(ps[i])
+    honest.append(f"L_(None,{len(ps)-1-i},{eq_cl})")
+for i in range(len(ps)-1):
+    honest.append("U")
+
+honest_histories(tuple([Action(a) for a in honest]))
+
+locking_tree = generate_routing_locking(ps[0], initial_state, None, "")
+
+routing_tree = branch(ps[-1], {
+    J: leaf({p: 0 for p in ps}),
+    S_H: locking_tree
+})
+
+for act in actions_for_sharing_secrets:
+    ACTIONS.append(Action(act))
+
+for act in actions_for_locking:
+    ACTIONS.append(Action(act))
 
 for const in constants_for_wrong_amounts:
     CONSTANTS.append(NameExpr(const))
 
-routing_tree = branch(B, {
-    J : leaf5(0, 0, 0, 0, 0),
-    S_H : locking_tree
-})
+### This part here is for debugging
+intermediate_state = {
+    "eq_secrets": [[p for p in ps]],
+    "time_orderings": [ps[2], ps[1], ps[0]]
+    }
+for player in ps:
+    intermediate_state[player] = {}
+    intermediate_state[player]["contract"] = "null"
+    intermediate_state[player]["amount_to_unlock"] = None
+    intermediate_state[player]["secrets"] = {p: False for p in ps}
+    intermediate_state[player]["ignoreshare"] = {p: False for p in ps}
+intermediate_state[ps[2]]["secrets"][ps[-1]] = True
+intermediate_state[ps[2]]["amount_to_unlock"] = m
+intermediate_state[ps[2]]["contract"] = "locked"
+intermediate_state[ps[1]]["amount_to_unlock"] = m + f
+intermediate_state[ps[1]]["contract"] = "locked"
+align_secret_knowledge(intermediate_state)
 
-tree(locking_tree)
+unlocking_tree = generate_routing_unlocking(ps[-1], intermediate_state, "")
+### Debugging part finished
+
+tree(routing_tree)
 
 finish()
