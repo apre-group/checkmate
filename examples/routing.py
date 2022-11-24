@@ -1,5 +1,6 @@
 from dsl import *
 import itertools
+import re
 
 PRINT_HISTORIES = False
 
@@ -63,7 +64,7 @@ def final(state):
     return True
 
 
-def utility_leaf(state):
+def utility_leaf(state, history):
     ut = {player: 0 for player in ps}
     for player in ps:
         if player == ps[-1]:
@@ -73,7 +74,10 @@ def utility_leaf(state):
                 ut[ps[0]] = ut[ps[0]] + rho + state[ps[1]]["amount_to_unlock"]
             elif state[player]["contract"] == "expired":
                 ut[prev_player(player)] = ut[prev_player(player)] - epsilon
-
+                # if the last player was sharing secrets, then he has to ship the goods
+                if re.search("S_S\((\(\),)*(\(\w+)+", history) is not None:
+                    ut[player] = ut[player] + rho - m
+                    ut[ps[0]] = ut[ps[0]] + rho + state[ps[1]]["amount_to_unlock"]
         else:
             if state[player]["contract"] == "unlocked":
                 ut[player] = ut[player] + state[player]["amount_to_unlock"]
@@ -189,7 +193,7 @@ def generate_routing_unlocking(player: Player, state, history):
     if depth > recursion_depth:
         recursion_depth = depth
     if final(state):
-        return leaf(utility_leaf(state))
+        return leaf(utility_leaf(state, history))
     else:
         # if all(state[player]["ignoreshare"].values()):
         #     raise Exception(f"It should not be player {player}'s turn, because they have ignored sharing secrets.")
@@ -391,7 +395,7 @@ intermediate_state[ps[1]]["amount_to_unlock"] = m + f
 intermediate_state[ps[1]]["contract"] = "locked"
 align_secret_knowledge(intermediate_state)
 
-unlocking_tree = generate_routing_unlocking(ps[-1], intermediate_state, "")
+# unlocking_tree = generate_routing_unlocking(ps[-1], intermediate_state, "")
 ### Debugging part finished
 
 tree(routing_tree)
