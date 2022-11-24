@@ -1,18 +1,7 @@
 from __future__ import annotations
 import json
-from typing import Dict, Tuple, Union, List
+from typing import Dict, Union, List
 from enum import IntEnum
-
-PLAYERS = ()
-ACTIONS = []
-INFINITESIMALS = ()
-CONSTANTS = []
-INITIAL_CONSTRAINTS = ()
-WEAK_IMMUNITY_CONSTRAINTS = ()
-COLLUSION_RESILIENCE_CONSTRAINTS = ()
-PRACTICALITY_CONSTRAINTS = ()
-HONEST_HISTORIES = ()
-TREE = ()
 
 
 class StringThing:
@@ -217,30 +206,20 @@ def branch(player: Player, actions: Dict[Action, Tree]) -> Branch:
     return Branch(player, actions)
 
 
-def players(*players: str) -> Tuple[Player, ...]:
-    global PLAYERS
-    PLAYERS = tuple(Player(player) for player in players)
-    return PLAYERS
+def players(*players: str) -> List[Player]:
+    return [Player(player) for player in players]
 
 
 def actions(*actions: str) -> List[Action]:
-    global ACTIONS
-    for action in actions:
-        ACTIONS.append(Action(action))
-    return ACTIONS
+    return [Action(action) for action in actions]
 
 
-def infinitesimals(*infs: str) -> Tuple[Expr, ...]:
-    global INFINITESIMALS
-    INFINITESIMALS = tuple(NameExpr(inf) for inf in infs)
-    return INFINITESIMALS
+def infinitesimals(*infs: str) -> List[Expr]:
+    return [NameExpr(inf) for inf in infs]
 
 
 def constants(*constants: str) -> List[Expr]:
-    global CONSTANTS
-    for const in constants:
-        CONSTANTS.append(NameExpr(const))
-    return CONSTANTS
+    return [NameExpr(constant) for constant in constants]
 
 
 class Constraint:
@@ -262,58 +241,38 @@ class DisequationConstraint(Constraint):
         return f"{self.left} {self.op} {self.right}"
 
 
-def initial_constraints(*constraints: Constraint):
-    global INITIAL_CONSTRAINTS
-    INITIAL_CONSTRAINTS = constraints
-
-
-def weak_immunity_constraints(*constraints: Constraint):
-    global WEAK_IMMUNITY_CONSTRAINTS
-    WEAK_IMMUNITY_CONSTRAINTS = constraints
-
-
-def collusion_resilience_constraints(*constraints: Constraint):
-    global COLLUSION_RESILIENCE_CONSTRAINTS
-    COLLUSION_RESILIENCE_CONSTRAINTS = constraints
-
-
-def practicality_constraints(*constraints: Constraint):
-    global PRACTICALITY_CONSTRAINTS
-    PRACTICALITY_CONSTRAINTS = constraints
-
-
-def honest_histories(*histories: Tuple[Action, ...]):
-    global HONEST_HISTORIES
-    HONEST_HISTORIES = histories
-
-
-def tree(tree: Tree):
-    global TREE
-    TREE = tree
-
-
-def finish():
+def finish(
+    players: List[Player],
+    actions: List[Action],
+    infinitesimals: List[Expr],
+    constants: List[Expr],
+    initial_constraints: List[Constraint],
+    weak_immunity_constraints: List[Constraint],
+    collusion_resilience_constraints: List[Constraint],
+    practicality_constraints: List[Constraint],
+    honest_histories: List[List[Action]],
+    tree: Tree,
+):
     import sys
     mode = sys.argv[1] if len(sys.argv) >= 2 else ''
     if mode == 'graphviz':
-        assert isinstance(TREE, Tree)
         print("digraph tree {")
-        TREE.graphviz()
+        tree.graphviz()
         print("}")
     else:
         json.dump({
-            'players': PLAYERS,
-            'actions': ACTIONS,
-            'infinitesimals': INFINITESIMALS,
-            'constants': CONSTANTS,
-            'initial_constraints': INITIAL_CONSTRAINTS,
+            'players': players,
+            'actions': actions,
+            'infinitesimals': infinitesimals,
+            'constants': constants,
+            'initial_constraints': initial_constraints,
             'property_constraints': {
-                'weak_immunity': WEAK_IMMUNITY_CONSTRAINTS,
-                'collusion_resilience': COLLUSION_RESILIENCE_CONSTRAINTS,
-                'practicality': PRACTICALITY_CONSTRAINTS
+                'weak_immunity': weak_immunity_constraints,
+                'collusion_resilience': collusion_resilience_constraints,
+                'practicality': practicality_constraints
             },
-            'honest_histories': HONEST_HISTORIES,
-            'tree': TREE
+            'honest_histories': honest_histories,
+            'tree': tree
         }, default=lambda x: x.json(), fp=sys.stdout, indent=2)
 
     sys.exit(0)

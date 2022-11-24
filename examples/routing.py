@@ -4,21 +4,22 @@ import re
 
 PRINT_HISTORIES = False
 
-ps = list(players('A', 'I', 'B'))
-S_H, U, J, I_L, I_U, I_S = actions('S_H', 'U', 'J', 'I_L', 'I_U', 'I_S')
-epsilon, rho = infinitesimals('epsilon', 'rho')
-m, f = constants('m', 'f')
+ps = PLAYERS = players('A', 'I', 'B')
+S_H, U, J, I_L, I_U, I_S = ACTIONS = actions(
+    'S_H', 'U', 'J', 'I_L', 'I_U', 'I_S')
+epsilon, rho = INFINITESIMALS = infinitesimals('epsilon', 'rho')
+m, f = CONSTANTS = constants('m', 'f')
 
-initial_constraints(
+INITIAL_CONSTRAINTS = [
     rho > 0,
     epsilon > 0,
     f > 0,
     m > 0
-)
+]
 
-weak_immunity_constraints()
-collusion_resilience_constraints()
-practicality_constraints()
+WEAK_IMMUNITY_CONSTRAINTS = []
+COLLUSION_RESILIENCE_CONSTRAINTS = []
+PRACTICALITY_CONSTRAINTS = []
 
 recursion_depth = 0
 
@@ -221,9 +222,9 @@ def generate_routing_unlocking(player: Player, state, history):
                 state1 = copy_state(state)
                 for i in range(len(ps)):
                     for person in sharing_instance[i]:
-                            state1[person]["secrets"][ps[i]] = True
+                        state1[person]["secrets"][ps[i]] = True
                     if state1[player]["secrets"][ps[i]]:
-                            state1[player]["ignoreshare"][ps[i]] = True
+                        state1[player]["ignoreshare"][ps[i]] = True
                 align_secret_knowledge(state1)
                 next_p, state2 = next_player(state1)
                 actions_for_sharing_secrets.add(f"S_S{sharing_instance}")
@@ -342,7 +343,7 @@ def generate_routing_locking(player, state, deviator, history):
 initial_state = {
     "eq_secrets": [[ps[-1]]],
     "time_orderings": [None for _ in ps]
-    }
+}
 for player in ps:
     initial_state[player] = {}
     initial_state[player]["contract"] = "null"
@@ -359,7 +360,7 @@ for i in range(len(ps)-1):
 for i in range(len(ps)-1):
     honest.append("U")
 
-honest_histories(tuple([Action(a) for a in honest]))
+HONEST_HISTORIES = [[Action(a) for a in honest]]
 
 locking_tree = generate_routing_locking(ps[0], initial_state, None, "")
 
@@ -381,7 +382,7 @@ for const in constants_for_wrong_amounts:
 intermediate_state = {
     "eq_secrets": [[p for p in ps]],
     "time_orderings": [ps[2], ps[1], ps[0]]
-    }
+}
 for player in ps:
     intermediate_state[player] = {}
     intermediate_state[player]["contract"] = "null"
@@ -398,6 +399,17 @@ align_secret_knowledge(intermediate_state)
 # unlocking_tree = generate_routing_unlocking(ps[-1], intermediate_state, "")
 ### Debugging part finished
 
-tree(routing_tree)
+TREE = routing_tree
 
-finish()
+finish(
+    PLAYERS,
+    ACTIONS,
+    INFINITESIMALS,
+    CONSTANTS,
+    INITIAL_CONSTRAINTS,
+    WEAK_IMMUNITY_CONSTRAINTS,
+    COLLUSION_RESILIENCE_CONSTRAINTS,
+    PRACTICALITY_CONSTRAINTS,
+    HONEST_HISTORIES,
+    TREE
+)
