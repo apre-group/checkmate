@@ -12,23 +12,43 @@ def flip(op: Callable[[Real, Real], Real]) -> Callable[[Real, Real], Real]:
     return lambda x, y: op(y, x)
 
 
-def binary_op_with_id(
-        left: Real,
-        right: Real,
-        op: Callable[[Real, Real], Real],
-        id: float
-) -> Real:
+def add(left: Real, right: Real) -> Real:
     """
-    build the expression `op(left, right)`
-
-    optimisation: if either side is `id`, this returns the other side
+    return left + right, except if either is 0
     """
-    if type(left) == float and left == id:
+    if type(left) == float and left == 0:
         return right
-    elif type(right) == float and right == id:
+    elif type(right) == float and right == 0:
         return left
     else:
-        return op(left, right)
+        return left + right
+
+
+def sub(left: Real, right: Real) -> Real:
+    """
+    return left - right, except if either is 0
+    """
+    if type(left) == float and left == 0:
+        return -right
+    elif type(right) == float and right == 0:
+        return left
+    else:
+        return left - right
+
+
+def mul(left: Real, right: Real) -> Real:
+    """
+    return left * right, except if either is 1
+    """
+    if type(left) == float and left == 1:
+        return right
+    elif type(right) == float and right == 1:
+        return left
+    else:
+        result = left * right
+        # satisfy linter for some reason
+        assert isinstance(result, float) or isinstance(result, z3.ArithRef)
+        return result
 
 
 class Utility:
@@ -64,25 +84,25 @@ class Utility:
         return Utility(-self.real, -self.inf)
 
     def __add__(self, other: Union[int, float, Utility]) -> Utility:
-        return self._binary_expression(other, operator.add, 0.0)
+        return self._binary_expression(other, add)
 
     def __radd__(self, other: Union[int, float, Utility]) -> Utility:
         """useful when parsing e.g. 2 + p"""
-        return self._binary_expression(other, flip(operator.add), 0.0)
+        return self._binary_expression(other, flip(add))
 
     def __sub__(self, other: Union[int, float, Utility]) -> Utility:
-        return self._binary_expression(other, operator.sub, 0.0)
+        return self._binary_expression(other, sub)
 
     def __rsub__(self, other: Union[int, float, Utility]) -> Utility:
         """useful when parsing e.g. 2 - p"""
-        return self._binary_expression(other, flip(operator.sub), 0.0)
+        return self._binary_expression(other, flip(sub))
 
     def __mul__(self, other: Union[int, float, Utility]) -> Utility:
-        return self._binary_expression(other, operator.mul, 1.0)
+        return self._binary_expression(other, mul)
 
     def __rmul__(self, other: Union[int, float, Utility]) -> Utility:
         """useful when parsing e.g. 2 * p"""
-        return self._binary_expression(other, flip(operator.mul), 1.0)
+        return self._binary_expression(other, flip(mul))
 
     def __eq__(
             self,
@@ -169,16 +189,15 @@ class Utility:
     def _binary_expression(
             self,
             other: Union[int, float, Utility],
-            op: Callable[[Real, Real], Real],
-            id: float
+            op: Callable[[Real, Real], Real]
     ) -> Utility:
-        """generate a Z3 expression `left op right` via `binary_op_with_id`"""
+        """generate a Z3 expression `left op right`"""
         if isinstance(other, int) or isinstance(other, float):
             other = Utility.from_value(other)
 
         return Utility(
-            binary_op_with_id(self.real, other.real, op, id),
-            binary_op_with_id(self.inf, other.inf, op, id)
+            op(self.real, other.real),
+            op(self.inf, other.inf)
         )
 
     def _binary_comparison(
