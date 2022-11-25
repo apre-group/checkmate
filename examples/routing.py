@@ -65,7 +65,7 @@ def final(state):
     return True
 
 
-def utility_leaf(state, history):
+def utility_leaf(state, B_sharing):
     ut = {player: 0 for player in ps}
     for player in ps:
         if player == ps[-1]:
@@ -76,7 +76,7 @@ def utility_leaf(state, history):
             elif state[player]["contract"] == "expired":
                 ut[prev_player(player)] = ut[prev_player(player)] - epsilon
                 # if the last player was sharing secrets, then he has to ship the goods
-                if re.search("S_S\((\(\),)*(\(\w+)+", history) is not None:
+                if B_sharing:
                     ut[player] = ut[player] + rho - m
                     ut[ps[0]] = ut[ps[0]] + rho + state[ps[1]]["amount_to_unlock"]
         else:
@@ -182,7 +182,7 @@ def remove_pointless_sharing(state, secrets_to_share_representatives):
     return useful
 
 
-def generate_routing_unlocking(player: Player, state, history):
+def generate_routing_unlocking(player: Player, state, B_sharing, history):
     if PRINT_HISTORIES:
         print(history)
     # print(player)
@@ -194,7 +194,7 @@ def generate_routing_unlocking(player: Player, state, history):
     if depth > recursion_depth:
         recursion_depth = depth
     if final(state):
-        return leaf(utility_leaf(state, history))
+        return leaf(utility_leaf(state, B_sharing))
     else:
         # if all(state[player]["ignoreshare"].values()):
         #     raise Exception(f"It should not be player {player}'s turn, because they have ignored sharing secrets.")
@@ -219,6 +219,8 @@ def generate_routing_unlocking(player: Player, state, history):
                     if not state[p]["secrets"][secret]:
                         sharing_dict[secret].append(p)
             for sharing_instance in secret_sharing_sets(sharing_dict):
+                if player == ps[-1] and list(sharing_instance) != [tuple() for _ in ps]:
+                    B_sharing = True
                 state1 = copy_state(state)
                 for i in range(len(ps)):
                     for person in sharing_instance[i]:
@@ -228,7 +230,7 @@ def generate_routing_unlocking(player: Player, state, history):
                 align_secret_knowledge(state1)
                 next_p, state2 = next_player(state1)
                 actions_for_sharing_secrets.add(f"S_S{sharing_instance}")
-                branch_actions[share_secret_action(sharing_instance)] = generate_routing_unlocking(next_p, state2, history + str(player) + "." + str(share_secret_action(sharing_instance)) + ";")
+                branch_actions[share_secret_action(sharing_instance)] = generate_routing_unlocking(next_p, state2, B_sharing, history + str(player) + "." + str(share_secret_action(sharing_instance)) + ";")
         if state[player]["contract"] == "locked" and state[player]["secrets"][prev_player(player)]:
             # Action unlock
             state1 = copy_state(state)
@@ -236,7 +238,7 @@ def generate_routing_unlocking(player: Player, state, history):
             state1[prev_player(player)]["secrets"][prev_player(player)] = True
             align_secret_knowledge(state1)
             next_p, state2 = next_player(state1)
-            branch_actions[U] = generate_routing_unlocking(next_p, state2, history + str(player) + ".U;")
+            branch_actions[U] = generate_routing_unlocking(next_p, state2, B_sharing, history + str(player) + ".U;")
             # Ignoring unlock
             state3 = copy_state(state)
             state3[player]["contract"] = "expired"
@@ -245,7 +247,7 @@ def generate_routing_unlocking(player: Player, state, history):
                     state3[p]["contract"] = "expired"
             # the next player is the rightmost one who knows the secret and has not ignored sharing with everyone who doesn't know
             next_p, state4 = next_player(state3)
-            branch_actions[I_U] = generate_routing_unlocking(next_p, state4, history + str(player) + ".I_U;")
+            branch_actions[I_U] = generate_routing_unlocking(next_p, state4, B_sharing, history + str(player) + ".I_U;")
 
         #imlpied by empty sharing_instance
         # else:
@@ -293,7 +295,7 @@ def generate_routing_locking(player, state, deviator, history):
                     else:
                         position = new_state2["time_orderings"].index(None)
                         new_state2["time_orderings"][position] = ps[-1]
-                    branch_actions[Action(action)] = generate_routing_unlocking(ps[-1], new_state2, history + str(player) + f".{action};")
+                    branch_actions[Action(action)] = generate_routing_unlocking(ps[-1], new_state2, False, history + str(player) + f".{action};")
                 else:
                     branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state2, deviator, history + str(player) + f".{action};")
             # I am my own eq class therefore I know my own secret
@@ -310,7 +312,7 @@ def generate_routing_locking(player, state, deviator, history):
                 else:
                     position = new_state1["time_orderings"].index(None)
                     new_state1["time_orderings"][position] = ps[-1]
-                branch_actions[Action(action)] = generate_routing_unlocking(ps[-1], new_state1, history + str(player) + f".{action};")
+                branch_actions[Action(action)] = generate_routing_unlocking(ps[-1], new_state1, False, history + str(player) + f".{action};")
             else:
                 branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state1, deviator, history + str(player) + f".{action};")
 
