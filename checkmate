@@ -128,6 +128,8 @@ class StrategySolver(metaclass=ABCMeta):
                 logging.info("case solved")
                 if output:
                     result["cases"].append(self._extract_strategy(case))
+                if generate_counterexamples:
+                    result["counterexamples"] = [_parse_counterexample(self.checked_history, label) for label in self._old_counterexamples]
 
                 # we solved this case, now add a conflict to move on
                 case_solver.add(disjunction(*(
@@ -197,6 +199,8 @@ class StrategySolver(metaclass=ABCMeta):
                         )
                         self._label2subtree = {}
                         self._subtree2label = {}
+                        self._label2pair = {}
+                        self._pair2label = {}
                         self._solver.reset()
                         self._add_action_constraints([], self.input.tree)
                         self._add_history_constraints(self.checked_history)
@@ -335,7 +339,6 @@ class StrategySolver(metaclass=ABCMeta):
                 expr = label()
                 self._solver.assert_and_track(expr, expr)
             else:
-                print("banana")
                 expr = z3.Bool(False)
         else:
             expr = label()
