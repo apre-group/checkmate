@@ -62,11 +62,12 @@ class StrategySolver(metaclass=ABCMeta):
         self._generated_preconditions = set()
 
         self._generate_counterexamples = False
+        self._old_counterexamples = []
 
         self._add_action_constraints([], input.tree)
         self._add_history_constraints(self.checked_history)
 
-    def solve(self, output: bool, generate_preconditions: bool, generate_counterexamples: bool) -> Dict[str, Any]:
+    def solve(self, output: bool, generate_preconditions: bool, generate_counterexamples: bool, old_counterexamples=None) -> Dict[str, Any]:
         """
         the main solving routine
 
@@ -74,6 +75,10 @@ class StrategySolver(metaclass=ABCMeta):
         otherwise, returns a solution to report later
         """
         self._generate_counterexamples = generate_counterexamples
+        if old_counterexamples is None:
+            self._old_counterexamples = []
+        else:
+            self._old_counterexamples = old_counterexamples[:]
         result = {"generated_preconditions": list(self._generated_preconditions),
                   "counterexamples": [],
                   "cases": []}
@@ -175,6 +180,12 @@ class StrategySolver(metaclass=ABCMeta):
 
                     if self._generate_counterexamples:
                         logging.info(f"counterexamples: {counterexamples}")
+                        logging.info(f"old counterexamples: {self._old_counterexamples}")
+                        self._old_counterexamples.extend(counterexamples)
+                        logging.info(
+                            "restarting with a set of old counterexamples"
+                        )
+                        return self.solve(output, generate_preconditions, generate_counterexamples, self._old_counterexamples)
 
                     if not generate_preconditions:
                         return {
@@ -305,7 +316,8 @@ class StrategySolver(metaclass=ABCMeta):
             self._subtree2label[(players, history_str)] = label
             self._label2subtree[label] = (players, history_str)
             expr = label()
-            self._solver.assert_and_track(expr, expr)
+            if (players, history_str) not in self._old_counterexamples:
+                self._solver.assert_and_track(expr, expr)
         else:
             expr = label()
 
