@@ -67,7 +67,8 @@ class StrategySolver(metaclass=ABCMeta):
         self._add_action_constraints([], input.tree)
         self._add_history_constraints(self.checked_history)
 
-    def solve(self, output: bool, generate_preconditions: bool, generate_counterexamples: bool, old_counterexamples=None) -> Dict[str, Any]:
+    def solve(self, output: bool, generate_preconditions: bool, generate_counterexamples: bool,
+              old_counterexamples=None) -> Dict[str, Any]:
         """
         the main solving routine
 
@@ -190,11 +191,12 @@ class StrategySolver(metaclass=ABCMeta):
                                 f"if players deviate at history {deviation_at}, "
                                 f"resulting in history {new_terminal_history}")
                         logging.info(f"old counterexamples: {self._old_counterexamples}")
-                        self._old_counterexamples.extend(counterexamples)
+                        self._old_counterexamples.extend([ce["label"] for ce in counterexamples])
                         logging.info(
                             "restarting with a set of old counterexamples"
                         )
-                        return self.solve(output, generate_preconditions, generate_counterexamples, self._old_counterexamples)
+                        return self.solve(output, generate_preconditions, generate_counterexamples,
+                                          self._old_counterexamples)
 
                     if not generate_preconditions:
                         return {
@@ -318,14 +320,14 @@ class StrategySolver(metaclass=ABCMeta):
             players: str,
             subtree_history: List[str]
     ) -> z3.BoolRef:
-        history_str = ','.join(subtree_history)
-        label = self._subtree2label.get((players, history_str))
+        history = tuple(subtree_history)
+        label = self._subtree2label.get((players, history))
         if label is None:
-            label = z3.Function(f'ce[{players}][{history_str}]', z3.BoolSort())
-            self._subtree2label[(players, history_str)] = label
-            self._label2subtree[label] = (players, history_str)
+            label = z3.Function(f'ce[{players}][{history}]', z3.BoolSort())
+            self._subtree2label[(players, history)] = label
+            self._label2subtree[label] = (players, subtree_history)
             expr = label()
-            if (players, history_str) not in self._old_counterexamples:
+            if (players, history) not in self._old_counterexamples:
                 self._solver.assert_and_track(expr, expr)
         else:
             expr = label()
@@ -636,22 +638,23 @@ class PracticalityStrategySolver(StrategySolver):
             )
 
 
-def _parse_counterexample(checked_history: List[str], counterexample_label: Tuple[str, str]) -> \
+def _parse_counterexample(checked_history: List[str], counterexample_label: Tuple[str, Tuple[str]]) -> \
         Dict[str, Union[str, List[str]]]:
     players = counterexample_label[0]
-    history = counterexample_label[1].split(',')
+    history = counterexample_label[1]
     deviation_at = []
 
     for index in range(0, len(history)):
         if checked_history[index] == history[index]:
-            deviation_at.append(history[index])
+            deviation_at.append(checked_history[index])
         else:
             break
 
     if ',' in players:
         players = players.split(',')
 
-    return {"players": players, "deviation_at": deviation_at, "new_terminal_history": history}
+    return {"players": players, "deviation_at": deviation_at, "new_terminal_history": list(history),
+            "label": counterexample_label, }
 
 
 if __name__ == '__main__':
