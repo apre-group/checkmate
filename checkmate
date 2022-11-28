@@ -656,7 +656,6 @@ def _parse_counterexample(checked_history: List[str], counterexample_label: Tupl
 
 if __name__ == '__main__':
     # set a signal handler so that console interrupts behave as expected
-    # this only partially works as Z3 does not like to be interrupted
     from signal import SIGINT, signal
     from os import _exit
 
