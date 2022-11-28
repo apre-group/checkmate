@@ -195,6 +195,11 @@ class StrategySolver(metaclass=ABCMeta):
                         logging.info(
                             "restarting with a set of old counterexamples"
                         )
+                        self._label2subtree = {}
+                        self._subtree2label = {}
+                        self._solver.reset()
+                        self._add_action_constraints([], self.input.tree)
+                        self._add_history_constraints(self.checked_history)
                         return self.solve(output, generate_preconditions, generate_counterexamples,
                                           self._old_counterexamples)
 
@@ -323,12 +328,15 @@ class StrategySolver(metaclass=ABCMeta):
         history = tuple(subtree_history)
         label = self._subtree2label.get((players, history))
         if label is None:
-            label = z3.Function(f'ce[{players}][{history}]', z3.BoolSort())
-            self._subtree2label[(players, history)] = label
-            self._label2subtree[label] = (players, subtree_history)
-            expr = label()
             if (players, history) not in self._old_counterexamples:
+                label = z3.Function(f'ce[{players}][{history}]', z3.BoolSort())
+                self._subtree2label[(players, history)] = label
+                self._label2subtree[label] = (players, history)
+                expr = label()
                 self._solver.assert_and_track(expr, expr)
+            else:
+                print("banana")
+                expr = z3.Bool(False)
         else:
             expr = label()
 
