@@ -10,7 +10,7 @@ import itertools
 import json
 import logging
 import sys
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple, Union
 import z3
 
 from auxfunz3 import Real, Boolean, negation, conjunction, disjunction, implication, minimize, simplify_boolean
@@ -161,7 +161,8 @@ class StrategySolver(metaclass=ABCMeta):
                                     new_expression = True
 
                         if self._generate_counterexamples and label in self._label2subtree:
-                            counterexamples.append(self._label2subtree[label])
+                            counterexamples.append(
+                                _parse_counterexample(self.checked_history, self._label2subtree[label]))
 
                 # we saturated, give up
                 if not new_expression:
@@ -179,7 +180,15 @@ class StrategySolver(metaclass=ABCMeta):
                     logging.error(f"here is a case I cannot solve: {minimized}")
 
                     if self._generate_counterexamples:
-                        logging.info(f"counterexamples: {counterexamples}")
+                        for ce in counterexamples:
+                            players = ce["players"]
+                            deviation_at = ce["deviation_at"]
+                            new_terminal_history = ce["new_terminal_history"]
+                            loser = 'group' if isinstance(players, List) else 'player'
+                            logging.info(
+                                f"counterexample: property not fulfilled for {loser} {players} "
+                                f"if players deviate at history {deviation_at}, "
+                                f"resulting in history {new_terminal_history}")
                         logging.info(f"old counterexamples: {self._old_counterexamples}")
                         self._old_counterexamples.extend(counterexamples)
                         logging.info(
@@ -309,7 +318,7 @@ class StrategySolver(metaclass=ABCMeta):
             players: str,
             subtree_history: List[str]
     ) -> z3.BoolRef:
-        history_str = '[' + ','.join(subtree_history) + ']'
+        history_str = ','.join(subtree_history)
         label = self._subtree2label.get((players, history_str))
         if label is None:
             label = z3.Function(f'ce[{players}][{history_str}]', z3.BoolSort())
@@ -627,7 +636,39 @@ class PracticalityStrategySolver(StrategySolver):
             )
 
 
+def _parse_counterexample(checked_history: List[str], counterexample_label: Tuple[str, str]) -> \
+        Dict[str, Union[str, List[str]]]:
+    players = counterexample_label[0]
+    history = counterexample_label[1].split(',')
+    deviation_at = []
+
+    for index in range(0, len(history)):
+        if checked_history[index] == history[index]:
+            deviation_at.append(history[index])
+        else:
+            break
+
+    if ',' in players:
+        players = players.split(',')
+
+    return {"players": players, "deviation_at": deviation_at, "new_terminal_history": history}
+
+
 if __name__ == '__main__':
+    # set a signal handler so that console interrupts behave as expected
+    # this only partially works as Z3 does not like to be interrupted
+    from signal import SIGINT, signal
+    from sys import exit
+
+
+    def interrupted(*_):
+        z3.main_ctx().interrupt()
+        print('exit')
+        exit(0)
+
+
+    signal(SIGINT, interrupted)
+
     logging.basicConfig(
         level=logging.INFO,
         format='[%(levelname)s] %(message)s'
@@ -727,7 +768,4 @@ if __name__ == '__main__':
                     str(precond) for precond in gen_precond
                 ]
                 counterexamples = hh[pr]["counterexamples"]
-                hh[pr]["counterexamples"] = [
-                    {"player": player, "history": history.split(',')} for player, history in counterexamples
-                ]
         json.dump({"strategies": strategies}, fp=sys.stdout, indent=4)
