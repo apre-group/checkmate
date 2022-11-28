@@ -70,15 +70,15 @@ def utility_leaf(state, B_sharing):
     for player in ps:
         if player == ps[-1]:
             if state[player]["contract"] == "unlocked":
-                ut[player] = ut[player] + rho
+                ut[player] = ut[player] + rho - m + state[player]["amount_to_unlock"]
                 ut[prev_player(player)] = ut[prev_player(player)] - state[player]["amount_to_unlock"]
-                ut[ps[0]] = ut[ps[0]] + rho + state[ps[1]]["amount_to_unlock"]
+                ut[ps[0]] = ut[ps[0]] + rho + m + (len(ps) - 2) * f
             elif state[player]["contract"] == "expired":
                 ut[prev_player(player)] = ut[prev_player(player)] - epsilon
                 # if the last player was sharing secrets, then he has to ship the goods
                 if B_sharing:
                     ut[player] = ut[player] + rho - m
-                    ut[ps[0]] = ut[ps[0]] + rho + state[ps[1]]["amount_to_unlock"]
+                    ut[ps[0]] = ut[ps[0]] + rho + m + (len(ps) - 2) * f
         else:
             if state[player]["contract"] == "unlocked":
                 ut[player] = ut[player] + state[player]["amount_to_unlock"]
@@ -219,8 +219,9 @@ def generate_routing_unlocking(player: Player, state, B_sharing, history):
                     if not state[p]["secrets"][secret]:
                         sharing_dict[secret].append(p)
             for sharing_instance in secret_sharing_sets(sharing_dict):
+                B_sharing1 = B_sharing
                 if player == ps[-1] and list(sharing_instance) != [tuple() for _ in ps]:
-                    B_sharing = True
+                    B_sharing1 = True
                 state1 = copy_state(state)
                 for i in range(len(ps)):
                     for person in sharing_instance[i]:
@@ -230,7 +231,7 @@ def generate_routing_unlocking(player: Player, state, B_sharing, history):
                 align_secret_knowledge(state1)
                 next_p, state2 = next_player(state1)
                 actions_for_sharing_secrets.add(f"S_S{sharing_instance}")
-                branch_actions[share_secret_action(sharing_instance)] = generate_routing_unlocking(next_p, state2, B_sharing, history + str(player) + "." + str(share_secret_action(sharing_instance)) + ";")
+                branch_actions[share_secret_action(sharing_instance)] = generate_routing_unlocking(next_p, state2, B_sharing1, history + str(player) + "." + str(share_secret_action(sharing_instance)) + ";")
         if state[player]["contract"] == "locked" and state[player]["secrets"][prev_player(player)]:
             # Action unlock
             state1 = copy_state(state)
