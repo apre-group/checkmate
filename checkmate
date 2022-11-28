@@ -658,13 +658,13 @@ if __name__ == '__main__':
     # set a signal handler so that console interrupts behave as expected
     # this only partially works as Z3 does not like to be interrupted
     from signal import SIGINT, signal
-    from sys import exit
+    from os import _exit
 
 
     def interrupted(*_):
         z3.main_ctx().interrupt()
-        print('exit')
-        exit(0)
+        print('exit', flush=True)
+        _exit(1)
 
 
     signal(SIGINT, interrupted)
