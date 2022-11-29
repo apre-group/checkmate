@@ -62,7 +62,7 @@ class StrategySolver(metaclass=ABCMeta):
         self._generated_preconditions = set()
 
         self._generate_counterexamples = False
-        self._old_counterexamples = []
+        self._old_counterexamples = {}
 
         self._add_action_constraints([], input.tree)
         self._add_history_constraints(self.checked_history)
@@ -76,10 +76,10 @@ class StrategySolver(metaclass=ABCMeta):
         otherwise, returns a solution to report later
         """
         self._generate_counterexamples = generate_counterexamples
-        if old_counterexamples is None:
-            self._old_counterexamples = []
+        if not old_counterexamples:
+            self._old_counterexamples = {}
         else:
-            self._old_counterexamples = old_counterexamples[:]
+            self._old_counterexamples = old_counterexamples.copy()
         result = {"generated_preconditions": list(self._generated_preconditions),
                   "counterexamples": [],
                   "cases": []}
@@ -129,7 +129,7 @@ class StrategySolver(metaclass=ABCMeta):
                 if output:
                     result["cases"].append(self._extract_strategy(case))
                 if generate_counterexamples:
-                    result["counterexamples"] = [_parse_counterexample(self.checked_history, label) for label in self._old_counterexamples]
+                    result["counterexamples"] = list(self._old_counterexamples.values())
 
                 # we solved this case, now add a conflict to move on
                 case_solver.add(disjunction(*(
@@ -141,7 +141,7 @@ class StrategySolver(metaclass=ABCMeta):
 
                 # track whether we actually found any more
                 new_expression = False
-                counterexamples = []
+                counterexamples = {}
                 for item in self._solver.unsat_core():
                     # sometimes solver generates garbage for some reason, exclude it
                     if isinstance(item, z3.BoolRef) and z3.is_app(item):
@@ -164,8 +164,8 @@ class StrategySolver(metaclass=ABCMeta):
                                     new_expression = True
 
                         if self._generate_counterexamples and label in self._label2subtree:
-                            counterexamples.append(
-                                _parse_counterexample(self.checked_history, self._label2subtree[label]))
+                            subtree = self._label2subtree[label]
+                            counterexamples[subtree] = _parse_counterexample(self.checked_history, subtree)
 
                 # we saturated, give up
                 if not new_expression:
@@ -183,7 +183,7 @@ class StrategySolver(metaclass=ABCMeta):
                     logging.error(f"here is a case I cannot solve: {minimized}")
 
                     if self._generate_counterexamples:
-                        for ce in counterexamples:
+                        for key, ce in counterexamples.items():
                             players = ce["players"]
                             deviation_at = ce["deviation_at"]
                             new_terminal_history = ce["new_terminal_history"]
@@ -192,8 +192,8 @@ class StrategySolver(metaclass=ABCMeta):
                                 f"counterexample: property not fulfilled for {loser} {players} "
                                 f"if players deviate at history {deviation_at}, "
                                 f"resulting in history {new_terminal_history}")
-                        logging.info(f"old counterexamples: {self._old_counterexamples}")
-                        self._old_counterexamples.extend([ce["label"] for ce in counterexamples])
+                        logging.info(f"old counterexamples: {[key for key in self._old_counterexamples.keys()]}")
+                        self._old_counterexamples.update(counterexamples)
                         logging.info(
                             "restarting with a set of old counterexamples"
                         )
@@ -664,8 +664,7 @@ def _parse_counterexample(checked_history: List[str], counterexample_label: Tupl
     if ',' in players:
         players = players.split(',')
 
-    return {"players": players, "deviation_at": deviation_at, "new_terminal_history": list(history),
-            "label": counterexample_label, }
+    return {"players": players, "deviation_at": deviation_at, "new_terminal_history": list(history)}
 
 
 if __name__ == '__main__':
