@@ -64,15 +64,15 @@ class StrategySolver(metaclass=ABCMeta):
         self._generate_counterexamples = False
         self._old_counterexamples = {}
 
-        self._add_action_constraints([], input.tree)
+        self._add_action_constraints([], self.input.tree)
         self._add_history_constraints(self.checked_history)
 
-    def solve(self, output: bool, generate_preconditions: bool, generate_counterexamples: bool,
-              old_counterexamples=None) -> Dict[str, Any]:
+    def solve(self, generate_preconditions: bool, generate_counterexamples: bool, old_counterexamples=None) -> \
+            Dict[str, Any]:
         """
         the main solving routine
 
-        if `not output` or we failed to find a solution, return empty list
+        if we failed to find a solution, return empty list
         otherwise, returns a solution to report later
         """
         self._generate_counterexamples = generate_counterexamples
@@ -82,7 +82,7 @@ class StrategySolver(metaclass=ABCMeta):
             self._old_counterexamples = old_counterexamples.copy()
         result = {"generated_preconditions": list(self._generated_preconditions),
                   "counterexamples": [],
-                  "cases": []}
+                  "strategies": []}
         # a solver that manages case splits, AVATAR style
         case_solver = z3.Solver()
         # it should know about initial constraints for the property we're trying
@@ -126,8 +126,8 @@ class StrategySolver(metaclass=ABCMeta):
 
             if self._solver.check(self._property_constraint(case)) == z3.sat:
                 logging.info("case solved")
-                if output:
-                    result["cases"].append(self._extract_strategy(case))
+                if not self._old_counterexamples:
+                    result["strategies"].append(self._extract_strategy(case))
                 if generate_counterexamples:
                     result["counterexamples"] = list(self._old_counterexamples.values())
 
@@ -204,14 +204,13 @@ class StrategySolver(metaclass=ABCMeta):
                         self._solver.reset()
                         self._add_action_constraints([], self.input.tree)
                         self._add_history_constraints(self.checked_history)
-                        return self.solve(output, generate_preconditions, generate_counterexamples,
-                                          self._old_counterexamples)
+                        return self.solve(generate_preconditions, generate_counterexamples, self._old_counterexamples)
 
                     if not generate_preconditions:
                         return {
                             "generated_preconditions": list(self._generated_preconditions),
                             "counterexamples": counterexamples,
-                            "cases": []
+                            "strategies": []
                         }
                     else:
                         if len(minimized) == 0:
@@ -221,7 +220,7 @@ class StrategySolver(metaclass=ABCMeta):
                             return {
                                 "generated_preconditions": list(self._generated_preconditions),
                                 "counterexamples": counterexamples,
-                                "cases": []
+                                "strategies": []
                             }
                         self._generated_preconditions.add(disjunction(*(
                             simplify_boolean(negation(constr)) for constr in minimized
@@ -232,7 +231,7 @@ class StrategySolver(metaclass=ABCMeta):
                         logging.info(
                             "restarting with a generated set of preconditions"
                         )
-                        return self.solve(output, generate_preconditions, generate_counterexamples)
+                        return self.solve(generate_preconditions, generate_counterexamples)
 
         # there are no more possible models, i.e. no more cases to be discharged
         logging.info("no more cases, done")
@@ -578,7 +577,7 @@ class PracticalityStrategySolver(StrategySolver):
                 player,
                 tree
             )
-            for player in input.players
+            for player in self.input.players
         }
 
         nash_constraints = []
@@ -726,19 +725,19 @@ if __name__ == '__main__':
         result["weak_immunity"] = WeakImmuneStrategySolver(
             input,
             honest_history
-        ).solve(True, generate_preconditions, generate_counterexamples)
+        ).solve(generate_preconditions, generate_counterexamples)
 
         logging.info("checking collusion resilience")
         result["collusion_resilience"] = CollusionResilienceStrategySolver(
             input,
             honest_history
-        ).solve(True, generate_preconditions, generate_counterexamples)
+        ).solve(generate_preconditions, generate_counterexamples)
 
         logging.info("checking practicality")
         result["practicality"] = PracticalityStrategySolver(
             input,
             honest_history
-        ).solve(True, generate_preconditions, generate_counterexamples)
+        ).solve(generate_preconditions, generate_counterexamples)
 
         strategies.append(result)
 
@@ -747,7 +746,7 @@ if __name__ == '__main__':
     for hh in strategies:
         logging.info(f"Honest history {hh['history']}")
         for pr in ["weak_immunity", "collusion_resilience", "practicality"]:
-            strats = hh[pr]["cases"]
+            strats = hh[pr]["strategies"]
             gen_precond = hh[pr]["generated_preconditions"]
             if len(strats) == 0:
                 logging.info(f"-- doesn't have {pr.replace('_', ' ')}")
@@ -779,5 +778,4 @@ if __name__ == '__main__':
                 hh[pr]["generated_preconditions"] = [
                     str(precond) for precond in gen_precond
                 ]
-                counterexamples = hh[pr]["counterexamples"]
         json.dump({"strategies": strategies}, fp=sys.stdout, indent=4)
