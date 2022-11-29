@@ -1,7 +1,6 @@
 from __future__ import annotations
 import json
 from typing import Dict, Union, List
-from enum import IntEnum
 
 
 class StringThing:
@@ -133,7 +132,6 @@ class TermExpr(Expr):
         }
         return TermExpr(constant, coefficients)
 
-
     def __repr__(self):
         if not self.coefficients:
             return str(self.constant)
@@ -154,13 +152,13 @@ class TermExpr(Expr):
 
         for key, value in positive.items():
             factor = '' if value == 1.0 else f'{value} * '
-            join = ' + ' if need_join else '';
+            join = ' + ' if need_join else ''
             need_join = True
             result += f'{join}{factor}{key}'
 
         for key, value in negative.items():
             factor = '' if value == 1.0 else f'{value} * '
-            join = ' - ' if need_join else '-';
+            join = ' - ' if need_join else '-'
             need_join = True
             result += f'{join}{factor}{key}'
 
@@ -168,6 +166,7 @@ class TermExpr(Expr):
             result += f" - {abs(self.constant)}"
 
         return result
+
 
 def neg_expr(expr: LExpr) -> TermExpr:
     return TermExpr.negate(TermExpr.from_expr(expr))
@@ -313,16 +312,16 @@ class DisequationConstraint(Constraint):
 
 
 def finish(
-    players: List[Player],
-    actions: List[Action],
-    infinitesimals: List[Expr],
-    constants: List[Expr],
-    initial_constraints: List[Constraint],
-    weak_immunity_constraints: List[Constraint],
-    collusion_resilience_constraints: List[Constraint],
-    practicality_constraints: List[Constraint],
-    honest_histories: List[List[Action]],
-    tree: Tree,
+        players: List[Player],
+        actions: List[Action],
+        infinitesimals: List[Expr],
+        constants: List[Expr],
+        initial_constraints: List[Constraint],
+        weak_immunity_constraints: List[Constraint],
+        collusion_resilience_constraints: List[Constraint],
+        practicality_constraints: List[Constraint],
+        honest_histories: List[List[Action]],
+        tree: Tree,
 ):
     import sys
     mode = sys.argv[1] if len(sys.argv) >= 2 else ''
