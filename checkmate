@@ -78,6 +78,8 @@ if __name__ == '__main__':
     output = args.output_strategies
     generate_preconditions = args.generate_preconditions
     generate_counterexamples = args.generate_counterexamples
+    if generate_preconditions and generate_counterexamples:
+        raise Exception("Generating preconditions and counterexamples at the same time is not supported.")
     checked_input = Input(args.PATH)
     logging.info(
         f"input OK, checking {len(checked_input.honest_histories)} histories..."
