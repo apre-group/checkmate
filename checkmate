@@ -24,18 +24,11 @@ PROPERTY_TO_JSON_KEY = {SecurityProperty.WEAK_IMMUNITY.value: 'weak_immunity',
                         SecurityProperty.PRACTICALITY.value: 'practicality'}
 
 if __name__ == '__main__':
-    # set a signal handler so that console interrupts behave as expected
-    from signal import SIGINT, signal
-    from os import _exit
-
-
-    def interrupted(*_):
-        z3.main_ctx().interrupt()
-        print('exit', flush=True)
-        _exit(1)
-
-
-    signal(SIGINT, interrupted)
+    # set signal handler to OS default so that console interrupts behave as expected
+    # this is usually "terminate reasonably rapidly" for SIGINT
+    # Python's default is "wait around for any native code, then consider KeyboardInterrupt on a good day"
+    from signal import SIGINT, SIG_DFL, signal
+    signal(SIGINT, SIG_DFL)
 
     security_properties = [member.value for member in SecurityProperty]
 
