@@ -7,8 +7,6 @@ import json
 import logging
 import sys
 
-import z3
-
 from solving import WeakImmuneStrategySolver, CollusionResilienceStrategySolver, PracticalityStrategySolver
 from trees import Input
 
@@ -87,22 +85,28 @@ if __name__ == '__main__':
             logging.info("checking weak immunity")
             result["weak_immunity"] = WeakImmuneStrategySolver(
                 checked_input,
-                honest_history
-            ).solve(generate_preconditions, generate_counterexamples)
+                honest_history,
+                generate_preconditions,
+                generate_counterexamples
+            ).solve()
 
         if SecurityProperty.COLLUSION_RESILIENCE.value in analyzed_properties:
             logging.info("checking collusion resilience")
             result["collusion_resilience"] = CollusionResilienceStrategySolver(
                 checked_input,
-                honest_history
-            ).solve(generate_preconditions, generate_counterexamples)
+                honest_history,
+                generate_preconditions,
+                generate_counterexamples
+            ).solve()
 
         if SecurityProperty.PRACTICALITY.value in analyzed_properties:
             logging.info("checking practicality")
             result["practicality"] = PracticalityStrategySolver(
                 checked_input,
-                honest_history
-            ).solve(generate_preconditions, generate_counterexamples)
+                honest_history,
+                generate_preconditions,
+                generate_counterexamples
+            ).solve()
 
         strategies.append(result)
 
