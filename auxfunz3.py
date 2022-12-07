@@ -62,7 +62,7 @@ def label(
     return implication(label, comparison)
 
 
-def minimize(solver: z3.Solver, constraints: Set[z3.BoolRef]) -> Set[z3.BoolRef]:
+def eliminate_consequences(solver: z3.Solver, constraints: Set[z3.BoolRef]) -> Set[z3.BoolRef]:
     """compute a greedy consequence elimination of `constraints` wrt `solver`"""
     to_elim = set()
     for constr in constraints:
@@ -70,3 +70,36 @@ def minimize(solver: z3.Solver, constraints: Set[z3.BoolRef]) -> Set[z3.BoolRef]
         if solver.check(*to_check) == z3.unsat:
             to_elim.add(constr)
     return constraints - to_elim
+
+
+# following functions adapted from "Programming Z3"
+def maximal_satisfying_subset(solver: z3.Solver, start: Set[z3.BoolRef], all: Set[z3.BoolRef]) -> Set[z3.BoolRef]:
+    """compute a maximal satisfying subset of `all`, starting from `start` with respect to `solver`"""
+    ps = all - start
+    mss = start
+    backbones = set([])
+    while len(ps) > 0:
+       p = ps.pop()
+       if solver.check(mss | backbones | { p }) == z3.sat:
+          mss = mss | { p } | { q for q in ps if tt(solver, q) }
+          ps  = ps - mss
+       else:
+          backbones = backbones | { negation(p) }
+
+    return mss
+
+def marco(s, ps):
+    """compute a maximal satisfying subset of `all`, starting from `start` with respect to `solver`"""
+    map = z3.Solver()
+    map.set("unsat_core", True)
+    map.set("core.minimize", True)
+    while map.check() == z3.sat:
+        seed = {p for p in ps if not ff(map, p)}
+        if s.check(seed) == z3.sat:
+           mss = maximal_satisfying_subset(s, seed, ps)
+           map.add(disjunction(ps - mss))
+           yield "MSS", mss
+        else:
+           mus = s.unsat_core()
+           map.add(negation(conjunction(mus)))
+           yield "MUS", mus
