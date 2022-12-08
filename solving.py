@@ -8,7 +8,7 @@ import itertools
 import logging
 import z3
 
-from auxfunz3 import Real, Boolean, negation, conjunction, disjunction, implication, simplify_boolean, eliminate_consequences
+from auxfunz3 import *
 from utility import Utility, ZERO
 from trees import Tree, Leaf, Branch, Input
 
@@ -139,7 +139,8 @@ class StrategySolver(metaclass=ABCMeta):
             case = eliminate_consequences(minimize_solver, set(case))
             logging.info(f"current case assumes {case}")
 
-            if self._solver.check(self._property_constraint(case), *self._label2pair.keys(), *self._label2subtree.keys()) == z3.sat:
+            property_constraint = self._property_constraint(case)
+            if self._solver.check(property_constraint, *self._label2pair.keys(), *self._label2subtree.keys()) == z3.sat:
                 logging.info("case solved")
                 result["strategies"].append(self._extract_strategy(case))
 
@@ -153,8 +154,7 @@ class StrategySolver(metaclass=ABCMeta):
 
                 # track whether we actually found any more
                 new_expression = False
-                core = self._solver.unsat_core()
-                for label in core:
+                for label in self._solver.unsat_core():
                     # sometimes solver generates garbage for some reason, exclude it
                     if not isinstance(label, z3.BoolRef) or not z3.is_app(label):
                         continue
@@ -180,39 +180,34 @@ class StrategySolver(metaclass=ABCMeta):
                     logging.error("no more splits, failed")
                     logging.error(f"here is a case I cannot solve: {case}")
 
-                    counterexamples = []
                     if self.generate_counterexamples:
-                        for label in core:
-                            # sometimes solver generates garbage for some reason, exclude it
-                            if not isinstance(label, z3.BoolRef) or not z3.is_app(label):
-                                continue
+                        # property constraint is now fixed
+                        self._solver.add(property_constraint)
+                        # we no longer care about unsat cores for expression comparisons,
+                        # so just assert it and move along
+                        for label in self._label2pair.keys():
+                            self._solver.add(label)
 
-                            if self.generate_counterexamples and label in self._label2subtree:
-                                subtree = self._label2subtree[label]
-                                players, history = subtree
-                                deviation_at = [
-                                    x[0]
-                                    for x in itertools.takewhile(
-                                        lambda x: x[0] == x[1],
-                                        zip(self.checked_history, history)
-                                    )
-                                ]
-                                # TODO define a class for counterexamples
-                                counterexamples.append({
-                                    "players": players,
-                                    "deviation_at": deviation_at,
-                                    "new_terminal_history": history
-                                })
-                                logging.info(
-                                    f"counterexample: property not fulfilled for players {players} "
-                                    f"if players deviate at history {deviation_at}, "
-                                    f"resulting in history {history}"
-                                )
+                        labels = set(self._label2subtree.keys())
+                        for core in minimal_unsat_cores(self._solver, labels):
+                            logging.info("counterexample found - property cannot be fulfilled because of:")
+                            for label in core:
+                                # sometimes solver generates garbage for some reason, exclude it
+                                if not isinstance(label, z3.BoolRef) or not z3.is_app(label):
+                                    continue
+
+                                if label in self._label2subtree:
+                                    subtree = self._label2subtree[label]
+                                    players, history = subtree
+                                    # TODO do something with the counterexamples?
+                                    logging.info(f"- players {players} with history {history}")
+
+                        logging.info("no more counterexamples")
 
                     if not self.generate_preconditions:
                         return {
                             "generated_preconditions": list(self._generated_preconditions),
-                            "counterexamples": counterexamples,
+                            "counterexamples": [],
                             "strategies": []
                         }
                     else:
@@ -222,7 +217,7 @@ class StrategySolver(metaclass=ABCMeta):
                             )
                             return {
                                 "generated_preconditions": list(self._generated_preconditions),
-                                "counterexamples": counterexamples,
+                                "counterexamples": [],
                                 "strategies": []
                             }
                         self._generated_preconditions.add(disjunction(*(
@@ -329,7 +324,7 @@ class StrategySolver(metaclass=ABCMeta):
         history = tuple(subtree_history)
         label = self._subtree2label.get((players, history))
         if label is None:
-            label = z3.Bool(f'st[{players}][{history}]')
+            label = z3.Bool(f'ce[{players}][{history}]')
             self._subtree2label[(players, history)] = label
             self._label2subtree[label] = (players, history)
 

@@ -2,7 +2,7 @@
 # minimum version: 3.7, will be default in future
 from __future__ import annotations
 
-from typing import Callable, Optional, Union, Set
+from typing import Callable, Optional, Union, Set, Generator
 import z3
 
 Real = Union[float, z3.ArithRef]
@@ -77,29 +77,41 @@ def maximal_satisfying_subset(solver: z3.Solver, start: Set[z3.BoolRef], all: Se
     """compute a maximal satisfying subset of `all`, starting from `start` with respect to `solver`"""
     ps = all - start
     mss = start
-    backbones = set([])
+    backbones = set()
     while len(ps) > 0:
-       p = ps.pop()
-       if solver.check(mss | backbones | { p }) == z3.sat:
-          mss = mss | { p } | { q for q in ps if tt(solver, q) }
-          ps  = ps - mss
-       else:
-          backbones = backbones | { negation(p) }
+        p = ps.pop()
+        if solver.check(*(mss | backbones | { p })) == z3.sat:
+            model = solver.model()
+            mss = mss | { p } | {
+                q for q in ps
+                if z3.is_true(model.eval(q))
+            }
+            ps = ps - mss
+        else:
+            backbones = backbones | { negation(p) }
 
     return mss
 
-def marco(s, ps):
-    """compute a maximal satisfying subset of `all`, starting from `start` with respect to `solver`"""
+def minimal_unsat_cores(solver: z3.Solver, all: Set[z3.BoolRef]) -> Generator[Set[z3.BoolRef], None, None]:
+    """iteratively compute all minimal unsat cores in `all` with respect to `solver`"""
+
     map = z3.Solver()
     map.set("unsat_core", True)
     map.set("core.minimize", True)
     while map.check() == z3.sat:
-        seed = {p for p in ps if not ff(map, p)}
-        if s.check(seed) == z3.sat:
-           mss = maximal_satisfying_subset(s, seed, ps)
-           map.add(disjunction(ps - mss))
-           yield "MSS", mss
+        model = map.model()
+        seed = {
+            p for p in all
+            if not z3.is_false(model.eval(p))
+        }
+        if solver.check(*seed) == z3.sat:
+            mss = maximal_satisfying_subset(solver, seed, all)
+            map.add(disjunction(*(all - mss)))
         else:
-           mus = s.unsat_core()
-           map.add(negation(conjunction(mus)))
-           yield "MUS", mus
+            mus = {
+                label
+                for label in solver.unsat_core()
+                if isinstance(label, z3.BoolRef)
+            }
+            map.add(disjunction(*(negation(label) for label in mus)))
+            yield mus
