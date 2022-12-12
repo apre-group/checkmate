@@ -1,0 +1,290 @@
+{
+    "players": [
+      "A",
+      "E1",
+      "I",
+      "E2",
+      "B"
+    ],
+    "actions": [
+      "S_H",
+      "L",
+      "U",
+      "I_U",
+      "S_SE1"
+    ],
+    "infinitesimals": [
+      "rho",
+      "epsilon"
+    ],
+    "constants": [
+      "m",
+      "f"
+    ],
+    "initial_constraints": [
+      "epsilon > 0",
+      "rho > 0",
+      "m > 0",
+      "f > 0"
+    ],
+    "property_constraints": {
+      "weak_immunity": [
+      ],
+      "collusion_resilience": [
+      ],
+      "practicality": [
+      ]
+    },
+    "honest_histories": [
+      [
+        "S_H",
+        "L",
+        "L",
+        "L",
+        "L",
+        "U",
+        "U",
+        "U",
+        "U"
+      ]
+    ],
+    "tree": {
+        "player": "B",
+        "children": [
+            {
+                "action": "S_H",
+                "child": {
+                    "player": "A",
+                    "children": [
+                        {
+                            "action": "L",
+                            "child": {
+                                "player": "E1",
+                                "children": [
+                                    {
+                                        "action": "L",
+                                        "child": {
+                                            "player": "I",
+                                            "children": [
+                                                {
+                                                    "action": "L",
+                                                    "child": {
+                                                        "player": "E2",
+                                                        "children": [
+                                                            {
+                                                                "action": "L",
+                                                                "child": {
+                                                                    "player": "B",
+                                                                    "children": [
+                                                                        {
+                                                                            "action": "I_U",
+                                                                            "child": {
+                                                                                "utility": [
+                                                                                    {
+                                                                                        "player": "A",
+                                                                                        "value": "-epsilon"
+                                                                                    },
+                                                                                    {
+                                                                                        "player": "E1",
+                                                                                        "value": "-epsilon"
+                                                                                    },
+                                                                                    {
+                                                                                        "player": "I",
+                                                                                        "value": "-epsilon"
+                                                                                    },
+                                                                                    {
+                                                                                        "player": "E2",
+                                                                                        "value": "-epsilon"
+                                                                                    },
+                                                                                    {
+                                                                                        "player": "B",
+                                                                                        "value": 0
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        },
+                                                                        {
+                                                                            "action": "U",
+                                                                            "child": {
+                                                                                "player": "E2",
+                                                                                "children": [
+                                                                                    {
+                                                                                        "action": "U",
+                                                                                        "child": {
+                                                                                            "player": "I",
+                                                                                            "children": [
+                                                                                                {
+                                                                                                    "action": "I_U",
+                                                                                                    "child": {
+                                                                                                        "utility": [
+                                                                                                            {
+                                                                                                                "player": "A",
+                                                                                                                "value": "rho + m + 3*f - epsilon"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "player": "E1",
+                                                                                                                "value": "- epsilon"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "player": "I",
+                                                                                                                "value": "- m - f"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "player": "E2",
+                                                                                                                "value": "f"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "player": "B",
+                                                                                                                "value": "rho"
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                },
+                                                                                                {
+                                                                                                    "action": "U",
+                                                                                                    "child": {
+                                                                                                        "player": "E1",
+                                                                                                        "children": [
+                                                                                                            {
+                                                                                                                "action": "I_U",
+                                                                                                                "child": {
+                                                                                                                    "utility":[
+                                                                                                                        {
+                                                                                                                            "player": "A",
+                                                                                                                            "value":"rho + m + 3*f - epsilon"
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "player": "E1",
+                                                                                                                            "value": "- m - 2*f"
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "player": "I",
+                                                                                                                            "value": "f"
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "player": "E2",
+                                                                                                                            "value": "f"
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "player": "B",
+                                                                                                                            "value": "rho"
+                                                                                                                        }
+                                                                                                                    ]
+                                                                                                                }
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "action": "U",
+                                                                                                                "child": {
+                                                                                                                    "utility":[
+                                                                                                                        {
+                                                                                                                            "player": "A",
+                                                                                                                            "value": "rho"
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "player": "E1",
+                                                                                                                            "value": "f"
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "player": "I",
+                                                                                                                            "value": "f"
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "player": "E2",
+                                                                                                                            "value": "f"
+                                                                                                                        },
+                                                                                                                        {
+                                                                                                                            "player": "B",
+                                                                                                                            "value": "rho"
+                                                                                                                        }
+                                                                                                                    ]
+                                                                                                                }
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                }
+                                                                                            ]
+                                                                                        }
+                                                                                    },
+                                                                                    {
+                                                                                        "action": "S_SE1",
+                                                                                        "child": {
+                                                                                            "player": "E1",
+                                                                                            "children":[
+                                                                                                {
+                                                                                                    "action": "I_U",
+                                                                                                    "child": {
+                                                                                                        "utility":[
+                                                                                                            {
+                                                                                                                "player": "A",
+                                                                                                                "value":"rho + m + 3*f - epsilon"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "player": "E1",
+                                                                                                                "value": "- epsilon"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "player": "I",
+                                                                                                                "value":"- epsilon"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "player": "E2",
+                                                                                                                "value": "-m"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "player": "B",
+                                                                                                                "value": "rho"
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                },
+                                                                                                {
+                                                                                                    "action": "U",
+                                                                                                    "child":{
+                                                                                                        "utility":[
+                                                                                                            {
+                                                                                                                "player": "A",
+                                                                                                                "value": "rho"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "player": "E1",
+                                                                                                                "value": "m + 3*f - epsilon"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "player": "I",
+                                                                                                                "value": "-epsilon"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "player": "E2",
+                                                                                                                "value": "-m"
+                                                                                                            },
+                                                                                                            {
+                                                                                                                "player": "B",
+                                                                                                                "value": "rho"
+                                                                                                            }
+                                                                                                        ]
+                                                                                                    }
+                                                                                                }
+                                                                                            ]
+                                                                                        }
+                                                                                    }
+                                                                                ]
+                                                                            }
+                                                                        }
+                                                                    ]
+                                                                }
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}
