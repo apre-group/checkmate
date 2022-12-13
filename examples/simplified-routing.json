@@ -266,6 +266,33 @@
                                                                                                 }
                                                                                             ]
                                                                                         }
+                                                                                    },
+                                                                                    {
+                                                                                        "action": "I_U",
+                                                                                        "child": {
+                                                                                            "utility":[
+                                                                                                {
+                                                                                                    "player": "A",
+                                                                                                    "value": "rho + m + 3*f - epsilon"
+                                                                                                },
+                                                                                                {
+                                                                                                    "player": "E1",
+                                                                                                    "value": "- epsilon"
+                                                                                                },
+                                                                                                {
+                                                                                                    "player": "I",
+                                                                                                    "value":"- epsilon"
+                                                                                                },
+                                                                                                {
+                                                                                                    "player": "E2",
+                                                                                                    "value": "-m"
+                                                                                                },
+                                                                                                {
+                                                                                                    "player": "B",
+                                                                                                    "value": "rho"
+                                                                                                }
+                                                                                            ]
+                                                                                        }
                                                                                     }
                                                                                 ]
                                                                             }
