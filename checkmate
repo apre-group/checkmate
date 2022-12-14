@@ -7,17 +7,19 @@ import json
 import logging
 import sys
 
-from solving import WeakImmuneStrategySolver, CollusionResilienceStrategySolver, PracticalityStrategySolver
+from solving import WeakImmunityStrategySolver, WeakerImmunityStrategySolver, CollusionResilienceStrategySolver, PracticalityStrategySolver
 from trees import Input
 
 
 class SecurityProperty(Enum):
     WEAK_IMMUNITY = 'WI'
+    WEAKER_IMMUNITY = 'WWI'
     COLLUSION_RESILIENCE = 'CR'
     PRACTICALITY = 'P'
 
 
 PROPERTY_TO_JSON_KEY = {SecurityProperty.WEAK_IMMUNITY.value: 'weak_immunity',
+                        SecurityProperty.WEAKER_IMMUNITY.value: 'weaker_immunity',
                         SecurityProperty.COLLUSION_RESILIENCE.value: 'collusion_resilience',
                         SecurityProperty.PRACTICALITY.value: 'practicality'}
 
@@ -83,7 +85,16 @@ if __name__ == '__main__':
 
         if SecurityProperty.WEAK_IMMUNITY.value in analyzed_properties:
             logging.info("checking weak immunity")
-            result["weak_immunity"] = WeakImmuneStrategySolver(
+            result["weak_immunity"] = WeakImmunityStrategySolver(
+                checked_input,
+                honest_history,
+                generate_preconditions,
+                generate_counterexamples
+            ).solve()
+
+        if SecurityProperty.WEAKER_IMMUNITY.value in analyzed_properties:
+            logging.info("checking weaker immunity")
+            result["weaker_immunity"] = WeakerImmunityStrategySolver(
                 checked_input,
                 honest_history,
                 generate_preconditions,

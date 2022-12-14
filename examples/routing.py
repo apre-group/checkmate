@@ -3,7 +3,7 @@ import itertools
 import re
 
 """
-This file generates a game model for Lightning's routing protocol. To set the number of intermediaries to n, 
+This file generates a game model for Lightning's routing protocol. To set the number of intermediaries to n,
 include n many labels in players() between A and B.
 
 Design choices for routing:
@@ -12,8 +12,8 @@ An HTLC has the following parameters:
 - v: the amount of funds locked in the HTLC.
 - t: time out, after which the funds are reassigned to the HTLC's initiator.
 
-All of these parameters could be misused in a possible attack. Therefore, the actions the players can take in the game need to 
-reflect the choices of parameters. To correctly model the possible actions and utilities in each step, we track the parameters 
+All of these parameters could be misused in a possible attack. Therefore, the actions the players can take in the game need to
+reflect the choices of parameters. To correctly model the possible actions and utilities in each step, we track the parameters
 in a state with the following structure:
 
 state = {
@@ -26,22 +26,22 @@ state = {
 }
 
 Secrets: In the honest case there is only one secret (player B's) whose hash everyone uses to lock their contracts. However,
-players could use different secrets and their hashes in the contracts. Some of these secrets can be the same. 
+players could use different secrets and their hashes in the contracts. Some of these secrets can be the same.
 This is recorded in the state with "eq_secrets". For example if eq_secrets" is [[A, I], [B, E1, E2]], then A and I used the same secret's hash,
 but different from the one B, E1 and E2 used.
 
 Knowledge of secrets: Since there might be multiple secrets, we have to keep track of whose secret each player knows. This is modeled in the
 dictionary "secrets" for each player. Note that since some secrets can be identical, we need to align the knowledge of secrets according to the equivalence
-classes. 
+classes.
 
-Sharing of secrets: In the honest case no player would share a secret. However, secret sharing can lead to possible attacks, so we model 
+Sharing of secrets: In the honest case no player would share a secret. However, secret sharing can lead to possible attacks, so we model
 this behavior. A player who knows a secret can choose to share it with other players or ignore this option, which we record in the "ignoreshare" dictionary.
 
-Time orderings: It only matters in which order the contracts expire. Thus, we model time outs by the ordering the players according 
+Time orderings: It only matters in which order the contracts expire. Thus, we model time outs by the ordering the players according
 to their contracts' time outs. The first element in the list has the earliest time out.
 
 Amount to unlock and contract: Each contract that was set up can be in three different states: "locked", i.e. player can unlock it before the time out
-if they know the corresponding secret, "unlocked", or "expired" if the contract has already timed out. 
+if they know the corresponding secret, "unlocked", or "expired" if the contract has already timed out.
 Note that the contract is attributed to the player who can unlock. This also holds for the amount to unlock.
 
 
@@ -50,19 +50,19 @@ Other design choices:
 1) The players can choose between the following actions:
     - In the initiation phase, i.e. before contracts are locked:
         *)S_H: B can choose to share the hash to their secret with A and thereby initiate the locking phase.
-        *)J: B can choose to ignore the possible trade. 
+        *)J: B can choose to ignore the possible trade.
     - In the locking phase:
         *) L_(<amount_deviator>,<time_ordering_placement>,<equivalence_class>): e.g. L_(A,2,[B, I]) is an action that player I can choose.
-           It means that A was the first to deviate in the locked amount, I's contract expires second and I used the same hash as B. 
+           It means that A was the first to deviate in the locked amount, I's contract expires second and I used the same hash as B.
            Note that in the honest case, the amount deviator is set to None, as nobody deviates.
         *) I_L: Ignore to lock a contract.
     - In the unlocking phase:
         *) U: Unlocking the contract.
         *) I_U: Ignore to unlock the contract. This implies expiration of the contract.
-        *) S_S((<players to share A's secret with>),...,(<players to share B's secret with>)): 
+        *) S_S((<players to share A's secret with>),...,(<players to share B's secret with>)):
            Sharing the secrets. Note that S_S((),...,()) means sharing with nobody.
 
-2) Choosing the next player is an important design choice in game models. 
+2) Choosing the next player is an important design choice in game models.
     - In the locking phase (set up of contracts), the next player is chosen according to the planned route.
     - We start the unlocking phase with player B. After that the next player is chosen according to the following priorities:
         *) Priority 1: The next player is the one whose contract expires next and who knows the secret.
@@ -71,24 +71,24 @@ Other design choices:
 
 3) Wlog to prune the tree we limit the sharing of secrets in the following ways:
     - Sharing secrets can only happen in the unlocking phase, that is when all contracts are already set up.
-      If sharing secrets only happens in the unlocking phase, we will still capture possible attacks (including collusion), 
-      with even worse utility (-epsilon instead of 0). 
+      If sharing secrets only happens in the unlocking phase, we will still capture possible attacks (including collusion),
+      with even worse utility (-epsilon instead of 0).
     - At the same time a person can share multiple secrets with multiple players (who do not know them already).
-      As a consequence, sharing secrets in two consecutive actions by the same player is not permitted. 
+      As a consequence, sharing secrets in two consecutive actions by the same player is not permitted.
     - Sharing a secret with a subset of players implies ignoring the sharing of this secret with all other players.
     - Sharing secrets, which were only used in contracts which are already unlocked or expired, is pointless and therefore not modeled.
 
-4) We assume a fair trade behind a payment, that means A pays B in exchange for some goods. In the honest case both A and B benefit from 
+4) We assume a fair trade behind a payment, that means A pays B in exchange for some goods. In the honest case both A and B benefit from
 such a trade. This is modeled by the infinitesimal value rho, which both A and B get assigned once B sent the goods.
-In our model, if B unlocks the contract, they are obligated to send the goods (proof of payment). But also if B is sharing the secret 
+In our model, if B unlocks the contract, they are obligated to send the goods (proof of payment). But also if B is sharing the secret
 there is proof that B engaged in the unlocking and is thus "legally" obligated to send the goods.
 
-5) If a player locks with a wrong amount, we model this amount with a variable and include a constraint that it is different 
-from the correct amount. Once one player locks with a wrong amount, the amounts in the following contracts are also modeled 
+5) If a player locks with a wrong amount, we model this amount with a variable and include a constraint that it is different
+from the correct amount. Once one player locks with a wrong amount, the amounts in the following contracts are also modeled
 with a variable (possibly equal to the correct amount). This way we capture all possible cases, but prune the game tree at the same time.
 
 6) Wlog we assume that everytime a player locks a contract with a new hash, they also know the corresponding secret. Otherwise,
-no one could ever unlock the contract and therefore it is security-equivalent to not creating a contract at all. 
+no one could ever unlock the contract and therefore it is security-equivalent to not creating a contract at all.
 """
 
 
@@ -107,11 +107,12 @@ INITIAL_CONSTRAINTS = [
     f > 0,
     m > 0
 ]
-#dishonest amounts different from honest amounts (first deviation only) 
+#dishonest amounts different from honest amounts (first deviation only)
 for i in range(len(ps)-1):
    INITIAL_CONSTRAINTS.append(NameExpr(f"a_{ps[i]}_{ps[i]}") !=  m + (len(ps) - 2 - i) * f)
 
 WEAK_IMMUNITY_CONSTRAINTS = []
+WEAKER_IMMUNITY_CONSTRAINTS = []
 COLLUSION_RESILIENCE_CONSTRAINTS = []
 PRACTICALITY_CONSTRAINTS = []
 
@@ -206,7 +207,7 @@ def players_who_can_unlock(state):
 
 def next_player(state):
 # prio1: the next player is the one with the next time-out, who knows the secret and current state of contract is locked
-# prio2: the next player is the one with the earliest time-out who can share 
+# prio2: the next player is the one with the earliest time-out who can share
 # prio3: if the is no possible next player, every locked contract expires and we reach a leaf of the game tree
     next_p = None
     state2 = copy_state(state)
@@ -508,6 +509,7 @@ finish(
     CONSTANTS,
     INITIAL_CONSTRAINTS,
     WEAK_IMMUNITY_CONSTRAINTS,
+    WEAKER_IMMUNITY_CONSTRAINTS,
     COLLUSION_RESILIENCE_CONSTRAINTS,
     PRACTICALITY_CONSTRAINTS,
     HONEST_HISTORIES,

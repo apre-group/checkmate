@@ -67,7 +67,7 @@ class Utility:
         self.inf = inf
 
     @staticmethod
-    def from_value(value: Union[int, float]) -> Utility:
+    def from_real(value: Real) -> Utility:
         """convert a numeric value into a real utility with zero infinitesimal"""
         return Utility(value, 0.0)
 
@@ -115,7 +115,7 @@ class Utility:
         when `label_fn` is supplied, label generated comparisons for unsat cores
         """
         if isinstance(other, int) or isinstance(other, float):
-            other = Utility.from_value(other)
+            other = Utility.from_real(other)
 
         return conjunction(
             label(self.real, other.real, operator.eq, label_fn, True),
@@ -193,7 +193,7 @@ class Utility:
     ) -> Utility:
         """generate a Z3 expression `left op right`"""
         if isinstance(other, int) or isinstance(other, float):
-            other = Utility.from_value(other)
+            other = Utility.from_real(other)
 
         return Utility(
             op(self.real, other.real),
@@ -213,7 +213,7 @@ class Utility:
         when `label_fn` is supplied, label generated comparisons for unsat cores
         """
         if isinstance(other, int) or isinstance(other, float):
-            other = Utility.from_value(other)
+            other = Utility.from_real(other)
 
         return disjunction(
             label(self.real, other.real, real_op, label_fn, True),
@@ -224,5 +224,5 @@ class Utility:
         )
 
 
-ZERO = Utility.from_value(0.0)
+ZERO = Utility.from_real(0.0)
 """the zero utility, <0.0, 0.0>"""
