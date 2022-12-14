@@ -72,6 +72,7 @@ class Input:
     constants: Dict[str, Utility]
     initial_constraints: List[Boolean]
     weak_immunity_constraints: List[Boolean]
+    weaker_immunity_constraints: List[Boolean]
     collusion_resilience_constraints: List[Boolean]
     practicality_constraints: List[Boolean]
     honest_histories: List[List[str]]
@@ -99,6 +100,10 @@ class Input:
             self._load_constraint(constraint)
             for constraint in obj['property_constraints']['weak_immunity']
         ]
+        self.weaker_immunity_constraints = [
+            self._load_constraint(constraint)
+            for constraint in obj['property_constraints']['weaker_immunity']
+        ]
         self.collusion_resilience_constraints = [
             self._load_constraint(constraint)
             for constraint in obj['property_constraints']['collusion_resilience']
@@ -117,6 +122,7 @@ class Input:
             f"constants: {list(self.constants)}\n"
             f"initial constraints: {self.initial_constraints}\n"
             f"weak immunity constraints: {self.weak_immunity_constraints}\n"
+            f"weaker immunity constraints: {self.weaker_immunity_constraints}\n"
             f"collusion resilience constraints: {self.collusion_resilience_constraints}\n"
             f"practicality constraints: {self.practicality_constraints}\n"
             f"honest histories: {self.honest_histories}\n"
@@ -126,12 +132,12 @@ class Input:
     def _load_utility(self, utility: Union[int, str]) -> Utility:
         """load a string expression or an integer into a Utility, via `eval()`"""
         if isinstance(utility, int):
-            return Utility.from_value(utility)
+            return Utility.from_real(utility)
 
         utility = eval(utility, {}, self.constants)
         # NB: "2 * 2" is a possibility
         if isinstance(utility, int):
-            return Utility.from_value(utility)
+            return Utility.from_real(utility)
 
         assert isinstance(utility, Utility)
         return utility

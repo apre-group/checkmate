@@ -351,11 +351,12 @@ class StrategySolver(metaclass=ABCMeta):
         }
 
 
-class WeakImmuneStrategySolver(StrategySolver):
-    """solver for weak immunity"""
+class FeebleImmuneStrategySolver(StrategySolver):
+    """solver for weak and weaker immunity"""
 
-    def _property_initial_constraints(self) -> List[Boolean]:
-        return self.input.weak_immunity_constraints
+    @abstractmethod
+    def _compare_utilities(self, utility) -> z3.BoolRef:
+        pass
 
     def _property_constraint_implementation(self) -> z3.BoolRef:
         constraints = []
@@ -377,7 +378,7 @@ class WeakImmuneStrategySolver(StrategySolver):
         if isinstance(tree, Leaf):
             impl = implication(
                 conjunction(*player_decisions),
-                Utility.__ge__(tree.utilities[player], ZERO, self._pair_label)
+                self._compare_utilities(tree.utilities[player])
             )
             if self.generate_counterexamples:
                 impl = implication(self._subtree_label((player,), history), impl)
@@ -399,6 +400,25 @@ class WeakImmuneStrategySolver(StrategySolver):
                 history + [action],
                 child
             )
+
+
+class WeakImmunityStrategySolver(FeebleImmuneStrategySolver):
+
+    def _property_initial_constraints(self) -> List[Boolean]:
+        return self.input.weak_immunity_constraints
+
+    def _compare_utilities(self, utility) -> z3.BoolRef:
+        return Utility.__ge__(utility, ZERO, self._pair_label)
+
+
+class WeakerImmunityStrategySolver(FeebleImmuneStrategySolver):
+
+    def _property_initial_constraints(self) -> List[Boolean]:
+        return self.input.weaker_immunity_constraints
+
+    def _compare_utilities(self, utility) -> z3.BoolRef:
+        real_part = Utility.from_real(utility.real)
+        return Utility.__ge__(real_part, ZERO, self._pair_label)
 
 
 class CollusionResilienceStrategySolver(StrategySolver):

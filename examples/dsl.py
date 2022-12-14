@@ -318,6 +318,7 @@ def finish(
         constants: List[Expr],
         initial_constraints: List[Constraint],
         weak_immunity_constraints: List[Constraint],
+        weaker_immunity_constraints: List[Constraint],
         collusion_resilience_constraints: List[Constraint],
         practicality_constraints: List[Constraint],
         honest_histories: List[List[Action]],
@@ -338,6 +339,7 @@ def finish(
             'initial_constraints': initial_constraints,
             'property_constraints': {
                 'weak_immunity': weak_immunity_constraints,
+                'weaker_immunity': weaker_immunity_constraints,
                 'collusion_resilience': collusion_resilience_constraints,
                 'practicality': practicality_constraints
             },

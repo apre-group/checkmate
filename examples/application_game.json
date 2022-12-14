@@ -22,6 +22,7 @@
   ],
   "property_constraints": {
     "weak_immunity": [],
+    "weaker_immunity": [],
     "collusion_resilience": [],
     "practicality": []
   },

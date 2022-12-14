@@ -35,6 +35,9 @@
     "weak_immunity": [
       "a >= f"
     ],
+    "weaker_immunity": [
+      "a >= f"
+    ],
     "collusion_resilience": [
     ],
     "practicality": [
