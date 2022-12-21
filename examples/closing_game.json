@@ -53,6 +53,10 @@
       "a >= f",
       "b >= f"
     ],
+    "weaker_immunity": [
+      "a >= f",
+      "b >= f"
+    ],
     "collusion_resilience": [
       "a - p_B + d_A >= f",
       "b - p_A + d_B >= f"
