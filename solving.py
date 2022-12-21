@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from abc import ABCMeta, abstractmethod
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Tuple
 import itertools
 import logging
-import z3
 
 from auxfunz3 import *
 from utility import Utility, ZERO
@@ -54,11 +53,11 @@ class StrategySolver(metaclass=ABCMeta):
         pass
 
     def __init__(
-        self,
-        checked_input: Input,
-        checked_history: List[str],
-        generate_preconditions: bool,
-        generate_counterexamples: bool
+            self,
+            checked_input: Input,
+            checked_history: List[str],
+            generate_preconditions: bool,
+            generate_counterexamples: bool
     ):
         """create a solver for a certain input and checked history"""
         self.input = checked_input
@@ -515,45 +514,22 @@ class PracticalityStrategySolver(StrategySolver):
         self._exclude_variables.update((utility.real, utility.inf))
         return utility
 
-    def _define_utility_variable(
-            self,
-            constraints: List[z3.BoolRef],
-            starting_from: List[str],
-            player: str,
-            tree: Tree
-    ) -> Utility:
-        """
-        define a utility variable for a player starting at a subtree
-
-        a new variable is registered and constraints are added to `constraints`
-        """
-        variable = self._utility_variable(starting_from, player)
-        self._add_utility_constraints(
-            constraints,
-            variable,
-            player,
-            starting_from,
-            [],
-            tree
-        )
-        return variable
-
     def _add_utility_constraints(
             self,
             constraints: List[z3.BoolRef],
-            variable: Utility,
-            player: str,
+            player_utilities: Dict[str, Utility],
             history: List[str],
             decisions: List[z3.BoolRef],
             tree: Tree
     ):
         """add constraints to give the semantics of a utility variable"""
         if isinstance(tree, Leaf):
-            utility = tree.utilities[player]
+            equalities = [Utility.__eq__(ut, tree.utilities[player], self._pair_label) for player, ut in
+                          player_utilities.items()]
             # if we take `decisions` to a leaf, the utility variable has a known value
             constraints.append(implication(
                 conjunction(*decisions),
-                Utility.__eq__(variable, utility, self._pair_label)
+                conjunction(*equalities)
             ))
             return
 
@@ -561,8 +537,7 @@ class PracticalityStrategySolver(StrategySolver):
         for action, child in tree.actions.items():
             self._add_utility_constraints(
                 constraints,
-                variable,
-                player,
+                player_utilities,
                 history + [action],
                 decisions + [self._action_variable(history, action)],
                 child
@@ -583,16 +558,19 @@ class PracticalityStrategySolver(StrategySolver):
             return
 
         assert isinstance(tree, Branch)
-        utility_constraints = []
         utility_variables = {
-            player: self._define_utility_variable(
-                utility_constraints,
-                history,
-                player,
-                tree
-            )
+            player: self._utility_variable(history, player)
             for player in self.input.players
         }
+
+        utility_constraints = []
+        self._add_utility_constraints(
+            utility_constraints,
+            utility_variables,
+            history,
+            [],
+            tree
+        )
 
         nash_constraints = []
         for player in self.input.players:
