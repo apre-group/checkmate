@@ -520,12 +520,15 @@ class PracticalityStrategySolver(StrategySolver):
             player_utilities: Dict[str, Utility],
             history: List[str],
             decisions: List[z3.BoolRef],
-            tree: Tree
+            tree: Tree,
+            player: str
     ):
         """add constraints to give the semantics of a utility variable"""
         if isinstance(tree, Leaf):
-            equalities = [Utility.__eq__(ut, tree.utilities[player], self._pair_label) for player, ut in
-                          player_utilities.items()]
+            #experiment
+            equalities = [Utility.__eq__(player_utilities[player], tree.utilities[player], self._pair_label)]  
+            #equalities = [Utility.__eq__(ut, tree.utilities[player], self._pair_label) for player, ut in
+            #              player_utilities.items()]
             # if we take `decisions` to a leaf, the utility variable has a known value
             constraints.append(implication(
                 conjunction(*decisions),
@@ -540,7 +543,8 @@ class PracticalityStrategySolver(StrategySolver):
                 player_utilities,
                 history + [action],
                 decisions + [self._action_variable(history, action)],
-                child
+                child,
+                player
             )
 
     def _practicality_constraints(
@@ -569,19 +573,31 @@ class PracticalityStrategySolver(StrategySolver):
             utility_variables,
             history,
             [],
-            tree
+            tree,
+            tree.player
         )
 
         nash_constraints = []
-        for player in self.input.players:
-            self._nash_constraints(
-                nash_constraints,
-                utility_variables[player],
-                player,
-                history,
-                [],
-                tree
-            )
+
+        #experiment
+        player= tree.player
+        self._nash_constraints(
+            nash_constraints,
+            utility_variables[player],
+            player,
+            history,
+            [],
+            tree
+        )
+        #for player in self.input.players:
+        #    self._nash_constraints(
+        #        nash_constraints,
+        #        utility_variables[player],
+        #        player,
+        #        history,
+        #        [],
+        #        tree
+        #    )
 
         constraints.append(z3.ForAll(
             [
