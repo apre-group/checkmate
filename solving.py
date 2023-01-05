@@ -271,7 +271,7 @@ class StrategySolver(metaclass=ABCMeta):
         ```
         """
         constraint = self._property_constraint_implementation()
-        self._quantify_constants(implication(
+        return self._quantify_constants(implication(
             conjunction(
                 *self.input.initial_constraints,
                 *self._generated_preconditions,
