@@ -246,9 +246,9 @@ class StrategySolver(metaclass=ABCMeta):
             self._action_variable(history, action)
             for action in tree.actions
         ]
-        self._solver.add(disjunction(*actions))
+        self._solver.add(self._quantify_constants(disjunction(*actions)))
         for (left, right) in itertools.combinations(actions, 2):
-            self._solver.add(disjunction(negation(left), negation(right)))
+            self._solver.add(self._quantify_constants(disjunction(negation(left), negation(right))))
 
         for action, tree in tree.actions.items():
             self._add_action_constraints(history + [action], tree)
@@ -256,9 +256,9 @@ class StrategySolver(metaclass=ABCMeta):
     def _add_history_constraints(self, checked_history: List[str]):
         """we only care about this history"""
         for i in range(len(checked_history)):
-            self._solver.add(self._action_variable(
+            self._solver.add(self._quantify_constants(self._action_variable(
                 checked_history[:i], checked_history[i]
-            ))
+            )))
 
     def _property_constraint(self, case: Set[z3.BoolRef]) -> z3.BoolRef:
         """
@@ -271,7 +271,7 @@ class StrategySolver(metaclass=ABCMeta):
         ```
         """
         constraint = self._property_constraint_implementation()
-        return self._quantify_constants(implication(
+        self._quantify_constants(implication(
             conjunction(
                 *self.input.initial_constraints,
                 *self._generated_preconditions,
@@ -294,7 +294,9 @@ class StrategySolver(metaclass=ABCMeta):
     def _action_variable(self, history: List[str], action: str) -> z3.BoolRef:
         """the variable representing taking `action` after `history`"""
         tag = ';'.join(history)
-        variable = z3.Bool(f'a[{tag}][{action}]')
+        function = z3.Function(f'a[{tag}][{action}]', *(z3.RealSort() for _ in self.input.constants), z3.BoolSort())
+        variable = function(*(z3.Real(constant) for constant in self.input.constants))
+        assert isinstance(variable, z3.BoolRef)
         self._action_variables[variable] = (history, action)
         return variable
 
@@ -333,6 +335,8 @@ class StrategySolver(metaclass=ABCMeta):
         """Extracting strategies from the solver for the current case split."""
         strategy = {}
         model = self._solver.model()
+        print(model)
+        return {}
         for name in model:
             if not isinstance(name, z3.FuncDeclRef):
                 continue
