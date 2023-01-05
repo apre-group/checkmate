@@ -500,8 +500,14 @@ class PracticalityStrategySolver(StrategySolver):
 
     def _property_constraint_implementation(self) -> z3.BoolRef:
         constraints = []
-        self._practicality_constraints(constraints, [], self.input.tree)
-        return conjunction(*constraints)
+        utility_variables = []
+        self._practicality_constraints(constraints, utility_variables, [], self.input.tree)
+        return z3.ForAll(
+                [
+                    var
+                    for value in utility_variables
+                    for var in (value.real, value.inf)
+                ], conjunction(*constraints))
 
     def _utility_variable(self, starting_from: List[str], player: str) -> Utility:
         """create real/infinitesimal variables to represent a utility"""
@@ -514,42 +520,10 @@ class PracticalityStrategySolver(StrategySolver):
         self._exclude_variables.update((utility.real, utility.inf))
         return utility
 
-    def _add_utility_constraints(
-            self,
-            constraints: List[z3.BoolRef],
-            player_utilities: Dict[str, Utility],
-            history: List[str],
-            decisions: List[z3.BoolRef],
-            tree: Tree,
-            player: str
-    ):
-        """add constraints to give the semantics of a utility variable"""
-        if isinstance(tree, Leaf):
-            #experiment
-            equalities = [Utility.__eq__(player_utilities[player], tree.utilities[player], self._pair_label)]  
-            #equalities = [Utility.__eq__(ut, tree.utilities[player], self._pair_label) for player, ut in
-            #              player_utilities.items()]
-            # if we take `decisions` to a leaf, the utility variable has a known value
-            constraints.append(implication(
-                conjunction(*decisions),
-                conjunction(*equalities)
-            ))
-            return
-
-        assert isinstance(tree, Branch)
-        for action, child in tree.actions.items():
-            self._add_utility_constraints(
-                constraints,
-                player_utilities,
-                history + [action],
-                decisions + [self._action_variable(history, action)],
-                child,
-                player
-            )
-
     def _practicality_constraints(
             self,
             constraints: List[z3.BoolRef],
+            variables: List[Utility],
             history: List[str],
             tree: Tree
     ):
@@ -559,100 +533,39 @@ class PracticalityStrategySolver(StrategySolver):
         history is how we got to the subtree.
         """
         if isinstance(tree, Leaf):
+            for player in self.input.players:
+                variables.append(self._utility_variable(history, player))
+                constraints.append(Utility.__eq__(self._utility_variable(history, player), tree.utilities[player], self._pair_label))
             return
 
         assert isinstance(tree, Branch)
-        utility_variables = {
-            player: self._utility_variable(history, player)
-            for player in self.input.players
-        }
 
-        utility_constraints = []
-        self._add_utility_constraints(
-            utility_constraints,
-            utility_variables,
-            history,
-            [],
-            tree,
-            tree.player
-        )
+        for action in tree.actions:
+            utilties_propagate = []
+            for player in self.input.players:
+                utilties_propagate.append(Utility.__eq__(self._utility_variable(history, player), self._utility_variable(history + [action], player)))
+                variables.append(self._utility_variable(history, player))
+            impl = implication(self._action_variable(history, action), conjunction(*utilties_propagate))
+            constraints.append(impl)
+            constraints.append(Utility.__ge__(self._utility_variable(history, tree.player), self._utility_variable(history + [action], tree.player)))
 
-        nash_constraints = []
+        maximal_utility_constraints = []
+        for action in tree.actions:
+            maximal_utility_constraints.append(Utility.__eq__(self._utility_variable(history, tree.player),
+                                                              self._utility_variable(history + [action], tree.player)))
+        constraints.append(disjunction(*maximal_utility_constraints))
 
-        #experiment
-        player= tree.player
-        self._nash_constraints(
-            nash_constraints,
-            utility_variables[player],
-            player,
-            history,
-            [],
-            tree
-        )
-        #for player in self.input.players:
-        #    self._nash_constraints(
-        #        nash_constraints,
-        #        utility_variables[player],
-        #        player,
-        #        history,
-        #        [],
-        #        tree
-        #    )
-
-        constraints.append(z3.ForAll(
-            [
-                var
-                for value in utility_variables.values()
-                for var in (value.real, value.inf)
-            ],
-            implication(
-                conjunction(*utility_constraints),
-                conjunction(*nash_constraints)
-            )
-        ))
+        action_choose_maximal = []
+        for action in tree.actions:
+            implication(Utility.__eq__(self._utility_variable(history, tree.player),
+                                       self._utility_variable(history + [action], tree.player)),
+                        self._action_variable(history, action))
+        constraints.append(disjunction(*action_choose_maximal))
 
         for action, child in tree.actions.items():
             self._practicality_constraints(
                 constraints,
+                variables,
                 history + [action],
-                child
-            )
-
-    def _nash_constraints(
-            self,
-            constraints: List[z3.BoolRef],
-            old_utility: Utility,
-            player: str,
-            history: List[str],
-            nonplayer_decisions: List[z3.BoolRef],
-            tree: Tree
-    ):
-        # player should not benefit from deviating in this subtree.
-        if isinstance(tree, Leaf):
-            deviating_utility = tree.utilities[player]
-            impl = implication(
-                conjunction(*nonplayer_decisions),
-                Utility.__ge__(old_utility, deviating_utility, self._pair_label)
-            )
-            if self.generate_counterexamples:
-                impl = implication(self._subtree_label((player,), history), impl)
-
-            constraints.append(impl)
-            return
-
-        # all the other players have the strategy fixed (nonplayer_decisions)
-        # we collect these decisions for implication above at the Leaf case
-        assert isinstance(tree, Branch)
-        player_decision = player == tree.player
-        for action, child in tree.actions.items():
-            action_variable = [] \
-                if player_decision \
-                else [self._action_variable(history, action)]
-            self._nash_constraints(
-                constraints,
-                old_utility,
-                player,
-                history + [action],
-                nonplayer_decisions + action_variable,
                 child
             )
