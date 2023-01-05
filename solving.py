@@ -499,15 +499,20 @@ class PracticalityStrategySolver(StrategySolver):
         return self.input.practicality_constraints
 
     def _property_constraint_implementation(self) -> z3.BoolRef:
-        constraints = []
+        left_constraints = []
+        right_constraints = []
         utility_variables = []
-        self._practicality_constraints(constraints, utility_variables, [], self.input.tree)
+        self._practicality_constraints(left_constraints, right_constraints, utility_variables, [], self.input.tree)
         return z3.ForAll(
                 [
                     var
                     for value in utility_variables
                     for var in (value.real, value.inf)
-                ], conjunction(*constraints))
+                ], implication(
+                    conjunction(*left_constraints),
+                    conjunction(*right_constraints)
+                )
+        )
 
     def _utility_variable(self, starting_from: List[str], player: str) -> Utility:
         """create real/infinitesimal variables to represent a utility"""
@@ -522,7 +527,8 @@ class PracticalityStrategySolver(StrategySolver):
 
     def _practicality_constraints(
             self,
-            constraints: List[z3.BoolRef],
+            left_constraints: List[z3.BoolRef],
+            right_constraints: List[z3.BoolRef],
             variables: List[Utility],
             history: List[str],
             tree: Tree
@@ -535,7 +541,7 @@ class PracticalityStrategySolver(StrategySolver):
         if isinstance(tree, Leaf):
             for player in self.input.players:
                 variables.append(self._utility_variable(history, player))
-                constraints.append(Utility.__eq__(self._utility_variable(history, player), tree.utilities[player], self._pair_label))
+                left_constraints.append(Utility.__eq__(self._utility_variable(history, player), tree.utilities[player], self._pair_label))
             return
 
         assert isinstance(tree, Branch)
@@ -546,25 +552,26 @@ class PracticalityStrategySolver(StrategySolver):
                 utilties_propagate.append(Utility.__eq__(self._utility_variable(history, player), self._utility_variable(history + [action], player)))
                 variables.append(self._utility_variable(history, player))
             impl = implication(self._action_variable(history, action), conjunction(*utilties_propagate))
-            constraints.append(impl)
-            constraints.append(Utility.__ge__(self._utility_variable(history, tree.player), self._utility_variable(history + [action], tree.player)))
+            left_constraints.append(impl)
+            right_constraints.append(Utility.__ge__(self._utility_variable(history, tree.player), self._utility_variable(history + [action], tree.player)))
 
         maximal_utility_constraints = []
         for action in tree.actions:
             maximal_utility_constraints.append(Utility.__eq__(self._utility_variable(history, tree.player),
                                                               self._utility_variable(history + [action], tree.player)))
-        constraints.append(disjunction(*maximal_utility_constraints))
+        right_constraints.append(disjunction(*maximal_utility_constraints))
 
         action_choose_maximal = []
         for action in tree.actions:
             implication(Utility.__eq__(self._utility_variable(history, tree.player),
                                        self._utility_variable(history + [action], tree.player)),
                         self._action_variable(history, action))
-        constraints.append(disjunction(*action_choose_maximal))
+        right_constraints.append(disjunction(*action_choose_maximal))
 
         for action, child in tree.actions.items():
             self._practicality_constraints(
-                constraints,
+                left_constraints,
+                right_constraints,
                 variables,
                 history + [action],
                 child
