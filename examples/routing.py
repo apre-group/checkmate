@@ -84,7 +84,7 @@ In our model, if B unlocks the contract, they are obligated to send the goods (p
 there is proof that B engaged in the unlocking and is thus "legally" obligated to send the goods.
 
 5) If a player locks with a wrong amount, we model this amount with a variable and include a constraint that it is different
-from the correct amount. Once one player locks with a wrong amount, the amounts in the following contracts are also modeled
+from the correct amount. The variable is named "a_<first-deviator>_<current-player>". Once one player locks with a wrong amount, the amounts in the following contracts are also modeled
 with a variable (possibly equal to the correct amount). This way we capture all possible cases, but prune the game tree at the same time.
 
 6) Wlog we assume that everytime a player locks a contract with a new hash, they also know the corresponding secret. Otherwise,
@@ -109,7 +109,10 @@ INITIAL_CONSTRAINTS = [
 ]
 #dishonest amounts different from honest amounts (first deviation only)
 for i in range(len(ps)-1):
-   INITIAL_CONSTRAINTS.append(NameExpr(f"a_{ps[i]}_{ps[i]}") !=  m + (len(ps) - 2 - i) * f)
+    INITIAL_CONSTRAINTS.append(NameExpr(f"a_{ps[i]}_{ps[i]}") !=  m + (len(ps) - 2 - i) * f)
+    for j in range(i,len(ps)-1):
+        INITIAL_CONSTRAINTS.append(NameExpr(f"a_{ps[i]}_{ps[j]}") >= 0 )
+
 
 WEAK_IMMUNITY_CONSTRAINTS = []
 WEAKER_IMMUNITY_CONSTRAINTS = []
