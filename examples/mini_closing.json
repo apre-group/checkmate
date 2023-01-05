@@ -41,6 +41,7 @@
     "collusion_resilience": [
     ],
     "practicality": [
+      "a >= f"
     ]
   },
   "honest_histories": [
