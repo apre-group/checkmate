@@ -549,24 +549,26 @@ class PracticalityStrategySolver(StrategySolver):
         for action in tree.actions:
             utilties_propagate = []
             for player in self.input.players:
-                utilties_propagate.append(Utility.__eq__(self._utility_variable(history, player), self._utility_variable(history + [action], player)))
+                utilties_propagate.append(Utility.__eq__(self._utility_variable(history, player), self._utility_variable(history + [action], player), self._pair_label))
                 variables.append(self._utility_variable(history, player))
             impl = implication(self._action_variable(history, action), conjunction(*utilties_propagate))
             left_constraints.append(impl)
-            right_constraints.append(Utility.__ge__(self._utility_variable(history, tree.player), self._utility_variable(history + [action], tree.player)))
+            right_constraints.append(Utility.__ge__(self._utility_variable(history, tree.player), self._utility_variable(history + [action], tree.player), self._pair_label))
 
-        maximal_utility_constraints = []
-        for action in tree.actions:
-            maximal_utility_constraints.append(Utility.__eq__(self._utility_variable(history, tree.player),
-                                                              self._utility_variable(history + [action], tree.player)))
-        right_constraints.append(disjunction(*maximal_utility_constraints))
+        # maximal_utility_constraints = []
+        # for action in tree.actions:
+        #     maximal_utility_constraints.append(Utility.__eq__(self._utility_variable(history, tree.player),
+        #                                                       self._utility_variable(history + [action], tree.player),
+        #                                                       self._pair_label))
+        # right_constraints.append(disjunction(*maximal_utility_constraints))
 
-        action_choose_maximal = []
-        for action in tree.actions:
-            implication(Utility.__eq__(self._utility_variable(history, tree.player),
-                                       self._utility_variable(history + [action], tree.player)),
-                        self._action_variable(history, action))
-        right_constraints.append(disjunction(*action_choose_maximal))
+        # action_choose_maximal = []
+        # for action in tree.actions:
+        #     implication(Utility.__eq__(self._utility_variable(history, tree.player),
+        #                                self._utility_variable(history + [action], tree.player),
+        #                                self._pair_label),
+        #                 self._action_variable(history, action))
+        # right_constraints.append(disjunction(*action_choose_maximal))
 
         for action, child in tree.actions.items():
             self._practicality_constraints(
