@@ -69,7 +69,7 @@ class StrategySolver(metaclass=ABCMeta):
 
         self._solver = z3.Solver()
         self._solver.set("unsat_core", True)
-        self._solver.set("core.minimize", True)
+        self._solver.set("core.minimize_partial", True)
 
         self._case_solver = z3.Solver()
         self._minimize_solver = z3.Solver()
@@ -154,6 +154,7 @@ class StrategySolver(metaclass=ABCMeta):
                                 logging.info(f"new expression: {x}")
                                 add_to.add(x)
                                 new_expression = True
+
 
                 # we saturated, give up
                 if not new_expression:
@@ -653,3 +654,86 @@ class PracticalityStrategySolver(StrategySolver):
                 non_player_decisions + action_variable,
                 child
             )
+
+class PracticalityStrategySolver2(StrategySolver):
+    """solver for practicality - linear (ish) version"""
+
+    def _property_initial_constraints(self) -> List[Boolean]:
+        return self.input.practicality_constraints
+
+    def _property_constraint_implementation(self) -> z3.BoolRef:
+        constraints = []
+        self._practicality_constraints(constraints, [], self.input.tree)
+        return conjunction(*constraints)
+
+    def _practicality_constraints(self, constraints: List[Boolean], history: List[str], tree: Tree) -> Dict[str, Dict[Tuple[Real, Real], Boolean]]:
+        if isinstance(tree, Leaf):
+            return {
+                player: {(utility.real, utility.inf): True}
+                for player, utility in tree.utilities.items()
+            }
+
+        """
+        if len(history) < 5:
+            print("start", history)
+        """
+
+        assert isinstance(tree, Branch)
+        utility_map = {}
+        for action, child in tree.actions.items():
+            utility_map[action] = self._practicality_constraints(constraints, history + [action], child)
+
+        action_variables = {
+            action: self._action_variable(history, action)
+            for action in tree.actions
+        }
+
+        # if we take an action a and get a certain utility u for it...
+        for action, utilities in utility_map.items():
+            # (we only care about the current player)
+            utilities = utilities[tree.player]
+            # for every other a', u'...
+            for other, other_utilities in utility_map.items():
+                if action == other:
+                    continue
+
+                # (we only care about the current player)
+                other_utilities = other_utilities[tree.player]
+
+                # (utilities are conditional upon taking actions below us in the tree)
+                for utility, condition in utilities.items():
+                    utility = Utility(*utility)
+                    for other_utility, other_condition in other_utilities.items():
+                        other_utility = Utility(*other_utility)
+                        # ...then we know that taking action a means that u >= u'
+                        constraints.append(implication(
+                            # (conditionally upon taking certain actions below us)
+                            conjunction(condition, other_condition),
+                            implication(
+                                action_variables[action],
+                                Utility.__ge__(utility, other_utility, label_fn=self._pair_label),
+                            )
+                        ))
+
+        # build the utility map players->utility->condition
+        # the inner map gives a single boolean condition for "player p gets utility u starting from this subtree"
+        result = {
+            player: {}
+            for player in self.input.players
+        }
+        for action, player_utilities in utility_map.items():
+            for player, utilities in player_utilities.items():
+                player_result = result[player]
+                for utility, condition in utilities.items():
+                    condition = conjunction(action_variables[action], condition)
+                    if utility in player_result:
+                        player_result[utility] = disjunction(condition, player_result[utility])
+                    else:
+                        player_result[utility] = condition
+
+        """
+        if len(history) < 5:
+            print("end", history)
+        """
+
+        return result
