@@ -25,6 +25,9 @@ class StrategySolver(metaclass=ABCMeta):
     generate_counterexamples: bool
     _solver: z3.Solver
 
+    # cache the property constraint for subsequent case splits
+    _cached_property_constraint: Optional[Boolean]
+
     # maintain a bijection from (left, right) expression pairs and Z3 labels
     _pair2label: Dict[Tuple[Real, Real], z3.BoolRef]
     # note extra boolean to partition comparisons into real/infinitesimal
@@ -67,7 +70,9 @@ class StrategySolver(metaclass=ABCMeta):
 
         self._solver = z3.Solver()
         self._solver.set("unsat_core", True)
-        self._solver.set("core.minimize", True)
+        self._solver.set("core.minimize_partial", True)
+
+        self._cached_property_constraint = None
 
         self._pair2label = {}
         self._label2pair = {}
@@ -142,7 +147,6 @@ class StrategySolver(metaclass=ABCMeta):
             if self._solver.check(property_constraint, *self._label2pair.keys(), *self._label2subtree.keys()) == z3.sat:
                 logging.info("case solved")
                 result["strategies"].append(self._extract_strategy(case))
-
                 # we solved this case, now add a conflict to move on
                 case_solver.add(disjunction(*(
                     negation(spl) for spl in case
@@ -173,6 +177,7 @@ class StrategySolver(metaclass=ABCMeta):
                                 logging.info(f"new expression: {x}")
                                 add_to.add(x)
                                 new_expression = True
+
 
                 # we saturated, give up
                 if not new_expression:
@@ -270,7 +275,9 @@ class StrategySolver(metaclass=ABCMeta):
             <case split> => self._property_constraint_implementation()
         ```
         """
-        constraint = self._property_constraint_implementation()
+        if self._cached_property_constraint is None:
+            self._cached_property_constraint = self._property_constraint_implementation()
+
         return self._quantify_constants(implication(
             conjunction(
                 *self.input.initial_constraints,
@@ -278,7 +285,7 @@ class StrategySolver(metaclass=ABCMeta):
                 *self._property_initial_constraints(),
                 *case
             ),
-            constraint
+            self._cached_property_constraint
         ))
 
     def _quantify_constants(self, constraint: z3.BoolRef) -> z3.BoolRef:
@@ -656,3 +663,86 @@ class PracticalityStrategySolver(StrategySolver):
                 nonplayer_decisions + action_variable,
                 child
             )
+
+class PracticalityStrategySolver2(StrategySolver):
+    """solver for practicality - linear (ish) version"""
+
+    def _property_initial_constraints(self) -> List[Boolean]:
+        return self.input.practicality_constraints
+
+    def _property_constraint_implementation(self) -> z3.BoolRef:
+        constraints = []
+        self._practicality_constraints(constraints, [], self.input.tree)
+        return conjunction(*constraints)
+
+    def _practicality_constraints(self, constraints: List[Boolean], history: List[str], tree: Tree) -> Dict[str, Dict[Tuple[Real, Real], Boolean]]:
+        if isinstance(tree, Leaf):
+            return {
+                player: {(utility.real, utility.inf): True}
+                for player, utility in tree.utilities.items()
+            }
+
+        """
+        if len(history) < 5:
+            print("start", history)
+        """
+
+        assert isinstance(tree, Branch)
+        utility_map = {}
+        for action, child in tree.actions.items():
+            utility_map[action] = self._practicality_constraints(constraints, history + [action], child)
+
+        action_variables = {
+            action: self._action_variable(history, action)
+            for action in tree.actions
+        }
+
+        # if we take an action a and get a certain utility u for it...
+        for action, utilities in utility_map.items():
+            # (we only care about the current player)
+            utilities = utilities[tree.player]
+            # for every other a', u'...
+            for other, other_utilities in utility_map.items():
+                if action == other:
+                    continue
+
+                # (we only care about the current player)
+                other_utilities = other_utilities[tree.player]
+
+                # (utilities are conditional upon taking actions below us in the tree)
+                for utility, condition in utilities.items():
+                    utility = Utility(*utility)
+                    for other_utility, other_condition in other_utilities.items():
+                        other_utility = Utility(*other_utility)
+                        # ...then we know that taking action a means that u >= u'
+                        constraints.append(implication(
+                            # (conditionally upon taking certain actions below us)
+                            conjunction(condition, other_condition),
+                            implication(
+                                action_variables[action],
+                                Utility.__ge__(utility, other_utility, label_fn=self._pair_label),
+                            )
+                        ))
+
+        # build the utility map players->utility->condition
+        # the inner map gives a single boolean condition for "player p gets utility u starting from this subtree"
+        result = {
+            player: {}
+            for player in self.input.players
+        }
+        for action, player_utilities in utility_map.items():
+            for player, utilities in player_utilities.items():
+                player_result = result[player]
+                for utility, condition in utilities.items():
+                    condition = conjunction(action_variables[action], condition)
+                    if utility in player_result:
+                        player_result[utility] = disjunction(condition, player_result[utility])
+                    else:
+                        player_result[utility] = condition
+
+        """
+        if len(history) < 5:
+            print("end", history)
+        """
+
+        return result
