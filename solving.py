@@ -526,7 +526,7 @@ class PracticalityStrategySolver(StrategySolver):
         """add constraints to give the semantics of a utility variable"""
         if isinstance(tree, Leaf):
             #experiment
-            equalities = [Utility.__eq__(player_utilities[player], tree.utilities[player], self._pair_label)]  
+            equalities = [Utility.__eq__(player_utilities[player], tree.utilities[player], self._pair_label)]
             #equalities = [Utility.__eq__(ut, tree.utilities[player], self._pair_label) for player, ut in
             #              player_utilities.items()]
             # if we take `decisions` to a leaf, the utility variable has a known value
@@ -547,6 +547,22 @@ class PracticalityStrategySolver(StrategySolver):
                 player
             )
 
+    def list_leaves(self, tree: Tree):
+
+        if isinstance(tree, Leaf):
+            return []
+
+        assert isinstance(tree, Branch)
+
+        result = []
+        for (action, child) in tree.actions.items():
+            subhistories = self.list_leaves(child)
+            if not subhistories:
+                result.append([(action, tree.player)])
+            for subhistory in subhistories:
+                result.append([(action, tree.player)] + subhistory)
+        return result
+
     def _practicality_constraints(
             self,
             constraints: List[z3.BoolRef],
@@ -562,97 +578,43 @@ class PracticalityStrategySolver(StrategySolver):
             return
 
         assert isinstance(tree, Branch)
-        utility_variables = {
-            player: self._utility_variable(history, player)
-            for player in self.input.players
-        }
 
-        utility_constraints = []
-        self._add_utility_constraints(
-            utility_constraints,
-            utility_variables,
-            history,
-            [],
-            tree,
-            tree.player
-        )
+        terminal_histories = self.list_leaves(tree)
 
-        nash_constraints = []
+        for player in self.input.players:
+            for beta in terminal_histories:
+                for strat_history in terminal_histories:
 
-        #experiment
-        player= tree.player
-        self._nash_constraints(
-            nash_constraints,
-            utility_variables[player],
-            player,
-            history,
-            [],
-            tree
-        )
-        #for player in self.input.players:
-        #    self._nash_constraints(
-        #        nash_constraints,
-        #        utility_variables[player],
-        #        player,
-        #        history,
-        #        [],
-        #        tree
-        #    )
+                    strategy_constraints = []
+                    prev_hist_strat = history
+                    for action, _ in strat_history:
+                        strategy_constraints.append(self._action_variable(prev_hist_strat, action))
+                        prev_hist_strat = prev_hist_strat + [action]
 
-        constraints.append(z3.ForAll(
-            [
-                var
-                for value in utility_variables.values()
-                for var in (value.real, value.inf)
-            ],
-            implication(
-                conjunction(*utility_constraints),
-                conjunction(*nash_constraints)
-            )
-        ))
+                    non_player_decisions = []
+                    prev_hist_beta = history
+                    for action, p in beta:
+                        if p != player:
+                            non_player_decisions.append(self._action_variable(prev_hist_beta, action))
+                        prev_hist_beta = prev_hist_beta + [action]
+
+                    utilities_comparison = Utility.__ge__(
+                                                        tree.get_utility_of_terminal_history([a for (a, _) in strat_history])[player],
+                                                        tree.get_utility_of_terminal_history([a for (a, _) in beta])[player],
+                                                        self._pair_label)
+
+                    constraints.append(
+                        implication(
+                            conjunction(
+                                conjunction(*strategy_constraints),
+                                conjunction(*non_player_decisions)
+                            ),
+                            utilities_comparison
+                            ))
 
         for action, child in tree.actions.items():
             self._practicality_constraints(
                 constraints,
                 history + [action],
-                child
-            )
-
-    def _nash_constraints(
-            self,
-            constraints: List[z3.BoolRef],
-            old_utility: Utility,
-            player: str,
-            history: List[str],
-            nonplayer_decisions: List[z3.BoolRef],
-            tree: Tree
-    ):
-        # player should not benefit from deviating in this subtree.
-        if isinstance(tree, Leaf):
-            deviating_utility = tree.utilities[player]
-            impl = implication(
-                conjunction(*nonplayer_decisions),
-                Utility.__ge__(old_utility, deviating_utility, self._pair_label)
-            )
-            if self.generate_counterexamples:
-                impl = implication(self._subtree_label((player,), history), impl)
-
-            constraints.append(impl)
-            return
-
-        # all the other players have the strategy fixed (nonplayer_decisions)
-        # we collect these decisions for implication above at the Leaf case
-        assert isinstance(tree, Branch)
-        player_decision = player == tree.player
-        for action, child in tree.actions.items():
-            action_variable = [] \
-                if player_decision \
-                else [self._action_variable(history, action)]
-            self._nash_constraints(
-                constraints,
-                old_utility,
-                player,
-                history + [action],
-                nonplayer_decisions + action_variable,
                 child
             )
