@@ -46,6 +46,9 @@ class StrategySolver(metaclass=ABCMeta):
     # set of variables to exclude from case splits: useful for e.g. utility variables
     _exclude_variables: Set[Real]
 
+    # precomputed property constraint
+    _computed_property_constraint: Boolean
+
     @abstractmethod
     def _property_initial_constraints(self) -> List[Boolean]:
         pass
@@ -67,13 +70,6 @@ class StrategySolver(metaclass=ABCMeta):
         self.generate_preconditions = generate_preconditions
         self.generate_counterexamples = generate_counterexamples
 
-        self._solver = z3.Solver()
-        self._solver.set("unsat_core", True)
-        self._solver.set("core.minimize_partial", True)
-
-        self._case_solver = z3.Solver()
-        self._minimize_solver = z3.Solver()
-
         self._pair2label = {}
         self._label2pair = {}
         self._subtree2label = {}
@@ -81,9 +77,22 @@ class StrategySolver(metaclass=ABCMeta):
         self._action_variables = {}
         self._exclude_variables = set()
 
+        self._computed_property_constraint = self._property_constraint_implementation()
+        self._solver = z3.Solver()
+        self._solver.set('ctrl_c', False)
         self._add_action_constraints([], self.input.tree)
         self._add_history_constraints(self.checked_history)
 
+        self._minimize_solver = z3.Solver()
+        self._minimize_solver.set('ctrl_c', False)
+        # should know about initial constraints for the property we're trying
+        self._minimize_solver.add(
+            *self.input.initial_constraints,
+            *self._property_initial_constraints()
+        )
+
+    # TODO define a class for results
+    def solve(self) -> Dict[str, Any]:
     def solve(self) -> SolvingResult:
         """
         the main solving routine
@@ -102,25 +111,25 @@ class StrategySolver(metaclass=ABCMeta):
         infinitesimals = set()
 
         while self._case_solver.check() == z3.sat:
-            # an assignment of variables to concrete real values
             model = self._case_solver.model()
+            case = order_according_to_model(model, self._minimize_solver, reals) |\
+                order_according_to_model(model, self._minimize_solver, infinitesimals)
+            logging.info(f"current case assumes {case}")
 
-            # we can use this model to decide whether left > right, left = right or left < right
-            # the current case is the conjunction of all known expression comparisons
-            case = [
-                evaluate_model(model, left, right)
-                for left, right in itertools.chain(
-                    itertools.combinations(reals, 2),
-                    itertools.combinations(infinitesimals, 2)
-                )
-                # no point in providing e.g. 2.0 > 1.0
-                if type(left) != float or type(right) != float
-            ]
-            case = eliminate_consequences(self._minimize_solver, set(case))
-            logging.info(f"current case assumes {case if case else 'nothing'}")
+            property_constraint = self._property_constraint_for_case(*case)
+            check_result = self._solver.check(property_constraint, *self._label2pair.keys(), *self._label2subtree.keys())
+            if check_result == z3.unknown:
+                logging.warn("internal solver returned 'unknown', which shouldn't happen")
+                reason = self._solver.reason_unknown()
+                logging.warn(f"reason given was: {reason}")
+                logging.info("trying again...")
+                check_result = self._solver.check(property_constraint, *self._label2pair.keys(), *self._label2subtree.keys())
+                if check_result == z3.unknown:
+                    logging.error("solver still says 'unknown', bailing out")
+                    assert False
 
-            property_constraint = self._property_constraint(case, result.generated_preconditions)
-            if self._solver.check(property_constraint, *self._label2pair.keys(), *self._label2subtree.keys()) == z3.sat:
+            if check_result == z3.sat:
+                case = set(case)
                 logging.info("case solved")
                 result.strategies.append(self._extract_strategy(case))
 
@@ -134,26 +143,31 @@ class StrategySolver(metaclass=ABCMeta):
 
                 # track whether we actually found any more
                 new_expression = False
-                for label_expr in self._solver.unsat_core():
-                    # sometimes solver generates garbage for some reason, exclude it
-                    if not isinstance(label_expr, z3.BoolRef) or not z3.is_app(label_expr):
+
+                core = {
+                    label
+                    for label in self._solver.unsat_core()
+                    if isinstance(label, z3.BoolRef) and z3.is_app(label)
+                }
+                core = minimize_unsat_core(self._solver, core, property_constraint)
+                for label in core:
+                    if label not in self._label2pair:
                         continue
 
-                    if label_expr in self._label2pair:
-                        # `left op right` was in an unsat core
-                        left, right, real = self._label2pair[label_expr]
-                        # partition reals/infinitesimals
-                        add_to = reals if real else infinitesimals
+                    # `left op right` was in an unsat core
+                    left, right, real = self._label2pair[label]
+                    # partition reals/infinitesimals
+                    add_to = reals if real else infinitesimals
 
-                        for x in (left, right):
-                            # exclude utility variables
-                            if x in self._exclude_variables:
-                                continue
-                            # found one we didn't know about yet
-                            if x not in add_to:
-                                logging.info(f"new expression: {x}")
-                                add_to.add(x)
-                                new_expression = True
+                    for x in (left, right):
+                        # exclude utility variables
+                        if x in self._exclude_variables:
+                            continue
+                        # found one we didn't know about yet
+                        if x not in add_to:
+                            logging.info(f"new expression: {x}")
+                            add_to.add(x)
+                            new_expression = True
 
 
                 # we saturated, give up
@@ -170,17 +184,13 @@ class StrategySolver(metaclass=ABCMeta):
                         self._solver.add(property_constraint)
                         # we no longer care about unsat cores for expression comparisons,
                         # so just assert it and move along
-                        for label_expr in self._label2pair.keys():
-                            self._solver.add(label_expr)
+                        self._solver.add(*self._label2pair.keys())
 
                         labels = set(self._label2subtree.keys())
                         for core in minimal_unsat_cores(self._solver, labels):
                             logging.info("counterexample(s) found - property cannot be fulfilled because of:")
                             for label_expr in core:
                                 # sometimes solver generates garbage for some reason, exclude it
-                                if not isinstance(label_expr, z3.BoolRef) or not z3.is_app(label_expr):
-                                    continue
-
                                 if label_expr in self._label2subtree:
                                     counterexample = self._extract_counterexample(label_expr)
                                     logging.info(f"- {counterexample}")
@@ -252,7 +262,7 @@ class StrategySolver(metaclass=ABCMeta):
                 checked_history[:i], checked_history[i]
             ))
 
-    def _property_constraint(self, case: Set[z3.BoolRef], generated_preconditions: Set[z3.BoolRef]) -> z3.BoolRef:
+    def _property_constraint_for_case(self, *case: Boolean, generated_preconditions: Set[z3.BoolRef]) -> z3.BoolRef:
         """
         create a universally-quantified constraint for a given property of the form
         ```
@@ -263,7 +273,7 @@ class StrategySolver(metaclass=ABCMeta):
             <case split> => self._property_constraint_implementation()
         ```
         """
-        constraint = self._property_constraint_implementation()
+
         return self._quantify_constants(implication(
             conjunction(
                 *self.input.initial_constraints,
@@ -271,7 +281,7 @@ class StrategySolver(metaclass=ABCMeta):
                 *self._property_initial_constraints(),
                 *case
             ),
-            constraint
+            self._computed_property_constraint
         ))
 
     def _quantify_constants(self, constraint: z3.BoolRef) -> z3.BoolRef:
@@ -322,7 +332,7 @@ class StrategySolver(metaclass=ABCMeta):
 
         return label_expr
 
-    def _extract_strategy(self, case: Set[z3.BoolRef]) -> CaseWithStrategy:
+    def _extract_strategy(self, *case: Boolean) -> CaseWithStrategy:
         """Extracting strategies from the solver for the current case split."""
         strategy = {}
         model = self._solver.model()
@@ -687,6 +697,7 @@ class PracticalityStrategySolver2(StrategySolver):
             action: self._action_variable(history, action)
             for action in tree.actions
         }
+        subtree_label = self._subtree_label((tree.player,), history)
 
         # if we take an action a and get a certain utility u for it...
         for action, utilities in utility_map.items():
@@ -705,14 +716,16 @@ class PracticalityStrategySolver2(StrategySolver):
                     utility = Utility(*utility)
                     for other_utility, other_condition in other_utilities.items():
                         other_utility = Utility(*other_utility)
-                        # ...then we know that taking action a means that u >= u'
                         constraints.append(implication(
-                            # (conditionally upon taking certain actions below us)
-                            conjunction(condition, other_condition),
-                            implication(
+                            conjunction(
+                                # ...then we know that taking action a means that u >= u'
                                 action_variables[action],
-                                Utility.__ge__(utility, other_utility, label_fn=self._pair_label),
-                            )
+                                # (conditionally upon taking certain actions below us)
+                                condition,
+                                other_condition,
+                                subtree_label,
+                            ),
+                            Utility.__ge__(utility, other_utility, label_fn=self._pair_label),
                         ))
 
         # build the utility map players->utility->condition
