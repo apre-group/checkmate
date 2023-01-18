@@ -91,8 +91,6 @@ class StrategySolver(metaclass=ABCMeta):
             *self._property_initial_constraints()
         )
 
-    # TODO define a class for results
-    def solve(self) -> Dict[str, Any]:
     def solve(self) -> SolvingResult:
         """
         the main solving routine
@@ -108,7 +106,9 @@ class StrategySolver(metaclass=ABCMeta):
         # there is no point in comparing e.g. p_A > epsilon
         # therefore, partition case splits into real and infinitesimal parts
         reals = set()
+        reals_pairs = set()
         infinitesimals = set()
+        infinitesimals_pairs = set()
 
         while self._case_solver.check() == z3.sat:
             model = self._case_solver.model()
@@ -154,10 +154,12 @@ class StrategySolver(metaclass=ABCMeta):
                     if label not in self._label2pair:
                         continue
 
+                    print(label)
                     # `left op right` was in an unsat core
                     left, right, real = self._label2pair[label]
                     # partition reals/infinitesimals
                     add_to = reals if real else infinitesimals
+                    add_to_pairs = reals_pairs if real else infinitesimals_pairs
 
                     for x in (left, right):
                         # exclude utility variables
@@ -169,6 +171,8 @@ class StrategySolver(metaclass=ABCMeta):
                             add_to.add(x)
                             new_expression = True
 
+                    if new_expression:
+                        add_to_pairs.add((left, right))
 
                 # we saturated, give up
                 if not new_expression:

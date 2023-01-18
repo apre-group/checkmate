@@ -2,7 +2,7 @@
 # minimum version: 3.7, will be default in future
 from __future__ import annotations
 
-from typing import Callable, Optional, Union, List, Set, Generator
+from typing import Callable, Optional, Union, List, Set, Generator, Tuple
 from fractions import Fraction
 import z3
 
@@ -73,7 +73,7 @@ def evaluate_model(model: z3.ModelRef, left: Real, right: Real) -> z3.BoolRef:
         return right > left
 
 
-def order_according_to_model(model: z3.ModelRef, minimize: z3.Solver, terms: Set[Real]) -> Set[Boolean]:
+def order_according_to_model(model: z3.ModelRef, minimize: z3.Solver, terms: Set[Tuple[Real, Real]]) -> Set[Boolean]:
     """
     compute the order of terms according to the model and return it as a set of constraints
     (also exclude those that can be shown by `minimize`)
@@ -98,10 +98,9 @@ def order_according_to_model(model: z3.ModelRef, minimize: z3.Solver, terms: Set
         else:
             return left < right
 
-    order = sorted(terms, key=valuation)
     comparisons = {
         split(left, right)
-        for left, right in zip(order, order[1:])
+        for left, right in terms
     }
 
     redundant = set()
@@ -110,6 +109,7 @@ def order_according_to_model(model: z3.ModelRef, minimize: z3.Solver, terms: Set
             redundant.add(comparison)
 
     return comparisons - redundant
+
 
 def minimize_unsat_core(solver: z3.Solver, core: Set[z3.BoolRef], *assumptions: z3.BoolRef) -> Set[z3.BoolRef]:
     """
