@@ -8,7 +8,7 @@ import z3
 
 Real = Union[float, z3.ArithRef]
 Boolean = Union[bool, z3.BoolRef]
-LabelFn = Optional[Callable[[Real, Real, bool], z3.BoolRef]]
+LabelFn = Optional[Callable[[Real, Real, Boolean, bool], Optional[z3.BoolRef]]]
 
 
 def negation(to_negate: Boolean) -> z3.BoolRef:
@@ -59,18 +59,11 @@ def label(
     comparison = op(left, right)
     if label_fn is None:
         return comparison
-    label_expr = label_fn(left, right, real)
-    return implication(label_expr, comparison)
+    label = label_fn(left, right, comparison, real)
+    if label is None:
+        return comparison
 
-
-def evaluate_model(model: z3.ModelRef, left: Real, right: Real) -> z3.BoolRef:
-    """compute comparative constraint based on given model"""
-    if model.evaluate(left > right, True):
-        return left > right
-    elif model.evaluate(left == right, True):
-        return left == right
-    else:
-        return right > left
+    return implication(label, comparison)
 
 
 def order_according_to_model(model: z3.ModelRef, minimize: z3.Solver, terms: Set[Tuple[Real, Real]]) -> Set[Boolean]:
