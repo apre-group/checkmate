@@ -77,12 +77,6 @@ class StrategySolver(metaclass=ABCMeta):
         self._action_variables = {}
         self._exclude_variables = set()
 
-        self._computed_property_constraint = self._property_constraint_implementation()
-        self._solver = z3.Solver()
-        self._solver.set('ctrl_c', False)
-        self._add_action_constraints([], self.input.tree)
-        self._add_history_constraints(self.checked_history)
-
         self._minimize_solver = z3.Solver()
         self._minimize_solver.set('ctrl_c', False)
         # should know about initial constraints for the property we're trying
@@ -90,6 +84,12 @@ class StrategySolver(metaclass=ABCMeta):
             *self.input.initial_constraints,
             *self._property_initial_constraints()
         )
+
+        self._computed_property_constraint = self._property_constraint_implementation()
+        self._solver = z3.Solver()
+        self._solver.set('ctrl_c', False)
+        self._add_action_constraints([], self.input.tree)
+        self._add_history_constraints(self.checked_history)
 
     def solve(self) -> SolvingResult:
         """
@@ -298,8 +298,12 @@ class StrategySolver(metaclass=ABCMeta):
             self,
             left: Real,
             right: Real,
+            expr: Boolean,
             real: bool
-    ) -> z3.BoolRef:
+    ) -> Optional[z3.BoolRef]:
+        if self._minimize_solver.check(expr) == z3.unsat or self._minimize_solver.check(z3.Not(expr)) == z3.unsat:
+            return None
+
         """label comparisons for unsat cores"""
         label_expr = self._pair2label.get((left, right))
         if label_expr is None:
