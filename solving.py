@@ -106,9 +106,7 @@ class StrategySolver(metaclass=ABCMeta):
         # there is no point in comparing e.g. p_A > epsilon
         # therefore, partition case splits into real and infinitesimal parts
         reals = set()
-        reals_pairs = set()
         infinitesimals = set()
-        infinitesimals_pairs = set()
 
         while self._case_solver.check() == z3.sat:
             model = self._case_solver.model()
@@ -142,7 +140,7 @@ class StrategySolver(metaclass=ABCMeta):
                 logging.info("no solution, trying case split")
 
                 # track whether we actually found any more
-                new_expression = False
+                new_pair = False
 
                 core = {
                     label
@@ -154,28 +152,19 @@ class StrategySolver(metaclass=ABCMeta):
                     if label not in self._label2pair:
                         continue
 
-                    print(label)
                     # `left op right` was in an unsat core
                     left, right, real = self._label2pair[label]
                     # partition reals/infinitesimals
                     add_to = reals if real else infinitesimals
-                    add_to_pairs = reals_pairs if real else infinitesimals_pairs
 
-                    for x in (left, right):
-                        # exclude utility variables
-                        if x in self._exclude_variables:
-                            continue
-                        # found one we didn't know about yet
-                        if x not in add_to:
-                            logging.info(f"new expression: {x}")
-                            add_to.add(x)
-                            new_expression = True
-
-                    if new_expression:
-                        add_to_pairs.add((left, right))
+                    if (left, right) not in add_to:
+                        logging.info(f"new comparison: ({left}, {right})")
+                        add_to.add((left, right))
+                        add_to.add((right, left))
+                        new_pair = True
 
                 # we saturated, give up
-                if not new_expression:
+                if not new_pair:
                     logging.error("no more splits, failed")
                     logging.error(f"here is a case I cannot solve: {case}" if case
                                   else "failed with existing initial constraints")
