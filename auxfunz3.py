@@ -2,7 +2,7 @@
 # minimum version: 3.7, will be default in future
 from __future__ import annotations
 
-from typing import Callable, Optional, Union, List, Set, Generator, Tuple
+from typing import Callable, Optional, Union, Set, Generator, Tuple
 from fractions import Fraction
 import z3
 
