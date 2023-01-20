@@ -88,6 +88,7 @@ class StrategySolver(metaclass=ABCMeta):
         self._computed_property_constraint = self._property_constraint_implementation()
         self._solver = z3.Solver()
         self._solver.set('ctrl_c', False)
+        self._solver.set('core.minimize_partial', True)
         self._add_action_constraints([], self.input.tree)
         self._add_history_constraints(self.checked_history)
 
@@ -147,7 +148,6 @@ class StrategySolver(metaclass=ABCMeta):
                     for label in self._solver.unsat_core()
                     if isinstance(label, z3.BoolRef) and z3.is_app(label)
                 }
-                core = minimize_unsat_core(self._solver, core, property_constraint)
                 for label in core:
                     if label not in self._label2pair:
                         continue

@@ -104,18 +104,6 @@ def order_according_to_model(model: z3.ModelRef, minimize: z3.Solver, terms: Set
     return comparisons - redundant
 
 
-def minimize_unsat_core(solver: z3.Solver, core: Set[z3.BoolRef], *assumptions: z3.BoolRef) -> Set[z3.BoolRef]:
-    """
-    minimize `core` with respect to `solver` under `assumptions`
-    only necessary because Z3's version is a bit rubbish under our loads for some reason
-    """
-    remove = set()
-    for label in core:
-        if solver.check(*(core - remove - {label}), *assumptions) == z3.unsat:
-            remove.add(label)
-
-    return core - remove
-
 # following functions adapted from "Programming Z3"
 def maximal_satisfying_subset(solver: z3.Solver, start: Set[z3.BoolRef], all: Set[z3.BoolRef], *assumptions: z3.BoolRef) -> Set[z3.BoolRef]:
     """compute a maximal satisfying subset of `all`, starting from `start` with respect to `solver` + `assumptions`"""
