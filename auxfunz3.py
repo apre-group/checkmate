@@ -59,11 +59,11 @@ def label(
     comparison = op(left, right)
     if label_fn is None:
         return comparison
-    label = label_fn(left, right, comparison, real)
-    if label is None:
+    label_expr = label_fn(left, right, comparison, real)
+    if label_expr is None:
         return comparison
 
-    return implication(label, comparison)
+    return implication(label_expr, comparison)
 
 
 def order_according_to_model(model: z3.ModelRef, minimize: z3.Solver, terms: Set[Tuple[Real, Real]]) -> Set[Boolean]:
@@ -105,45 +105,49 @@ def order_according_to_model(model: z3.ModelRef, minimize: z3.Solver, terms: Set
 
 
 # following functions adapted from "Programming Z3"
-def maximal_satisfying_subset(solver: z3.Solver, start: Set[z3.BoolRef], all: Set[z3.BoolRef], *assumptions: z3.BoolRef) -> Set[z3.BoolRef]:
+def maximal_satisfying_subset(solver: z3.Solver,
+                              start: Set[z3.BoolRef],
+                              all_labels: Set[z3.BoolRef],
+                              *assumptions: z3.BoolRef) -> Set[z3.BoolRef]:
     """compute a maximal satisfying subset of `all`, starting from `start` with respect to `solver` + `assumptions`"""
-    ps = all - start
+    ps = all_labels - start
     mss = start
     backbones = set()
     while len(ps) > 0:
         p = ps.pop()
-        if solver.check(*(mss | backbones | { p }), *assumptions) == z3.sat:
+        if solver.check(*(mss | backbones | {p}), *assumptions) == z3.sat:
             model = solver.model()
-            mss = mss | { p } | {
+            mss = mss | {p} | {
                 q for q in ps
                 if z3.is_true(model.eval(q))
             }
             ps = ps - mss
         else:
-            backbones = backbones | { negation(p) }
+            backbones = backbones | {negation(p)}
 
     return mss
 
-def minimal_unsat_cores(solver: z3.Solver, all: Set[z3.BoolRef], *assumptions: z3.BoolRef) -> Generator[Set[z3.BoolRef], None, None]:
-    """iteratively compute all minimal unsat cores in `all` with respect to `solver` + `assumptions`"""
 
-    map = z3.Solver()
-    map.set("unsat_core", True)
-    map.set("core.minimize", True)
-    while map.check() == z3.sat:
-        model = map.model()
+def minimal_unsat_cores(solver: z3.Solver, all_labels: Set[z3.BoolRef], *assumptions: z3.BoolRef) -> \
+        Generator[Set[z3.BoolRef], None, None]:
+    """iteratively compute all minimal unsat cores in `all` with respect to `solver` + `assumptions`"""
+    map_solver = z3.Solver()
+    map_solver.set("unsat_core", True)
+    map_solver.set("core.minimize", True)
+    while map_solver.check() == z3.sat:
+        model = map_solver.model()
         seed = {
-            p for p in all
+            p for p in all_labels
             if not z3.is_false(model.eval(p))
         }
         if solver.check(*seed, *assumptions) == z3.sat:
-            mss = maximal_satisfying_subset(solver, seed, all, *assumptions)
-            map.add(disjunction(*(all - mss)))
+            mss = maximal_satisfying_subset(solver, seed, all_labels, *assumptions)
+            map_solver.add(disjunction(*(all_labels - mss)))
         else:
             mus = {
-                label
-                for label in solver.unsat_core()
-                if isinstance(label, z3.BoolRef) and label in all
+                label_expr
+                for label_expr in solver.unsat_core()
+                if isinstance(label_expr, z3.BoolRef) and label_expr in all_labels
             }
-            map.add(disjunction(*(negation(label) for label in mus)))
+            map_solver.add(disjunction(*(negation(label_expr) for label_expr in mus)))
             yield mus

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABCMeta, abstractmethod
-from typing import Dict, List, Tuple
+from typing import Dict, List
 import itertools
 import logging
 
@@ -78,17 +78,19 @@ class StrategySolver(metaclass=ABCMeta):
         self._exclude_variables = set()
 
         self._minimize_solver = z3.Solver()
+        self._case_solver = z3.Solver()
         self._minimize_solver.set('ctrl_c', False)
         # should know about initial constraints for the property we're trying
-        self._minimize_solver.add(
-            *self.input.initial_constraints,
-            *self._property_initial_constraints()
-        )
+        initial_constraints = *self.input.initial_constraints, *self._property_initial_constraints()
+        self._minimize_solver.add(initial_constraints)
+        self._case_solver.add(initial_constraints)
 
         self._computed_property_constraint = self._property_constraint_implementation()
+
         self._solver = z3.Solver()
         self._solver.set('ctrl_c', False)
         self._solver.set('core.minimize_partial', True)
+
         self._add_action_constraints([], self.input.tree)
         self._add_history_constraints(self.checked_history)
 
@@ -101,9 +103,6 @@ class StrategySolver(metaclass=ABCMeta):
         """
         result = SolvingResult()
 
-        # add initial constraints to case and minimizing solver
-        self._reset_case_and_minimize_solver()
-
         # there is no point in comparing e.g. p_A > epsilon
         # therefore, partition case splits into real and infinitesimal parts
         reals = set()
@@ -113,16 +112,21 @@ class StrategySolver(metaclass=ABCMeta):
             model = self._case_solver.model()
             case = order_according_to_model(model, self._minimize_solver, reals) |\
                 order_according_to_model(model, self._minimize_solver, infinitesimals)
-            logging.info(f"current case assumes {case}")
+            logging.info(f"current case assumes {case if case else 'nothing'}")
 
-            property_constraint = self._property_constraint_for_case(*case)
-            check_result = self._solver.check(property_constraint, *self._label2pair.keys(), *self._label2subtree.keys())
+            property_constraint = \
+                self._property_constraint_for_case(*case, generated_preconditions=result.generated_preconditions)
+            check_result = self._solver.check(property_constraint,
+                                              *self._label2pair.keys(),
+                                              *self._label2subtree.keys())
             if check_result == z3.unknown:
-                logging.warn("internal solver returned 'unknown', which shouldn't happen")
+                logging.warning("internal solver returned 'unknown', which shouldn't happen")
                 reason = self._solver.reason_unknown()
-                logging.warn(f"reason given was: {reason}")
+                logging.warning(f"reason given was: {reason}")
                 logging.info("trying again...")
-                check_result = self._solver.check(property_constraint, *self._label2pair.keys(), *self._label2subtree.keys())
+                check_result = self._solver.check(property_constraint,
+                                                  *self._label2pair.keys(),
+                                                  *self._label2subtree.keys())
                 if check_result == z3.unknown:
                     logging.error("solver still says 'unknown', bailing out")
                     assert False
@@ -144,16 +148,17 @@ class StrategySolver(metaclass=ABCMeta):
                 new_pair = False
 
                 core = {
-                    label
-                    for label in self._solver.unsat_core()
-                    if isinstance(label, z3.BoolRef) and z3.is_app(label)
+                    label_expr
+                    for label_expr in self._solver.unsat_core()
+                    if isinstance(label_expr, z3.BoolRef) and z3.is_app(label_expr)
                 }
-                for label in core:
-                    if label not in self._label2pair:
+
+                for label_expr in core:
+                    if label_expr not in self._label2pair:
                         continue
 
                     # `left op right` was in an unsat core
-                    left, right, real = self._label2pair[label]
+                    left, right, real = self._label2pair[label_expr]
                     # partition reals/infinitesimals
                     add_to = reals if real else infinitesimals
 
@@ -183,11 +188,9 @@ class StrategySolver(metaclass=ABCMeta):
                         for core in minimal_unsat_cores(self._solver, labels):
                             logging.info("counterexample(s) found - property cannot be fulfilled because of:")
                             for label_expr in core:
-                                # sometimes solver generates garbage for some reason, exclude it
-                                if label_expr in self._label2subtree:
-                                    counterexample = self._extract_counterexample(label_expr)
-                                    logging.info(f"- {counterexample}")
-                                    result.counterexamples.append(counterexample)
+                                counterexample = self._extract_counterexample(label_expr)
+                                logging.info(f"- {counterexample}")
+                                result.counterexamples.append(counterexample)
 
                         logging.info("no more counterexamples")
 
@@ -221,6 +224,8 @@ class StrategySolver(metaclass=ABCMeta):
     def _reset_case_and_minimize_solver(self, generated_preconditions: Set[z3.BoolRef] = None):
         self._case_solver.reset()
         self._minimize_solver.reset()
+
+        self._minimize_solver.set('ctrl_c', False)
 
         # both should know about initial constraints for the property we're trying
         for constraint in itertools.chain(
@@ -329,7 +334,7 @@ class StrategySolver(metaclass=ABCMeta):
 
         return label_expr
 
-    def _extract_strategy(self, *case: Boolean) -> CaseWithStrategy:
+    def _extract_strategy(self, case: Set[z3.BoolRef]) -> CaseWithStrategy:
         """Extracting strategies from the solver for the current case split."""
         strategy = {}
         model = self._solver.model()
@@ -662,6 +667,7 @@ class PracticalityStrategySolver(StrategySolver):
                 child
             )
 
+
 class PracticalityStrategySolver2(StrategySolver):
     """solver for practicality - linear (ish) version"""
 
@@ -673,7 +679,8 @@ class PracticalityStrategySolver2(StrategySolver):
         self._practicality_constraints(constraints, [], self.input.tree)
         return conjunction(*constraints)
 
-    def _practicality_constraints(self, constraints: List[Boolean], history: List[str], tree: Tree) -> Dict[str, Dict[Tuple[Real, Real], Boolean]]:
+    def _practicality_constraints(self, constraints: List[Boolean], history: List[str], tree: Tree) -> \
+            Dict[str, Dict[Tuple[Real, Real], Boolean]]:
         if isinstance(tree, Leaf):
             return {
                 player: {(utility.real, utility.inf): True}
