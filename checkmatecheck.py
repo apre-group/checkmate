@@ -13,8 +13,11 @@ from typing import Dict, List, Set, Tuple, Iterator
 import z3
 
 from auxfunz3 import Boolean, disjunction
+from constants import ANALYSIS_JSON_KEY, HONEST_HISTORY_JSON_KEY, PROPERTY_TO_JSON_KEY, SecurityProperty, \
+    PROPERTY_TO_STR, GENERATED_PRECONDITIONS_JSON_KEY, JOINT_STRATEGIES_JSON_KEY, JOINT_STRATEGY_ORDERING_JSON_KEY, \
+    JOINT_STRATEGY_STRATEGY_JSON_KEY
 from utility import Utility, ZERO
-from trees import Tree, Leaf, Branch, Input
+from input import Tree, Leaf, Branch, Input
 
 
 class StrategyChecker(metaclass=ABCMeta):
@@ -24,7 +27,8 @@ class StrategyChecker(metaclass=ABCMeta):
     to_check: Input
     _solver: z3.Solver
 
-    def __init__(self, checked_input: Input,
+    def __init__(self,
+                 checked_input: Input,
                  checked_honest_history: List[str],
                  strategy: Dict[str, str],
                  cases: List[Boolean],
@@ -191,47 +195,64 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
     to_check = Input(args.PATH)
-    strategies = json.load(open(args.STRATEGIES))['strategies']
+    analysis_results = json.load(open(args.STRATEGIES))[ANALYSIS_JSON_KEY]
     logging.info(
         f"input OK, checking strategies..."
     )
 
-    for honest_history in strategies:
-        for pr in ["weak_immunity", "collusion_resilience", "practicality"]:
-            logging.info(f"checking {pr.replace('_', ' ')} of history {honest_history['history']}")
-            generated_preconditions_str = honest_history[pr]["generated_preconditions"]
-            generated_preconditions = [to_check.load_constraint(c) for c in generated_preconditions_str]
+    for analysis_result in analysis_results:
+        honest_history = analysis_result[HONEST_HISTORY_JSON_KEY]
 
-            for case in honest_history[pr]["cases"]:
-                logging.info(f"case {case['case']}")
-                case_constraints = [to_check.load_constraint(c) for c in case['case']]
+        for security_property in SecurityProperty:
+            security_property_json = PROPERTY_TO_JSON_KEY[security_property]
 
-                if pr == "weak_immunity":
-                    result = WeakImmunityStrategyChecker(
-                        to_check,
-                        honest_history['history'],
-                        case['strategy'],
-                        case_constraints,
-                        generated_preconditions
-                    ).check()
-                    print(result)
+            if security_property_json in analysis_result and \
+                    analysis_result[security_property_json][JOINT_STRATEGIES_JSON_KEY]:
+                logging.info(f"checking {PROPERTY_TO_STR[security_property]} of history {honest_history}")
+                analysis_result_for_property = analysis_result[security_property_json]
+                generated_preconditions = [to_check.load_constraint(c) for c in
+                                           analysis_result_for_property[GENERATED_PRECONDITIONS_JSON_KEY]]
 
-                elif pr == "collusion_resilience":
-                    result = CollusionResilienceStrategyChecker(
-                        to_check,
-                        honest_history['history'],
-                        case['strategy'],
-                        case_constraints,
-                        generated_preconditions
-                    ).check()
-                    print(result)
+                for case_with_strategy in analysis_result_for_property[JOINT_STRATEGIES_JSON_KEY]:
+                    ordering = case_with_strategy[JOINT_STRATEGY_ORDERING_JSON_KEY]
 
-                elif pr == "practicality":
-                    result = PracticalityStrategyChecker(
-                        to_check,
-                        honest_history['history'],
-                        case['strategy'],
-                        case_constraints,
-                        generated_preconditions
-                    ).check()
-                    print(result)
+                    if ordering:
+                        logging.info(f"- case {ordering}")
+
+                    case_constraints = [to_check.load_constraint(c) for c in ordering]
+
+                    joint_strategy = case_with_strategy[JOINT_STRATEGY_STRATEGY_JSON_KEY]
+                    result = None
+
+                    if security_property == SecurityProperty.WEAK_IMMUNITY:
+                        result = WeakImmunityStrategyChecker(
+                            to_check,
+                            honest_history,
+                            joint_strategy,
+                            case_constraints,
+                            generated_preconditions
+                        ).check()
+
+                    elif security_property == SecurityProperty.COLLUSION_RESILIENCE:
+                        result = CollusionResilienceStrategyChecker(
+                            to_check,
+                            honest_history,
+                            joint_strategy,
+                            case_constraints,
+                            generated_preconditions
+                        ).check()
+
+                    elif security_property == SecurityProperty.PRACTICALITY:
+                        result = PracticalityStrategyChecker(
+                            to_check,
+                            honest_history,
+                            joint_strategy,
+                            case_constraints,
+                            generated_preconditions
+                        ).check()
+
+                    if result is not None:
+                        if result:
+                            logging.info(f"--- strategy does satisfy {PROPERTY_TO_STR[security_property]}")
+                        else:
+                            logging.error(f"--- strategy does NOT satisfy {PROPERTY_TO_STR[security_property]}")

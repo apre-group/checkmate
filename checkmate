@@ -1,34 +1,22 @@
 #!/usr/bin/env python3
 
 from argparse import ArgumentParser
-from enum import Enum
-from typing import Dict, Any
 import json
 import logging
 import sys
 
+from constants import ANALYSIS_JSON_KEY, SecurityProperty, PROPERTY_TO_STR
+from output import AnalysisResult
 from solving import WeakImmunityStrategySolver, WeakerImmunityStrategySolver, CollusionResilienceStrategySolver, \
     PracticalityStrategySolver
-from trees import Input
-
-
-class SecurityProperty(Enum):
-    WEAK_IMMUNITY = 'WI'
-    WEAKER_IMMUNITY = 'WWI'
-    COLLUSION_RESILIENCE = 'CR'
-    PRACTICALITY = 'P'
-
-
-PROPERTY_TO_JSON_KEY = {SecurityProperty.WEAK_IMMUNITY.value: 'weak_immunity',
-                        SecurityProperty.WEAKER_IMMUNITY.value: 'weaker_immunity',
-                        SecurityProperty.COLLUSION_RESILIENCE.value: 'collusion_resilience',
-                        SecurityProperty.PRACTICALITY.value: 'practicality'}
+from input import Input
 
 if __name__ == '__main__':
     # set signal handler to OS default so that console interrupts behave as expected
     # this is usually "terminate reasonably rapidly" for SIGINT
     # Python's default is "wait around for any native code, then consider KeyboardInterrupt on a good day"
     from signal import SIGINT, SIG_DFL, signal
+
     signal(SIGINT, SIG_DFL)
 
     security_properties = [member.value for member in SecurityProperty]
@@ -43,7 +31,7 @@ if __name__ == '__main__':
     parser.add_argument(
         'PATH',
         type=str,
-        help="path to input file"
+        help="path to input JSON"
     )
     parser.add_argument(
         '--analyze-properties',
@@ -55,7 +43,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--output-strategies',
         action='store_true',
-        help="print strategies as JSON"
+        help="print strategies as JSON to standard output"
     )
     parser.add_argument(
         '--generate-preconditions',
@@ -68,7 +56,7 @@ if __name__ == '__main__':
         help="generate counterexamples if a case fails"
     )
     args = parser.parse_args()
-    analyzed_properties = args.analyze_properties
+    analyzed_properties_str = args.analyze_properties
     output = args.output_strategies
     generate_preconditions = args.generate_preconditions
     generate_counterexamples = args.generate_counterexamples
@@ -79,89 +67,80 @@ if __name__ == '__main__':
         f"input OK, checking {len(checked_input.honest_histories)} histories..."
     )
 
-    strategies = []
+    analyzed_properties = [sec_prop for sec_prop in SecurityProperty if sec_prop.value in analyzed_properties_str]
+    results = []
     for honest_history in checked_input.honest_histories:
-        result: Dict[str, Any] = {"history": honest_history}
+        wi_res, weri_res, cr_res, p_res = None, None, None, None
         logging.info(f"history {honest_history}")
 
-        if SecurityProperty.WEAK_IMMUNITY.value in analyzed_properties:
+        if SecurityProperty.WEAK_IMMUNITY in analyzed_properties:
             logging.info("checking weak immunity")
-            result["weak_immunity"] = WeakImmunityStrategySolver(
+            wi_res = WeakImmunityStrategySolver(
                 checked_input,
                 honest_history,
                 generate_preconditions,
                 generate_counterexamples
             ).solve()
 
-        if SecurityProperty.WEAKER_IMMUNITY.value in analyzed_properties:
+        if SecurityProperty.WEAKER_IMMUNITY in analyzed_properties:
             logging.info("checking weaker immunity")
-            result["weaker_immunity"] = WeakerImmunityStrategySolver(
+            weri_res = WeakerImmunityStrategySolver(
                 checked_input,
                 honest_history,
                 generate_preconditions,
                 generate_counterexamples
             ).solve()
 
-        if SecurityProperty.COLLUSION_RESILIENCE.value in analyzed_properties:
+        if SecurityProperty.COLLUSION_RESILIENCE in analyzed_properties:
             logging.info("checking collusion resilience")
-            result["collusion_resilience"] = CollusionResilienceStrategySolver(
+            cr_res = CollusionResilienceStrategySolver(
                 checked_input,
                 honest_history,
                 generate_preconditions,
                 generate_counterexamples
             ).solve()
 
-        if SecurityProperty.PRACTICALITY.value in analyzed_properties:
+        if SecurityProperty.PRACTICALITY in analyzed_properties:
             logging.info("checking practicality")
-            result["practicality"] = PracticalityStrategySolver(
+            p_res = PracticalityStrategySolver(
                 checked_input,
                 honest_history,
                 generate_preconditions,
                 generate_counterexamples
             ).solve()
 
-        strategies.append(result)
+        results.append(AnalysisResult(honest_history, wi_res, weri_res, cr_res, p_res))
 
-    json_keys = [PROPERTY_TO_JSON_KEY[name] for name in analyzed_properties]
     # nice summary of the check
     logging.info("####### Summary: ######")
-    for hh in strategies:
-        logging.info(f"Honest history {hh['history']}")
+    for result in results:
+        logging.info(f"Honest history {result.honest_history}")
 
-        for pr in json_keys:
-            found_strategies = hh[pr]["strategies"]
-            gen_preconditions = hh[pr]["generated_preconditions"]
+        for security_property in analyzed_properties:
+            property_result = result.get_property_result(security_property)
+            found_strategies = property_result.strategies
+            gen_preconditions = property_result.generated_preconditions
 
-            if len(found_strategies) == 0:
-                logging.info(f"-- doesn't have {pr.replace('_', ' ')}")
+            if not found_strategies:
+                logging.info(f"-- doesn't have {PROPERTY_TO_STR[security_property]}")
 
             elif len(found_strategies) == 1:
-                if len(gen_preconditions) == 0:
-                    logging.info(
-                        f"-- has {pr.replace('_', ' ')} (one strategy)"
-                    )
-                else:
-                    logging.info(
-                        f"-- has {pr.replace('_', ' ')} if {gen_preconditions} (one strategy)"
-                    )
+                logging.info(
+                    f"-- has {PROPERTY_TO_STR[security_property]} (one strategy)" if not gen_preconditions
+                    else f"-- has {PROPERTY_TO_STR[security_property]} if {gen_preconditions} (one strategy)"
+                )
 
             else:
-                if len(gen_preconditions) == 0:
-                    logging.info(
-                        f"-- has {pr.replace('_', ' ')} with different strategies for cases"
-                    )
-                else:
-                    logging.info(
-                        f"-- has {pr.replace('_', ' ')} if {gen_preconditions} with different strategies for cases"
-                    )
-                for i, c in enumerate(found_strategies):
-                    logging.info(f"---- case {i}: {c['case']}")
+                logging.info(
+                    f"-- has {PROPERTY_TO_STR[security_property]} "
+                    f"with different strategies for cases" if not gen_preconditions
+                    else f"-- has {PROPERTY_TO_STR[security_property]} if {gen_preconditions} "
+                         f"with different strategies for cases"
+                )
+
+                for i, cws in enumerate(found_strategies):
+                    logging.info(f"---- case {i}: {[str(c) for c in cws.ordering_case]}")
 
     if output:
-        for hh in strategies:
-            for pr in json_keys:
-                gen_preconditions = hh[pr]["generated_preconditions"]
-                hh[pr]["generated_preconditions"] = [
-                    str(precondition) for precondition in gen_preconditions
-                ]
-        json.dump({"strategies": strategies}, fp=sys.stdout, indent=4)
+        result_jsons = [result.to_json() for result in results]
+        json.dump({ANALYSIS_JSON_KEY: result_jsons}, fp=sys.stdout, indent=4)
