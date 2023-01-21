@@ -85,8 +85,12 @@ class StrategyChecker(metaclass=ABCMeta):
             return False
 
 
-class WeakImmunityStrategyChecker(StrategyChecker):
-    """checker for weak immunity"""
+class FeebleImmuneStrategyChecker(StrategyChecker):
+    """checker for weak and weaker immunity"""
+
+    @abstractmethod
+    def _compare_utility(self, utility: Utility) -> z3.BoolRef:
+        pass
 
     def utility_function(self, ut: Dict[str, Utility], players: Set[str]) -> List[Utility]:
         return [ut[p] for p in players]
@@ -96,10 +100,23 @@ class WeakImmunityStrategyChecker(StrategyChecker):
 
         for p in to_check.players:
             player_utilities = self._get_utilities(self.input.tree, {p}, '', [])
-            disjuncts.extend([ZERO > utility for utility in player_utilities])
+            disjuncts.extend([self._compare_utility(utility) for utility in player_utilities])
 
         self._solver.add(self.input.weak_immunity_constraints)
         self._solver.add(disjunction(*disjuncts))
+
+
+class WeakImmunityStrategyChecker(FeebleImmuneStrategyChecker):
+    """checker for weak immunity"""
+    def _compare_utility(self, utility: Utility) -> z3.BoolRef:
+        return utility < ZERO
+
+
+class WeakerImmunityStrategyChecker(FeebleImmuneStrategyChecker):
+    """checker for weaker immunity"""
+    def _compare_utility(self, utility) -> z3.BoolRef:
+        real_part = Utility.from_real(utility.real)
+        return real_part < ZERO
 
 
 class CollusionResilienceStrategyChecker(StrategyChecker):
@@ -226,6 +243,15 @@ if __name__ == '__main__':
 
                     if security_property == SecurityProperty.WEAK_IMMUNITY:
                         result = WeakImmunityStrategyChecker(
+                            to_check,
+                            honest_history,
+                            joint_strategy,
+                            case_constraints,
+                            generated_preconditions
+                        ).check()
+
+                    if security_property == SecurityProperty.WEAKER_IMMUNITY:
+                        result = WeakerImmunityStrategyChecker(
                             to_check,
                             honest_history,
                             joint_strategy,
