@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from abc import ABCMeta, abstractmethod
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple
 import itertools
 import logging
 
 from auxfunz3 import *
+from output import SolvingResult, CaseWithStrategy, Counterexample
 from utility import Utility, ZERO
-from trees import Tree, Leaf, Branch, Input
+from input import Tree, Leaf, Branch, Input
 
 
 class StrategySolver(metaclass=ABCMeta):
@@ -80,17 +81,14 @@ class StrategySolver(metaclass=ABCMeta):
         self._add_action_constraints([], self.input.tree)
         self._add_history_constraints(self.checked_history)
 
-    # TODO define a class for results
-    def solve(self) -> Dict[str, Any]:
+    def solve(self) -> SolvingResult:
         """
         the main solving routine
 
         if we failed to find a solution, return empty list
         otherwise, returns a solution to report later
         """
-        result = {"generated_preconditions": list(self._generated_preconditions),
-                  "counterexamples": [],
-                  "strategies": []}
+        result = SolvingResult(self._generated_preconditions)
 
         # a solver that manages case splits, AVATAR style
         case_solver = z3.Solver()
@@ -136,12 +134,12 @@ class StrategySolver(metaclass=ABCMeta):
                 if type(left) != float or type(right) != float
             ]
             case = eliminate_consequences(minimize_solver, set(case))
-            logging.info(f"current case assumes {case}")
+            logging.info(f"current case assumes {case if case else 'nothing'}")
 
             property_constraint = self._property_constraint(case)
             if self._solver.check(property_constraint, *self._label2pair.keys(), *self._label2subtree.keys()) == z3.sat:
                 logging.info("case solved")
-                result["strategies"].append(self._extract_strategy(case))
+                result.strategies.append(self._extract_strategy(case))
 
                 # we solved this case, now add a conflict to move on
                 case_solver.add(disjunction(*(
@@ -177,7 +175,8 @@ class StrategySolver(metaclass=ABCMeta):
                 # we saturated, give up
                 if not new_expression:
                     logging.error("no more splits, failed")
-                    logging.error(f"here is a case I cannot solve: {case}")
+                    logging.error(f"here is a case I cannot solve: {case}" if case
+                                  else "failed with existing initial constraints")
 
                     if self.generate_counterexamples:
                         # property constraint is now fixed
@@ -189,39 +188,34 @@ class StrategySolver(metaclass=ABCMeta):
 
                         labels = set(self._label2subtree.keys())
                         for core in minimal_unsat_cores(self._solver, labels):
-                            logging.info("counterexample found - property cannot be fulfilled because of:")
+                            logging.info("counterexample(s) found - property cannot be fulfilled because of:")
                             for label_expr in core:
                                 # sometimes solver generates garbage for some reason, exclude it
                                 if not isinstance(label_expr, z3.BoolRef) or not z3.is_app(label_expr):
                                     continue
 
                                 if label_expr in self._label2subtree:
-                                    subtree = self._label2subtree[label_expr]
-                                    players, history = subtree
-                                    # TODO do something with the counterexamples?
-                                    logging.info(f"- players {players} with history {history}")
+                                    counterexample = self._extract_counterexample(label_expr)
+                                    logging.info(str(counterexample))
+                                    result.counterexamples.append(counterexample)
 
                         logging.info("no more counterexamples")
 
-                    if not self.generate_preconditions:
-                        return {
-                            "generated_preconditions": list(self._generated_preconditions),
-                            "counterexamples": [],
-                            "strategies": []
-                        }
-                    else:
-                        if len(case) == 0:
+                    if not self.generate_preconditions or not len(case):
+                        if self.generate_preconditions and not len(case):
                             logging.info(
-                                "failed case is implied by preconditions."
+                                "failed case is implied by preconditions"
                             )
-                            return {
-                                "generated_preconditions": list(self._generated_preconditions),
-                                "counterexamples": [],
-                                "strategies": []
-                            }
-                        self._generated_preconditions.add(disjunction(*(
+
+                        result.set_to_fail(self._generated_preconditions)
+                        return result
+
+                    else:
+                        new_precondition = disjunction(*(
                             simplify_boolean(negation(constr)) for constr in case
-                        )))
+                        ))
+                        self._generated_preconditions.add(new_precondition)
+
                         logging.info(
                             f"here are the generated preconditions: {self._generated_preconditions}"
                         )
@@ -329,7 +323,7 @@ class StrategySolver(metaclass=ABCMeta):
 
         return label_expr
 
-    def _extract_strategy(self, case: Set[z3.BoolRef]) -> Dict[str, Any]:
+    def _extract_strategy(self, case: Set[z3.BoolRef]) -> CaseWithStrategy:
         """Extracting strategies from the solver for the current case split."""
         strategy = {}
         model = self._solver.model()
@@ -344,10 +338,11 @@ class StrategySolver(metaclass=ABCMeta):
                 history, action = self._action_variables[variable]
                 strategy[';'.join(history)] = action
 
-        return {
-            "case": [repr(c) for c in case],
-            "strategy": strategy
-        }
+        return CaseWithStrategy(case, strategy)
+
+    def _extract_counterexample(self, label_expr: z3.BoolRef) -> Counterexample:
+        players, history = self._label2subtree[label_expr]
+        return Counterexample(list(players), list(history))
 
 
 class FeebleImmuneStrategySolver(StrategySolver):
