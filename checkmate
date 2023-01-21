@@ -7,7 +7,8 @@ import json
 import logging
 import sys
 
-from solving import WeakImmunityStrategySolver, WeakerImmunityStrategySolver, CollusionResilienceStrategySolver, PracticalityStrategySolver
+from solving import WeakImmunityStrategySolver, WeakerImmunityStrategySolver, CollusionResilienceStrategySolver, \
+    PracticalityStrategySolver
 from trees import Input
 
 
@@ -126,37 +127,41 @@ if __name__ == '__main__':
     logging.info("####### Summary: ######")
     for hh in strategies:
         logging.info(f"Honest history {hh['history']}")
+
         for pr in json_keys:
-            strats = hh[pr]["strategies"]
-            gen_precond = hh[pr]["generated_preconditions"]
-            if len(strats) == 0:
+            found_strategies = hh[pr]["strategies"]
+            gen_preconditions = hh[pr]["generated_preconditions"]
+
+            if len(found_strategies) == 0:
                 logging.info(f"-- doesn't have {pr.replace('_', ' ')}")
-            elif len(strats) == 1:
-                if len(gen_precond) == 0:
+
+            elif len(found_strategies) == 1:
+                if len(gen_preconditions) == 0:
                     logging.info(
                         f"-- has {pr.replace('_', ' ')} (one strategy)"
                     )
                 else:
                     logging.info(
-                        f"-- has {pr.replace('_', ' ')} if {gen_precond} (one strategy)"
+                        f"-- has {pr.replace('_', ' ')} if {gen_preconditions} (one strategy)"
                     )
+
             else:
-                if len(gen_precond) == 0:
+                if len(gen_preconditions) == 0:
                     logging.info(
                         f"-- has {pr.replace('_', ' ')} with different strategies for cases"
                     )
                 else:
                     logging.info(
-                        f"-- has {pr.replace('_', ' ')} if {gen_precond} with different strategies for cases"
+                        f"-- has {pr.replace('_', ' ')} if {gen_preconditions} with different strategies for cases"
                     )
-                for i, c in enumerate(strats):
+                for i, c in enumerate(found_strategies):
                     logging.info(f"---- case {i}: {c['case']}")
 
     if output:
         for hh in strategies:
             for pr in json_keys:
-                gen_precond = hh[pr]["generated_preconditions"]
+                gen_preconditions = hh[pr]["generated_preconditions"]
                 hh[pr]["generated_preconditions"] = [
-                    str(precond) for precond in gen_precond
+                    str(precondition) for precondition in gen_preconditions
                 ]
         json.dump({"strategies": strategies}, fp=sys.stdout, indent=4)

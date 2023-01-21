@@ -153,14 +153,14 @@ class StrategySolver(metaclass=ABCMeta):
 
                 # track whether we actually found any more
                 new_expression = False
-                for label in self._solver.unsat_core():
+                for label_expr in self._solver.unsat_core():
                     # sometimes solver generates garbage for some reason, exclude it
-                    if not isinstance(label, z3.BoolRef) or not z3.is_app(label):
+                    if not isinstance(label_expr, z3.BoolRef) or not z3.is_app(label_expr):
                         continue
 
-                    if label in self._label2pair:
+                    if label_expr in self._label2pair:
                         # `left op right` was in an unsat core
-                        left, right, real = self._label2pair[label]
+                        left, right, real = self._label2pair[label_expr]
                         # partition reals/infinitesimals
                         add_to = reals if real else infinitesimals
 
@@ -184,19 +184,19 @@ class StrategySolver(metaclass=ABCMeta):
                         self._solver.add(property_constraint)
                         # we no longer care about unsat cores for expression comparisons,
                         # so just assert it and move along
-                        for label in self._label2pair.keys():
-                            self._solver.add(label)
+                        for label_expr in self._label2pair.keys():
+                            self._solver.add(label_expr)
 
                         labels = set(self._label2subtree.keys())
                         for core in minimal_unsat_cores(self._solver, labels):
                             logging.info("counterexample found - property cannot be fulfilled because of:")
-                            for label in core:
+                            for label_expr in core:
                                 # sometimes solver generates garbage for some reason, exclude it
-                                if not isinstance(label, z3.BoolRef) or not z3.is_app(label):
+                                if not isinstance(label_expr, z3.BoolRef) or not z3.is_app(label_expr):
                                     continue
 
-                                if label in self._label2subtree:
-                                    subtree = self._label2subtree[label]
+                                if label_expr in self._label2subtree:
+                                    subtree = self._label2subtree[label_expr]
                                     players, history = subtree
                                     # TODO do something with the counterexamples?
                                     logging.info(f"- players {players} with history {history}")
@@ -305,14 +305,14 @@ class StrategySolver(metaclass=ABCMeta):
             real: bool
     ) -> z3.BoolRef:
         """label comparisons for unsat cores"""
-        label = self._pair2label.get((left, right))
-        if label is None:
-            label = z3.Bool(f'l[{left}][{right}]')
-            self._pair2label[(left, right)] = label
+        label_expr = self._pair2label.get((left, right))
+        if label_expr is None:
+            label_expr = z3.Bool(f'l[{left}][{right}]')
+            self._pair2label[(left, right)] = label_expr
             # store whether the comparison is real-valued for partition later
-            self._label2pair[label] = (left, right, real)
+            self._label2pair[label_expr] = (left, right, real)
 
-        return label
+        return label_expr
 
     def _subtree_label(
             self,
@@ -321,13 +321,13 @@ class StrategySolver(metaclass=ABCMeta):
     ) -> z3.BoolRef:
         """label subtrees for unsat cores"""
         history = tuple(subtree_history)
-        label = self._subtree2label.get((players, history))
-        if label is None:
-            label = z3.Bool(f'ce[{players}][{history}]')
-            self._subtree2label[(players, history)] = label
-            self._label2subtree[label] = (players, history)
+        label_expr = self._subtree2label.get((players, history))
+        if label_expr is None:
+            label_expr = z3.Bool(f'ce[{players}][{history}]')
+            self._subtree2label[(players, history)] = label_expr
+            self._label2subtree[label_expr] = (players, history)
 
-        return label
+        return label_expr
 
     def _extract_strategy(self, case: Set[z3.BoolRef]) -> Dict[str, Any]:
         """Extracting strategies from the solver for the current case split."""
@@ -402,6 +402,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
 
 
 class WeakImmunityStrategySolver(FeebleImmuneStrategySolver):
+    """solver for weak immunity"""
 
     def _property_initial_constraints(self) -> List[Boolean]:
         return self.input.weak_immunity_constraints
@@ -411,6 +412,7 @@ class WeakImmunityStrategySolver(FeebleImmuneStrategySolver):
 
 
 class WeakerImmunityStrategySolver(FeebleImmuneStrategySolver):
+    """solver for weaker immunity"""
 
     def _property_initial_constraints(self) -> List[Boolean]:
         return self.input.weaker_immunity_constraints
@@ -454,20 +456,20 @@ class CollusionResilienceStrategySolver(StrategySolver):
             constraints: List[z3.BoolRef],
             old_utility: Utility,
             colluding_group: Tuple[str],
-            nongroup_decisions: List[z3.BoolRef],
+            non_group_decisions: List[z3.BoolRef],
             history: List[str],
             tree: Tree
     ):
-        # the colluding group should not benefit.
+        # the colluding group should not benefit
         # players that are not in the colluding group have their strategy "fixed"
-        # that is the strategy we are trying to find (so nongroup_decisions is antecedens)
+        # that is the strategy we are trying to find (so `non_group_decisions` is antecedent)
         if isinstance(tree, Leaf):
             colluding_utility = sum((
                 tree.utilities[player]
                 for player in colluding_group
             ), start=ZERO)
             impl = implication(
-                conjunction(*nongroup_decisions),
+                conjunction(*non_group_decisions),
                 Utility.__ge__(old_utility, colluding_utility, self._pair_label)
             )
             if self.generate_counterexamples:
@@ -486,7 +488,7 @@ class CollusionResilienceStrategySolver(StrategySolver):
                 constraints,
                 old_utility,
                 colluding_group,
-                nongroup_decisions + action_variable,
+                non_group_decisions + action_variable,
                 history + [action],
                 child
             )
@@ -505,7 +507,7 @@ class PracticalityStrategySolver(StrategySolver):
 
     def _utility_variable(self, starting_from: List[str], player: str) -> Utility:
         """create real/infinitesimal variables to represent a utility"""
-        # utility varible belongs to a subtree. We tag which subtree by the history where we strat from.
+        # utility variable belongs to a subtree -> we tag which subtree by the history where we start from
         tag = ''.join(starting_from)
         utility = Utility(
             z3.Real(f'ur[{tag}][{player}]'),
@@ -525,9 +527,10 @@ class PracticalityStrategySolver(StrategySolver):
     ):
         """add constraints to give the semantics of a utility variable"""
         if isinstance(tree, Leaf):
-            #experiment
-            equalities = [Utility.__eq__(player_utilities[player], tree.utilities[player], self._pair_label)]  
-            #equalities = [Utility.__eq__(ut, tree.utilities[player], self._pair_label) for player, ut in
+            # experiment
+            # TODO cleanup
+            equalities = [Utility.__eq__(player_utilities[player], tree.utilities[player], self._pair_label)]
+            # equalities = [Utility.__eq__(ut, tree.utilities[player], self._pair_label) for player, ut in
             #              player_utilities.items()]
             # if we take `decisions` to a leaf, the utility variable has a known value
             constraints.append(implication(
@@ -579,8 +582,8 @@ class PracticalityStrategySolver(StrategySolver):
 
         nash_constraints = []
 
-        #experiment
-        player= tree.player
+        # experiment
+        player = tree.player
         self._nash_constraints(
             nash_constraints,
             utility_variables[player],
@@ -589,7 +592,8 @@ class PracticalityStrategySolver(StrategySolver):
             [],
             tree
         )
-        #for player in self.input.players:
+        # TODO cleanup
+        # for player in self.input.players:
         #    self._nash_constraints(
         #        nash_constraints,
         #        utility_variables[player],
@@ -624,14 +628,14 @@ class PracticalityStrategySolver(StrategySolver):
             old_utility: Utility,
             player: str,
             history: List[str],
-            nonplayer_decisions: List[z3.BoolRef],
+            non_player_decisions: List[z3.BoolRef],
             tree: Tree
     ):
         # player should not benefit from deviating in this subtree.
         if isinstance(tree, Leaf):
             deviating_utility = tree.utilities[player]
             impl = implication(
-                conjunction(*nonplayer_decisions),
+                conjunction(*non_player_decisions),
                 Utility.__ge__(old_utility, deviating_utility, self._pair_label)
             )
             if self.generate_counterexamples:
@@ -640,7 +644,7 @@ class PracticalityStrategySolver(StrategySolver):
             constraints.append(impl)
             return
 
-        # all the other players have the strategy fixed (nonplayer_decisions)
+        # all the other players have the strategy fixed (non_player_decisions)
         # we collect these decisions for implication above at the Leaf case
         assert isinstance(tree, Branch)
         player_decision = player == tree.player
@@ -653,6 +657,6 @@ class PracticalityStrategySolver(StrategySolver):
                 old_utility,
                 player,
                 history + [action],
-                nonplayer_decisions + action_variable,
+                non_player_decisions + action_variable,
                 child
             )
