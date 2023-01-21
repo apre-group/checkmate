@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
-
-from argparse import ArgumentParser
-import json
 import logging
 import sys
+from argparse import ArgumentParser
+import json
+from enum import Enum
 
-from constants import ANALYSIS_JSON_KEY, SecurityProperty, PROPERTY_TO_STR
-from output import AnalysisResult
-from solving import WeakImmunityStrategySolver, WeakerImmunityStrategySolver, CollusionResilienceStrategySolver, \
-    PracticalityStrategySolver
+from analysis import analyze_input
+from checkmatecheck import check_joint_strategies
+from constants import SecurityProperty, ANALYSIS_JSON_KEY
 from input import Input
+
+
+class Subcommand(Enum):
+    ANALYZE = 'analyze'
+    CHECK = 'check'
+
 
 if __name__ == '__main__':
     # set signal handler to OS default so that console interrupts behave as expected
@@ -25,122 +30,68 @@ if __name__ == '__main__':
         level=logging.INFO,
         format='[%(levelname)s] %(message)s'
     )
+
     parser = ArgumentParser(
         description="check game-theoretic security properties of off-chain protocols"
     )
     parser.add_argument(
-        'PATH',
+        'GAME',
         type=str,
-        help="path to input JSON"
+        help="path to JSON encoding of input game"
     )
-    parser.add_argument(
-        '--analyze-properties',
+
+    subparsers = parser.add_subparsers(title='subcommands',
+                                       description='specify whether CheckMate should analyze the input game or '
+                                                   'check existing joint strategies',
+                                       dest='subcommand')
+
+    analyze_parser = subparsers.add_parser(Subcommand.ANALYZE.value, help='security analysis of input game')
+    check_parser = subparsers.add_parser(Subcommand.CHECK.value,
+                                         help='check if provided strategies truly satisfy security properties')
+
+    generation = analyze_parser.add_mutually_exclusive_group()
+    analyze_parser.add_argument(
+        '--properties',
         nargs='+',
         choices=security_properties,
         default=security_properties,
         help='specify analyzed security properties',
     )
-    parser.add_argument(
-        '--output-strategies',
+    analyze_parser.add_argument(
+        '--output',
         action='store_true',
         help="print strategies as JSON to standard output"
     )
-    generation = parser.add_mutually_exclusive_group()
     generation.add_argument(
-        '--generate-preconditions',
+        '--preconditions',
         action='store_true',
         help="generate preconditions if a case fails"
     )
     generation.add_argument(
-        '--generate-counterexamples',
+        '--counterexamples',
         action='store_true',
         help="generate counterexamples if a case fails"
     )
-    args = parser.parse_args()
-    analyzed_properties_str = args.analyze_properties
-    output = args.output_strategies
-    generate_preconditions = args.generate_preconditions
-    generate_counterexamples = args.generate_counterexamples
-    checked_input = Input(args.PATH)
 
-    logging.info(
-        f"input OK, checking {len(checked_input.honest_histories)} histories..."
+    check_parser.add_argument(
+        'STRATEGIES',
+        type=str,
+        help="path to JSON encoding of joint strategies to check"
     )
 
-    analyzed_properties = [sec_prop for sec_prop in SecurityProperty if sec_prop.value in analyzed_properties_str]
-    results = []
-    for honest_history in checked_input.honest_histories:
-        wi_res, weri_res, cr_res, p_res = None, None, None, None
-        logging.info(f"history {honest_history}")
+    args = parser.parse_args()
+    checked_input = Input(args.GAME)
 
-        if SecurityProperty.WEAK_IMMUNITY in analyzed_properties:
-            logging.info("checking weak immunity")
-            wi_res = WeakImmunityStrategySolver(
-                checked_input,
-                honest_history,
-                generate_preconditions,
-                generate_counterexamples
-            ).solve()
+    if args.subcommand == Subcommand.ANALYZE.value:
+        analyzed_properties = [sec_prop for sec_prop in SecurityProperty if sec_prop.value in args.properties]
+        results = analyze_input(checked_input, analyzed_properties, args.preconditions, args.counterexamples)
 
-        if SecurityProperty.WEAKER_IMMUNITY in analyzed_properties:
-            logging.info("checking weaker immunity")
-            weri_res = WeakerImmunityStrategySolver(
-                checked_input,
-                honest_history,
-                generate_preconditions,
-                generate_counterexamples
-            ).solve()
+        if args.output:
+            result_jsons = [result.to_json() for result in results]
+            json.dump({ANALYSIS_JSON_KEY: result_jsons}, fp=sys.stdout, indent=4)
 
-        if SecurityProperty.COLLUSION_RESILIENCE in analyzed_properties:
-            logging.info("checking collusion resilience")
-            cr_res = CollusionResilienceStrategySolver(
-                checked_input,
-                honest_history,
-                generate_preconditions,
-                generate_counterexamples
-            ).solve()
+    elif args.subcommand == Subcommand.CHECK.value:
+        check_joint_strategies(checked_input, json.load(open(args.STRATEGIES)))
 
-        if SecurityProperty.PRACTICALITY in analyzed_properties:
-            logging.info("checking practicality")
-            p_res = PracticalityStrategySolver(
-                checked_input,
-                honest_history,
-                generate_preconditions,
-                generate_counterexamples
-            ).solve()
-
-        results.append(AnalysisResult(honest_history, wi_res, weri_res, cr_res, p_res))
-
-    # nice summary of the check
-    logging.info("####### Summary: ######")
-    for result in results:
-        logging.info(f"Honest history {result.honest_history}")
-
-        for security_property in analyzed_properties:
-            property_result = result.get_property_result(security_property)
-            found_strategies = property_result.strategies
-            gen_preconditions = property_result.generated_preconditions
-
-            if not found_strategies:
-                logging.info(f"-- doesn't have {PROPERTY_TO_STR[security_property]}")
-
-            elif len(found_strategies) == 1:
-                logging.info(
-                    f"-- has {PROPERTY_TO_STR[security_property]} (one strategy)" if not gen_preconditions
-                    else f"-- has {PROPERTY_TO_STR[security_property]} if {gen_preconditions} (one strategy)"
-                )
-
-            else:
-                logging.info(
-                    f"-- has {PROPERTY_TO_STR[security_property]} "
-                    f"with different strategies for cases" if not gen_preconditions
-                    else f"-- has {PROPERTY_TO_STR[security_property]} if {gen_preconditions} "
-                         f"with different strategies for cases"
-                )
-
-                for i, cws in enumerate(found_strategies):
-                    logging.info(f"---- case {i}: {[str(c) for c in cws.ordering_case]}")
-
-    if output:
-        result_jsons = [result.to_json() for result in results]
-        json.dump({ANALYSIS_JSON_KEY: result_jsons}, fp=sys.stdout, indent=4)
+    else:
+        parser.print_usage()

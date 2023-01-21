@@ -84,7 +84,7 @@ class AnalysisResult:
     def get_property_result(self, security_property: SecurityProperty) -> SolvingResult:
         return self.property_results[security_property]
 
-    def to_json(self) -> Dict[str, Union[List[str], Dict[str, Any]]]:
+    def to_json(self) -> Dict[str, Any]:
         result = {HONEST_HISTORY_JSON_KEY: self.honest_history}
 
         wi_res = self.get_property_result(SecurityProperty.WEAK_IMMUNITY)
