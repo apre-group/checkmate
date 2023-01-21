@@ -26,6 +26,11 @@ class StrategySolver(metaclass=ABCMeta):
     generate_counterexamples: bool
     _solver: z3.Solver
 
+    # a solver that manages case splits, AVATAR style
+    _case_solver: z3.Solver
+    # a solver that minimizes assumptions in case splits
+    _minimize_solver: z3.Solver
+
     # maintain a bijection from (left, right) expression pairs and Z3 labels
     _pair2label: Dict[Tuple[Real, Real], z3.BoolRef]
     # note extra boolean to partition comparisons into real/infinitesimal
@@ -40,10 +45,6 @@ class StrategySolver(metaclass=ABCMeta):
 
     # set of variables to exclude from case splits: useful for e.g. utility variables
     _exclude_variables: Set[Real]
-
-    # the set of generated preconditions in case the game is not secure per se
-    # TODO does this need to be a member?
-    _generated_preconditions: Set[z3.BoolRef]
 
     @abstractmethod
     def _property_initial_constraints(self) -> List[Boolean]:
@@ -70,13 +71,15 @@ class StrategySolver(metaclass=ABCMeta):
         self._solver.set("unsat_core", True)
         self._solver.set("core.minimize", True)
 
+        self._case_solver = z3.Solver()
+        self._minimize_solver = z3.Solver()
+
         self._pair2label = {}
         self._label2pair = {}
         self._subtree2label = {}
         self._label2subtree = {}
         self._action_variables = {}
         self._exclude_variables = set()
-        self._generated_preconditions = set()
 
         self._add_action_constraints([], self.input.tree)
         self._add_history_constraints(self.checked_history)
@@ -88,44 +91,24 @@ class StrategySolver(metaclass=ABCMeta):
         if we failed to find a solution, return empty list
         otherwise, returns a solution to report later
         """
-        result = SolvingResult(self._generated_preconditions)
+        result = SolvingResult()
 
-        # a solver that manages case splits, AVATAR style
-        case_solver = z3.Solver()
-        # a solver that minimizes assumptions in case splits
-        minimize_solver = z3.Solver()
-
-        # both should know about initial constraints for the property we're trying
-        for constraint in itertools.chain(
-                self.input.initial_constraints,
-                self._generated_preconditions,
-                self._property_initial_constraints()
-        ):
-            case_solver.add(constraint)
-            minimize_solver.add(constraint)
+        # add initial constraints to case and minimizing solver
+        self._reset_case_and_minimize_solver()
 
         # there is no point in comparing e.g. p_A > epsilon
         # therefore, partition case splits into real and infinitesimal parts
         reals = set()
         infinitesimals = set()
 
-        while case_solver.check() == z3.sat:
+        while self._case_solver.check() == z3.sat:
             # an assignment of variables to concrete real values
-            model = case_solver.model()
+            model = self._case_solver.model()
 
-            # we can use this model to decide whether
-            # left > right, left = right or left < right
-            def split(left, right):
-                if model.evaluate(left > right, True):
-                    return left > right
-                elif model.evaluate(left == right, True):
-                    return left == right
-                else:
-                    return right > left
-
+            # we can use this model to decide whether left > right, left = right or left < right
             # the current case is the conjunction of all known expression comparisons
             case = [
-                split(left, right)
+                evaluate_model(model, left, right)
                 for left, right in itertools.chain(
                     itertools.combinations(reals, 2),
                     itertools.combinations(infinitesimals, 2)
@@ -133,16 +116,16 @@ class StrategySolver(metaclass=ABCMeta):
                 # no point in providing e.g. 2.0 > 1.0
                 if type(left) != float or type(right) != float
             ]
-            case = eliminate_consequences(minimize_solver, set(case))
+            case = eliminate_consequences(self._minimize_solver, set(case))
             logging.info(f"current case assumes {case if case else 'nothing'}")
 
-            property_constraint = self._property_constraint(case)
+            property_constraint = self._property_constraint(case, result.generated_preconditions)
             if self._solver.check(property_constraint, *self._label2pair.keys(), *self._label2subtree.keys()) == z3.sat:
                 logging.info("case solved")
                 result.strategies.append(self._extract_strategy(case))
 
                 # we solved this case, now add a conflict to move on
-                case_solver.add(disjunction(*(
+                self._case_solver.add(disjunction(*(
                     negation(spl) for spl in case
                 )))
             else:
@@ -178,6 +161,9 @@ class StrategySolver(metaclass=ABCMeta):
                     logging.error(f"here is a case I cannot solve: {case}" if case
                                   else "failed with existing initial constraints")
 
+                    # delete existing strategies from result because property is not fulfilled
+                    result.delete_strategies()
+
                     if self.generate_counterexamples:
                         # property constraint is now fixed
                         self._solver.add(property_constraint)
@@ -201,34 +187,45 @@ class StrategySolver(metaclass=ABCMeta):
 
                         logging.info("no more counterexamples")
 
-                    if not self.generate_preconditions or not len(case):
-                        if self.generate_preconditions and not len(case):
+                    if not self.generate_preconditions or not case:
+                        if self.generate_preconditions and not case:
                             logging.info(
                                 "failed case is implied by preconditions"
                             )
 
-                        result.set_to_fail(self._generated_preconditions)
                         return result
 
                     else:
-                        new_precondition = disjunction(*(
+                        result.generated_preconditions.add(disjunction(*(
                             simplify_boolean(negation(constr)) for constr in case
-                        ))
-                        self._generated_preconditions.add(new_precondition)
+                        )))
 
                         logging.info(
-                            f"here are the generated preconditions: {self._generated_preconditions}"
+                            f"here are the generated preconditions: {result.generated_preconditions}"
                         )
                         logging.info(
-                            "restarting with a generated set of preconditions"
+                            "restarting solving routine with the generated set of preconditions"
                         )
-                        # TODO control flow here is quite confusing and requires _generated_preconditions
-                        # is there a way to do this within the main loop?
-                        return self.solve()
+
+                        # reset case and minimizing solver to initial constraints plus generated preconditions
+                        self._reset_case_and_minimize_solver(result.generated_preconditions)
 
         # there are no more possible models, i.e. no more cases to be discharged
         logging.info("no more cases, done")
         return result
+
+    def _reset_case_and_minimize_solver(self, generated_preconditions: Set[z3.BoolRef] = None):
+        self._case_solver.reset()
+        self._minimize_solver.reset()
+
+        # both should know about initial constraints for the property we're trying
+        for constraint in itertools.chain(
+                self.input.initial_constraints,
+                generated_preconditions if generated_preconditions else [],
+                self._property_initial_constraints()
+        ):
+            self._case_solver.add(constraint)
+            self._minimize_solver.add(constraint)
 
     def _add_action_constraints(self, history: List[str], tree: Tree):
         """exactly one action must be taken at this subtree"""
@@ -254,13 +251,14 @@ class StrategySolver(metaclass=ABCMeta):
                 checked_history[:i], checked_history[i]
             ))
 
-    def _property_constraint(self, case: Set[z3.BoolRef]) -> z3.BoolRef:
+    def _property_constraint(self, case: Set[z3.BoolRef], generated_preconditions: Set[z3.BoolRef]) -> z3.BoolRef:
         """
         create a universally-quantified constraint for a given property of the form
         ```
         forall <input constants>.
             <initial constraints> &&
             self._property_initial_constraints() &&
+            <generated preconditions> &&
             <case split> => self._property_constraint_implementation()
         ```
         """
@@ -268,7 +266,7 @@ class StrategySolver(metaclass=ABCMeta):
         return self._quantify_constants(implication(
             conjunction(
                 *self.input.initial_constraints,
-                *self._generated_preconditions,
+                *generated_preconditions,
                 *self._property_initial_constraints(),
                 *case
             ),
@@ -277,7 +275,7 @@ class StrategySolver(metaclass=ABCMeta):
 
     def _quantify_constants(self, constraint: z3.BoolRef) -> z3.BoolRef:
         """quantify `constraint` with the input constants"""
-        if len(self.input.constants) == 0:
+        if not self.input.constants:
             return constraint
 
         return z3.ForAll(
