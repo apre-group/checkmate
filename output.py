@@ -49,14 +49,13 @@ class SolvingResult:
     generated_preconditions: Set[z3.BoolRef]
     counterexamples: List[Counterexample]
 
-    def __init__(self, generated_preconditions: Set[z3.BoolRef] = None):
+    def __init__(self):
         self.strategies = []
-        self.generated_preconditions = generated_preconditions if generated_preconditions else set()
+        self.generated_preconditions = set()
         self.counterexamples = []
 
-    def set_to_fail(self, generated_preconditions: Set[z3.BoolRef]):
-        self.strategies = []
-        self.generated_preconditions = generated_preconditions
+    def delete_strategies(self):
+        self.strategies.clear()
 
     def to_json(self) -> Dict[str, Any]:
         return {

@@ -62,6 +62,16 @@ def label(
     return implication(label_expr, comparison)
 
 
+def evaluate_model(model: z3.ModelRef, left: Real, right: Real) -> z3.BoolRef:
+    """compute comparative constraint based on given model"""
+    if model.evaluate(left > right, True):
+        return left > right
+    elif model.evaluate(left == right, True):
+        return left == right
+    else:
+        return right > left
+
+
 def eliminate_consequences(solver: z3.Solver, constraints: Set[z3.BoolRef]) -> Set[z3.BoolRef]:
     """compute a greedy consequence elimination of `constraints` wrt `solver`"""
     to_eliminate = set()
