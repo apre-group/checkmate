@@ -93,23 +93,23 @@ class Input:
             )
         }
         self.initial_constraints = [
-            self._load_constraint(constraint)
+            self.load_constraint(constraint)
             for constraint in obj['initial_constraints']
         ]
         self.weak_immunity_constraints = [
-            self._load_constraint(constraint)
+            self.load_constraint(constraint)
             for constraint in obj['property_constraints']['weak_immunity']
         ]
         self.weaker_immunity_constraints = [
-            self._load_constraint(constraint)
+            self.load_constraint(constraint)
             for constraint in obj['property_constraints']['weaker_immunity']
         ]
         self.collusion_resilience_constraints = [
-            self._load_constraint(constraint)
+            self.load_constraint(constraint)
             for constraint in obj['property_constraints']['collusion_resilience']
         ]
         self.practicality_constraints = [
-            self._load_constraint(constraint)
+            self.load_constraint(constraint)
             for constraint in obj['property_constraints']['practicality']
         ]
         self.honest_histories = obj['honest_histories']
@@ -129,6 +129,10 @@ class Input:
             f"tree:\n{self.tree}"
         )
 
+    def load_constraint(self, source: str) -> Boolean:
+        """load a string expression into a Boolean constraint, via `eval()`"""
+        return eval(source, {'OR': z3.Or}, self.constants)
+
     def _load_utility(self, utility: Union[int, str]) -> Utility:
         """load a string expression or an integer into a Utility, via `eval()`"""
         if isinstance(utility, int):
@@ -141,10 +145,6 @@ class Input:
 
         assert isinstance(utility, Utility)
         return utility
-
-    def _load_constraint(self, source: str) -> Boolean:
-        """load a string expression into a Boolean constraint, via `eval()`"""
-        return eval(source, {'OR': z3.Or}, self.constants)
 
     def _load_tree(self, tree: Dict[str, Any]) -> Tree:
         """recursively load subtrees in the input"""

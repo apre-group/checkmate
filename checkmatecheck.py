@@ -21,16 +21,19 @@ class StrategyChecker(metaclass=ABCMeta):
     """
     base class for checking strategies for security properties
     """
-    input: Input
+    to_check: Input
     _solver: z3.Solver
 
-    def __init__(self, input: Input, honest_history: List[str], strategy: Dict[str, str], cases: List[Boolean],
-                 generated_preconditions: List[Boolean]) -> None:
-        self.input = input
-        self.honest_history = honest_history
+    def __init__(self, checked_input: Input,
+                 checked_honest_history: List[str],
+                 strategy: Dict[str, str],
+                 cases: List[Boolean],
+                 generated_precondition_list: List[Boolean]) -> None:
+        self.input = checked_input
+        self.honest_history = checked_honest_history
         self.strategy = strategy
         self.cases = cases
-        self.generated_preconditions = generated_preconditions
+        self.generated_preconditions = generated_precondition_list
         self._solver = z3.Solver()
 
         self._solver.add(self.input.initial_constraints)
@@ -78,26 +81,28 @@ class StrategyChecker(metaclass=ABCMeta):
             return False
 
 
-class WeakImuneStrategyChecker(StrategyChecker):
+class WeakImmunityStrategyChecker(StrategyChecker):
     """checker for weak immunity"""
 
     def utility_function(self, ut: Dict[str, Utility], players: Set[str]) -> List[Utility]:
         return [ut[p] for p in players]
 
     def _property_constraints(self) -> None:
-        disj = []
+        disjuncts = []
 
-        for p in input.players:
+        for p in to_check.players:
             player_utilities = self._get_utilities(self.input.tree, {p}, '', [])
-            disj.extend([ZERO > utility for utility in player_utilities])
+            disjuncts.extend([ZERO > utility for utility in player_utilities])
 
         self._solver.add(self.input.weak_immunity_constraints)
-        self._solver.add(disjunction(*disj))
+        self._solver.add(disjunction(*disjuncts))
 
 
 class CollusionResilienceStrategyChecker(StrategyChecker):
+    """checker for collusion resilience"""
 
-    def strict_subgroups(self, group: Set) -> Iterator:
+    @staticmethod
+    def strict_subgroups(group: Set) -> Iterator:
         """
         Generator for all non-empty subgroups of a set of players.
         """
@@ -111,7 +116,7 @@ class CollusionResilienceStrategyChecker(StrategyChecker):
         return [sum([ut[player] for player in set(self.input.players) - players], start=ZERO)]
 
     def _property_constraints(self) -> None:
-        disj = False
+        disjuncts = False
 
         for player_subset in self.strict_subgroups(set(self.input.players)):
             sum_old_utility = sum(
@@ -120,13 +125,14 @@ class CollusionResilienceStrategyChecker(StrategyChecker):
             sum_new_utility = self._get_utilities(self.input.tree, set(self.input.players) - set(player_subset), '', [])
 
             for sum_utility in sum_new_utility:
-                disj = disjunction(sum_old_utility < sum_utility, disj)
+                disjuncts = disjunction(sum_old_utility < sum_utility, disjuncts)
 
-            self._solver.add(input.collusion_resilience_constraints)
-            self._solver.add(disj)
+            self._solver.add(to_check.collusion_resilience_constraints)
+            self._solver.add(disjuncts)
 
 
 class PracticalityStrategyChecker(StrategyChecker):
+    """checker for practicality"""
 
     def utility_function(self, ut: Dict[str, Utility], players: Set[str]) -> List[Utility]:
         return [ut[p] for p in set(self.input.players) - players]
@@ -150,8 +156,8 @@ class PracticalityStrategyChecker(StrategyChecker):
                 yield from self.walk_tree(child, new_history)
 
     def _property_constraints(self) -> None:
+        disjuncts = []
 
-        disj = []
         for subtree, history in self.walk_tree(self.input.tree, ''):
             if isinstance(subtree, Leaf):
                 continue
@@ -159,10 +165,10 @@ class PracticalityStrategyChecker(StrategyChecker):
             for player in self.input.players:
                 old_utility = self.utility_of_strategy(subtree, history)[player]
                 player_utilities = self._get_utilities(subtree, set(self.input.players) - {player}, history, [])
-                disj.extend([old_utility < utility for utility in player_utilities])
+                disjuncts.extend([old_utility < utility for utility in player_utilities])
 
-        self._solver.add(input.practicality_constraints)
-        self._solver.add(disjunction(*disj))
+        self._solver.add(to_check.practicality_constraints)
+        self._solver.add(disjunction(*disjuncts))
 
 
 if __name__ == '__main__':
@@ -184,7 +190,7 @@ if __name__ == '__main__':
         help="path to file with strategies"
     )
     args = parser.parse_args()
-    input = Input(args.PATH)
+    to_check = Input(args.PATH)
     strategies = json.load(open(args.STRATEGIES))['strategies']
     logging.info(
         f"input OK, checking strategies..."
@@ -193,32 +199,36 @@ if __name__ == '__main__':
     for honest_history in strategies:
         for pr in ["weak_immunity", "collusion_resilience", "practicality"]:
             logging.info(f"checking {pr.replace('_', ' ')} of history {honest_history['history']}")
-            gen_prec_str = honest_history[pr]["generated_preconditions"]
-            generated_preconditions = [input._load_constraint(c) for c in gen_prec_str]
+            generated_preconditions_str = honest_history[pr]["generated_preconditions"]
+            generated_preconditions = [to_check.load_constraint(c) for c in generated_preconditions_str]
+
             for case in honest_history[pr]["cases"]:
                 logging.info(f"case {case['case']}")
-                case_constraints = [input._load_constraint(c) for c in case['case']]
+                case_constraints = [to_check.load_constraint(c) for c in case['case']]
+
                 if pr == "weak_immunity":
-                    result = WeakImuneStrategyChecker(
-                        input,
+                    result = WeakImmunityStrategyChecker(
+                        to_check,
                         honest_history['history'],
                         case['strategy'],
                         case_constraints,
                         generated_preconditions
                     ).check()
                     print(result)
+
                 elif pr == "collusion_resilience":
                     result = CollusionResilienceStrategyChecker(
-                        input,
+                        to_check,
                         honest_history['history'],
                         case['strategy'],
                         case_constraints,
                         generated_preconditions
                     ).check()
                     print(result)
+
                 elif pr == "practicality":
                     result = PracticalityStrategyChecker(
-                        input,
+                        to_check,
                         honest_history['history'],
                         case['strategy'],
                         case_constraints,
