@@ -1,11 +1,11 @@
-from typing import Set, Dict, List, Any, Union
+from typing import Set, Dict, List, Any
 
 from z3 import z3
 
 from constants import SecurityProperty, PROPERTY_TO_JSON_KEY, HONEST_HISTORY_JSON_KEY, \
     GENERATED_PRECONDITIONS_JSON_KEY, JOINT_STRATEGIES_JSON_KEY, COUNTEREXAMPLES_JSON_KEY, \
     COUNTEREXAMPLE_PLAYERS_JSON_KEY, COUNTEREXAMPLE_TERMINAL_HISTORY_JSON_KEY, JOINT_STRATEGY_ORDERING_JSON_KEY, \
-    JOINT_STRATEGY_STRATEGY_JSON_KEY, OR_CONSTRAINT_KEY
+    JOINT_STRATEGY_STRATEGY_JSON_KEY, OR_CONSTRAINT_KEY, PROPERTY_TO_STR
 
 
 class CaseWithStrategy:
@@ -16,6 +16,11 @@ class CaseWithStrategy:
     def __init__(self, case: Set[z3.BoolRef], strategy: Dict[str, str]):
         self.ordering_case = case
         self.strategy = strategy
+
+    def __repr__(self):
+        strategy = '; '.join([f"{history}->{action}" for history, action in self.strategy.items()])
+        return f"{{\n\t\tcase: {self.ordering_case}\n\t\t" \
+               f"strategy: {strategy}\n\t}}"
 
     def to_json(self) -> Dict[str, Any]:
         return {
@@ -34,7 +39,7 @@ class Counterexample:
         self.terminal_history = terminal_history
 
     def __repr__(self):
-        return f"- players {self.players} with history {self.terminal_history}"
+        return f"players {self.players} with history {self.terminal_history}"
 
     def to_json(self) -> Dict[str, Any]:
         return {
@@ -53,6 +58,11 @@ class SolvingResult:
         self.strategies = []
         self.generated_preconditions = set()
         self.counterexamples = []
+
+    def __repr__(self):
+        return f"---- strategies: {self.strategies}\n" \
+               f"---- generated_preconditions: {self.generated_preconditions}\n" \
+               f"---- counterexamples: {self.counterexamples}"
 
     def delete_strategies(self):
         self.strategies.clear()
@@ -80,6 +90,12 @@ class AnalysisResult:
                                  SecurityProperty.WEAKER_IMMUNITY: weaker_immunity_result,
                                  SecurityProperty.COLLUSION_RESILIENCE: collusion_resilience_result,
                                  SecurityProperty.PRACTICALITY: practicality_result}
+
+    def __repr__(self):
+        results = '\n'.join(
+            [f"-- {PROPERTY_TO_STR[prop]}:\n{res}" for prop, res in self.property_results.items() if res])
+        return f"honest_history: {self.honest_history}\n" \
+               f"property_results:\n{results}"
 
     def get_property_result(self, security_property: SecurityProperty) -> SolvingResult:
         return self.property_results[security_property]

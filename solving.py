@@ -182,7 +182,7 @@ class StrategySolver(metaclass=ABCMeta):
 
                                 if label_expr in self._label2subtree:
                                     counterexample = self._extract_counterexample(label_expr)
-                                    logging.info(str(counterexample))
+                                    logging.info(f"- {counterexample}")
                                     result.counterexamples.append(counterexample)
 
                         logging.info("no more counterexamples")
