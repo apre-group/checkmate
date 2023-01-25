@@ -2,10 +2,10 @@ from enum import Enum
 
 
 class SecurityProperty(Enum):
-    WEAK_IMMUNITY = 'WI'
-    WEAKER_IMMUNITY = 'WWI'
-    COLLUSION_RESILIENCE = 'CR'
-    PRACTICALITY = 'P'
+    WEAK_IMMUNITY = 'wi'
+    WEAKER_IMMUNITY = 'weri'
+    COLLUSION_RESILIENCE = 'cr'
+    PRACTICALITY = 'pr'
 
 
 PROPERTY_TO_STR = {SecurityProperty.WEAK_IMMUNITY: 'weak immunity',

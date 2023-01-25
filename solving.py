@@ -174,7 +174,7 @@ class StrategySolver(metaclass=ABCMeta):
 
                         labels = set(self._label2subtree.keys())
                         for core in minimal_unsat_cores(self._solver, labels):
-                            logging.info("counterexample(s) found - property cannot be fulfilled because of:")
+                            logging.info("counterexample found - property cannot be fulfilled because of:")
                             for label_expr in core:
                                 # sometimes solver generates garbage for some reason, exclude it
                                 if not isinstance(label_expr, z3.BoolRef) or not z3.is_app(label_expr):
