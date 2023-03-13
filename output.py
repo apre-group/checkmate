@@ -34,14 +34,17 @@ class Counterexample:
     players: List[str]
     terminal_history = List[str]
 
-    def __init__(self, players: List[str], terminal_history: List[str]):
+    def __init__(self, players: List[str], terminal_history: List[str], action: str, other : str):
         self.players = players
         self.terminal_history = terminal_history
+        self.action = action
+        self.other_action = other
 
     def __repr__(self):
-        return f"players {self.players} with history {self.terminal_history}"
+        return f"players {self.players} with history {self.terminal_history} action {self.action} other action {self.other_action}"
 
     def to_json(self) -> Dict[str, Any]:
+        # adapt to action and other action!
         return {
             COUNTEREXAMPLE_PLAYERS_JSON_KEY: self.players,
             COUNTEREXAMPLE_TERMINAL_HISTORY_JSON_KEY: self.terminal_history

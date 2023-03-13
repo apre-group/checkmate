@@ -37,8 +37,8 @@ class StrategySolver(metaclass=ABCMeta):
     _label2pair: Dict[z3.BoolRef, Tuple[Real, Real, bool]]
 
     # maintain a bijection from (player, history) pairs and Z3 labels
-    _subtree2label: Dict[Tuple[Tuple[str], Tuple[str]], z3.BoolRef]
-    _label2subtree: Dict[z3.BoolRef, Tuple[Tuple[str], Tuple[str]]]
+    _subtree2label: Dict[Tuple[Tuple[str], Tuple[str], str, str], z3.BoolRef]
+    _label2subtree: Dict[z3.BoolRef, Tuple[Tuple[str], Tuple[str], str, str]]
 
     # mapping from action variables to (history, action) pairs
     _action_variables: Dict[z3.BoolRef, Tuple[List[str], str]]
@@ -55,6 +55,10 @@ class StrategySolver(metaclass=ABCMeta):
 
     @abstractmethod
     def _property_constraint_implementation(self) -> Boolean:
+        pass
+
+    @abstractmethod
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef]):
         pass
 
     def __init__(
@@ -187,10 +191,9 @@ class StrategySolver(metaclass=ABCMeta):
                         labels = set(self._label2subtree.keys())
                         for core in minimal_unsat_cores(self._solver, labels):
                             logging.info("counterexample(s) found - property cannot be fulfilled because of:")
-                            for label_expr in core:
-                                counterexample = self._extract_counterexample(label_expr)
-                                logging.info(f"- {counterexample}")
-                                result.counterexamples.append(counterexample)
+                            counterexample = self._extract_counterexample_core(core)
+                            # adapt what we save in the result!
+                            result.counterexamples.append(counterexample)
 
                         logging.info("no more counterexamples")
 
@@ -322,15 +325,17 @@ class StrategySolver(metaclass=ABCMeta):
     def _subtree_label(
             self,
             players: Tuple[str],
-            subtree_history: List[str]
+            subtree_history: List[str],
+            action="",
+            other=""
     ) -> z3.BoolRef:
         """label subtrees for unsat cores"""
         history = tuple(subtree_history)
-        label_expr = self._subtree2label.get((players, history))
+        label_expr = self._subtree2label.get((players, history, action, other))
         if label_expr is None:
-            label_expr = z3.Bool(f'ce[{players}][{history}]')
-            self._subtree2label[(players, history)] = label_expr
-            self._label2subtree[label_expr] = (players, history)
+            label_expr = z3.Bool(f'ce[{players}][{history}][{action}][{other}]')
+            self._subtree2label[(players, history, action, other)] = label_expr
+            self._label2subtree[label_expr] = (players, history, action, other)
 
         return label_expr
 
@@ -352,8 +357,8 @@ class StrategySolver(metaclass=ABCMeta):
         return CaseWithStrategy(case, strategy)
 
     def _extract_counterexample(self, label_expr: z3.BoolRef) -> Counterexample:
-        players, history = self._label2subtree[label_expr]
-        return Counterexample(list(players), list(history))
+        players, history, action, other_action = self._label2subtree[label_expr]
+        return Counterexample(list(players), list(history), action, other_action)
 
 
 class FeebleImmuneStrategySolver(StrategySolver):
@@ -370,6 +375,14 @@ class FeebleImmuneStrategySolver(StrategySolver):
                 constraints, player, [], [], self.input.tree
             )
         return conjunction(*constraints)
+
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef]):
+        ces = []
+        for label_expr in core:
+            counterexample = self._extract_counterexample(label_expr)
+            logging.info(f"- {counterexample}")
+            ces.append(counterexample)
+        return ces
 
     def _collect_weak_immunity_constraints(
             self,
@@ -457,6 +470,14 @@ class CollusionResilienceStrategySolver(StrategySolver):
 
         return conjunction(*constraints)
 
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef]):
+        ces = []
+        for label_expr in core:
+            counterexample = self._extract_counterexample(label_expr)
+            logging.info(f"- {counterexample}")
+            ces.append(counterexample)
+        return ces
+
     def _collect_collusion_resilience_constraints(
             self,
             constraints: List[z3.BoolRef],
@@ -510,6 +531,14 @@ class PracticalityStrategySolver(StrategySolver):
         constraints = []
         self._practicality_constraints(constraints, [], self.input.tree)
         return conjunction(*constraints)
+
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef]):
+        ces = []
+        for label_expr in core:
+            counterexample = self._extract_counterexample(label_expr)
+            logging.info(f"- {counterexample}")
+            ces.append(counterexample)
+        return ces
 
     def _utility_variable(self, starting_from: List[str], player: str) -> Utility:
         """create real/infinitesimal variables to represent a utility"""
@@ -679,6 +708,14 @@ class PracticalityStrategySolver2(StrategySolver):
         self._practicality_constraints(constraints, [], self.input.tree)
         return conjunction(*constraints)
 
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef]):
+        ces = []
+        for label_expr in core:
+            counterexample = self._extract_counterexample(label_expr)
+            logging.info(f"- {counterexample}")
+            ces.append(counterexample)
+        return ces
+
     def _practicality_constraints(self, constraints: List[Boolean], history: List[str], tree: Tree) -> \
             Dict[str, Dict[Tuple[Real, Real], Boolean]]:
         if isinstance(tree, Leaf):
@@ -701,7 +738,7 @@ class PracticalityStrategySolver2(StrategySolver):
             action: self._action_variable(history, action)
             for action in tree.actions
         }
-        subtree_label = self._subtree_label((tree.player,), history)
+        # subtree_label = self._subtree_label((tree.player,), history)
 
         # if we take an action a and get a certain utility u for it...
         for action, utilities in utility_map.items():
@@ -719,6 +756,7 @@ class PracticalityStrategySolver2(StrategySolver):
                 for utility, condition in utilities.items():
                     utility = Utility(*utility)
                     for other_utility, other_condition in other_utilities.items():
+                        subtree_label = self._subtree_label((tree.player,), history, action, other)
                         other_utility = Utility(*other_utility)
                         constraints.append(implication(
                             conjunction(
