@@ -131,6 +131,7 @@ def maximal_satisfying_subset(solver: z3.Solver,
 def minimal_unsat_cores(solver: z3.Solver, all_labels: Set[z3.BoolRef], *assumptions: z3.BoolRef) -> \
         Generator[Set[z3.BoolRef], None, None]:
     """iteratively compute all minimal unsat cores in `all` with respect to `solver` + `assumptions`"""
+    solver.set("core.minimize", True)
     map_solver = z3.Solver()
     map_solver.set("unsat_core", True)
     map_solver.set("core.minimize", True)
