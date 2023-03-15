@@ -191,6 +191,9 @@ class StrategySolver(metaclass=ABCMeta):
                         labels = set(self._label2subtree.keys())
                         for core in minimal_unsat_cores(self._solver, labels):
                             logging.info("counterexample(s) found - property cannot be fulfilled because of:")
+                            for item in core:
+                                print(item)
+                                assert self._solver.check(*(core - {item})) == z3.sat
                             counterexample = self._extract_counterexample_core(core)
                             # adapt what we save in the result!
                             result.counterexamples.append(counterexample)
@@ -756,7 +759,7 @@ class PracticalityStrategySolver2(StrategySolver):
                 for utility, condition in utilities.items():
                     utility = Utility(*utility)
                     for other_utility, other_condition in other_utilities.items():
-                        subtree_label = self._subtree_label((tree.player,), history, action, other)
+                        subtree_label = self._subtree_label((tree.player, str(condition), str(other_condition)), history, action, other)
                         other_utility = Utility(*other_utility)
                         constraints.append(implication(
                             conjunction(
@@ -786,6 +789,8 @@ class PracticalityStrategySolver2(StrategySolver):
                     else:
                         player_result[utility] = condition
 
+        #if len(history) == 0:
+        #    print(history, result, constraints)
         """
         if len(history) < 5:
             print("end", history)
