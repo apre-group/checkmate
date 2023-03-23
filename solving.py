@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from abc import ABCMeta, abstractmethod
-from typing import Dict, List
+from typing import Dict, List, Tuple
 import itertools
 import logging
 
@@ -58,7 +58,7 @@ class StrategySolver(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef]):
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
         pass
 
     def __init__(
@@ -95,7 +95,7 @@ class StrategySolver(metaclass=ABCMeta):
         self._solver.set('ctrl_c', False)
         self._solver.set('core.minimize_partial', True)
 
-        self._add_action_constraints([], self.input.tree)
+        self._add_action_constraints([], self.input.tree, self._solver)
         self._add_history_constraints(self.checked_history)
 
     def solve(self) -> SolvingResult:
@@ -138,7 +138,7 @@ class StrategySolver(metaclass=ABCMeta):
             if check_result == z3.sat:
                 case = set(case)
                 logging.info("case solved")
-                result.strategies.append(self._extract_strategy(case))
+                result.strategies.append(self._extract_strategy(self._solver, case))
 
                 # we solved this case, now add a conflict to move on
                 self._case_solver.add(disjunction(*(
@@ -192,9 +192,8 @@ class StrategySolver(metaclass=ABCMeta):
                         for core in minimal_unsat_cores(self._solver, labels):
                             logging.info("counterexample(s) found - property cannot be fulfilled because of:")
                             for item in core:
-                                print(item)
                                 assert self._solver.check(*(core - {item})) == z3.sat
-                            counterexample = self._extract_counterexample_core(core)
+                            counterexample = self._extract_counterexample_core(core, property_constraint)
                             # adapt what we save in the result!
                             result.counterexamples.append(counterexample)
 
@@ -242,7 +241,7 @@ class StrategySolver(metaclass=ABCMeta):
             self._case_solver.add(constraint)
             self._minimize_solver.add(constraint)
 
-    def _add_action_constraints(self, history: List[str], tree: Tree):
+    def _add_action_constraints(self, history: List[str], tree: Tree, solver):
         """exactly one action must be taken at this subtree"""
         if isinstance(tree, Leaf):
             return
@@ -252,12 +251,12 @@ class StrategySolver(metaclass=ABCMeta):
             self._action_variable(history, action)
             for action in tree.actions
         ]
-        self._solver.add(disjunction(*actions))
+        solver.add(disjunction(*actions))
         for (left, right) in itertools.combinations(actions, 2):
-            self._solver.add(disjunction(negation(left), negation(right)))
+            solver.add(disjunction(negation(left), negation(right)))
 
         for action, tree in tree.actions.items():
-            self._add_action_constraints(history + [action], tree)
+            self._add_action_constraints(history + [action], tree, solver)
 
     def _add_history_constraints(self, checked_history: List[str]):
         """we only care about this history"""
@@ -342,10 +341,10 @@ class StrategySolver(metaclass=ABCMeta):
 
         return label_expr
 
-    def _extract_strategy(self, case: Set[z3.BoolRef]) -> CaseWithStrategy:
+    def _extract_strategy(self, solver, case: Set[z3.BoolRef], give_history=False) -> Union[CaseWithStrategy, Tuple[CaseWithStrategy, str]]:
         """Extracting strategies from the solver for the current case split."""
         strategy = {}
-        model = self._solver.model()
+        model = solver.model()
         for name in model:
             if not isinstance(name, z3.FuncDeclRef):
                 continue
@@ -356,8 +355,18 @@ class StrategySolver(metaclass=ABCMeta):
             if variable in self._action_variables and model[name]:
                 history, action = self._action_variables[variable]
                 strategy[';'.join(history)] = action
-
-        return CaseWithStrategy(case, strategy)
+        if give_history:
+            terminal = False
+            hh = strategy[""]
+            if strategy.get(hh, None) is None:
+                terminal = True
+            while not terminal:
+                hh += ";" + strategy[hh]
+                if strategy.get(hh, None) is None:
+                    terminal = True
+            return CaseWithStrategy(case, strategy), hh
+        else:
+            return CaseWithStrategy(case, strategy)
 
     def _extract_counterexample(self, label_expr: z3.BoolRef) -> Counterexample:
         players, history, action, other_action = self._label2subtree[label_expr]
@@ -379,7 +388,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
             )
         return conjunction(*constraints)
 
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef]):
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
         ces = []
         for label_expr in core:
             counterexample = self._extract_counterexample(label_expr)
@@ -473,7 +482,7 @@ class CollusionResilienceStrategySolver(StrategySolver):
 
         return conjunction(*constraints)
 
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef]):
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
         ces = []
         for label_expr in core:
             counterexample = self._extract_counterexample(label_expr)
@@ -535,7 +544,7 @@ class PracticalityStrategySolver(StrategySolver):
         self._practicality_constraints(constraints, [], self.input.tree)
         return conjunction(*constraints)
 
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef]):
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
         ces = []
         for label_expr in core:
             counterexample = self._extract_counterexample(label_expr)
@@ -711,13 +720,25 @@ class PracticalityStrategySolver2(StrategySolver):
         self._practicality_constraints(constraints, [], self.input.tree)
         return conjunction(*constraints)
 
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef]):
-        ces = []
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
+        ce_solver = z3.Solver()
+        self._add_action_constraints([], self.input.tree, ce_solver)
+        ce_solver.add(property_constraint)
+        deviation_point = None
         for label_expr in core:
-            counterexample = self._extract_counterexample(label_expr)
-            logging.info(f"- {counterexample}")
-            ces.append(counterexample)
-        return ces
+            _players, history, action, other_action = self._label2subtree[label_expr]
+            if list(history) + [action] == self.checked_history[:len(history) + 1]:
+                assert (deviation_point is None or deviation_point == list(history))
+                deviation_point = list(history)
+            ce_solver.add(negation(self._action_variable(list(history), action)))
+        for i, action in enumerate(deviation_point):
+            ce_solver.add(self._action_variable(deviation_point[:i], action))
+        result = ce_solver.check(*self._label2pair.keys(), *self._label2subtree.keys())
+        if result == z3.sat:
+            logging.info(f"practical strategy found at deviation point {deviation_point}")
+            strat, hist = self._extract_strategy(ce_solver, set(), True)
+            logging.info(hist)
+            return strat
 
     def _practicality_constraints(self, constraints: List[Boolean], history: List[str], tree: Tree) -> \
             Dict[str, Dict[Tuple[Real, Real], Boolean]]:
