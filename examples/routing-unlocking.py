@@ -107,11 +107,11 @@ INITIAL_CONSTRAINTS = [
     f > 0,
     m > 0
 ]
-#dishonest amounts different from honest amounts (first deviation only)
-for i in range(len(ps)-1):
-    INITIAL_CONSTRAINTS.append(NameExpr(f"a_{ps[i]}_{ps[i]}") !=  m + (len(ps) - 2 - i) * f)
-    for j in range(i,len(ps)-1):
-        INITIAL_CONSTRAINTS.append(NameExpr(f"a_{ps[i]}_{ps[j]}") >= 0 )
+# #dishonest amounts different from honest amounts (first deviation only)
+# for i in range(len(ps)-1):
+#     INITIAL_CONSTRAINTS.append(NameExpr(f"a_{ps[i]}_{ps[i]}") !=  m + (len(ps) - 2 - i) * f)
+#     for j in range(i,len(ps)-1):
+#         INITIAL_CONSTRAINTS.append(NameExpr(f"a_{ps[i]}_{ps[j]}") >= 0 )
 
 
 WEAK_IMMUNITY_CONSTRAINTS = []
