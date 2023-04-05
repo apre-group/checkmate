@@ -729,13 +729,16 @@ class PracticalityStrategySolver2(StrategySolver):
         deviation_point = None
         for label_expr in core:
             _players, history, action, other_action, condition, other_condition = self._label2subtree[label_expr]
-            # print(label_expr)
+            print((history, action, other_action, condition, other_condition))
             if list(history) + [action] == self.checked_history[:len(history) + 1]:
                 assert (deviation_point is None or deviation_point == list(history))
                 deviation_point = list(history)
             ce_solver.add(implication(conjunction(condition, other_condition), negation(self._action_variable(list(history), action))))
-        for i, action in enumerate(deviation_point):
-            ce_solver.add(self._action_variable(deviation_point[:i], action))
+        if deviation_point is None:
+            logging.error("Deviation point not found! Wrong counterexample!")
+        else:
+            for i, action in enumerate(deviation_point):
+                ce_solver.add(self._action_variable(deviation_point[:i], action))
         result = ce_solver.check(*self._label2pair.keys(), *self._label2subtree.keys())
         print(result)
         if result == z3.sat:
