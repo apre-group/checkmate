@@ -34,14 +34,22 @@ class Counterexample:
     players: List[str]
     terminal_history = List[str]
 
-    def __init__(self, players: List[str], terminal_history: List[str], action: str, other : str):
+    def __init__(self,
+                players: List[str],
+                terminal_history: List[str],
+                action: str,
+                other : str,
+                condition: z3.BoolRef,
+                other_condition : z3.BoolRef):
         self.players = players
         self.terminal_history = terminal_history
         self.action = action
         self.other_action = other
+        self.condition = condition
+        self.other_condition = other_condition
 
     def __repr__(self):
-        return f"players {self.players} with history {self.terminal_history} action {self.action} other action {self.other_action}"
+        return f"players {self.players} with history {self.terminal_history} action {self.action} other action {self.other_action} condition {self.condition} other condition {self.other_condition}"
 
     def to_json(self) -> Dict[str, Any]:
         # adapt to action and other action!
