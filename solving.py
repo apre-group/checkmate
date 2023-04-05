@@ -37,8 +37,8 @@ class StrategySolver(metaclass=ABCMeta):
     _label2pair: Dict[z3.BoolRef, Tuple[Real, Real, bool]]
 
     # maintain a bijection from (player, history) pairs and Z3 labels
-    _subtree2label: Dict[Tuple[Tuple[str], Tuple[str], str, str], z3.BoolRef]
-    _label2subtree: Dict[z3.BoolRef, Tuple[Tuple[str], Tuple[str], str, str]]
+    _subtree2label: Dict[Tuple[Tuple[str], Tuple[str], str, str, z3.BoolRef, z3.BoolRef], z3.BoolRef]
+    _label2subtree: Dict[z3.BoolRef, Tuple[Tuple[str], Tuple[str], str, str, z3.BoolRef, z3.BoolRef]]
 
     # mapping from action variables to (history, action) pairs
     _action_variables: Dict[z3.BoolRef, Tuple[List[str], str]]
@@ -329,15 +329,17 @@ class StrategySolver(metaclass=ABCMeta):
             players: Tuple[str],
             subtree_history: List[str],
             action="",
-            other=""
+            other="",
+            condition=z3.Bool(True),
+            other_condition=z3.Bool(True)
     ) -> z3.BoolRef:
         """label subtrees for unsat cores"""
         history = tuple(subtree_history)
-        label_expr = self._subtree2label.get((players, history, action, other))
+        label_expr = self._subtree2label.get((players, history, action, other, condition, other_condition,))
         if label_expr is None:
-            label_expr = z3.Bool(f'ce[{players}][{history}][{action}][{other}]')
-            self._subtree2label[(players, history, action, other)] = label_expr
-            self._label2subtree[label_expr] = (players, history, action, other)
+            label_expr = z3.Bool(f'ce[{players}][{history}][{action}][{other}][{str(condition)}][{str(other_condition)}]')
+            self._subtree2label[(players, history, action, other, condition, other_condition)] = label_expr
+            self._label2subtree[label_expr] = (players, history, action, other, condition, other_condition)
 
         return label_expr
 
@@ -369,8 +371,8 @@ class StrategySolver(metaclass=ABCMeta):
             return CaseWithStrategy(case, strategy)
 
     def _extract_counterexample(self, label_expr: z3.BoolRef) -> Counterexample:
-        players, history, action, other_action = self._label2subtree[label_expr]
-        return Counterexample(list(players), list(history), action, other_action)
+        players, history, action, other_action, condition, other_condition = self._label2subtree[label_expr]
+        return Counterexample(list(players), list(history), action, other_action, condition, other_condition)
 
 
 class FeebleImmuneStrategySolver(StrategySolver):
@@ -726,14 +728,16 @@ class PracticalityStrategySolver2(StrategySolver):
         ce_solver.add(property_constraint)
         deviation_point = None
         for label_expr in core:
-            _players, history, action, other_action = self._label2subtree[label_expr]
+            _players, history, action, other_action, condition, other_condition = self._label2subtree[label_expr]
+            # print(label_expr)
             if list(history) + [action] == self.checked_history[:len(history) + 1]:
                 assert (deviation_point is None or deviation_point == list(history))
                 deviation_point = list(history)
-            ce_solver.add(negation(self._action_variable(list(history), action)))
+            ce_solver.add(implication(conjunction(condition, other_condition), negation(self._action_variable(list(history), action))))
         for i, action in enumerate(deviation_point):
             ce_solver.add(self._action_variable(deviation_point[:i], action))
         result = ce_solver.check(*self._label2pair.keys(), *self._label2subtree.keys())
+        print(result)
         if result == z3.sat:
             logging.info(f"practical strategy found at deviation point {deviation_point}")
             strat, hist = self._extract_strategy(ce_solver, set(), True)
@@ -780,7 +784,7 @@ class PracticalityStrategySolver2(StrategySolver):
                 for utility, condition in utilities.items():
                     utility = Utility(*utility)
                     for other_utility, other_condition in other_utilities.items():
-                        subtree_label = self._subtree_label((tree.player, str(condition), str(other_condition)), history, action, other)
+                        subtree_label = self._subtree_label((tree.player,), history, action, other, condition, other_condition,)
                         other_utility = Utility(*other_utility)
                         constraints.append(implication(
                             conjunction(
