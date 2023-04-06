@@ -189,13 +189,18 @@ class StrategySolver(metaclass=ABCMeta):
                         self._solver.add(*self._label2pair.keys())
 
                         labels = set(self._label2subtree.keys())
-                        for core in minimal_unsat_cores(self._solver, labels):
-                            logging.info("counterexample(s) found - property cannot be fulfilled because of:")
-                            for item in core:
-                                assert self._solver.check(*(core - {item})) == z3.sat
-                            counterexample = self._extract_counterexample_core(core, property_constraint)
-                            # adapt what we save in the result!
-                            result.counterexamples.append(counterexample)
+
+                        core = set()
+                        # for core in minimal_unsat_cores(self._solver, labels):
+                        #     logging.info("counterexample(s) found - property cannot be fulfilled because of:")
+                        #     for item in core:
+                        #         assert self._solver.check(*(core - {item})) == z3.sat
+                        #     counterexample = self._extract_counterexample_core(core, property_constraint)
+                        #     # adapt what we save in the result!
+                        #     result.counterexamples.append(counterexample)
+                        logging.info("counterexample(s) found - property cannot be fulfilled because of:")
+                        counterexample = self._extract_counterexample_core(core, property_constraint)
+                        result.counterexamples.append(counterexample)
 
                         logging.info("no more counterexamples")
 
@@ -727,25 +732,54 @@ class PracticalityStrategySolver2(StrategySolver):
         self._add_action_constraints([], self.input.tree, ce_solver)
         ce_solver.add(property_constraint)
         deviation_point = None
-        for label_expr in core:
-            _players, history, action, other_action, condition, other_condition = self._label2subtree[label_expr]
-            print((history, action, other_action, condition, other_condition))
-            if list(history) + [action] == self.checked_history[:len(history) + 1]:
-                assert (deviation_point is None or deviation_point == list(history))
-                deviation_point = list(history)
-            ce_solver.add(implication(conjunction(condition, other_condition), negation(self._action_variable(list(history), action))))
-        if deviation_point is None:
-            logging.error("Deviation point not found! Wrong counterexample!")
-        else:
-            for i, action in enumerate(deviation_point):
-                ce_solver.add(self._action_variable(deviation_point[:i], action))
+        # for label_expr in core:
+        #     _players, history, action, other_action, condition, other_condition = self._label2subtree[label_expr]
+        #     # print((history, action, other_action, condition, other_condition))
+        #     if list(history) + [action] == self.checked_history[:len(history) + 1]:
+        #         assert (deviation_point is None or deviation_point == list(history))
+        #         deviation_point = list(history)
+            # ce_solver.add(implication(conjunction(condition, other_condition), negation(self._action_variable(list(history), action))))
+            # possibly unsound simplification:
+            # ce_solver.add(negation(self._action_variable(list(history), action))) 
+            # some cores end up unsat, maybe still okay? Can we argue to not miss any counterexample?
+
+        #if deviation_point is None:
+        #    logging.error("Deviation point not found! Wrong counterexample!")
+        # else:
+        #     for i, action in enumerate(deviation_point):
+        #         ce_solver.add(self._action_variable(deviation_point[:i], action))
+
         result = ce_solver.check(*self._label2pair.keys(), *self._label2subtree.keys())
-        print(result)
-        if result == z3.sat:
-            logging.info(f"practical strategy found at deviation point {deviation_point}")
+        if result == z3.unsat:
+            #do case split stuff and call ce_solver with the extra constraints
+            pass
+
+        # print(result)
+        strat = []
+        counterexamples = []
+
+        while result == z3.sat:
             strat, hist = self._extract_strategy(ce_solver, set(), True)
-            logging.info(hist)
-            return strat
+            counterexamples.append(hist)
+            histlist = hist.split(";")
+            # print(histlist)
+            history_actions = []
+            for i, action in enumerate(histlist):
+                history_actions.append(self._action_variable(list(histlist[:i]),action))
+            ce_solver.add(negation(conjunction(*history_actions)))
+            result= ce_solver.check(*self._label2pair.keys(), *self._label2subtree.keys())
+        
+        # logging.info(f"practical strategy(s) found at deviation point {deviation_point}")
+        logging.info(counterexamples)
+        # return value is the last strategy found or an empty list in case it was unsat 
+        return strat
+        
+        
+        # if result == z3.sat:
+        #     logging.info(f"practical strategy found at deviation point {deviation_point}")
+        #     strat, hist = self._extract_strategy(ce_solver, set(), True)
+        #     logging.info(hist)
+        #     return strat
 
     def _practicality_constraints(self, constraints: List[Boolean], history: List[str], tree: Tree) -> \
             Dict[str, Dict[Tuple[Real, Real], Boolean]]:
