@@ -23,39 +23,43 @@ def analyze_input(checked_input: Input,
 
         if SecurityProperty.WEAK_IMMUNITY in analyzed_properties:
             logging.info("checking weak immunity")
-            wi_res = WeakImmunityStrategySolver(
+            wi_solver = WeakImmunityStrategySolver(
                 checked_input,
                 honest_history,
                 generate_preconditions,
                 generate_counterexamples
-            ).solve()
+            )
+            wi_res = wi_solver.solve(wi_solver._solver)
 
         if SecurityProperty.WEAKER_IMMUNITY in analyzed_properties:
             logging.info("checking weaker immunity")
-            weri_res = WeakerImmunityStrategySolver(
+            weri_solver = WeakerImmunityStrategySolver(
                 checked_input,
                 honest_history,
                 generate_preconditions,
                 generate_counterexamples
-            ).solve()
+            )
+            weri_res = weri_solver.solve(weri_solver._solver)
 
         if SecurityProperty.COLLUSION_RESILIENCE in analyzed_properties:
             logging.info("checking collusion resilience")
-            cr_res = CollusionResilienceStrategySolver(
+            cr_solver = CollusionResilienceStrategySolver(
                 checked_input,
                 honest_history,
                 generate_preconditions,
                 generate_counterexamples
-            ).solve()
+            )
+            cr_res = cr_solver.solve(cr_solver._solver)
 
         if SecurityProperty.PRACTICALITY in analyzed_properties:
             logging.info("checking practicality")
-            p_res = PracticalityStrategySolver2(
+            pr_solver = PracticalityStrategySolver2(
                 checked_input,
                 honest_history,
                 generate_preconditions,
                 generate_counterexamples
-            ).solve()
+            )
+            p_res = pr_solver.solve(pr_solver._solver)
 
         results.append(AnalysisResult(honest_history, wi_res, weri_res, cr_res, p_res))
 

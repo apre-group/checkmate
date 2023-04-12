@@ -31,16 +31,23 @@ class CaseWithStrategy:
 
 class Counterexample:
     """counterexample to analyzed property"""
+    ordering_case : Set[z3.BoolRef]
     players: List[str]
     terminal_history = List[str]
+    action: str
+    other_action : str
+    condition : z3.BoolRef
+    other_condition : z3.BoolRef
 
     def __init__(self,
+                ordering_case: Set[z3.BoolRef],
                 players: List[str],
                 terminal_history: List[str],
                 action: str,
                 other : str,
                 condition: z3.BoolRef,
                 other_condition : z3.BoolRef):
+        self.ordering_case = ordering_case
         self.players = players
         self.terminal_history = terminal_history
         self.action = action
@@ -49,10 +56,10 @@ class Counterexample:
         self.other_condition = other_condition
 
     def __repr__(self):
-        return f"players {self.players} with history {self.terminal_history} action {self.action} other action {self.other_action} condition {self.condition} other condition {self.other_condition}"
+        return f"in case {self.ordering_case} players {self.players} with history {self.terminal_history} action {self.action} other action {self.other_action} condition {self.condition} other condition {self.other_condition}"
 
     def to_json(self) -> Dict[str, Any]:
-        # adapt to action and other action!
+        # adapt to case,  action and other action!
         return {
             COUNTEREXAMPLE_PLAYERS_JSON_KEY: self.players,
             COUNTEREXAMPLE_TERMINAL_HISTORY_JSON_KEY: self.terminal_history
