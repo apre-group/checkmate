@@ -29,7 +29,7 @@ def analyze_input(checked_input: Input,
                 generate_preconditions,
                 generate_counterexamples
             )
-            wi_res = wi_solver.solve(wi_solver._solver)
+            wi_res = wi_solver.solve()
 
         if SecurityProperty.WEAKER_IMMUNITY in analyzed_properties:
             logging.info("checking weaker immunity")
@@ -39,7 +39,7 @@ def analyze_input(checked_input: Input,
                 generate_preconditions,
                 generate_counterexamples
             )
-            weri_res = weri_solver.solve(weri_solver._solver)
+            weri_res = weri_solver.solve()
 
         if SecurityProperty.COLLUSION_RESILIENCE in analyzed_properties:
             logging.info("checking collusion resilience")
@@ -49,7 +49,7 @@ def analyze_input(checked_input: Input,
                 generate_preconditions,
                 generate_counterexamples
             )
-            cr_res = cr_solver.solve(cr_solver._solver)
+            cr_res = cr_solver.solve()
 
         if SecurityProperty.PRACTICALITY in analyzed_properties:
             logging.info("checking practicality")
@@ -59,7 +59,7 @@ def analyze_input(checked_input: Input,
                 generate_preconditions,
                 generate_counterexamples
             )
-            p_res = pr_solver.solve(pr_solver._solver)
+            p_res = pr_solver.solve()
 
         results.append(AnalysisResult(honest_history, wi_res, weri_res, cr_res, p_res))
 

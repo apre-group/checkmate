@@ -58,19 +58,7 @@ class StrategySolver(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
-        pass
-
-    @abstractmethod
-    def _create_counterexamples_solver(self, case) -> z3.Solver:
-        pass
-
-    @abstractmethod
-    def _find_counterexamples(self, ce_solver: z3.Solver, case, result):
-        pass
-
-    @abstractmethod
-    def _extract_counterexamples(self, case, solver, result):
+    def _find_all_counterexamples(self, case, reals, infinitesimals, result):
         pass
 
     def __init__(
@@ -110,15 +98,19 @@ class StrategySolver(metaclass=ABCMeta):
         self._add_action_constraints([], self.input.tree, self._solver)
         self._add_history_constraints(self.checked_history)
 
-    def solve(self, solver, ce_in_progress=False, result=None) -> SolvingResult:
+        self.SATURATED = "saturated"
+        self.NO_MORE_CASES = "no_more_cases"
+        self.FOUND_CASE = "found_case"
+
+    def solve(self) -> SolvingResult:
         """
         the main solving routine
 
         if we failed to find a solution, return empty list
         otherwise, returns a solution to report later
         """
-        if result is None:
-            result = SolvingResult()
+
+        result = SolvingResult()
 
         # there is no point in comparing e.g. p_A > epsilon
         # therefore, partition case splits into real and infinitesimal parts
@@ -133,15 +125,15 @@ class StrategySolver(metaclass=ABCMeta):
 
             property_constraint = \
                 self._property_constraint_for_case(*case, generated_preconditions=result.generated_preconditions)
-            check_result = solver.check(property_constraint,
+            check_result = self._solver.check(property_constraint,
                                               *self._label2pair.keys(),
                                               *self._label2subtree.keys())
             if check_result == z3.unknown:
                 logging.warning("internal solver returned 'unknown', which shouldn't happen")
-                reason = solver.reason_unknown()
+                reason = self._solver.reason_unknown()
                 logging.warning(f"reason given was: {reason}")
                 logging.info("trying again...")
-                check_result = solver.check(property_constraint,
+                check_result = self._solver.check(property_constraint,
                                                   *self._label2pair.keys(),
                                                   *self._label2subtree.keys())
                 if check_result == z3.unknown:
@@ -150,11 +142,8 @@ class StrategySolver(metaclass=ABCMeta):
 
             if check_result == z3.sat:
                 case = set(case)
-                if ce_in_progress:
-                    solver = self._extract_counterexamples(case, solver, result)
-                else:
-                    logging.info("case solved")
-                    result.strategies.append(self._extract_strategy(solver, case))
+                logging.info("case solved")
+                result.strategies.append(self._extract_strategy(self._solver, case))
 
                 # we solved this case, now add a conflict to move on
                 self._case_solver.add(disjunction(*(
@@ -169,7 +158,7 @@ class StrategySolver(metaclass=ABCMeta):
 
                 core = {
                     label_expr
-                    for label_expr in solver.unsat_core()
+                    for label_expr in self._solver.unsat_core()
                     if isinstance(label_expr, z3.BoolRef) and z3.is_app(label_expr)
                 }
 
@@ -190,66 +179,39 @@ class StrategySolver(metaclass=ABCMeta):
 
                 # we saturated, give up
                 if not new_pair:
-                    if ce_in_progress:
-                        self._find_counterexamples(solver, case, result)
+                    logging.error("no more splits, failed")
+                    logging.error(f"here is a case I cannot solve: {case}" if case
+                                  else "failed with existing initial constraints")
+
+                    # delete existing strategies from result because property is not fulfilled
+                    result.delete_strategies()
+
+                    if self.generate_counterexamples:
+                        self._find_all_counterexamples(case, reals, infinitesimals, result)
+                        logging.info("no more counterexamples, done.")
+
+                    if not self.generate_preconditions or not case:
+                        if self.generate_preconditions and not case:
+                            logging.info(
+                                "failed case is implied by preconditions"
+                            )
+
+                        return result
+
                     else:
-                        logging.error("no more splits, failed")
-                        logging.error(f"here is a case I cannot solve: {case}" if case
-                                    else "failed with existing initial constraints")
+                        result.generated_preconditions.add(disjunction(*(
+                            simplify_boolean(negation(constr)) for constr in case
+                        )))
 
-                        # delete existing strategies from result because property is not fulfilled
-                        result.delete_strategies()
+                        logging.info(
+                            f"here are the generated preconditions: {result.generated_preconditions}"
+                        )
+                        logging.info(
+                            "restarting solving routine with the generated set of preconditions"
+                        )
 
-                        if self.generate_counterexamples:
-                            ce_solver = self._create_counterexamples_solver(case)
-                            self._find_counterexamples(ce_solver, case, result)
-                            logging.info("no more counterexamples, done.")
-
-                            ### ANJA LEFT HERE ####
-                            # # property constraint is now fixed
-                            # solver.add(property_constraint)
-                            # # we no longer care about unsat cores for expression comparisons,
-                            # # so just assert it and move along
-                            # solver.add(*self._label2pair.keys())
-
-                            # labels = set(self._label2subtree.keys())
-
-                            # core = set()
-                            # # for core in minimal_unsat_cores(self._solver, labels):
-                            # #     logging.info("counterexample(s) found - property cannot be fulfilled because of:")
-                            # #     for item in core:
-                            # #         assert self._solver.check(*(core - {item})) == z3.sat
-                            # #     counterexample = self._extract_counterexample_core(core, property_constraint)
-                            # #     # adapt what we save in the result!
-                            # #     result.counterexamples.append(counterexample)
-                            # logging.info("counterexample(s) found - property cannot be fulfilled because of:")
-                            # counterexample = self._extract_counterexample_core(core, property_constraint)
-                            # result.counterexamples.append(counterexample)
-
-                            # logging.info("no more counterexamples")
-
-                        if not self.generate_preconditions or not case:
-                            if self.generate_preconditions and not case:
-                                logging.info(
-                                    "failed case is implied by preconditions"
-                                )
-
-                            return result
-
-                        else:
-                            result.generated_preconditions.add(disjunction(*(
-                                simplify_boolean(negation(constr)) for constr in case
-                            )))
-
-                            logging.info(
-                                f"here are the generated preconditions: {result.generated_preconditions}"
-                            )
-                            logging.info(
-                                "restarting solving routine with the generated set of preconditions"
-                            )
-
-                            # reset case and minimizing solver to initial constraints plus generated preconditions
-                            self._reset_case_and_minimize_solver(result.generated_preconditions)
+                        # reset case and minimizing solver to initial constraints plus generated preconditions
+                        self._reset_case_and_minimize_solver(result.generated_preconditions)
 
         # there are no more possible models, i.e. no more cases to be discharged
         logging.info("no more cases, done")
@@ -419,6 +381,104 @@ class FeebleImmuneStrategySolver(StrategySolver):
             )
         return conjunction(*constraints)
 
+    def _find_all_counterexamples(self, case, reals, infinitesimals, result) -> SolvingResult:
+        """
+        the routine to find counterexamples. Similar to the main solving routine.
+        """
+
+        property_constraint = self._property_constraint_for_case(*case,
+                                                                 generated_preconditions=result.generated_preconditions)
+
+        for core in minimal_unsat_cores(self._solver, set(self._label2subtree.keys()), property_constraint, *self._label2pair.keys()):
+            logging.info("counterexample(s) found - property cannot be fulfilled because of:")
+            counterexample = self._extract_counterexample_core(case, core)
+            # adapt what we save in the result!
+            result.counterexamples.append(counterexample)
+
+        logging.info("no more counterexamples for this case.")
+        self._case_solver.add(disjunction(*(
+                    negation(spl) for spl in case
+                )))
+
+        while self._case_solver.check() == z3.sat:
+            model = self._case_solver.model()
+            case = order_according_to_model(model, self._minimize_solver, reals) |\
+                order_according_to_model(model, self._minimize_solver, infinitesimals)
+            logging.info(f"current case assumes {case if case else 'nothing'}")
+
+            property_constraint = \
+                self._property_constraint_for_case(*case, generated_preconditions=result.generated_preconditions)
+            check_result = self._solver.check(property_constraint,
+                                              *self._label2pair.keys(),
+                                              *self._label2subtree.keys())
+            if check_result == z3.unknown:
+                logging.warning("internal solver returned 'unknown', which shouldn't happen")
+                reason = self._solver.reason_unknown()
+                logging.warning(f"reason given was: {reason}")
+                logging.info("trying again...")
+                check_result = self._solver.check(property_constraint,
+                                                  *self._label2pair.keys(),
+                                                  *self._label2subtree.keys())
+                if check_result == z3.unknown:
+                    logging.error("solver still says 'unknown', bailing out")
+                    assert False
+
+            if check_result == z3.sat:
+                case = set(case)
+                logging.info("case solved")
+
+                # we solved this case, now add a conflict to move on
+                self._case_solver.add(disjunction(*(
+                    negation(spl) for spl in case
+                )))
+            else:
+                # we need to compare more expressions
+                logging.info("no solution, trying case split")
+
+                # track whether we actually found any more
+                new_pair = False
+
+                core = {
+                    label_expr
+                    for label_expr in self._solver.unsat_core()
+                    if isinstance(label_expr, z3.BoolRef) and z3.is_app(label_expr)
+                }
+
+                for label_expr in core:
+                    if label_expr not in self._label2pair:
+                        continue
+
+                    # `left op right` was in an unsat core
+                    left, right, real = self._label2pair[label_expr]
+                    # partition reals/infinitesimals
+                    add_to = reals if real else infinitesimals
+
+                    if (left, right) not in add_to:
+                        logging.info(f"new comparison: ({left}, {right})")
+                        add_to.add((left, right))
+                        add_to.add((right, left))
+                        new_pair = True
+
+                # we saturated, give up
+                if not new_pair:
+                    logging.error(f"here is a case I cannot solve: {case}" if case
+                                  else "failed with existing initial constraints")
+
+                    for core in minimal_unsat_cores(self._solver, set(self._label2subtree.keys()), property_constraint, *self._label2pair.keys()):
+                        logging.info("counterexample(s) found - property cannot be fulfilled because of:")
+                        counterexample = self._extract_counterexample_core(case, core)
+                        # adapt what we save in the result!
+                        result.counterexamples.append(counterexample)
+
+                    logging.info("no more counterexamples for this case.")
+                    self._case_solver.add(disjunction(*(
+                                negation(spl) for spl in case
+                            )))
+
+        # there are no more possible models, i.e. no more cases to be discharged
+        logging.info("no more cases, done")
+        return result
+
     def _extract_counterexample_core(self, case, core: Set[z3.BoolRef]):
         ces = []
         for label_expr in core:
@@ -426,33 +486,6 @@ class FeebleImmuneStrategySolver(StrategySolver):
             logging.info(f"- {counterexample}")
             ces.append(counterexample)
         return ces
-
-    def _create_counterexamples_solver(self, case) -> z3.Solver:
-        return self._solver
-
-    def _find_counterexamples(self, ce_solver, case, result):
-        property_constraint = \
-                self._property_constraint_for_case(*case, generated_preconditions=result.generated_preconditions)
-        ce_solver.add(property_constraint)
-        # we no longer care about unsat cores for expression comparisons,
-        # so just assert it and move along
-        ce_solver.add(*self._label2pair.keys())
-        for core in minimal_unsat_cores(ce_solver, set(self._label2subtree.keys())):
-            logging.info("counterexample(s) found - property cannot be fulfilled because of:")
-            for item in core:
-                assert ce_solver.check(*(core - {item})) == z3.sat
-            counterexample = self._extract_counterexample_core(case, core)
-            # adapt what we save in the result!
-            result.counterexamples.append(counterexample)
-        self._case_solver.add(disjunction(*(
-                    negation(spl) for spl in case
-                )))
-        print("pong")
-        self.solve(ce_solver, True, result)
-
-    def _extract_counterexamples(self, case, solver, result):
-        logging.info(f"case solved: {case}")
-        return solver
 
     def _collect_weak_immunity_constraints(
             self,
@@ -540,35 +573,111 @@ class CollusionResilienceStrategySolver(StrategySolver):
 
         return conjunction(*constraints)
 
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef]):
-        ces = []
-        for label_expr in core:
-            counterexample = self._extract_counterexample(label_expr)
-            logging.info(f"- {counterexample}")
-            ces.append(counterexample)
-        return ces
+    def _find_all_counterexamples(self, case, reals, infinitesimals, result) -> SolvingResult:
+        """
+        the routine to find counterexamples. Similar to the main solving routine.
+        """
 
-    def _create_counterexamples_solver(self, case) -> z3.Solver:
-        return self._solver
+        property_constraint = self._property_constraint_for_case(*case,
+                                                                 generated_preconditions=result.generated_preconditions)
 
-    def _find_counterexamples(self, ce_solver, case, result):
-        property_constraint = \
-                self._property_constraint_for_case(*case, generated_preconditions=result.generated_preconditions)
-        for core in minimal_unsat_cores(ce_solver, set(self._label2subtree.keys()),      property_constraint, *self._label2pair.keys(), *self._label2subtree.keys()):
+        for core in minimal_unsat_cores(self._solver, set(self._label2subtree.keys()), property_constraint, *self._label2pair.keys()):
             logging.info("counterexample(s) found - property cannot be fulfilled because of:")
-            for item in core:
-                assert ce_solver.check(*(core - {item})) == z3.sat
-            counterexample = self._extract_counterexample_core(core)
+            counterexample = self._extract_counterexample_core(case, core)
             # adapt what we save in the result!
             result.counterexamples.append(counterexample)
+
+        logging.info("no more counterexamples for this case.")
         self._case_solver.add(disjunction(*(
                     negation(spl) for spl in case
                 )))
-        self.solve(ce_solver, True, result)
 
-    def _extract_counterexamples(self, case, solver, result):
-        logging.info(f"case solved: {case}")
-        return solver
+        while self._case_solver.check() == z3.sat:
+            model = self._case_solver.model()
+            case = order_according_to_model(model, self._minimize_solver, reals) |\
+                order_according_to_model(model, self._minimize_solver, infinitesimals)
+            logging.info(f"current case assumes {case if case else 'nothing'}")
+
+            property_constraint = \
+                self._property_constraint_for_case(*case, generated_preconditions=result.generated_preconditions)
+            check_result = self._solver.check(property_constraint,
+                                              *self._label2pair.keys(),
+                                              *self._label2subtree.keys())
+            if check_result == z3.unknown:
+                logging.warning("internal solver returned 'unknown', which shouldn't happen")
+                reason = self._solver.reason_unknown()
+                logging.warning(f"reason given was: {reason}")
+                logging.info("trying again...")
+                check_result = self._solver.check(property_constraint,
+                                                  *self._label2pair.keys(),
+                                                  *self._label2subtree.keys())
+                if check_result == z3.unknown:
+                    logging.error("solver still says 'unknown', bailing out")
+                    assert False
+
+            if check_result == z3.sat:
+                case = set(case)
+                logging.info("case solved")
+
+                # we solved this case, now add a conflict to move on
+                self._case_solver.add(disjunction(*(
+                    negation(spl) for spl in case
+                )))
+            else:
+                # we need to compare more expressions
+                logging.info("no solution, trying case split")
+
+                # track whether we actually found any more
+                new_pair = False
+
+                core = {
+                    label_expr
+                    for label_expr in self._solver.unsat_core()
+                    if isinstance(label_expr, z3.BoolRef) and z3.is_app(label_expr)
+                }
+
+                for label_expr in core:
+                    if label_expr not in self._label2pair:
+                        continue
+
+                    # `left op right` was in an unsat core
+                    left, right, real = self._label2pair[label_expr]
+                    # partition reals/infinitesimals
+                    add_to = reals if real else infinitesimals
+
+                    if (left, right) not in add_to:
+                        logging.info(f"new comparison: ({left}, {right})")
+                        add_to.add((left, right))
+                        add_to.add((right, left))
+                        new_pair = True
+
+                # we saturated, give up
+                if not new_pair:
+                    logging.error(f"here is a case I cannot solve: {case}" if case
+                                  else "failed with existing initial constraints")
+
+                    for core in minimal_unsat_cores(self._solver, set(self._label2subtree.keys()), property_constraint, *self._label2pair.keys()):
+                        logging.info("counterexample(s) found - property cannot be fulfilled because of:")
+                        counterexample = self._extract_counterexample_core(case, core)
+                        # adapt what we save in the result!
+                        result.counterexamples.append(counterexample)
+
+                    logging.info("no more counterexamples for this case.")
+                    self._case_solver.add(disjunction(*(
+                                negation(spl) for spl in case
+                            )))
+
+        # there are no more possible models, i.e. no more cases to be discharged
+        logging.info("no more cases, done")
+        return result
+
+    def _extract_counterexample_core(self, case, core: Set[z3.BoolRef]):
+        ces = []
+        for label_expr in core:
+            counterexample = self._extract_counterexample(case, label_expr)
+            logging.info(f"- {counterexample}")
+            ces.append(counterexample)
+        return ces
 
     def _collect_collusion_resilience_constraints(
             self,
@@ -800,59 +909,113 @@ class PracticalityStrategySolver2(StrategySolver):
         self._practicality_constraints(constraints, [], self.input.tree)
         return conjunction(*constraints)
 
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
-        ce_solver = z3.Solver()
-        self._add_action_constraints([], self.input.tree, ce_solver)
-        ce_solver.add(property_constraint)
-        deviation_point = None
-        # for label_expr in core:
-        #     _players, history, action, other_action, condition, other_condition = self._label2subtree[label_expr]
-        #     # print((history, action, other_action, condition, other_condition))
-        #     if list(history) + [action] == self.checked_history[:len(history) + 1]:
-        #         assert (deviation_point is None or deviation_point == list(history))
-        #         deviation_point = list(history)
-            # ce_solver.add(implication(conjunction(condition, other_condition), negation(self._action_variable(list(history), action))))
-            # possibly unsound simplification:
-            # ce_solver.add(negation(self._action_variable(list(history), action)))
-            # some cores end up unsat, maybe still okay? Can we argue to not miss any counterexample?
+    def _further_case_split(self, solver, case, reals, infinitesimals):
+        # track whether we actually found any more
+        new_pair = False
 
-        #if deviation_point is None:
-        #    logging.error("Deviation point not found! Wrong counterexample!")
-        # else:
-        #     for i, action in enumerate(deviation_point):
-        #         ce_solver.add(self._action_variable(deviation_point[:i], action))
+        core = {
+            label_expr
+            for label_expr in solver.unsat_core()
+            if isinstance(label_expr, z3.BoolRef) and z3.is_app(label_expr)
+        }
 
-        result = ce_solver.check(*self._label2pair.keys(), *self._label2subtree.keys())
-        if result == z3.unsat:
-            #do case split stuff and call ce_solver with the extra constraints
-            pass
+        for label_expr in core:
+            if label_expr not in self._label2pair:
+                continue
 
-        # print(result)
-        strat = []
+            # `left op right` was in an unsat core
+            left, right, real = self._label2pair[label_expr]
+            # partition reals/infinitesimals
+            add_to = reals if real else infinitesimals
+
+            if (left, right) not in add_to:
+                logging.info(f"new comparison: ({left}, {right})")
+                add_to.add((left, right))
+                add_to.add((right, left))
+                new_pair = True
+
+        # we saturated, give up
+        if not new_pair:
+            return self.SATURATED, case, reals, infinitesimals
+
+        else:
+            if self._case_solver.check() == z3.sat:
+                model = self._case_solver.model()
+                case = order_according_to_model(model, self._minimize_solver, reals) |\
+                    order_according_to_model(model, self._minimize_solver, infinitesimals)
+                logging.info(f"current case assumes {case if case else 'nothing'}")
+                return self.FOUND_CASE, case, reals, infinitesimals
+            else:
+                return self.NO_MORE_CASES, case, reals, infinitesimals
+
+    def _find_practical_strategies_for_case(self, ce_solver, case, reals, infinitesimals, result):
+
+        property_constraint = self._property_constraint_for_case(*case,
+                                                                 generated_preconditions=result.generated_preconditions)
+        check_result = ce_solver.check(property_constraint,
+                                    *self._label2pair.keys(),
+                                    *self._label2subtree.keys())
+
         counterexamples = []
-
-        while result == z3.sat:
+        while check_result == z3.sat:
             strat, hist = self._extract_strategy(ce_solver, set(), True)
             counterexamples.append(hist)
+            logging.info(f"counterexample found. Practical history: {hist}")
             histlist = hist.split(";")
-            # print(histlist)
             history_actions = []
             for i, action in enumerate(histlist):
                 history_actions.append(self._action_variable(list(histlist[:i]),action))
             ce_solver.add(negation(conjunction(*history_actions)))
-            result= ce_solver.check(*self._label2pair.keys(), *self._label2subtree.keys())
+            check_result = ce_solver.check(property_constraint, *self._label2pair.keys(), *self._label2subtree.keys())
 
-        # logging.info(f"practical strategy(s) found at deviation point {deviation_point}")
-        logging.info(counterexamples)
-        # return value is the last strategy found or an empty list in case it was unsat
-        return strat
+        result.counterexamples.append((case, counterexamples))
+        split_result, case, reals, infinitesimals = self._further_case_split(ce_solver, case, reals, infinitesimals)
 
+        if split_result == self.FOUND_CASE:
+            return self._find_practical_strategies_for_case(ce_solver, case, reals, infinitesimals, result)
 
-        # if result == z3.sat:
-        #     logging.info(f"practical strategy found at deviation point {deviation_point}")
-        #     strat, hist = self._extract_strategy(ce_solver, set(), True)
-        #     logging.info(hist)
-        #     return strat
+        elif split_result == self.NO_MORE_CASES:
+            return result, case, reals, infinitesimals
+
+        # if we saturated
+        else:
+            return result, case, reals, infinitesimals
+
+    def _find_all_counterexamples(self, case, reals, infinitesimals, result):
+        """
+        the routine to find counterexamples. Similar to the main solving routine.
+        """
+        ce_solver = z3.Solver()
+        self._add_action_constraints([], self.input.tree, ce_solver)
+
+        # enumerate all practical strategies in the current case
+        result, case, reals, infinitesimals = self._find_practical_strategies_for_case(ce_solver, case, reals, infinitesimals, result)
+
+        logging.info("no more counterexamples for this case.")
+        self._case_solver.add(disjunction(*(
+                    negation(spl) for spl in case
+                )))
+
+        while self._case_solver.check() == z3.sat:
+            model = self._case_solver.model()
+            case = order_according_to_model(model, self._minimize_solver, reals) |\
+                order_according_to_model(model, self._minimize_solver, infinitesimals)
+            logging.info(f"current case assumes {case if case else 'nothing'}")
+
+            ce_solver = z3.Solver()
+            self._add_action_constraints([], self.input.tree, ce_solver)
+
+            # enumerate all practical strategies in the current case
+            result, case, reals, infinitesimals = self._find_practical_strategies_for_case(ce_solver, case, reals, infinitesimals, result)
+
+            logging.info("no more counterexamples for this case.")
+            self._case_solver.add(disjunction(*(
+                        negation(spl) for spl in case
+                    )))
+
+        # there are no more possible models, i.e. no more cases to be discharged
+        logging.info("no more cases, done")
+        return result
 
     def _practicality_constraints(self, constraints: List[Boolean], history: List[str], tree: Tree) -> \
             Dict[str, Dict[Tuple[Real, Real], Boolean]]:
