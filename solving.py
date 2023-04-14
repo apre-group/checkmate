@@ -190,7 +190,7 @@ class StrategySolver(metaclass=ABCMeta):
 
                         labels = set(self._label2subtree.keys())
 
-                        core = set()
+                        
                         # for core in minimal_unsat_cores(self._solver, labels):
                         #     logging.info("counterexample(s) found - property cannot be fulfilled because of:")
                         #     for item in core:
@@ -198,8 +198,9 @@ class StrategySolver(metaclass=ABCMeta):
                         #     counterexample = self._extract_counterexample_core(core, property_constraint)
                         #     # adapt what we save in the result!
                         #     result.counterexamples.append(counterexample)
-                        logging.info("counterexample(s) found - property cannot be fulfilled because of:")
-                        counterexample = self._extract_counterexample_core(core, property_constraint)
+                        #logging.info("counterexample(s) found - property cannot be fulfilled because of:")
+                        #counterexample = self._extract_counterexample_core(core, property_constraint)
+                        counterexample = self._generate_counterexamples( core, labels, property_constraint)
                         result.counterexamples.append(counterexample)
 
                         logging.info("no more counterexamples")
@@ -395,11 +396,25 @@ class FeebleImmuneStrategySolver(StrategySolver):
             )
         return conjunction(*constraints)
 
+    def _generate_counterexamples(self, core, labels, property_constraint):
+        ces = []
+        for core in minimal_unsat_cores(self._solver, labels):
+            logging.info("counterexample(s) found - property cannot be fulfilled because of:")
+            for item in core:
+                assert self._solver.check(*(core - {item})) == z3.sat
+            counterexample = self._extract_counterexample_core(core, property_constraint)
+            # adapt what we save in the result!
+            ces.append(counterexample)
+        return ces
+
+
     def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
         ces = []
         for label_expr in core:
             counterexample = self._extract_counterexample(label_expr)
-            logging.info(f"- {counterexample}")
+            p = counterexample.players
+            hist = counterexample.terminal_history
+            logging.info(f"- {p,hist}")
             ces.append(counterexample)
         return ces
 
@@ -488,6 +503,17 @@ class CollusionResilienceStrategySolver(StrategySolver):
                 )
 
         return conjunction(*constraints)
+
+    def _generate_counterexamples(self, core, labels, property_constraint):
+        ces = []
+        for core in minimal_unsat_cores(self._solver, labels):
+            logging.info("counterexample(s) found - property cannot be fulfilled because of:")
+            for item in core:
+                assert self._solver.check(*(core - {item})) == z3.sat
+            counterexample = self._extract_counterexample_core(core, property_constraint)
+            # adapt what we save in the result!
+            ces.append(counterexample)
+        return ces
 
     def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
         ces = []
@@ -727,6 +753,10 @@ class PracticalityStrategySolver2(StrategySolver):
         self._practicality_constraints(constraints, [], self.input.tree)
         return conjunction(*constraints)
 
+
+    def _generate_counterexamples(self, core, labels, property_constraint):
+        return self._extract_counterexample_core( core, property_constraint)
+
     def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
         ce_solver = z3.Solver()
         self._add_action_constraints([], self.input.tree, ce_solver)
@@ -770,6 +800,7 @@ class PracticalityStrategySolver2(StrategySolver):
             result= ce_solver.check(*self._label2pair.keys(), *self._label2subtree.keys())
         
         # logging.info(f"practical strategy(s) found at deviation point {deviation_point}")
+        logging.info("counterexample(s) found - property cannot be fulfilled because of:")
         logging.info(counterexamples)
         # return value is the last strategy found or an empty list in case it was unsat 
         return strat
