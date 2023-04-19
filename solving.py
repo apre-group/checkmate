@@ -409,13 +409,24 @@ class FeebleImmuneStrategySolver(StrategySolver):
 
 
     def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
+        cestrat = []
         ces = []
         for label_expr in core:
             counterexample = self._extract_counterexample(label_expr)
             p = counterexample.players
             hist = counterexample.terminal_history
-            logging.info(f"- {p,hist}")
+
+            players_in_hist = self.input.get_players_in_hist(self.input.get_tree(), hist)
+            for i, elem in enumerate(hist):
+                if players_in_hist[i]!=p[0]:
+                    print(p)
+                    print(players_in_hist[i])
+                    cestrat.append("player "+players_in_hist[i]+" chooses action "+elem+" after history "+str(hist[:i]))
+
+            
             ces.append(counterexample)
+        logging.info(f"- If player {p[0]} follows the honest history, {p[0]} can be harmed by strategy:")
+        logging.info(f"- {cestrat}")
         return ces
 
     def _collect_weak_immunity_constraints(
