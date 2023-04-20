@@ -61,6 +61,10 @@ class StrategySolver(metaclass=ABCMeta):
     def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, reals, infinitesimlas, model):
         pass
 
+    @abstractmethod
+    def _generate_counterexamples(self, core, labels, case, reals, infinitesimals, model) -> Counterexample:
+        pass
+
     def __init__(
             self,
             checked_input: Input,
@@ -366,10 +370,6 @@ class StrategySolver(metaclass=ABCMeta):
         else:
             return CaseWithStrategy(case, strategy)
 
-    def _extract_counterexample(self, label_expr: z3.BoolRef) -> Counterexample:
-        players, history, action, other_action, condition, other_condition = self._label2subtree[label_expr]
-        return Counterexample(list(players), list(history), action, other_action, condition, other_condition)
-
 
 class FeebleImmuneStrategySolver(StrategySolver):
     """solver for weak and weaker immunity"""
@@ -396,31 +396,26 @@ class FeebleImmuneStrategySolver(StrategySolver):
             counterexample = self._extract_counterexample_core(core, case, reals, infinitesimals, model)
             # adapt what we save in the result!
             ces.append(counterexample)
-        return ces
+        return Counterexample(case, ces, [])
 
     def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, reals, infinitesimals, model):
         """generate readable counterexamples one per unsat core"""
-        cestrat = []
-        ces = []
+        cestrat_output = []
+        cestrat = {}
 
         for label_expr in core:
-            counterexample = self._extract_counterexample(label_expr)
-            p = counterexample.players
-            hist = counterexample.terminal_history
+            setofp, hist, _action, _other_action, _condition, _other_condition = self._label2subtree[label_expr]
 
             players_in_hist = self.input.get_players_in_hist(self.input.get_tree(), hist)
             for i, elem in enumerate(hist):
-                if players_in_hist[i]!=p[0]:
-                    #print(p)
-                    #print(players_in_hist[i])
-                    cestrat.append("player "+players_in_hist[i]+" chooses action "+elem+" after history "+str(hist[:i]))
+                if players_in_hist[i] != setofp[0]:
+                    cestrat[";".join(hist[:i])] = elem
+                    cestrat_output.append("player "+players_in_hist[i]+" chooses action "+elem+" after history "+str(hist[:i]))
 
-
-            ces.append(counterexample)
-        logging.info(f"- If player {p[0]} follows the honest history, {p[0]} can be harmed by strategy:")
-        for line in cestrat:
+        logging.info(f"- If player {setofp[0]} follows the honest history, {setofp[0]} can be harmed by strategy:")
+        for line in cestrat_output:
             logging.info(f"- {line}")
-        return ces
+        return cestrat
 
     def _collect_weak_immunity_constraints(
             self,
@@ -518,33 +513,26 @@ class CollusionResilienceStrategySolver(StrategySolver):
             counterexample = self._extract_counterexample_core(core, case, reals, infinitesimals, model)
             # adapt what we save in the result!
             ces.append(counterexample)
-        return ces
+        return Counterexample(case, ces, [])
 
     def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, reals, infinitesimals, model):
         """generate readable counterexamples one per unsat core"""
-        cestrat = []
-        ces = []
+        cestrat_output = []
+        cestrat = {}
 
         for label_expr in core:
-            counterexample = self._extract_counterexample(label_expr)
-            setofp = counterexample.players
-            hist = counterexample.terminal_history
+            setofp, hist, _action, _other_action, _condition, _other_condition = self._label2subtree[label_expr]
 
             players_in_hist = self.input.get_players_in_hist(self.input.get_tree(), hist)
             for i, elem in enumerate(hist):
                 if players_in_hist[i] in setofp:
-                    #print(setofp)
-                    #print(players_in_hist[i])
-                    cestrat.append("player "+players_in_hist[i]+" chooses action "+elem+" after history "+str(hist[:i]))
+                    cestrat[";".join(hist[:i])] = elem
+                    cestrat_output.append("player "+players_in_hist[i]+" chooses action "+elem+" after history "+str(hist[:i]))
 
-            ces.append(counterexample)
         logging.info(f"- Players {setofp} profit from deviating to strategy:")
-        for line in cestrat:
+        for line in cestrat_output:
             logging.info(f"- {line}")
-        return ces
-
-
-        return ces
+        return cestrat
 
     def _collect_collusion_resilience_constraints(
             self,
@@ -601,12 +589,7 @@ class PracticalityStrategySolver(StrategySolver):
         return conjunction(*constraints)
 
     def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, reals, infinitesimals, model):
-        ces = []
-        for label_expr in core:
-            counterexample = self._extract_counterexample(label_expr)
-            logging.info(f"- {counterexample}")
-            ces.append(counterexample)
-        return ces
+        raise Exception(NotImplemented)
 
     def _utility_variable(self, starting_from: List[str], player: str) -> Utility:
         """create real/infinitesimal variables to represent a utility"""
@@ -827,13 +810,14 @@ class PracticalityStrategySolver2(StrategySolver):
                                                   *self._label2pair.keys(),
                                                   *self._label2subtree.keys())
 
-        strat = []
-        counterexamples = []
+        ce_strategies = []
+        ce_histories = []
         ce_solver.add(property_constraint)
 
         while check_result == z3.sat:
             strat, hist = self._extract_strategy(ce_solver, set(), True)
-            counterexamples.append(hist)
+            ce_histories.append(hist)
+            ce_strategies.append(strat)
             histlist = hist.split(";")
             # print(histlist)
             history_actions = []
@@ -844,9 +828,9 @@ class PracticalityStrategySolver2(StrategySolver):
 
         # logging.info(f"practical strategy(s) found at deviation point {deviation_point}")
         logging.info("counterexample(s) found - property cannot be fulfilled because of:")
-        logging.info(counterexamples)
+        logging.info(ce_histories)
         # return value is the last strategy found or an empty list in case it was unsat
-        return strat
+        return Counterexample(case, ce_strategies, ce_histories)
 
     def _practicality_constraints(self, constraints: List[Boolean], history: List[str], tree: Tree) -> \
             Dict[str, Dict[Tuple[Real, Real], Boolean]]:
