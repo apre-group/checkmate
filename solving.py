@@ -190,16 +190,6 @@ class StrategySolver(metaclass=ABCMeta):
 
                         labels = set(self._label2subtree.keys())
 
-                        
-                        # for core in minimal_unsat_cores(self._solver, labels):
-                        #     logging.info("counterexample(s) found - property cannot be fulfilled because of:")
-                        #     for item in core:
-                        #         assert self._solver.check(*(core - {item})) == z3.sat
-                        #     counterexample = self._extract_counterexample_core(core, property_constraint)
-                        #     # adapt what we save in the result!
-                        #     result.counterexamples.append(counterexample)
-                        #logging.info("counterexample(s) found - property cannot be fulfilled because of:")
-                        #counterexample = self._extract_counterexample_core(core, property_constraint)
                         counterexample = self._generate_counterexamples( core, labels, property_constraint)
                         result.counterexamples.append(counterexample)
 
@@ -397,6 +387,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
         return conjunction(*constraints)
 
     def _generate_counterexamples(self, core, labels, property_constraint):
+        """collecting all counterexample for w(er)i, one per unsat core"""
         ces = []
         for core in minimal_unsat_cores(self._solver, labels):
             logging.info("counterexample(s) found - property cannot be fulfilled because of:")
@@ -409,8 +400,10 @@ class FeebleImmuneStrategySolver(StrategySolver):
 
 
     def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
+        """generate readable counterexamples one per unsat core"""
         cestrat = []
         ces = []
+
         for label_expr in core:
             counterexample = self._extract_counterexample(label_expr)
             p = counterexample.players
@@ -419,14 +412,15 @@ class FeebleImmuneStrategySolver(StrategySolver):
             players_in_hist = self.input.get_players_in_hist(self.input.get_tree(), hist)
             for i, elem in enumerate(hist):
                 if players_in_hist[i]!=p[0]:
-                    print(p)
-                    print(players_in_hist[i])
+                    #print(p)
+                    #print(players_in_hist[i])
                     cestrat.append("player "+players_in_hist[i]+" chooses action "+elem+" after history "+str(hist[:i]))
 
             
             ces.append(counterexample)
         logging.info(f"- If player {p[0]} follows the honest history, {p[0]} can be harmed by strategy:")
-        logging.info(f"- {cestrat}")
+        for line in cestrat:
+            logging.info(f"- {line}")
         return ces
 
     def _collect_weak_immunity_constraints(
@@ -516,6 +510,7 @@ class CollusionResilienceStrategySolver(StrategySolver):
         return conjunction(*constraints)
 
     def _generate_counterexamples(self, core, labels, property_constraint):
+        """collecting all counterexample for cr, one per unsat core"""
         ces = []
         for core in minimal_unsat_cores(self._solver, labels):
             logging.info("counterexample(s) found - property cannot be fulfilled because of:")
@@ -527,11 +522,29 @@ class CollusionResilienceStrategySolver(StrategySolver):
         return ces
 
     def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
+        """generate readable counterexamples one per unsat core"""
+        cestrat = []
         ces = []
+
         for label_expr in core:
             counterexample = self._extract_counterexample(label_expr)
-            logging.info(f"- {counterexample}")
+            setofp = counterexample.players
+            hist = counterexample.terminal_history
+
+            players_in_hist = self.input.get_players_in_hist(self.input.get_tree(), hist)
+            for i, elem in enumerate(hist):
+                if players_in_hist[i] in setofp:
+                    #print(setofp)
+                    #print(players_in_hist[i])
+                    cestrat.append("player "+players_in_hist[i]+" chooses action "+elem+" after history "+str(hist[:i]))
+
             ces.append(counterexample)
+        logging.info(f"- Players {setofp} profit from deviating to strategy:")
+        for line in cestrat:
+            logging.info(f"- {line}")
+        return ces
+
+
         return ces
 
     def _collect_collusion_resilience_constraints(
@@ -766,36 +779,21 @@ class PracticalityStrategySolver2(StrategySolver):
 
 
     def _generate_counterexamples(self, core, labels, property_constraint):
+        """generate all counterexamples to pr, which is independent of unsat cores"""
         return self._extract_counterexample_core( core, property_constraint)
 
     def _extract_counterexample_core(self, core: Set[z3.BoolRef], property_constraint):
+        """generate readable counterexamples by listing all pr histories"""
         ce_solver = z3.Solver()
         self._add_action_constraints([], self.input.tree, ce_solver)
         ce_solver.add(property_constraint)
-        deviation_point = None
-        # for label_expr in core:
-        #     _players, history, action, other_action, condition, other_condition = self._label2subtree[label_expr]
-        #     # print((history, action, other_action, condition, other_condition))
-        #     if list(history) + [action] == self.checked_history[:len(history) + 1]:
-        #         assert (deviation_point is None or deviation_point == list(history))
-        #         deviation_point = list(history)
-            # ce_solver.add(implication(conjunction(condition, other_condition), negation(self._action_variable(list(history), action))))
-            # possibly unsound simplification:
-            # ce_solver.add(negation(self._action_variable(list(history), action))) 
-            # some cores end up unsat, maybe still okay? Can we argue to not miss any counterexample?
-
-        #if deviation_point is None:
-        #    logging.error("Deviation point not found! Wrong counterexample!")
-        # else:
-        #     for i, action in enumerate(deviation_point):
-        #         ce_solver.add(self._action_variable(deviation_point[:i], action))
+        #deviation_point = None
 
         result = ce_solver.check(*self._label2pair.keys(), *self._label2subtree.keys())
         if result == z3.unsat:
             #do case split stuff and call ce_solver with the extra constraints
             pass
 
-        # print(result)
         strat = []
         counterexamples = []
 
@@ -815,13 +813,7 @@ class PracticalityStrategySolver2(StrategySolver):
         logging.info(counterexamples)
         # return value is the last strategy found or an empty list in case it was unsat 
         return strat
-        
-        
-        # if result == z3.sat:
-        #     logging.info(f"practical strategy found at deviation point {deviation_point}")
-        #     strat, hist = self._extract_strategy(ce_solver, set(), True)
-        #     logging.info(hist)
-        #     return strat
+
 
     def _practicality_constraints(self, constraints: List[Boolean], history: List[str], tree: Tree) -> \
             Dict[str, Dict[Tuple[Real, Real], Boolean]]:
