@@ -171,7 +171,7 @@ class Input:
 
     def get_players_in_hist(self, Tree, history: List(str)) -> List(str):
         """get the players along the provided history"""
-        if history == []:
+        if len(history) == 0:
             return []
         else:
             assert type(Tree) == Branch
