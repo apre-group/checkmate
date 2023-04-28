@@ -398,13 +398,16 @@ class FeebleImmuneStrategySolver(StrategySolver):
             ces.append(counterexample)
         return Counterexample(case, ces, [])
 
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, reals, infinitesimals, model):
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef], _case, _reals, _infinitesimals, _model):
         """generate readable counterexamples one per unsat core"""
+        # unused variables from interface, suppress lint
+        _ = _case, _reals, _infinitesimals, _model
         cestrat_output = []
         cestrat = {}
 
+        setofp = None
         for label_expr in core:
-            setofp, hist, _action, _other_action, _condition, _other_condition = self._label2subtree[label_expr]
+            setofp, hist, _, _, _, _ = self._label2subtree[label_expr]
 
             players_in_hist = self.input.get_players_in_hist(self.input.get_tree(), hist)
             for i, elem in enumerate(hist):
@@ -412,6 +415,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
                     cestrat[";".join(hist[:i])] = elem
                     cestrat_output.append("player "+players_in_hist[i]+" chooses action "+elem+" after history "+str(hist[:i]))
 
+        assert setofp is not None, "expected non-empty unsat core"
         logging.info(f"- If player {setofp[0]} follows the honest history, {setofp[0]} can be harmed by strategy:")
         for line in cestrat_output:
             logging.info(f"- {line}")
