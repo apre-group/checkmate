@@ -5,7 +5,7 @@ from constants import SecurityProperty, PROPERTY_TO_STR
 from input import Input
 from output import AnalysisResult
 from solving import WeakImmunityStrategySolver, WeakerImmunityStrategySolver, CollusionResilienceStrategySolver, \
-    PracticalityStrategySolver
+    PracticalityStrategySolver2
 
 
 def analyze_input(checked_input: Input,
@@ -50,7 +50,7 @@ def analyze_input(checked_input: Input,
 
         if SecurityProperty.PRACTICALITY in analyzed_properties:
             logging.info("checking practicality")
-            p_res = PracticalityStrategySolver(
+            p_res = PracticalityStrategySolver2(
                 checked_input,
                 honest_history,
                 generate_preconditions,

@@ -4,7 +4,9 @@ from z3 import z3
 
 from constants import SecurityProperty, PROPERTY_TO_JSON_KEY, HONEST_HISTORY_JSON_KEY, \
     GENERATED_PRECONDITIONS_JSON_KEY, JOINT_STRATEGIES_JSON_KEY, COUNTEREXAMPLES_JSON_KEY, \
-    COUNTEREXAMPLE_PLAYERS_JSON_KEY, COUNTEREXAMPLE_TERMINAL_HISTORY_JSON_KEY, JOINT_STRATEGY_ORDERING_JSON_KEY, \
+    COUNTEREXAMPLE_ORDERING_JSON_KEY, COUNTEREXAMPLE_STRATEGIES_JSON_KEY, \
+    COUNTEREXAMPLE_HISTORIES_JSON_KEY, \
+    JOINT_STRATEGY_ORDERING_JSON_KEY, \
     JOINT_STRATEGY_STRATEGY_JSON_KEY, OR_CONSTRAINT_KEY, PROPERTY_TO_STR
 
 
@@ -31,20 +33,33 @@ class CaseWithStrategy:
 
 class Counterexample:
     """counterexample to analyzed property"""
-    players: List[str]
-    terminal_history = List[str]
+    ordering_case: Set[z3.BoolRef]
+    strategies: List[Dict[str, str]]
+    histories: List[str]
 
-    def __init__(self, players: List[str], terminal_history: List[str]):
-        self.players = players
-        self.terminal_history = terminal_history
+    def __init__(self,
+                 ordering_case: Set[z3.BoolRef],
+                 strategies: List[Dict[str, str]],
+                 histories: List[str]):
+        self.ordering_case = ordering_case
+        self.strategies = strategies
+        self.histories = histories
 
     def __repr__(self):
-        return f"players {self.players} with history {self.terminal_history}"
+        outstr = f"\n\t\tcase: {self.ordering_case}\n\t\t"
+        outstr += f"\n\t\tstrategies:\n\t\t"
+        for strat in self.strategies:
+            strategy = '; '.join([f"{history}->{action}" for history, action in strat.items()])
+            outstr += f"strategy: {strategy}\n\t"
+        outstr += f"\n\t\thistories: {self.histories}\n\t\t"
+        return outstr
 
     def to_json(self) -> Dict[str, Any]:
+        # adapt to action and other action!
         return {
-            COUNTEREXAMPLE_PLAYERS_JSON_KEY: self.players,
-            COUNTEREXAMPLE_TERMINAL_HISTORY_JSON_KEY: self.terminal_history
+            COUNTEREXAMPLE_ORDERING_JSON_KEY: [str(c) for c in self.ordering_case],
+            COUNTEREXAMPLE_STRATEGIES_JSON_KEY: self.strategies,
+            COUNTEREXAMPLE_HISTORIES_JSON_KEY: self.histories
         }
 
 
