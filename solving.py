@@ -343,7 +343,7 @@ class StrategySolver(metaclass=ABCMeta):
 
         return label_expr
 
-    def _extract_strategy(self, solver, case: Set[z3.BoolRef], give_history=False) -> Union[CaseWithStrategy, Tuple[CaseWithStrategy, str]]:
+    def _extract_strategy(self, solver, case: Set[Boolean], give_history=False) -> Union[CaseWithStrategy, Tuple[CaseWithStrategy, str]]:
         """Extracting strategies from the solver for the current case split."""
         strategy = {}
         model = solver.model()
