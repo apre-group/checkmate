@@ -1,7 +1,8 @@
-from typing import Set, Dict, List, Any
+from typing import Optional, Set, Dict, List, Any
 
 from z3 import z3
 
+from auxfunz3 import Boolean
 from constants import SecurityProperty, PROPERTY_TO_JSON_KEY, HONEST_HISTORY_JSON_KEY, \
     GENERATED_PRECONDITIONS_JSON_KEY, JOINT_STRATEGIES_JSON_KEY, COUNTEREXAMPLES_JSON_KEY, \
     COUNTEREXAMPLE_ORDERING_JSON_KEY, COUNTEREXAMPLE_STRATEGIES_JSON_KEY, \
@@ -12,10 +13,10 @@ from constants import SecurityProperty, PROPERTY_TO_JSON_KEY, HONEST_HISTORY_JSO
 
 class CaseWithStrategy:
     """strategy satisfying analyzed property in given case"""
-    ordering_case: Set[z3.BoolRef]
+    ordering_case: Set[Boolean]
     strategy: Dict[str, str]
 
-    def __init__(self, case: Set[z3.BoolRef], strategy: Dict[str, str]):
+    def __init__(self, case: Set[Boolean], strategy: Dict[str, str]):
         self.ordering_case = case
         self.strategy = strategy
 
@@ -93,13 +94,13 @@ class SolvingResult:
 
 class AnalysisResult:
     honest_history: List[str]
-    property_results: Dict[SecurityProperty, SolvingResult]
+    property_results: Dict[SecurityProperty, Optional[SolvingResult]]
 
     def __init__(self, honest_history: List[str],
-                 weak_immunity_result: SolvingResult = None,
-                 weaker_immunity_result: SolvingResult = None,
-                 collusion_resilience_result: SolvingResult = None,
-                 practicality_result: SolvingResult = None):
+                 weak_immunity_result: Optional[SolvingResult] = None,
+                 weaker_immunity_result: Optional[SolvingResult] = None,
+                 collusion_resilience_result: Optional[SolvingResult] = None,
+                 practicality_result: Optional[SolvingResult] = None):
         self.honest_history = honest_history
         self.property_results = {SecurityProperty.WEAK_IMMUNITY: weak_immunity_result,
                                  SecurityProperty.WEAKER_IMMUNITY: weaker_immunity_result,
@@ -112,11 +113,11 @@ class AnalysisResult:
         return f"honest_history: {self.honest_history}\n" \
                f"property_results:\n{results}"
 
-    def get_property_result(self, security_property: SecurityProperty) -> SolvingResult:
+    def get_property_result(self, security_property: SecurityProperty) -> Optional[SolvingResult]:
         return self.property_results[security_property]
 
     def to_json(self) -> Dict[str, Any]:
-        result = {HONEST_HISTORY_JSON_KEY: self.honest_history}
+        result: Dict[str, Any] = {HONEST_HISTORY_JSON_KEY: self.honest_history}
 
         wi_res = self.get_property_result(SecurityProperty.WEAK_IMMUNITY)
         weri_res = self.get_property_result(SecurityProperty.WEAKER_IMMUNITY)
