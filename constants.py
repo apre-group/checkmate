@@ -1,5 +1,5 @@
 from enum import Enum
-
+import z3
 
 class SecurityProperty(Enum):
     WEAK_IMMUNITY = 'wi'
@@ -28,4 +28,8 @@ COUNTEREXAMPLE_HISTORIES_JSON_KEY = "histories"
 JOINT_STRATEGY_ORDERING_JSON_KEY = "ordering"
 JOINT_STRATEGY_STRATEGY_JSON_KEY = "strategy"
 
-OR_CONSTRAINT_KEY = 'OR'
+CONSTRAINT_FUNS = {
+    'Or': z3.Or,
+    'And': z3.And,
+    'Not': z3.Not
+}

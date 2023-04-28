@@ -8,7 +8,7 @@ from constants import SecurityProperty, PROPERTY_TO_JSON_KEY, HONEST_HISTORY_JSO
     COUNTEREXAMPLE_ORDERING_JSON_KEY, COUNTEREXAMPLE_STRATEGIES_JSON_KEY, \
     COUNTEREXAMPLE_HISTORIES_JSON_KEY, \
     JOINT_STRATEGY_ORDERING_JSON_KEY, \
-    JOINT_STRATEGY_STRATEGY_JSON_KEY, OR_CONSTRAINT_KEY, PROPERTY_TO_STR
+    JOINT_STRATEGY_STRATEGY_JSON_KEY, PROPERTY_TO_STR
 
 
 class CaseWithStrategy:
@@ -86,8 +86,7 @@ class SolvingResult:
     def to_json(self) -> Dict[str, Any]:
         return {
             JOINT_STRATEGIES_JSON_KEY: [cws.to_json() for cws in self.strategies],
-            GENERATED_PRECONDITIONS_JSON_KEY: [str(prc).replace('Or', OR_CONSTRAINT_KEY) for prc in
-                                               self.generated_preconditions],
+            GENERATED_PRECONDITIONS_JSON_KEY: [str(prc) for prc in self.generated_preconditions],
             COUNTEREXAMPLES_JSON_KEY: [ce.to_json() for ce in self.counterexamples]
         }
 

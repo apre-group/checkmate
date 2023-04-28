@@ -9,7 +9,7 @@ import json
 from typing import Any, Dict, Iterable, List, Union
 import z3
 from auxfunz3 import Boolean
-from constants import OR_CONSTRAINT_KEY
+from constants import CONSTRAINT_FUNS
 from utility import Utility
 
 
@@ -135,7 +135,7 @@ class Input:
 
     def load_constraint(self, source: str) -> Boolean:
         """load a string expression into a Boolean constraint, via `eval()`"""
-        return eval(source, {OR_CONSTRAINT_KEY: z3.Or}, self.constants)
+        return eval(source, CONSTRAINT_FUNS, self.constants)
 
     def _load_utility(self, utility: Union[int, str]) -> Utility:
         """load a string expression or an integer into a Utility, via `eval()`"""
