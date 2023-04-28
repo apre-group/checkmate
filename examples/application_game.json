@@ -17,8 +17,8 @@
   ],
   "initial_constraints": [
     "t > 0",
-    "OR(j > t, f > t)",
-    "OR(t > j, t > f)"
+    "Or(j > t, f > t)",
+    "Or(t > j, t > f)",
   ],
   "property_constraints": {
     "weak_immunity": [],
