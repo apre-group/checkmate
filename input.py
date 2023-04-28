@@ -45,6 +45,9 @@ class Branch(Tree):
     player: str
     actions: Dict[str, Tree]
 
+    def get_player(self) -> str:
+        return self.player
+
     def get_utility_of_terminal_history(self, history: List[str]) -> Dict[str, Utility]:
         assert len(history) > 0
         return self.actions[history[0]].get_utility_of_terminal_history(history[1:])
@@ -162,3 +165,16 @@ class Input:
                 for utility in tree['utility']
             }
             return Leaf(utilities)
+    
+    def get_tree(self) -> Tree:
+        return self.tree
+
+    def get_players_in_hist(self, Tree, history: List(str)) -> List(str):
+        """get the players along the provided history"""
+        if len(history) == 0:
+            return []
+        else:
+            assert type(Tree) == Branch
+            player_list = [Tree.get_player()]
+            player_list.extend(self.get_players_in_hist(Tree.actions[history[0]],history[1:]))
+            return player_list
