@@ -165,7 +165,7 @@ class Input:
                 for utility in tree['utility']
             }
             return Leaf(utilities)
-    
+
     def get_tree(self) -> Tree:
         return self.tree
 
@@ -178,3 +178,18 @@ class Input:
             player_list = [Tree.get_player()]
             player_list.extend(self.get_players_in_hist(Tree.actions[history[0]],history[1:]))
             return player_list
+
+    def get_player_at_hist(self, tree, history: List[str]) -> str:
+        """get the player at the node of the history"""
+        if len(history) == 0:
+            assert isinstance(tree, Branch)
+            return tree.get_player()
+        else:
+            return self.get_player_at_hist(tree.actions[history[0]], history[1:])
+
+    def get_subtree_at_hist(self, tree: Tree, history: List[str]) -> Tree:
+        if len(history) == 0:
+            return tree
+        else:
+            assert isinstance(tree, Branch)
+            return self.get_subtree_at_hist(tree.actions[history[0]], history[1:])
