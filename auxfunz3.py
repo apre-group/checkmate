@@ -66,24 +66,26 @@ def label(
     return implication(label_expr, comparison)
 
 
+def valuation(term: Real, model: z3.ModelRef) -> Fraction:
+    """Evaluate the term according to the model"""
+    if not isinstance(term, z3.ArithRef):
+        return Fraction(term)
+
+    value = model.evaluate(term, model_completion=True)
+    assert isinstance(value, z3.RatNumRef) or isinstance(value, z3.IntNumRef)
+    value = value.as_fraction() if isinstance(value, z3.RatNumRef) else Fraction(value.as_long())
+    return value
+
+
 def order_according_to_model(model: z3.ModelRef, minimize: z3.Solver, terms: Set[Tuple[Real, Real]]) -> Set[Boolean]:
     """
     compute the order of terms according to the model and return it as a set of constraints
     (also exclude those that can be shown by `minimize`)
     """
 
-    def valuation(term: Real) -> Fraction:
-        if not isinstance(term, z3.ArithRef):
-            return Fraction(term)
-
-        value = model.evaluate(term, model_completion=True)
-        assert isinstance(value, z3.RatNumRef) or isinstance(value, z3.IntNumRef)
-        value = value.as_fraction() if isinstance(value, z3.RatNumRef) else Fraction(value.as_long())
-        return value
-
     def split(left: Real, right: Real) -> Boolean:
-        left_val = valuation(left)
-        right_val = valuation(right)
+        left_val = valuation(left, model)
+        right_val = valuation(right, model)
         if left_val > right_val:
             return left > right
         elif left_val == right_val:
