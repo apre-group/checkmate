@@ -939,20 +939,31 @@ class PracticalityStrategySolver2(StrategySolver):
                 for utility, condition in utilities.items():
                     utility = Utility(*utility)
                     for other_utility, other_condition in other_utilities.items():
-                        subtree_label = self._subtree_label((tree.player,), history, action, other, condition, other_condition,)
                         other_utility = Utility(*other_utility)
-                        constraints.append(implication(
-                            conjunction(
-                                # ...then we know that taking action a means that u >= u'
-                                action_variables[action],
-                                # (conditionally upon taking certain actions below us)
-                                condition,
-                                other_condition,
-                                subtree_label,
-                            ),
-                            Utility.__ge__(utility, other_utility, label_fn=self._pair_label),
-                        ))
-
+                        if self.generate_counterexamples:
+                            subtree_label = self._subtree_label((tree.player,), history, action, other, condition, other_condition,)
+                            constraints.append(implication(
+                                conjunction(
+                                    # ...then we know that taking action a means that u >= u'
+                                    action_variables[action],
+                                    # (conditionally upon taking certain actions below us)
+                                    condition,
+                                    other_condition,
+                                    subtree_label,
+                                ),
+                                Utility.__ge__(utility, other_utility, label_fn=self._pair_label),
+                            ))
+                        else:
+                            constraints.append(implication(
+                                conjunction(
+                                    # ...then we know that taking action a means that u >= u'
+                                    action_variables[action],
+                                    # (conditionally upon taking certain actions below us)
+                                    condition,
+                                    other_condition,
+                                ),
+                                Utility.__ge__(utility, other_utility, label_fn=self._pair_label),
+                            ))
         # build the utility map players->utility->condition
         # the inner map gives a single boolean condition for "player p gets utility u starting from this subtree"
         result = {
