@@ -174,7 +174,7 @@ class StrategySolver(metaclass=ABCMeta):
         contradiction_constraints=self._contrad_constraints(new_condition, current_case) 
         contrad_result =  self._case_solver.check(contradiction_constraints)
 
-        if implied_result == z3.unsat and new_condition != True:
+        if implied_result == z3.unsat and new_condition is not True:
             logging.info(f"case {new_condition} implied, next case considered")
             return result, True
         
