@@ -176,11 +176,11 @@ class StrategySolver(metaclass=ABCMeta):
 
         if implied_result == z3.unsat and new_condition != True:
             logging.info(f"case {new_condition} implied, next case considered")
-            return result
+            return result, True
         
         if contrad_result == z3.unsat:
             logging.info(f"case {new_condition} impossible, hence trivially satisfied, next case considered")
-            return result
+            return result, True
         
         #print(current_case)
 
@@ -215,7 +215,7 @@ class StrategySolver(metaclass=ABCMeta):
             case = set(case)
             logging.info("case solved")
             result.strategies.append(self._extract_strategy(self._solver, case))
-            return result
+            return result, True
             
         else:
             # we need to compare more expressions
@@ -236,6 +236,7 @@ class StrategySolver(metaclass=ABCMeta):
 
                 # `left op right` was in an unsat core
                 left, right, real = self._label2pair[label_expr]
+                first_new_comp = False
                 # partition reals/infinitesimals
                 #add_to = reals if real else infinitesimals
 
@@ -248,24 +249,25 @@ class StrategySolver(metaclass=ABCMeta):
                     new_comp.append([left, right])
                     new_comp.append([right, left])
 
-                    output1 = self.case_splitting(left < right, case , new_comp)
-                    if output1.strategies == []:
-                        return output1
+                    output1, sat1 = self.case_splitting(left < right, case , new_comp)
+                    if not sat1:
+                        return output1, False
                     else:
                         result.strategies.extend(output1.strategies)
 
-                    output2 = self.case_splitting(left == right, case , new_comp)
-                    if output2.strategies == []:
-                        return output2
+                    output2, sat2 = self.case_splitting(left == right, case , new_comp)
+                    if not sat2:
+                        return output2, False
                     else:
                         result.strategies.extend(output2.strategies)
                     
-                    output3 = self.case_splitting(left > right, case , new_comp)
-                    if output3.strategies == []:
-                        return output3
+                    output3, sat3 = self.case_splitting(left > right, case , new_comp)
+                    if not sat3:
+                        return output3, False
                     else:
                         result.strategies.extend(output3.strategies)
                     new_pair = True
+                    sat = True
                     break
 
             # we saturated, give up
@@ -275,8 +277,9 @@ class StrategySolver(metaclass=ABCMeta):
 
                 # delete existing strategies from result because property is not fulfilled
                 result.delete_strategies()
+                sat = False
 
-            return result
+            return result, sat
 
     
     def _implied_constraints(self, new_condition: z3.BoolRef, current_case: Set[z3.BoolRef]) -> z3.BoolRef:

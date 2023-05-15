@@ -4,7 +4,7 @@ from typing import List
 from constants import SecurityProperty, PROPERTY_TO_STR
 from input import Input
 from output import AnalysisResult
-from solving import WeakImmunityStrategySolver, WeakerImmunityStrategySolver, CollusionResilienceStrategySolver, \
+from solving_newcases import WeakImmunityStrategySolver, WeakerImmunityStrategySolver, CollusionResilienceStrategySolver, \
     PracticalityStrategySolver2
 
 
@@ -69,7 +69,7 @@ def analyze_input(checked_input: Input,
         logging.info(f"Honest history {result.honest_history}")
 
         for security_property in analyzed_properties:
-            property_result = result.get_property_result(security_property)
+            property_result, sat = result.get_property_result(security_property)
             found_strategies = property_result.strategies
             gen_preconditions = property_result.generated_preconditions
 
