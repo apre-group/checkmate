@@ -175,8 +175,10 @@ class StrategySolver(metaclass=ABCMeta):
         contrad_result =  self._case_solver.check(contradiction_constraints)
 
         if implied_result == z3.unsat and new_condition is not True:
-            logging.info(f"case {new_condition} implied, next case considered")
-            return result, True
+            logging.info(f"case {new_condition} implied, the result is unsat")
+            #this result is always the result from the parent call
+            #unsat no further splits to be considered
+            return result, False
         
         if contrad_result == z3.unsat:
             logging.info(f"case {new_condition} impossible, hence trivially satisfied, next case considered")
@@ -236,7 +238,6 @@ class StrategySolver(metaclass=ABCMeta):
 
                 # `left op right` was in an unsat core
                 left, right, real = self._label2pair[label_expr]
-                first_new_comp = False
                 # partition reals/infinitesimals
                 #add_to = reals if real else infinitesimals
 
