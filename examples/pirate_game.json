@@ -35,9 +35,9 @@
     "b_D >= 0",
     "c_C >= 0",
     "c_D >= 0",
-    "a_A + a_B + a_C + a_D == g",
-    "b_B + b_C + b_D == g",
-    "c_C + c_D == g"
+    "a_A + a_B + a_C + a_D = g",
+    "b_B + b_C + b_D = g",
+    "c_C + c_D = g"
   ],
   "property_constraints": {
     "weak_immunity": [],
