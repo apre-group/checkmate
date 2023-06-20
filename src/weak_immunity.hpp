@@ -1,14 +1,9 @@
 #ifndef __checkmate_weak_immunity__
 #define __checkmate_weak_immunity__
 
-#include "input.hpp"
+#include "solver.hpp"
 
-class WeakImmunity {
-public:
-	WeakImmunity(const Input &input);
-	z3::Bool computed;
-private:
-	void collect_constraints(std::vector<z3::Bool> &conjuncts, const std::unique_ptr<Node> &tree, const Player &player, z3::Bool *previous_player_decisions);
-};
+template<bool weaker>
+z3::Bool weak_immunity(const Input &input, Labels &labels);
 
 #endif

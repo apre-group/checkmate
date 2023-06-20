@@ -22,7 +22,20 @@ namespace z3 {
 		Expression() : ast(nullptr) {}
 		Expression(Z3_ast ast) : ast(ast) {}
 
-		inline bool identical_to(const Expression &other) const { return ast == other.ast; }
+		inline bool null() const { return ast == nullptr; }
+
+		inline bool is(Expression other) const { return ast == other.ast; }
+		inline unsigned id() const {
+			unsigned result = Z3_get_ast_id(CONTEXT, ast);
+			check_error();
+			return result;
+		}
+
+		friend std::ostream &operator<<(std::ostream &out, Expression expr) {
+			std::ostream &result = out << Z3_ast_to_string(CONTEXT, expr.ast);
+			check_error();
+			return result;
+		}
 
 	protected:
 		bool is_bool() {
@@ -40,8 +53,6 @@ namespace z3 {
 		Z3_ast ast;
 		static Z3_sort BOOL_SORT, REAL_SORT;
 	};
-
-	std::ostream &operator<<(std::ostream &out, Expression expr);
 
 	struct Real;
 	struct Bool: public Expression {
@@ -118,9 +129,8 @@ namespace z3 {
 		}
 
 	private:
-		Bool(Z3_ast ast) : Expression(ast) {
-			assert(is_bool());
-		}
+		Bool(Z3_ast ast) : Expression(ast) { assert(is_bool()); }
+
 		static unsigned FRESH_INDEX;
 		static std::vector<int> ONES;
 	};
@@ -149,7 +159,6 @@ namespace z3 {
 			Z3_ast constant = Z3_mk_const(CONTEXT, symbol, REAL_SORT);
 			check_error();
 			return constant;
-
 		}
 
 		bool is_zero() const { return ast == ZERO.ast; }
@@ -230,9 +239,7 @@ namespace z3 {
 		static Real ZERO;
 		static Real ONE;
 	private:
-		Real(Z3_ast ast) : Expression(ast) {
-			assert(is_real());
-		}
+		Real(Z3_ast ast) : Expression(ast) { assert(is_real()); }
 	};
 	static_assert(
 		sizeof(Real) == sizeof(Z3_app),
@@ -252,13 +259,28 @@ namespace z3 {
 	public:
 		Solver() : solver(Z3_mk_simple_solver(CONTEXT)) { check_error(); }
 
+		void push() {
+			Z3_solver_push(CONTEXT, solver);
+			check_error();
+		}
+
+		void pop() {
+			Z3_solver_pop(CONTEXT, solver, 1);
+			check_error();
+		}
+
 		void assert_(Bool assertion) {
 			Z3_solver_assert(CONTEXT, solver, assertion.ast);
 			check_error();
 		}
 
-		Result solve() {
-			Z3_lbool result = Z3_solver_check(CONTEXT, solver);
+		Result solve_assuming(Bool assumption) {
+			Z3_lbool result = Z3_solver_check_assumptions(
+				CONTEXT,
+				solver,
+				1,
+				&assumption.ast
+			);
 			check_error();
 			switch(result) {
 			case Z3_L_FALSE:
@@ -266,7 +288,7 @@ namespace z3 {
 			case Z3_L_TRUE:
 				return Result::SAT;
 			default:
-				throw std::logic_error("Z3_solver_check() returned UNDEF - this shouldn't happen");
+				throw std::logic_error("Z3_solver_check_assumptions() returned UNDEF - this shouldn't happen");
 			}
 		}
 	private:

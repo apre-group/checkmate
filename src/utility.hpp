@@ -25,33 +25,33 @@ struct Utility {
 	}
 
 	z3::Bool operator==(const Utility &other) const {
-		if(real.identical_to(other.real))
+		if(real.is(other.real))
 			return infinitesimal == other.infinitesimal;
-		if(infinitesimal.identical_to(other.infinitesimal))
+		if(infinitesimal.is(other.infinitesimal))
 			return real == other.real;
 		return real == other.real && infinitesimal == other.infinitesimal;
 	}
 
 	z3::Bool operator!=(const Utility &other) const {
-		if(real.identical_to(other.real))
+		if(real.is(other.real))
 			return infinitesimal != other.infinitesimal;
-		if(infinitesimal.identical_to(other.infinitesimal))
+		if(infinitesimal.is(other.infinitesimal))
 			return real != other.real;
 		return real != other.real || infinitesimal != other.infinitesimal;
 	}
 
 	z3::Bool operator>(const Utility &other) const {
-		if(real.identical_to(other.real))
+		if(real.is(other.real))
 			return infinitesimal > other.infinitesimal;
-		if(infinitesimal.identical_to(other.infinitesimal))
+		if(infinitesimal.is(other.infinitesimal))
 			return real > other.real;
 		return real > other.real || (real == other.real && infinitesimal > other.infinitesimal);
 	}
 
 	z3::Bool operator>=(const Utility &other) const {
-		if(real.identical_to(other.real))
+		if(real.is(other.real))
 			return infinitesimal >= other.infinitesimal;
-		if(infinitesimal.identical_to(other.infinitesimal))
+		if(infinitesimal.is(other.infinitesimal))
 			return real >= other.real;
 		return real > other.real || (real == other.real && infinitesimal >= other.infinitesimal);
 	}

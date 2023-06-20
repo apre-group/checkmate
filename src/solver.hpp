@@ -4,35 +4,60 @@
 #include <iostream>
 
 #include "input.hpp"
+#include "utils.hpp"
 #include "z3++.hpp"
 
-class GeneralSolver {
+class Labels {
 public:
-	GeneralSolver(const Input &input);
-protected:
-	void add_action_constraints(const Branch &branch);
-	const Input &input;
-	z3::Solver solver;
+	Labels(z3::Solver &solver) : solver(solver) {}
+
+	void clear() {
+		label2expr.clear();
+		expr2label.clear();
+	}
+
+	z3::Bool label(z3::Bool expr) {
+		z3::Bool &cached_label = expr2label[expr.id()];
+		if(!cached_label.null())
+			return cached_label;
+
+		z3::Bool label = z3::Bool::fresh();
+		solver.assert_(label);
+		label2expr[label.id()] = expr;
+		cached_label = label;
+		return label;
+	}
+
+	z3::Bool lookup(z3::Bool label) const { return label2expr.at(label.id()); }
+
+private:
+	z3::Solver &solver;
+	std::unordered_map<unsigned, z3::Bool> label2expr, expr2label;
 };
 
-template<typename Property>
-class Solver final: public GeneralSolver {
+class Solver {
 public:
-	Solver(const Input &input) :
-		GeneralSolver(input),
-		property(input)
-	{}
+	Solver(const Input &input);
 
-	void solve() {
-		solver.assert_(input.honest_histories[0]);
-		z3::Bool with_initial = input.initial_constraint.implies(property.computed);
-		z3::Bool quantified = z3::Bool::forall(input.constants, with_initial);
-		solver.assert_(quantified);
-		z3::Result result = solver.solve();
-		std::cout << result << std::endl;
+	template<typename Property>
+	void solve(Property property) {
+		auto deferred = defer([&] {
+			labels.clear();
+			solver.pop();
+		});
+
+		solver.push();
+		z3::Bool computed = property(input, labels);
+		solve(computed);
 	}
+
 private:
-	Property property;
+	void add_action_constraints(const Branch &branch);
+	void solve(z3::Bool property);
+
+	const Input &input;
+	z3::Solver solver;
+	Labels labels;
 };
 
 #endif

@@ -7,4 +7,14 @@
 #define UNREACHABLE
 #endif
 
+template<typename F>
+struct Defer {
+	Defer(F deferred) : deferred(deferred) {}
+	~Defer() { deferred(); }
+	F deferred;
+};
+
+template<typename F>
+Defer<F> defer(F deferred) { return Defer<F>(deferred); }
+
 #endif
