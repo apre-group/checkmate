@@ -274,13 +274,8 @@ namespace z3 {
 			check_error();
 		}
 
-		Result solve_assuming(Bool assumption) {
-			Z3_lbool result = Z3_solver_check_assumptions(
-				CONTEXT,
-				solver,
-				1,
-				&assumption.ast
-			);
+		Result solve() {
+			Z3_lbool result = Z3_solver_check(CONTEXT, solver);
 			check_error();
 			switch(result) {
 			case Z3_L_FALSE:
@@ -288,7 +283,7 @@ namespace z3 {
 			case Z3_L_TRUE:
 				return Result::SAT;
 			default:
-				throw std::logic_error("Z3_solver_check_assumptions() returned UNDEF - this shouldn't happen");
+				throw std::logic_error("Z3_solver_check() returned UNDEF - this shouldn't happen");
 			}
 		}
 	private:

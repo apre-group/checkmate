@@ -4,6 +4,18 @@
 #include "solver.hpp"
 
 template<bool weaker>
-z3::Bool weak_immunity(const Input &input, Labels &labels);
+class WeakImmunity: public Solver::PropertyBase {
+public:
+	WeakImmunity(const Input &input);
+	using HonestHistoryBehaviour = Solver::InvariantToHonestHistory;
+
+private:
+	void collect_constraints(
+		std::vector<z3::Bool> &constraints,
+		const std::unique_ptr<Node> &input,
+		const Player &player,
+		z3::Bool *previous_player_decisions
+	);
+};
 
 #endif

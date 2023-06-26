@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include <memory>
@@ -350,6 +351,7 @@ static std::unique_ptr<Node> tree(Parser &parser, const json &node) {
 				std::exit(EXIT_FAILURE);
 			}
 		}
+		std::sort(leaf->utilities.begin(), leaf->utilities.end());
 		return leaf;
 	}
 	std::cerr << "checkmate: unexpected object in tree position " << node << std::endl;
@@ -366,16 +368,17 @@ Input::Input(const char *path) {
 
 		for(const json &player : document["players"])
 			players.push_back({player});
+		std::sort(players.begin(), players.end());
 		for(const json &real : document["constants"]) {
 			const std::string &name = real;
 			z3::Real constant = z3::Real::constant(name);
-			constants.push_back(constant);
+			quantify.push_back(constant);
 			utilities.insert({name, {constant, z3::Real::ZERO}});
 		}
 		for(const json &infinitesimal : document["infinitesimals"]) {
 			const std::string &name = infinitesimal;
 			z3::Real constant = z3::Real::constant(name);
-			constants.push_back(constant);
+			quantify.push_back(constant);
 			utilities.insert({name, {z3::Real::ZERO, constant}});
 		}
 
@@ -422,9 +425,11 @@ Input::Input(const char *path) {
 				const Branch &branch = current->branch();
 				const Choice &choice = branch.get_choice(action);
 				history.push_back(choice.action.variable);
-				current = choice.tree.get();
+				current = choice.node.get();
 			}
+			const Leaf *leaf = static_cast<const Leaf *>(current);
 			honest_histories.push_back(z3::Bool::conjunction(history));
+			honest_history_leaves.push_back(leaf);
 		}
 	}
 	catch(const std::ifstream::failure &fail) {
