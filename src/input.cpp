@@ -318,31 +318,39 @@ struct Parser {
 
 using json = nlohmann::json;
 
-static std::unique_ptr<Node> tree(Parser &parser, const json &node) {
+static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const json &node) {
 	if(node.contains("children")) {
-		std::unique_ptr<Branch> branch(new Branch({node["player"]}));
+		unsigned player;
+		for(player = 0; player < input.players.size(); player++)
+			if(input.players[player] == node["player"])
+				break;
+		if(player == input.players.size())
+			throw std::logic_error("undeclared player in the input");
+
+		std::unique_ptr<Branch> branch(new Branch(player));
 		for(const json &child : node["children"])
 			branch->choices.push_back({
 				{child["action"], z3::Bool::fresh()},
-				tree(parser, child["child"])
+				load_tree(input, parser, child["child"])
 			});
 		return branch;
 	}
 	if(node.contains("utility")) {
-		std::unique_ptr<Leaf> leaf(new Leaf);
+		using PlayerUtility = std::pair<std::string, Utility>;
+		std::vector<PlayerUtility> player_utilities;
 		for(const json &utility : node["utility"]) {
 			const json &value = utility["value"];
 			if(value.is_string()) {
 				const std::string &string = value;
-				leaf->utilities.push_back({
-					{utility["player"]},
+				player_utilities.push_back({
+					utility["player"],
 					parser.parse_utility(string.c_str())
 				});
 			}
 			else if(value.is_number_unsigned()) {
 				unsigned number = value;
-				leaf->utilities.push_back({
-					{utility["player"]},
+				player_utilities.push_back({
+					utility["player"],
 					{z3::Real::value(number), z3::Real::ZERO}
 				});
 			}
@@ -351,7 +359,14 @@ static std::unique_ptr<Node> tree(Parser &parser, const json &node) {
 				std::exit(EXIT_FAILURE);
 			}
 		}
-		std::sort(leaf->utilities.begin(), leaf->utilities.end());
+		std::sort(
+			player_utilities.begin(),
+			player_utilities.end(),
+			[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
+		);
+		std::unique_ptr<Leaf> leaf(new Leaf);
+		for(auto &player_utility : player_utilities)
+			leaf->utilities.push_back(player_utility.second);
 		return leaf;
 	}
 	std::cerr << "checkmate: unexpected object in tree position " << node << std::endl;
@@ -417,7 +432,7 @@ Input::Input(const char *path) {
 		}
 		practicality_constraint = z3::Bool::conjunction(conjuncts);
 
-		root = tree(parser, document["tree"]);
+		root = load_tree(*this, parser, document["tree"]);
 		for(const json &honest_history : document["honest_histories"]) {
 			const Node *current = root.get();
 			std::vector<z3::Bool> history;
@@ -427,7 +442,7 @@ Input::Input(const char *path) {
 				history.push_back(choice.action.variable);
 				current = choice.node.get();
 			}
-			const Leaf *leaf = static_cast<const Leaf *>(current);
+			const Leaf &leaf = current->leaf();
 			honest_histories.push_back(z3::Bool::conjunction(history));
 			honest_history_leaves.push_back(leaf);
 		}

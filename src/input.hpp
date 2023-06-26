@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #include "z3++.hpp"
 #include "utility.hpp"
@@ -12,24 +13,8 @@
 struct Leaf;
 struct Branch;
 
-struct Player {
-	bool operator ==(const Player &other) const { return name == other.name; }
-	bool operator<(const Player &other) const { return name < other.name; }
-
-	std::string name;
-};
-
-struct PlayerUtility {
-	bool operator<(const PlayerUtility &other) const { return player < other.player; }
-	Player player;
-	Utility utility;
-};
-
 struct Action {
-	bool operator ==(const Action &other) const {
-		return name == other.name;
-	}
-
+	bool operator==(const Action &other) const { return name == other.name; }
 	std::string name;
 	z3::Bool variable;
 };
@@ -58,28 +43,21 @@ struct Choice {
 
 struct Leaf final : public Node {
 	virtual bool is_leaf() const { return true; }
-	const PlayerUtility &get_player_utility(const std::string &player) const {
-		for(const PlayerUtility &player_utility : utilities)
-			if(player_utility.player.name == player)
-				return player_utility;
-		throw std::logic_error("Leaf::get_player_utility() failed to find anything");
-	}
-
-	std::vector<PlayerUtility> utilities;
+	std::vector<Utility> utilities;
 };
 
 struct Branch final : public Node {
-	Branch(Player player) : player(player) {}
+	Branch(unsigned player) : player(player) {}
 	virtual bool is_leaf() const { return false; }
 
 	const Choice &get_choice(const std::string &action) const {
 		for(const Choice &choice : choices)
 			if(choice.action.name == action)
 				return choice;
-		throw std::logic_error("Choice::get_player_utility() failed to find anything");
+		throw std::logic_error("Branch::get_player_utility() failed to find anything");
 	}
 
-	Player player;
+	unsigned player;
 	std::vector<Choice> choices;
 };
 
@@ -129,9 +107,10 @@ inline void Node::visit(VisitLeaf visit_leaf, VisitBranch visit_branch, Recurse 
 	};
 }
 
-struct Input {
+class Input {
+public:
 	Input(const char *path);
-	std::vector<Player> players;
+	std::vector<std::string> players;
 	std::vector<z3::Real> quantify;
 	std::unordered_map<std::string, Utility> utilities;
 	z3::Bool initial_constraint;
@@ -140,7 +119,7 @@ struct Input {
 	z3::Bool collusion_resilience_constraint;
 	z3::Bool practicality_constraint;
 	std::vector<z3::Bool> honest_histories;
-	std::vector<const Leaf *> honest_history_leaves;
+	std::vector<std::reference_wrapper<const Leaf>> honest_history_leaves;
 	std::unique_ptr<Node> root;
 };
 

@@ -236,6 +236,17 @@ namespace z3 {
 			return result;
 		}
 
+		static Bool sum(const std::vector<Real> &terms) {
+			Z3_ast result = Z3_mk_add(
+				CONTEXT,
+				terms.size(),
+				// safety: Z3_ast should have the same size/alignment as Real
+				reinterpret_cast<const Z3_ast *>(terms.data())
+			);
+			check_error();
+			return result;
+		}
+
 		static Real ZERO;
 		static Real ONE;
 	private:
@@ -259,14 +270,18 @@ namespace z3 {
 	public:
 		Solver() : solver(Z3_mk_simple_solver(CONTEXT)) { check_error(); }
 
-		void push() {
+		struct Frame {
+			~Frame() {
+				Z3_solver_pop(CONTEXT, solver.solver, 1);
+				check_error();
+			}
+			const Solver &solver;
+		};
+
+		Frame push() {
 			Z3_solver_push(CONTEXT, solver);
 			check_error();
-		}
-
-		void pop() {
-			Z3_solver_pop(CONTEXT, solver, 1);
-			check_error();
+			return {*this};
 		}
 
 		void assert_(Bool assertion) {

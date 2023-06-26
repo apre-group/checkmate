@@ -13,13 +13,14 @@ public:
 	Solver(const Input &input);
 
 	template<bool weaker> void weak_immunity();
+	void collusion_resilience();
 
 private:
 	const Input &input;
 	z3::Solver solver;
 
 	void add_action_constraints();
-	void solve(z3::Bool quantified_property);
+	void solve(z3::Bool property);
 
 	z3::Bool label(z3::Bool expr);
 	std::unordered_map<unsigned, z3::Bool> label2expr;
