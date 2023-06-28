@@ -1,7 +1,9 @@
+#include <algorithm>
 #include <bitset>
 #include <iostream>
 
 #include "solver.hpp"
+#include "utils.hpp"
 
 // stack frame in simulated recursion over a tree
 template<typename T>
@@ -43,11 +45,60 @@ void Solver::add_action_constraints() {
 }
 
 void Solver::solve(z3::Bool property, z3::Bool honest_history) {
-	z3::Solver::Frame pop = solver.push();
+	z3::Solver::Frame pop_history = solver.push();
 	solver.assert_(honest_history);
-	z3::Bool quantified = z3::Bool::forall(input.quantify, property);
-	solver.assert_(quantified);
-	std::cout << solver.solve() << std::endl;
+
+	std::vector<z3::Bool> case_;
+	std::vector<bool> finished;
+	while(true) {
+		z3::Solver::Frame pop_property = solver.push();
+		z3::Bool with_split = z3::Bool::conjunction(case_).implies(property);
+		z3::Bool quantified = z3::Bool::forall(input.quantify, with_split);
+		solver.assert_(quantified);
+
+		std::cout << "case: " << case_ << std::endl;
+		if(solver.solve(assumptions) == z3::Result::SAT) {
+			std::cout << "solved" << std::endl;
+			while(!finished.empty()) {
+				std::vector<bool>::reference top = finished.back();
+				if(top) {
+					case_.pop_back();
+					finished.pop_back();
+					continue;
+				}
+				top = true;
+				z3::Bool &last_split = case_.back();
+				last_split = !last_split;
+				break;
+			}
+			if(finished.empty()) {
+				std::cout << "done" << std::endl;
+				return;
+			}
+			continue;
+		}
+
+		std::vector<z3::Bool> core = solver.unsat_core();
+		z3::Bool split;
+		for(auto label : core) {
+			z3::Bool expr = label2expr[label];
+			if(std::find_if(
+				case_.begin(),
+				case_.end(),
+				[expr](z3::Bool split) { return split.is(expr) || split.is(!expr); }
+			) != case_.end())
+				continue;
+			split = expr;
+			break;
+		}
+		if(split.null()) {
+			std::cout << "no more splits" << std::endl;
+			return;
+		}
+		std::cout << "split: " << split << std::endl;
+		case_.push_back(split);
+		finished.push_back(false);
+	}
 }
 
 template<bool weaker>
@@ -74,10 +125,9 @@ void Solver::weak_immunity() {
 				const Leaf &leaf = choice.node->leaf();
 				Utility utility = leaf.utilities[player];
 				z3::Bool comparison = weaker
-					? utility.real >= z3::Real::ZERO
-					: utility >= Utility {z3::Real::ZERO, z3::Real::ZERO};
-				z3::Bool labelled = label(comparison);
-				conjuncts.push_back(player_decisions.null() ? labelled : player_decisions.implies(labelled));
+					? label(utility.real >= z3::Real::ZERO)
+					: label_geq(utility, {z3::Real::ZERO, z3::Real::ZERO});
+				conjuncts.push_back(player_decisions.null() ? comparison : player_decisions.implies(comparison));
 				continue;
 			}
 
@@ -136,9 +186,8 @@ void Solver::collusion_resilience() {
 					for(size_t player = 0; player < input.players.size(); player++)
 						if(group[player])
 							total = total + leaf.utilities[player];
-					z3::Bool comparison = honest_total >= total;
-					z3::Bool labelled = label(comparison);
-					conjuncts.push_back(nongroup_decisions.null() ? labelled : nongroup_decisions.implies(labelled));
+					z3::Bool comparison = label_geq(honest_total, total);
+					conjuncts.push_back(nongroup_decisions.null() ? comparison : nongroup_decisions.implies(comparison));
 					continue;
 				}
 
@@ -210,9 +259,8 @@ void Solver::practicality() {
 							// if a and c and c'...
 							z3::Bool conjunction = action_variable && action_condition && other_condition;
 							// ...then u is at least as good as u', otherwise we'd switch
-							z3::Bool comparison = action_utility >= other_utility;
-							z3::Bool labelled = label(comparison);
-							conjuncts.push_back(conjunction.implies(labelled));
+							z3::Bool comparison = label_geq(action_utility, other_utility);
+							conjuncts.push_back(conjunction.implies(comparison));
 						}
 					}
 				}
@@ -272,8 +320,18 @@ z3::Bool Solver::label(z3::Bool expr) {
 		return cached_label.implies(expr);
 
 	z3::Bool label = z3::Bool::fresh();
-	solver.assert_(label);
+	assumptions.push_back(label);
 	label2expr[label] = expr;
 	cached_label = label;
 	return label.implies(expr);
+}
+
+z3::Bool Solver::label_geq(Utility left, Utility right) {
+	if(left.real.is(right.real))
+		return label(left.infinitesimal >= right.infinitesimal);
+	if(left.infinitesimal.is(right.infinitesimal))
+		return label(left.real >= right.real);
+	return label(left.real > right.real) ||
+		(label(left.real == right.real) && label(left.infinitesimal >= right.infinitesimal));
+
 }

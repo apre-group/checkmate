@@ -11,19 +11,19 @@
 struct Utility {
 	z3::Real real, infinitesimal;
 
-	bool is(const Utility &other) const {
+	bool is(Utility other) const {
 		return real.is(other.real) && infinitesimal.is(other.infinitesimal);
 	}
 
-	Utility operator+(const Utility &other) const {
+	Utility operator+(Utility other) const {
 		return {real + other.real, infinitesimal + other.infinitesimal};
 	}
 
-	Utility operator-(const Utility &other) const {
+	Utility operator-(Utility other) const {
 		return {real - other.real, infinitesimal - other.infinitesimal};
 	}
 
-	Utility operator*(const Utility &other) const {
+	Utility operator*(Utility other) const {
 		return {real * other.real, infinitesimal * other.infinitesimal};
 	}
 
@@ -31,7 +31,7 @@ struct Utility {
 		return {-real, -infinitesimal};
 	}
 
-	z3::Bool operator==(const Utility &other) const {
+	z3::Bool operator==(Utility other) const {
 		if(real.is(other.real))
 			return infinitesimal == other.infinitesimal;
 		if(infinitesimal.is(other.infinitesimal))
@@ -39,7 +39,7 @@ struct Utility {
 		return real == other.real && infinitesimal == other.infinitesimal;
 	}
 
-	z3::Bool operator!=(const Utility &other) const {
+	z3::Bool operator!=(Utility other) const {
 		if(real.is(other.real))
 			return infinitesimal != other.infinitesimal;
 		if(infinitesimal.is(other.infinitesimal))
@@ -47,7 +47,7 @@ struct Utility {
 		return real != other.real || infinitesimal != other.infinitesimal;
 	}
 
-	z3::Bool operator>(const Utility &other) const {
+	z3::Bool operator>(Utility other) const {
 		if(real.is(other.real))
 			return infinitesimal > other.infinitesimal;
 		if(infinitesimal.is(other.infinitesimal))
@@ -55,7 +55,7 @@ struct Utility {
 		return real > other.real || (real == other.real && infinitesimal > other.infinitesimal);
 	}
 
-	z3::Bool operator>=(const Utility &other) const {
+	z3::Bool operator>=(Utility other) const {
 		if(real.is(other.real))
 			return infinitesimal >= other.infinitesimal;
 		if(infinitesimal.is(other.infinitesimal))
@@ -64,20 +64,20 @@ struct Utility {
 	}
 };
 
-inline std::ostream &operator<<(std::ostream &out, const Utility &utility) {
+inline std::ostream &operator<<(std::ostream &out, Utility utility) {
 	return out << utility.real << " + " << utility.infinitesimal;
 }
 
 template<>
 struct std::equal_to<Utility> {
-	bool operator()(const Utility &left, const Utility &right) const {
+	bool operator()(Utility left, Utility right) const {
 		return left.real.is(right.real) && left.infinitesimal.is(right.infinitesimal);
 	}
 };
 
 template<>
 struct std::hash<Utility> {
-	bool operator()(const Utility &utility) const {
+	bool operator()(Utility utility) const {
 		size_t real_id = utility.real.id();
 		size_t infinitesimal_id = utility.infinitesimal.id();
 		size_t combined = real_id << (CHAR_BIT * sizeof(unsigned)) | infinitesimal_id;

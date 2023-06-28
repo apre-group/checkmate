@@ -2,7 +2,21 @@
 
 namespace z3 {
 
-Z3_context CONTEXT = Z3_mk_context(Z3_mk_config());
+Z3_context CONTEXT;
+
+struct Global {
+	Global() {
+		Z3_global_param_set("sat.core.minimize", "true");
+		Z3_global_param_set("smt.core.minimize", "true");
+		CONTEXT = Z3_mk_context(Z3_mk_config());
+		check_error();
+	}
+
+	~Global() {
+		Z3_del_context(CONTEXT);
+	}
+};
+struct Global GLOBAL;
 
 Z3_sort Expression::BOOL_SORT = Z3_mk_bool_sort(CONTEXT);
 Z3_sort Expression::REAL_SORT = Z3_mk_real_sort(CONTEXT);

@@ -70,6 +70,7 @@ namespace z3 {
 	// Expression of Boolean sort by construction
 	struct Bool: public Expression {
 		friend Real;
+		friend Solver;
 
 		Bool() : Expression() {}
 
@@ -85,6 +86,12 @@ namespace z3 {
 		// construct true or false
 		static Bool value(bool value) {
 			Z3_ast result = value ? Z3_mk_true(CONTEXT) : Z3_mk_false(CONTEXT);
+			check_error();
+			return result;
+		}
+
+		Bool operator!() const {
+			Z3_ast result = Z3_mk_not(CONTEXT, ast);
 			check_error();
 			return result;
 		}
@@ -318,7 +325,16 @@ namespace z3 {
 
 	class Solver {
 	public:
-		Solver() : solver(Z3_mk_simple_solver(CONTEXT)) { check_error(); }
+		Solver() : solver(Z3_mk_simple_solver(CONTEXT)) {
+			check_error();
+			Z3_solver_inc_ref(CONTEXT, solver);
+			check_error();
+		}
+
+		~Solver() {
+			Z3_solver_dec_ref(CONTEXT, solver);
+			check_error();
+		}
 
 		// represents a frame in Z3's push/pop semantics: pops the frame on destruction
 		struct Frame {
@@ -340,8 +356,14 @@ namespace z3 {
 			check_error();
 		}
 
-		Result solve() {
-			Z3_lbool result = Z3_solver_check(CONTEXT, solver);
+		Result solve(const std::vector<Bool> &assumptions) {
+			Z3_lbool result = Z3_solver_check_assumptions(
+				CONTEXT,
+				solver,
+				assumptions.size(),
+				// safety: Z3_ast should have the same size/alignment as Bool
+				reinterpret_cast<const Z3_ast *>(assumptions.data())
+			);
 			check_error();
 			switch(result) {
 			case Z3_L_FALSE:
@@ -351,6 +373,23 @@ namespace z3 {
 			default:
 				throw std::logic_error("Z3_solver_check() returned UNDEF - this shouldn't happen");
 			}
+		}
+
+		std::vector<Bool> unsat_core() {
+			Z3_ast_vector core = Z3_solver_get_unsat_core(CONTEXT, solver);
+			check_error();
+			Z3_ast_vector_inc_ref(CONTEXT, core);
+			check_error();
+			unsigned length = Z3_ast_vector_size(CONTEXT, core);
+			std::vector<Bool> result;
+			for(unsigned i = 0; i < length; i++) {
+				Z3_ast item = Z3_ast_vector_get(CONTEXT, core, i);
+				check_error();
+				result.push_back(Bool(item));
+			}
+			Z3_ast_vector_dec_ref(CONTEXT, core);
+			check_error();
+			return result;
 		}
 
 		friend std::ostream &operator<<(std::ostream &out, const Solver &solver) {
