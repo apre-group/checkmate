@@ -7,6 +7,7 @@
 
 #include "z3++.hpp"
 
+// a real/infinitesimal pair
 struct Utility {
 	z3::Real real, infinitesimal;
 

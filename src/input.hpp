@@ -10,15 +10,14 @@
 #include "z3++.hpp"
 #include "utility.hpp"
 
-struct Leaf;
-struct Branch;
-
 struct Action {
 	bool operator==(const Action &other) const { return name == other.name; }
 	std::string name;
 	z3::Bool variable;
 };
 
+struct Leaf;
+struct Branch;
 struct Node {
 	Node() = default;
 	Node(const Node &) = delete;
@@ -31,16 +30,6 @@ struct Node {
 	virtual bool is_branch() const { return !is_leaf(); }
 	const Leaf &leaf() const;
 	const Branch &branch() const;
-
-	template<
-		typename State,
-		typename VisitLeaf,
-		typename StartBranch,
-		typename StartChoice,
-		typename EndChoice,
-		typename EndBranch
-	>
-	void visit(VisitLeaf, StartBranch, StartChoice, EndChoice, EndBranch);
 };
 
 struct Choice {
@@ -61,7 +50,7 @@ struct Branch final : public Node {
 		for(const Choice &choice : choices)
 			if(choice.action.name == action)
 				return choice;
-		throw std::logic_error("Branch::get_player_utility() failed to find anything");
+		throw std::logic_error("Branch::get_choice() failed to find anything");
 	}
 
 	unsigned player;
@@ -76,81 +65,16 @@ inline const Branch &Node::branch() const {
 	return *static_cast<const Branch *>(this);
 }
 
-template<
-	typename State,
-	typename VisitLeaf,
-	typename StartBranch,
-	typename StartChoice,
-	typename EndChoice,
-	typename EndBranch
->
-inline void Node::visit(
-	VisitLeaf visit_leaf,
-	StartBranch start_branch,
-	StartChoice start_choice,
-	EndChoice end_choice,
-	EndBranch end_branch
-) {
-	State initial;
-	if(is_leaf()) {
-		visit_leaf(initial, leaf());
-		return;
-	}
-
-	struct Todo {
-		Todo(const Branch &branch, State state) :
-			branch(branch),
-			state(state),
-			choices(branch.choices.begin())
-		{}
-		const Branch &branch;
-		State state;
-		std::vector<Choice>::const_iterator choices;
-	};
-	std::vector<Todo> todo;
-	const Branch &root = branch();
-	start_branch(initial, root);
-	todo.emplace_back(root, std::move(initial));
-
-	while(true) {
-		Todo &current = todo.back();
-		if(current.choices == current.branch.choices.end()) {
-			end_branch(current.state, current.branch);
-			State state = std::move(current.state);
-			todo.pop_back();
-			if(todo.empty())
-				break;
-			Todo &parent = todo.back();
-			const Choice &choice = *parent.choices++;
-			end_choice(parent.state, std::move(state), parent.branch, choice);
-			continue;
-		}
-		const Choice &choice = *current.choices;
-		State next_state;
-		start_choice(current.state, next_state, current.branch, choice);
-		if(choice.node->is_leaf()) {
-			visit_leaf(next_state, choice.node->leaf());
-			State state = std::move(current.state);
-			todo.pop_back();
-			if(todo.empty())
-				break;
-			Todo &parent = todo.back();
-			const Choice &choice = *parent.choices++;
-			end_choice(parent.state, std::move(state), parent.branch, choice);
-		}
-		else {
-			const Branch &next_branch = choice.node->branch();
-			start_branch(next_state, next_branch);
-			todo.emplace_back(next_branch, std::move(next_state));
-		}
-	};
-}
-
 class Input {
 public:
+	// parse an input from `path`
 	Input(const char *path);
+
+	// list of players in alphabetical order
 	std::vector<std::string> players;
+	// all real or infinitesimal constants
 	std::vector<z3::Real> quantify;
+	// a real or infinitesimal utility for each string
 	std::unordered_map<std::string, Utility> utilities;
 	z3::Bool initial_constraint;
 	z3::Bool weak_immunity_constraint;
@@ -158,9 +82,13 @@ public:
 	z3::Bool collusion_resilience_constraint;
 	z3::Bool practicality_constraint;
 	std::vector<z3::Bool> honest_histories;
+	// the leaves reached by each honest history
 	std::vector<std::reference_wrapper<const Leaf>> honest_history_leaves;
+	// root: NB must be a branch
 	std::unique_ptr<Branch> root;
 
+	// maximum number of players currently supported
+	// no reason there couldn't be more, but convenient for implementation (cf collusion resilience)
 	static const size_t MAX_PLAYERS = 64;
 };
 

@@ -10,16 +10,19 @@
 
 #include "z3.h"
 
-#include "utils.hpp"
-
 namespace z3 {
+	// the only Z3 context we use
 	extern Z3_context CONTEXT;
 
+	// check for Z3 errors in debug mode
 	inline void check_error() {
 		assert(Z3_get_error_code(CONTEXT) == Z3_OK);
 	}
 
 	class Solver;
+	struct Bool;
+	struct Real;
+	// base class for Real and Bool
 	struct Expression {
 		friend Solver;
 		Expression() : ast(nullptr) {}
@@ -27,7 +30,10 @@ namespace z3 {
 
 		inline bool null() const { return ast == nullptr; }
 
+		// this expression is exactly the same as another
 		inline bool is(Expression other) const { return ast == other.ast; }
+
+		// Z3's internal ID for this AST
 		inline unsigned id() const {
 			unsigned result = Z3_get_ast_id(CONTEXT, ast);
 			check_error();
@@ -41,27 +47,33 @@ namespace z3 {
 		}
 
 	protected:
+		// are we of Boolean sort? moderately expensive so protected
 		bool is_bool() {
 			Z3_sort sort = Z3_get_sort(CONTEXT, ast);
 			check_error();
 			return sort == BOOL_SORT;
 		}
 
+		// are we of real sort? moderately expensive so protected
 		bool is_real() {
 			Z3_sort sort = Z3_get_sort(CONTEXT, ast);
 			check_error();
 			return sort == REAL_SORT;
 		}
 
+		// pointer to Z3 AST: possibly null
 		Z3_ast ast;
+
 		static Z3_sort BOOL_SORT, REAL_SORT;
 	};
 
-	struct Real;
+	// Expression of Boolean sort by construction
 	struct Bool: public Expression {
 		friend Real;
 
 		Bool() : Expression() {}
+
+		// construct a fresh Boolean variable
 		static Bool fresh() {
 			Z3_symbol fresh = Z3_mk_int_symbol(CONTEXT, FRESH_INDEX++);
 			check_error();
@@ -70,7 +82,21 @@ namespace z3 {
 			return constant;
 		}
 
+		// construct true or false
+		static Bool value(bool value) {
+			Z3_ast result = value ? Z3_mk_true(CONTEXT) : Z3_mk_false(CONTEXT);
+			check_error();
+			return result;
+		}
+
 		Bool operator&&(Bool other) const {
+			if(is(FALSE) || other.is(FALSE))
+				return FALSE;
+			if(is(TRUE))
+				return other;
+			if(other.is(TRUE))
+				return *this;
+
 			Z3_ast conjuncts[2] {ast, other.ast};
 			Z3_ast result = Z3_mk_and(CONTEXT, 2, conjuncts);
 			check_error();
@@ -89,6 +115,13 @@ namespace z3 {
 		}
 
 		Bool operator||(Bool other) const {
+			if(is(TRUE) || other.is(TRUE))
+				return TRUE;
+			if(is(FALSE))
+				return other;
+			if(other.is(FALSE))
+				return *this;
+
 			Z3_ast disjuncts[2] {ast, other.ast};
 			Z3_ast result = Z3_mk_or(CONTEXT, 2, disjuncts);
 			check_error();
@@ -105,7 +138,6 @@ namespace z3 {
 			check_error();
 			return result;
 		}
-
 
 		Bool implies(Bool other) const {
 			Z3_ast result = Z3_mk_implies(CONTEXT, ast, other.ast);
@@ -143,6 +175,8 @@ namespace z3 {
 			return result;
 		}
 
+		static Bool FALSE, TRUE;
+
 	private:
 		Bool(Z3_ast ast) : Expression(ast) { assert(is_bool()); }
 
@@ -154,20 +188,25 @@ namespace z3 {
 		"the size of Bool must be equal to that of Z3_ast to allow cast magic"
 	);
 
+	// Expression of real sort by construction
 	struct Real: public Expression {
 		Real() : Expression() {}
+		
+		// construct an integer-valued real expression
 		static Real value(unsigned number) {
 			Z3_ast result = Z3_mk_real(CONTEXT, number, 1);
 			check_error();
 			return result;
 		}
 
+		// construct a real value from a string
 		static Real value(const std::string &number) {
 			Z3_ast result = Z3_mk_numeral(CONTEXT, number.c_str(), REAL_SORT);
 			check_error();
 			return result;
 		}
 
+		// construct a real constant
 		static Real constant(const std::string &name) {
 			Z3_symbol symbol = Z3_mk_string_symbol(CONTEXT, name.c_str());
 			check_error();
@@ -176,13 +215,10 @@ namespace z3 {
 			return constant;
 		}
 
-		bool is_zero() const { return ast == ZERO.ast; }
-		bool is_one() const { return ast == ONE.ast; }
-
 		Real operator+(Real other) const {
-			if(is_zero())
+			if(is(ZERO))
 				return other;
-			if(other.is_zero())
+			if(other.is(ZERO))
 				return *this;
 
 			Z3_ast args[2] = {ast, other.ast};
@@ -192,7 +228,7 @@ namespace z3 {
 		}
 
 		Real operator-() const {
-			if(is_zero())
+			if(is(ZERO))
 				return *this;
 
 			Z3_ast result = Z3_mk_unary_minus(CONTEXT, ast);
@@ -201,9 +237,9 @@ namespace z3 {
 		}
 
 		Real operator-(Real other) const {
-			if(other.is_zero())
+			if(other.is(ZERO))
 				return *this;
-			if(is_zero())
+			if(is(ZERO))
 				return -other;
 
 			Z3_ast args[2] = {ast, other.ast};
@@ -213,11 +249,11 @@ namespace z3 {
 		}
 
 		Real operator*(Real other) const {
-			if(is_zero() || other.is_zero())
+			if(is(ZERO) || other.is(ZERO))
 				return ZERO;
-			if(is_one())
+			if(is(ONE))
 				return other;
-			if(other.is_one())
+			if(other.is(ONE))
 				return *this;
 
 			Z3_ast args[2] = {ast, other.ast};
@@ -262,8 +298,7 @@ namespace z3 {
 			return result;
 		}
 
-		static Real ZERO;
-		static Real ONE;
+		static Real ZERO, ONE;
 	private:
 		Real(Z3_ast ast) : Expression(ast) { assert(is_real()); }
 	};
@@ -285,6 +320,7 @@ namespace z3 {
 	public:
 		Solver() : solver(Z3_mk_simple_solver(CONTEXT)) { check_error(); }
 
+		// represents a frame in Z3's push/pop semantics: pops the frame on destruction
 		struct Frame {
 			~Frame() {
 				Z3_solver_pop(CONTEXT, solver.solver, 1);
