@@ -381,6 +381,10 @@ Input::Input(const char *path) {
 		input.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 		document = json::parse(input);
 
+		if(document["players"].size() > MAX_PLAYERS) {
+			std::cerr << "checkmate: more than 64 players not supported - are you sure you want this many?!" << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
 		for(const json &player : document["players"])
 			players.push_back({player});
 		std::sort(players.begin(), players.end());
@@ -432,7 +436,12 @@ Input::Input(const char *path) {
 		}
 		practicality_constraint = z3::Bool::conjunction(conjuncts);
 
-		root = load_tree(*this, parser, document["tree"]);
+		Node *node = load_tree(*this, parser, document["tree"]).release();
+		if(node->is_leaf()) {
+			std::cerr << "checkmate: root node is a leaf (?!) - exiting" << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		root = std::unique_ptr<Branch>(static_cast<Branch *>(node));
 		for(const json &honest_history : document["honest_histories"]) {
 			const Node *current = root.get();
 			std::vector<z3::Bool> history;

@@ -32,8 +32,15 @@ struct Node {
 	const Leaf &leaf() const;
 	const Branch &branch() const;
 
-	template<typename State, typename VisitLeaf, typename VisitBranch, typename Recurse>
-	void visit(VisitLeaf, VisitBranch, Recurse);
+	template<
+		typename State,
+		typename VisitLeaf,
+		typename StartBranch,
+		typename StartChoice,
+		typename EndChoice,
+		typename EndBranch
+	>
+	void visit(VisitLeaf, StartBranch, StartChoice, EndChoice, EndBranch);
 };
 
 struct Choice {
@@ -69,8 +76,27 @@ inline const Branch &Node::branch() const {
 	return *static_cast<const Branch *>(this);
 }
 
-template<typename State, typename VisitLeaf, typename VisitBranch, typename Recurse>
-inline void Node::visit(VisitLeaf visit_leaf, VisitBranch visit_branch, Recurse recurse) {
+template<
+	typename State,
+	typename VisitLeaf,
+	typename StartBranch,
+	typename StartChoice,
+	typename EndChoice,
+	typename EndBranch
+>
+inline void Node::visit(
+	VisitLeaf visit_leaf,
+	StartBranch start_branch,
+	StartChoice start_choice,
+	EndChoice end_choice,
+	EndBranch end_branch
+) {
+	State initial;
+	if(is_leaf()) {
+		visit_leaf(initial, leaf());
+		return;
+	}
+
 	struct Todo {
 		Todo(const Branch &branch, State state) :
 			branch(branch),
@@ -82,28 +108,41 @@ inline void Node::visit(VisitLeaf visit_leaf, VisitBranch visit_branch, Recurse 
 		std::vector<Choice>::const_iterator choices;
 	};
 	std::vector<Todo> todo;
+	const Branch &root = branch();
+	start_branch(initial, root);
+	todo.emplace_back(root, std::move(initial));
 
-	auto enqueue = [&](const Node &node, State state) {
-		if(node.is_leaf()) {
-			visit_leaf(state, node.leaf());
-			return;
-		}
-		const Branch &branch = node.branch();
-		visit_branch(state, branch);
-		todo.emplace_back(branch, std::move(state));
-	};
-
-	enqueue(*this, State());
-	while(!todo.empty()) {
+	while(true) {
 		Todo &current = todo.back();
 		if(current.choices == current.branch.choices.end()) {
+			end_branch(current.state, current.branch);
+			State state = std::move(current.state);
 			todo.pop_back();
+			if(todo.empty())
+				break;
+			Todo &parent = todo.back();
+			const Choice &choice = *parent.choices++;
+			end_choice(parent.state, std::move(state), parent.branch, choice);
 			continue;
 		}
-		const Choice &choice = *current.choices++;
-		State next_state(current.state);
-		recurse(next_state, choice);
-		enqueue(*choice.node, next_state);
+		const Choice &choice = *current.choices;
+		State next_state;
+		start_choice(current.state, next_state, current.branch, choice);
+		if(choice.node->is_leaf()) {
+			visit_leaf(next_state, choice.node->leaf());
+			State state = std::move(current.state);
+			todo.pop_back();
+			if(todo.empty())
+				break;
+			Todo &parent = todo.back();
+			const Choice &choice = *parent.choices++;
+			end_choice(parent.state, std::move(state), parent.branch, choice);
+		}
+		else {
+			const Branch &next_branch = choice.node->branch();
+			start_branch(next_state, next_branch);
+			todo.emplace_back(next_branch, std::move(next_state));
+		}
 	};
 }
 
@@ -120,7 +159,9 @@ public:
 	z3::Bool practicality_constraint;
 	std::vector<z3::Bool> honest_histories;
 	std::vector<std::reference_wrapper<const Leaf>> honest_history_leaves;
-	std::unique_ptr<Node> root;
+	std::unique_ptr<Branch> root;
+
+	static const size_t MAX_PLAYERS = 64;
 };
 
 #endif

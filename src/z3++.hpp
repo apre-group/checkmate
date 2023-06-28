@@ -6,8 +6,11 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <utility>
 
 #include "z3.h"
+
+#include "utils.hpp"
 
 namespace z3 {
 	extern Z3_context CONTEXT;
@@ -91,6 +94,18 @@ namespace z3 {
 			check_error();
 			return result;
 		}
+
+		static Bool disjunction(const std::vector<Bool> &disjuncts) {
+			Z3_ast result = Z3_mk_or(
+				CONTEXT,
+				disjuncts.size(),
+				// safety: Z3_ast should have the same size/alignment as Bool
+				reinterpret_cast<const Z3_ast *>(disjuncts.data())
+			);
+			check_error();
+			return result;
+		}
+
 
 		Bool implies(Bool other) const {
 			Z3_ast result = Z3_mk_implies(CONTEXT, ast, other.ast);
@@ -301,9 +316,42 @@ namespace z3 {
 				throw std::logic_error("Z3_solver_check() returned UNDEF - this shouldn't happen");
 			}
 		}
+
+		friend std::ostream &operator<<(std::ostream &out, const Solver &solver) {
+			return out << Z3_solver_to_string(CONTEXT, solver.solver);
+		}
+
 	private:
 		Z3_solver solver;
 	};
 }
+
+template<>
+struct std::equal_to<z3::Bool> {
+	bool operator()(const z3::Bool &left, const z3::Bool &right) const {
+		return left.is(right);
+	}
+};
+
+template<>
+struct std::equal_to<z3::Real> {
+	bool operator()(const z3::Real &left, const z3::Real &right) const {
+		return left.is(right);
+	}
+};
+
+template<>
+struct std::hash<z3::Bool> {
+	size_t operator()(const z3::Bool &expr) const {
+		return std::hash<unsigned>{}(expr.id());
+	}
+};
+
+template<>
+struct std::hash<z3::Real> {
+	size_t operator()(const z3::Real &expr) const {
+		return std::hash<unsigned>{}(expr.id());
+	}
+};
 
 #endif
