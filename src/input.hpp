@@ -76,6 +76,8 @@ public:
 	std::vector<z3::Real> quantify;
 	// a real or infinitesimal utility for each string
 	std::unordered_map<std::string, Utility> utilities;
+
+	z3::Bool action_constraint;
 	z3::Bool initial_constraint;
 	z3::Bool weak_immunity_constraint;
 	z3::Bool weaker_immunity_constraint;

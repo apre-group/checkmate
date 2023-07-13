@@ -358,6 +358,11 @@ namespace z3 {
 			check_error();
 		}
 
+		void assert_and_track(Bool assertion) {
+			Z3_solver_assert_and_track(CONTEXT, solver, assertion.ast, assertion.ast);
+			check_error();
+		}
+
 		Result solve(const std::vector<Bool> &assumptions) {
 			Z3_lbool result = Z3_solver_check_assumptions(
 				CONTEXT,

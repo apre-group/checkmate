@@ -318,7 +318,7 @@ struct Parser {
 
 using json = nlohmann::json;
 
-static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const json &node) {
+static std::unique_ptr<Node> load_tree(const Input &input, std::vector<z3::Bool> &action_constraints, Parser &parser, const json &node) {
 	if(node.contains("children")) {
 		unsigned player;
 		for(player = 0; player < input.players.size(); player++)
@@ -327,12 +327,17 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 		if(player == input.players.size())
 			throw std::logic_error("undeclared player in the input");
 
+		std::vector<z3::Bool> actions;
 		std::unique_ptr<Branch> branch(new Branch(player));
-		for(const json &child : node["children"])
+		for(const json &child : node["children"]) {
+			z3::Bool action = z3::Bool::fresh();
 			branch->choices.push_back({
-				{child["action"], z3::Bool::fresh()},
-				load_tree(input, parser, child["child"])
+				{child["action"], action},
+				load_tree(input, action_constraints, parser, child["child"])
 			});
+			actions.push_back(action);
+		}
+		action_constraints.push_back(z3::Bool::exactly_one(actions));
 		return branch;
 	}
 	if(node.contains("utility")) {
@@ -436,11 +441,14 @@ Input::Input(const char *path) {
 		}
 		practicality_constraint = z3::Bool::conjunction(conjuncts);
 
-		Node *node = load_tree(*this, parser, document["tree"]).release();
+		std::vector<z3::Bool> action_constraints;
+		Node *node = load_tree(*this, action_constraints, parser, document["tree"]).release();
 		if(node->is_leaf()) {
 			std::cerr << "checkmate: root node is a leaf (?!) - exiting" << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
+
+		action_constraint = z3::Bool::conjunction(action_constraints);
 		root = std::unique_ptr<Branch>(static_cast<Branch *>(node));
 		for(const json &honest_history : document["honest_histories"]) {
 			const Node *current = root.get();

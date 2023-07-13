@@ -1,22 +1,21 @@
 #include "input.hpp"
 #include "options.hpp"
-#include "solver.hpp"
+#include "property.hpp"
 
 #include <iostream>
 
 int main(int, char **argv) {
 	Options opts(argv);
 	Input input(opts.input_path);
-	Solver solver(input);
 
 	std::cout << "weak immunity" << std::endl;
-	solver.weak_immunity<false>();
+	weak_immunity<false>(input);
 	std::cout << "weaker immunity" << std::endl;
-	solver.weak_immunity<true>();
+	weak_immunity<true>(input);
 	std::cout << "collusion resilience" << std::endl;
-	solver.collusion_resilience();
+	collusion_resilience(input);
 	std::cout << "practicality" << std::endl;
-	solver.practicality();
+	practicality(input);
 
 	return EXIT_SUCCESS;
 }

@@ -2,7 +2,7 @@
 #include <bitset>
 #include <iostream>
 
-#include "solver.hpp"
+#include "property.hpp"
 #include "utils.hpp"
 
 // stack frame in simulated recursion over a tree
@@ -19,101 +19,144 @@ struct Frame {
 	T data;
 };
 
-Solver::Solver(const Input &input) : input(input) {
-	add_action_constraints();
-}
-
-void Solver::add_action_constraints() {
-	struct Unit {};
-	std::vector<Frame<Unit>> stack;
-	stack.emplace_back(*input.root);
-	while(!stack.empty()) {
-		Frame<Unit> &current = stack.back();
-		if(current.choices == current.branch.choices.end()) {
-			std::vector<z3::Bool> actions;
-			for(const Choice &choice : current.branch.choices)
-				actions.push_back(choice.action.variable);
-			solver.assert_(z3::Bool::exactly_one(actions));
-			stack.pop_back();
-			continue;
-		}
-		const Choice &choice = *current.choices++;
-		if(choice.node->is_leaf())
-			continue;
-		stack.emplace_back(choice.node->branch());
+// common behaviour between properties
+struct Helper {
+	Helper(const Input &input) : input(input) {
+		solver.assert_(input.action_constraint);
 	}
-}
 
-void Solver::solve(z3::Bool property, z3::Bool property_constraint, z3::Bool honest_history) {
-	property = (input.initial_constraint && property_constraint).implies(property);
-	z3::Solver::Pop pop_history(solver);
-	solver.assert_(honest_history);
+	void solve(z3::Bool property, z3::Bool property_constraint, z3::Bool honest_history) {
+		property = (
+			z3::Bool::conjunction(trigger_implications) &&
+			input.initial_constraint &&
+			property_constraint
+		).implies(property);
+		property = z3::Bool::forall(input.quantify, property);
+		solver.assert_(property);
 
-	z3::Solver minimize_solver;
-	minimize_solver.assert_(input.initial_constraint);
-	minimize_solver.assert_(property_constraint);
+		z3::Solver::Pop pop_history(solver);
+		solver.assert_(honest_history);
 
-	std::vector<z3::Bool> case_;
-	std::vector<bool> finished;
-	while(true) {
-		z3::Solver::Pop pop_property(solver);
-		z3::Bool with_split = z3::Bool::conjunction(case_).implies(property);
-		z3::Bool quantified = z3::Bool::forall(input.quantify, with_split);
-		solver.assert_(quantified);
+		z3::Solver minimize_solver;
+		minimize_solver.assert_(input.initial_constraint);
+		minimize_solver.assert_(property_constraint);
 
-		std::cout << "case: " << case_ << std::endl;
-		if(solver.solve(assumptions) == z3::Result::SAT) {
-			std::cout << "solved" << std::endl;
-			while(!finished.empty()) {
-				std::vector<bool>::reference top = finished.back();
-				if(top) {
-					case_.pop_back();
-					finished.pop_back();
-					continue;
+		std::vector<bool> triggered(triggers.size());
+		std::vector<z3::Bool> case_;
+		std::vector<bool> finished;
+		while(true) {
+			z3::Solver::Pop pop_triggers(solver);
+			for(unsigned i = 0; i < triggered.size(); i++)
+				solver.assert_(triggered[i] ? triggers[i] : !triggers[i]);
+
+			std::cout << "case: " << case_ << std::endl;
+			std::vector<z3::Bool> dummy;
+			if(solver.solve(dummy) == z3::Result::SAT) {
+				std::cout << "solved" << std::endl;
+				while(!finished.empty()) {
+					std::vector<bool>::reference top = finished.back();
+					z3::Bool &last_split = case_.back();
+					unsigned trigger_index = expr2trigger[last_split];
+					if(top) {
+						case_.pop_back();
+						finished.pop_back();
+						triggered[trigger_index] = false;
+						continue;
+					}
+					top = true;
+					triggered[trigger_index] = false;
+					triggered[trigger_index + 1] = true;
+					last_split = !last_split;
+					break;
 				}
-				top = true;
-				z3::Bool &last_split = case_.back();
-				last_split = !last_split;
+				if(finished.empty()) {
+					std::cout << "done" << std::endl;
+					return;
+				}
+				continue;
+			}
+			std::cout << "failed, trying split" << std::endl;
+
+			std::vector<z3::Bool> core = solver.unsat_core();
+			z3::Bool split;
+			for(auto label : core) {
+				decltype(label2expr)::iterator found(label2expr.find(label));
+				if(found == label2expr.end())
+					continue;
+				z3::Bool expr = found->second;
+
+				if(minimize_solver.solve(case_, expr) == z3::Result::UNSAT || minimize_solver.solve(case_, !expr) == z3::Result::UNSAT)
+					continue;
+
+				split = expr;
 				break;
 			}
-			if(finished.empty()) {
-				std::cout << "done" << std::endl;
+
+			if(split.null()) {
+				std::cout << "no more splits, failed" << std::endl;
 				return;
 			}
-			continue;
+
+			std::cout << "split: " << split << std::endl;
+			case_.push_back(split);
+			triggered[expr2trigger[split]] = true;
+			finished.push_back(false);
 		}
-
-		std::vector<z3::Bool> core = solver.unsat_core();
-		z3::Bool split;
-		for(auto label : core) {
-			z3::Bool expr = label2expr[label];
-			if(std::find_if(
-				case_.begin(),
-				case_.end(),
-				[expr](z3::Bool split) { return split.is(expr) || split.is(!expr); }
-			) != case_.end())
-				continue;
-
-			if(minimize_solver.solve(case_, expr) == z3::Result::UNSAT || minimize_solver.solve(case_, !expr) == z3::Result::UNSAT)
-				continue;
-
-			split = expr;
-			break;
-		}
-
-		if(split.null()) {
-			std::cout << "no more splits, failed" << std::endl;
-			return;
-		}
-
-		std::cout << "split: " << split << std::endl;
-		case_.push_back(split);
-		finished.push_back(false);
 	}
-}
+
+	// produce a fresh (or cached) label for `expr` and return `label => expr`
+	z3::Bool label(z3::Bool expr) {
+		z3::Bool &cached_label = expr2label[expr];
+		if(!cached_label.null())
+			return cached_label.implies(expr);
+
+		z3::Bool label = z3::Bool::fresh();
+		solver.assert_and_track(label);
+		label2expr[label] = expr;
+		cached_label = label;
+		expr2trigger[expr] = triggers.size();
+		expr2trigger[!expr] = triggers.size() + 1;
+		z3::Bool positive = z3::Bool::fresh();
+		z3::Bool negative = z3::Bool::fresh();
+		triggers.push_back(positive);
+		triggers.push_back(negative);
+		trigger_implications.push_back(positive.implies(expr));
+		trigger_implications.push_back(negative.implies(!expr));
+		return label.implies(expr);
+	}
+
+	// produce a labelled version of `left >= right`
+	z3::Bool label_geq(Utility left, Utility right) {
+		if(left.real.is(right.real))
+			return label(left.infinitesimal >= right.infinitesimal);
+		if(left.infinitesimal.is(right.infinitesimal))
+			return label(left.real >= right.real);
+		return label(left.real > right.real) ||
+			(label(left.real == right.real) && label(left.infinitesimal >= right.infinitesimal));
+	}
+
+	// parsed input
+	const Input &input;
+
+	// underlying Z3 solver
+	z3::Solver solver;
+
+	// label-to-expression map
+	std::unordered_map<z3::Bool, z3::Bool> label2expr;
+	// expression-to-label map
+	std::unordered_map<z3::Bool, z3::Bool> expr2label;
+
+	// expr-to-trigger map
+	std::unordered_map<z3::Bool, unsigned> expr2trigger;
+	// list of trigger booleans
+	std::vector<z3::Bool> triggers;
+	// trigger implications
+	std::vector<z3::Bool> trigger_implications;
+};
 
 template<bool weaker>
-void Solver::weak_immunity() {
+void weak_immunity(const Input &input) {
+	Helper helper(input);
 	std::vector<z3::Bool> conjuncts;
 	for(unsigned player = 0; player < input.players.size(); player++) {
 		std::vector<Frame<z3::Bool>> stack;
@@ -136,8 +179,8 @@ void Solver::weak_immunity() {
 				const Leaf &leaf = choice.node->leaf();
 				Utility utility = leaf.utilities[player];
 				z3::Bool comparison = weaker
-					? label(utility.real >= z3::Real::ZERO)
-					: label_geq(utility, {z3::Real::ZERO, z3::Real::ZERO});
+					? helper.label(utility.real >= z3::Real::ZERO)
+					: helper.label_geq(utility, {z3::Real::ZERO, z3::Real::ZERO});
 				conjuncts.push_back(player_decisions.null() ? comparison : player_decisions.implies(comparison));
 				continue;
 			}
@@ -152,16 +195,17 @@ void Solver::weak_immunity() {
 	z3::Bool property = z3::Bool::conjunction(conjuncts);
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << "honest history #" << history + 1 << std::endl;
-		solve(property, property_constraint, input.honest_histories[history]);
+		helper.solve(property, property_constraint, input.honest_histories[history]);
 	}
 }
 
-template void Solver::weak_immunity<false>();
-template void Solver::weak_immunity<true>();
+template void weak_immunity<false>(const Input &);
+template void weak_immunity<true>(const Input &);
 
-void Solver::collusion_resilience() {
+void collusion_resilience(const Input &input) {
 	assert(input.players.size() < Input::MAX_PLAYERS);
 
+	Helper helper(input);
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
 		const Leaf &honest_leaf = input.honest_history_leaves[history];
 		std::vector<z3::Bool> conjuncts;
@@ -195,7 +239,7 @@ void Solver::collusion_resilience() {
 					for(size_t player = 0; player < input.players.size(); player++)
 						if(group[player])
 							total = total + leaf.utilities[player];
-					z3::Bool comparison = label_geq(honest_total, total);
+					z3::Bool comparison = helper.label_geq(honest_total, total);
 					conjuncts.push_back(nongroup_decisions.null() ? comparison : nongroup_decisions.implies(comparison));
 					continue;
 				}
@@ -206,11 +250,13 @@ void Solver::collusion_resilience() {
 
 		z3::Bool property = z3::Bool::conjunction(conjuncts);
 		std::cout << "honest history #" << history + 1 << std::endl;
-		solve(property, input.collusion_resilience_constraint, input.honest_histories[history]);
+		helper.solve(property, input.collusion_resilience_constraint, input.honest_histories[history]);
 	}
 }
 
-void Solver::practicality() {
+void practicality(const Input &input) {
+	Helper helper(input);
+
 	// possible routes from an _action_ to a leaf
 	struct Routes {
 		// possibilities after the action
@@ -268,7 +314,7 @@ void Solver::practicality() {
 							// if a and c and c'...
 							z3::Bool conjunction = action_variable && action_condition && other_condition;
 							// ...then u is at least as good as u', otherwise we'd switch
-							z3::Bool comparison = label_geq(action_utility, other_utility);
+							z3::Bool comparison = helper.label_geq(action_utility, other_utility);
 							conjuncts.push_back(conjunction.implies(comparison));
 						}
 					}
@@ -318,28 +364,6 @@ void Solver::practicality() {
 	z3::Bool property = z3::Bool::conjunction(conjuncts);
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << "honest history #" << history + 1 << std::endl;
-		solve(property, input.practicality_constraint, input.honest_histories[history]);
+		helper.solve(property, input.practicality_constraint, input.honest_histories[history]);
 	}
-}
-
-z3::Bool Solver::label(z3::Bool expr) {
-	z3::Bool &cached_label = expr2label[expr];
-	if(!cached_label.null())
-		return cached_label.implies(expr);
-
-	z3::Bool label = z3::Bool::fresh();
-	assumptions.push_back(label);
-	label2expr[label] = expr;
-	cached_label = label;
-	return label.implies(expr);
-}
-
-z3::Bool Solver::label_geq(Utility left, Utility right) {
-	if(left.real.is(right.real))
-		return label(left.infinitesimal >= right.infinitesimal);
-	if(left.infinitesimal.is(right.infinitesimal))
-		return label(left.real >= right.real);
-	return label(left.real > right.real) ||
-		(label(left.real == right.real) && label(left.infinitesimal >= right.infinitesimal));
-
 }

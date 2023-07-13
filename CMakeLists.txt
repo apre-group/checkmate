@@ -10,8 +10,8 @@ add_executable(checkmate
 	src/input.cpp
 	src/options.hpp
 	src/options.cpp
-	src/solver.hpp
-	src/solver.cpp
+	src/property.hpp
+	src/property.cpp
 	src/utility.hpp
 	src/utils.hpp
 	src/z3++.hpp
