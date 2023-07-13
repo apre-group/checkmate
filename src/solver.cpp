@@ -44,14 +44,19 @@ void Solver::add_action_constraints() {
 	}
 }
 
-void Solver::solve(z3::Bool property, z3::Bool honest_history) {
-	z3::Solver::Frame pop_history = solver.push();
+void Solver::solve(z3::Bool property, z3::Bool property_constraint, z3::Bool honest_history) {
+	property = (input.initial_constraint && property_constraint).implies(property);
+	z3::Solver::Pop pop_history(solver);
 	solver.assert_(honest_history);
+
+	z3::Solver minimize_solver;
+	minimize_solver.assert_(input.initial_constraint);
+	minimize_solver.assert_(property_constraint);
 
 	std::vector<z3::Bool> case_;
 	std::vector<bool> finished;
 	while(true) {
-		z3::Solver::Frame pop_property = solver.push();
+		z3::Solver::Pop pop_property(solver);
 		z3::Bool with_split = z3::Bool::conjunction(case_).implies(property);
 		z3::Bool quantified = z3::Bool::forall(input.quantify, with_split);
 		solver.assert_(quantified);
@@ -88,13 +93,19 @@ void Solver::solve(z3::Bool property, z3::Bool honest_history) {
 				[expr](z3::Bool split) { return split.is(expr) || split.is(!expr); }
 			) != case_.end())
 				continue;
+
+			if(minimize_solver.solve(case_, expr) == z3::Result::UNSAT || minimize_solver.solve(case_, !expr) == z3::Result::UNSAT)
+				continue;
+
 			split = expr;
 			break;
 		}
+
 		if(split.null()) {
-			std::cout << "no more splits" << std::endl;
+			std::cout << "no more splits, failed" << std::endl;
 			return;
 		}
+
 		std::cout << "split: " << split << std::endl;
 		case_.push_back(split);
 		finished.push_back(false);
@@ -138,11 +149,10 @@ void Solver::weak_immunity() {
 	z3::Bool property_constraint = weaker
 		? input.weak_immunity_constraint
 		: input.weaker_immunity_constraint;
-	z3::Bool constraint = input.initial_constraint && property_constraint;
-	z3::Bool property = constraint.implies(z3::Bool::conjunction(conjuncts));
+	z3::Bool property = z3::Bool::conjunction(conjuncts);
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << "honest history #" << history + 1 << std::endl;
-		solve(property, input.honest_histories[history]);
+		solve(property, property_constraint, input.honest_histories[history]);
 	}
 }
 
@@ -152,7 +162,6 @@ template void Solver::weak_immunity<true>();
 void Solver::collusion_resilience() {
 	assert(input.players.size() < Input::MAX_PLAYERS);
 
-	z3::Bool constraint = input.initial_constraint && input.collusion_resilience_constraint;
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
 		const Leaf &honest_leaf = input.honest_history_leaves[history];
 		std::vector<z3::Bool> conjuncts;
@@ -195,9 +204,9 @@ void Solver::collusion_resilience() {
 			}
 		}
 
-		z3::Bool property = constraint.implies(z3::Bool::conjunction(conjuncts));
+		z3::Bool property = z3::Bool::conjunction(conjuncts);
 		std::cout << "honest history #" << history + 1 << std::endl;
-		solve(property, input.honest_histories[history]);
+		solve(property, input.collusion_resilience_constraint, input.honest_histories[history]);
 	}
 }
 
@@ -306,11 +315,10 @@ void Solver::practicality() {
 		stack.emplace_back(choice.node->branch());
 	}
 
-	z3::Bool constraint = input.initial_constraint && input.practicality_constraint;
-	z3::Bool property = constraint.implies(z3::Bool::conjunction(conjuncts));
+	z3::Bool property = z3::Bool::conjunction(conjuncts);
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << "honest history #" << history + 1 << std::endl;
-		solve(property, input.honest_histories[history]);
+		solve(property, input.practicality_constraint, input.honest_histories[history]);
 	}
 }
 

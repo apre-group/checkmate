@@ -336,20 +336,22 @@ namespace z3 {
 			check_error();
 		}
 
-		// represents a frame in Z3's push/pop semantics: pops the frame on destruction
-		struct Frame {
-			~Frame() {
+		// represents Z3's push/pop semantics: push on construction, pop on destruction
+		class Pop {
+		public:
+			Pop(const Solver &solver) : solver(solver) {
+				Z3_solver_push(CONTEXT, solver.solver);
+				check_error();
+			}
+
+			~Pop() {
 				Z3_solver_pop(CONTEXT, solver.solver, 1);
 				check_error();
 			}
+
+		private:
 			const Solver &solver;
 		};
-
-		Frame push() {
-			Z3_solver_push(CONTEXT, solver);
-			check_error();
-			return {*this};
-		}
 
 		void assert_(Bool assertion) {
 			Z3_solver_assert(CONTEXT, solver, assertion.ast);
@@ -373,6 +375,14 @@ namespace z3 {
 			default:
 				throw std::logic_error("Z3_solver_check() returned UNDEF - this shouldn't happen");
 			}
+		}
+
+		template<typename... BoolList>
+		Result solve(std::vector<Bool> &assumptions, Bool extra, BoolList... others) {
+			assumptions.push_back(extra);
+			Result result = solve(assumptions, others...);
+			assumptions.pop_back();
+			return result;
 		}
 
 		std::vector<Bool> unsat_core() {

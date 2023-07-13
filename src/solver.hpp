@@ -15,15 +15,17 @@ public:
 private:
 	// parsed input
 	const Input &input;
+
 	// underlying Z3 solver
 	z3::Solver solver;
+
 	// list of assumptions that could appear in unsat cores
 	std::vector<z3::Bool> assumptions;
 
 	// assert that exactly one action must be taken
 	void add_action_constraints();
 	// solve an unquantified `property` under `honest_history`
-	void solve(z3::Bool property, z3::Bool honest_history);
+	void solve(z3::Bool property, z3::Bool property_constraint, z3::Bool honest_history);
 
 	// produce a fresh (or cached) label for `expr` and return `label => expr`
 	z3::Bool label(z3::Bool expr);
