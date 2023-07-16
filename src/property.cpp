@@ -1,5 +1,7 @@
+#include <algorithm>
 #include <bitset>
 #include <iostream>
+#include <random>
 
 #include "property.hpp"
 #include "utils.hpp"
@@ -75,6 +77,7 @@ void solve(const Input &input, const Labels &labels, Bool property, Bool propert
 	std::vector<bool> triggered(labels.triggers.size());
 	std::vector<Bool> case_;
 	std::vector<bool> finished;
+	std::minstd_rand prng;
 	while(true) {
 		Solver::Pop pop_triggers(solver);
 		for(unsigned i = 0; i < triggered.size(); i++)
@@ -108,6 +111,8 @@ void solve(const Input &input, const Labels &labels, Bool property, Bool propert
 		std::cout << "failed, trying split" << std::endl;
 
 		auto core = solver.unsat_core();
+		// don't get "stuck" too often
+		std::shuffle(core.begin(), core.end(), prng);
 		Bool split;
 		for(auto label : core) {
 			auto expr = labels.label2expr.at(label);
