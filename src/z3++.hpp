@@ -6,7 +6,6 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include <utility>
 
 #include "z3.h"
 
@@ -195,6 +194,12 @@ namespace z3 {
 		"the size of Bool must be equal to that of Z3_ast to allow cast magic"
 	);
 
+	// for ADL
+	inline Bool disjunction(const std::vector<Bool> &disjuncts) { return Bool::disjunction(disjuncts); }
+	inline Bool conjunction(const std::vector<Bool> &conjuncts) { return Bool::conjunction(conjuncts); }
+	inline Bool exactly_one(const std::vector<Bool> &exactly_one_of) { return Bool::exactly_one(exactly_one_of); }
+	inline Bool forall(const std::vector<Real> &bind, Bool bound) { return Bool::forall(bind, bound); }
+
 	// Expression of real sort by construction
 	struct Real: public Expression {
 		Real() : Expression() {}
@@ -294,25 +299,10 @@ namespace z3 {
 			return result;
 		}
 
-		static Bool sum(const std::vector<Real> &terms) {
-			Z3_ast result = Z3_mk_add(
-				CONTEXT,
-				terms.size(),
-				// safety: Z3_ast should have the same size/alignment as Real
-				reinterpret_cast<const Z3_ast *>(terms.data())
-			);
-			check_error();
-			return result;
-		}
-
 		static Real ZERO, ONE;
 	private:
 		Real(Z3_ast ast) : Expression(ast) { assert(is_real()); }
 	};
-	static_assert(
-		sizeof(Real) == sizeof(Z3_app),
-		"the size of Real must be equal to that of Z3_app to allow cast magic"
-	);
 
 	enum class Result {
 		SAT,
@@ -363,6 +353,19 @@ namespace z3 {
 			check_error();
 		}
 
+		Result solve() {
+			Z3_lbool result = Z3_solver_check(CONTEXT, solver);
+			check_error();
+			switch(result) {
+			case Z3_L_FALSE:
+				return Result::UNSAT;
+			case Z3_L_TRUE:
+				return Result::SAT;
+			default:
+				throw std::logic_error("Z3_solver_check() returned UNDEF - this shouldn't happen");
+			}
+		}
+
 		Result solve(const std::vector<Bool> &assumptions) {
 			Z3_lbool result = Z3_solver_check_assumptions(
 				CONTEXT,
@@ -378,14 +381,14 @@ namespace z3 {
 			case Z3_L_TRUE:
 				return Result::SAT;
 			default:
-				throw std::logic_error("Z3_solver_check() returned UNDEF - this shouldn't happen");
+				throw std::logic_error("Z3_solver_check_assumptions() returned UNDEF - this shouldn't happen");
 			}
 		}
 
 		template<typename... BoolList>
 		Result solve(std::vector<Bool> &assumptions, Bool extra, BoolList... others) {
 			assumptions.push_back(extra);
-			Result result = solve(assumptions, others...);
+			auto result = solve(assumptions, others...);
 			assumptions.pop_back();
 			return result;
 		}
@@ -400,7 +403,7 @@ namespace z3 {
 			for(unsigned i = 0; i < length; i++) {
 				Z3_ast item = Z3_ast_vector_get(CONTEXT, core, i);
 				check_error();
-				result.push_back(Bool(item));
+				result.push_back(item);
 			}
 			Z3_ast_vector_dec_ref(CONTEXT, core);
 			check_error();

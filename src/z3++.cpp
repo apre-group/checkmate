@@ -6,8 +6,9 @@ Z3_context CONTEXT;
 
 struct Global {
 	Global() {
-		Z3_global_param_set("sat.core.minimize", "true");
-		Z3_global_param_set("smt.core.minimize", "true");
+		// TODO should we try and minimize unsat cores?
+		//Z3_global_param_set("sat.core.minimize", "true");
+		//Z3_global_param_set("smt.core.minimize", "true");
 		CONTEXT = Z3_mk_context(Z3_mk_config());
 		check_error();
 	}

@@ -1,7 +1,5 @@
-#include <algorithm>
 #include <fstream>
 #include <iostream>
-#include <memory>
 #include "json.hpp"
 
 #include "input.hpp"
@@ -161,7 +159,7 @@ struct Parser {
 
 	Operation pop_operation() {
 		assert(!operation_stack.empty());
-		Operation operation = operation_stack.back();
+		auto operation = operation_stack.back();
 		operation_stack.pop_back();
 		return operation;
 	}
@@ -169,7 +167,7 @@ struct Parser {
 	Utility pop_utility() {
 		if(utility_stack.empty())
 			error();
-		Utility utility = utility_stack.back();
+		auto utility = utility_stack.back();
 		utility_stack.pop_back();
 		return utility;
 	}
@@ -177,7 +175,7 @@ struct Parser {
 	z3::Bool pop_constraint() {
 		if(constraint_stack.empty())
 			error();
-		z3::Bool constraint = constraint_stack.back();
+		auto constraint = constraint_stack.back();
 		constraint_stack.pop_back();
 		return constraint;
 	}
@@ -185,55 +183,55 @@ struct Parser {
 	void commit(Operation operation) {
 		switch(operation) {
 		case Operation::PLUS: {
-			Utility right = pop_utility();
-			Utility left = pop_utility();
+			auto right = pop_utility();
+			auto left = pop_utility();
 			utility_stack.push_back(left + right);
 			break;
 		}
 		case Operation::MINUS: {
-			Utility right = pop_utility();
-			Utility left = pop_utility();
+			auto right = pop_utility();
+			auto left = pop_utility();
 			utility_stack.push_back(left - right);
 			break;
 		}
 		case Operation::MULTIPLY: {
-			Utility right = pop_utility();
-			Utility left = pop_utility();
+			auto right = pop_utility();
+			auto left = pop_utility();
 			utility_stack.push_back(left * right);
 			break;
 		}
 		case Operation::NEGATE: {
-			Utility negate = pop_utility();
+			auto negate = pop_utility();
 			utility_stack.push_back(-negate);
 			break;
 		}
 		case Operation::EQ: {
-			Utility right = pop_utility();
-			Utility left = pop_utility();
+			auto right = pop_utility();
+			auto left = pop_utility();
 			constraint_stack.push_back(left == right);
 			break;
 		}
 		case Operation::NE: {
-			Utility right = pop_utility();
-			Utility left = pop_utility();
+			auto right = pop_utility();
+			auto left = pop_utility();
 			constraint_stack.push_back(left != right);
 			break;
 		}
 		case Operation::GT: {
-			Utility right = pop_utility();
-			Utility left = pop_utility();
+			auto right = pop_utility();
+			auto left = pop_utility();
 			constraint_stack.push_back(left > right);
 			break;
 		}
 		case Operation::GE: {
-			Utility right = pop_utility();
-			Utility left = pop_utility();
+			auto right = pop_utility();
+			auto left = pop_utility();
 			constraint_stack.push_back(left >= right);
 			break;
 		}
 		case Operation::OR:
-			z3::Bool right = pop_constraint();
-			z3::Bool left = pop_constraint();
+			auto right = pop_constraint();
+			auto left = pop_constraint();
 			constraint_stack.push_back(left || right);
 			break;
 		}
@@ -301,7 +299,7 @@ struct Parser {
 		parse(start);
 		if(!constraint_stack.empty() || utility_stack.size() != 1)
 			error();
-		Utility utility = utility_stack.back();
+		auto utility = utility_stack.back();
 		utility_stack.clear();
 		return utility;
 	}
@@ -310,7 +308,7 @@ struct Parser {
 		parse(start);
 		if(!utility_stack.empty() || constraint_stack.size() != 1)
 			error();
-		z3::Bool constraint = constraint_stack.back();
+		auto constraint = constraint_stack.back();
 		constraint_stack.clear();
 		return constraint;
 	}
@@ -330,14 +328,14 @@ static std::unique_ptr<Node> load_tree(const Input &input, std::vector<z3::Bool>
 		std::vector<z3::Bool> actions;
 		std::unique_ptr<Branch> branch(new Branch(player));
 		for(const json &child : node["children"]) {
-			z3::Bool action = z3::Bool::fresh();
+			auto action = z3::Bool::fresh();
 			branch->choices.push_back({
 				{child["action"], action},
 				load_tree(input, action_constraints, parser, child["child"])
 			});
 			actions.push_back(action);
 		}
-		action_constraints.push_back(z3::Bool::exactly_one(actions));
+		action_constraints.push_back(exactly_one(actions));
 		return branch;
 	}
 	if(node.contains("utility")) {
@@ -364,7 +362,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, std::vector<z3::Bool>
 				std::exit(EXIT_FAILURE);
 			}
 		}
-		std::sort(
+		sort(
 			player_utilities.begin(),
 			player_utilities.end(),
 			[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
@@ -392,16 +390,16 @@ Input::Input(const char *path) {
 		}
 		for(const json &player : document["players"])
 			players.push_back({player});
-		std::sort(players.begin(), players.end());
+		sort(players.begin(), players.end());
 		for(const json &real : document["constants"]) {
 			const std::string &name = real;
-			z3::Real constant = z3::Real::constant(name);
+			auto constant = z3::Real::constant(name);
 			quantify.push_back(constant);
 			utilities.insert({name, {constant, z3::Real::ZERO}});
 		}
 		for(const json &infinitesimal : document["infinitesimals"]) {
 			const std::string &name = infinitesimal;
-			z3::Real constant = z3::Real::constant(name);
+			auto constant = z3::Real::constant(name);
 			quantify.push_back(constant);
 			utilities.insert({name, {z3::Real::ZERO, constant}});
 		}
@@ -425,42 +423,42 @@ Input::Input(const char *path) {
 			const std::string &constraint = weaker_immunity_constraint;
 			conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
 		}
-		weaker_immunity_constraint = z3::Bool::conjunction(conjuncts);
+		weaker_immunity_constraint = conjunction(conjuncts);
 
 		conjuncts.clear();
 		for(const json &collusion_resilience_constraint : document["property_constraints"]["collusion_resilience"]) {
 			const std::string &constraint = collusion_resilience_constraint;
 			conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
 		}
-		collusion_resilience_constraint = z3::Bool::conjunction(conjuncts);
+		collusion_resilience_constraint = conjunction(conjuncts);
 
 		conjuncts.clear();
 		for(const json &practicality_constraint : document["property_constraints"]["practicality"]) {
 			const std::string &constraint = practicality_constraint;
 			conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
 		}
-		practicality_constraint = z3::Bool::conjunction(conjuncts);
+		practicality_constraint = conjunction(conjuncts);
 
 		std::vector<z3::Bool> action_constraints;
-		Node *node = load_tree(*this, action_constraints, parser, document["tree"]).release();
+		auto node = load_tree(*this, action_constraints, parser, document["tree"]).release();
 		if(node->is_leaf()) {
 			std::cerr << "checkmate: root node is a leaf (?!) - exiting" << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 
-		action_constraint = z3::Bool::conjunction(action_constraints);
+		action_constraint = conjunction(action_constraints);
 		root = std::unique_ptr<Branch>(static_cast<Branch *>(node));
 		for(const json &honest_history : document["honest_histories"]) {
 			const Node *current = root.get();
 			std::vector<z3::Bool> history;
 			for(const json &action : honest_history) {
-				const Branch &branch = current->branch();
-				const Choice &choice = branch.get_choice(action);
+				const auto &branch = current->branch();
+				const auto &choice = branch.get_choice(action);
 				history.push_back(choice.action.variable);
 				current = choice.node.get();
 			}
-			const Leaf &leaf = current->leaf();
-			honest_histories.push_back(z3::Bool::conjunction(history));
+			const auto &leaf = current->leaf();
+			honest_histories.push_back(conjunction(history));
 			honest_history_leaves.push_back(leaf);
 		}
 	}
