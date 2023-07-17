@@ -112,7 +112,7 @@ void solve(const Input &input, const Labels &labels, Bool property, Bool propert
 
 		auto core = solver.unsat_core();
 		// don't get "stuck" too often
-		std::shuffle(core.begin(), core.end(), prng);
+		shuffle(core.begin(), core.end(), prng);
 		Bool split;
 		for(auto label : core) {
 			auto expr = labels.label2expr.at(label);
@@ -153,6 +153,7 @@ struct Frame {
 
 template<bool weaker>
 void weak_immunity(const Input &input) {
+	std::cout << (weaker ? "weaker immunity" : "weak immunity") << std::endl;
 	Labels labels;
 	std::vector<Bool> conjuncts;
 	for(unsigned player = 0; player < input.players.size(); player++) {
@@ -200,6 +201,7 @@ template void weak_immunity<false>(const Input &);
 template void weak_immunity<true>(const Input &);
 
 void collusion_resilience(const Input &input) {
+	std::cout << "collusion resilience" << std::endl;
 	assert(input.players.size() < Input::MAX_PLAYERS);
 
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
@@ -252,6 +254,7 @@ void collusion_resilience(const Input &input) {
 }
 
 void practicality(const Input &input) {
+	std::cout << "practicality" << std::endl;
 	// possible routes from an _action_ to a leaf
 	struct Routes {
 		// possibilities after the action

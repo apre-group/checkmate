@@ -1,15 +1,27 @@
 #ifndef __checkmate_options__
 #define __checkmate_options__
 
-#include <string>
-
+// program options
 struct Options {
+	// parse options from `argv` - exits the program on failure
+	Options(char **argv);
+
+	// what mode we're in - currently only 'analyze'
 	enum class Mode {
 		ANALYZE
-	};
-	Options(char **argv);
-	Mode mode;
+	} mode;
+
+	// input game we should load
 	const char *input_path;
+
+	// analyze weak immunity
+	bool weak_immunity = false;
+	// analyze weaker immunity
+	bool weaker_immunity = false;
+	// analyze collusion resilience
+	bool collusion_resilience = false;
+	// analyze practicality
+	bool practicality = false;
 };
 
 #endif

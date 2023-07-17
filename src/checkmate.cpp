@@ -8,14 +8,14 @@ int main(int, char **argv) {
 	Options opts(argv);
 	Input input(opts.input_path);
 
-	std::cout << "weak immunity" << std::endl;
-	weak_immunity<false>(input);
-	std::cout << "weaker immunity" << std::endl;
-	weak_immunity<true>(input);
-	std::cout << "collusion resilience" << std::endl;
-	collusion_resilience(input);
-	std::cout << "practicality" << std::endl;
-	practicality(input);
+	if(opts.weak_immunity)
+		weak_immunity<false>(input);
+	if(opts.weaker_immunity)
+		weak_immunity<true>(input);
+	if(opts.collusion_resilience)
+		collusion_resilience(input);
+	if(opts.practicality)
+		practicality(input);
 
 	return EXIT_SUCCESS;
 }

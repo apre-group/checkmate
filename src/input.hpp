@@ -5,55 +5,74 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
-#include <utility>
 
 #include "z3++.hpp"
 #include "utility.hpp"
 
+// an action available at a branch
 struct Action {
-	bool operator==(const Action &other) const { return name == other.name; }
+	// the name of the action
 	std::string name;
+	// a Z3 variable representing taking this action
 	z3::Bool variable;
 };
 
+// forward declarations for Node::leaf() and Node::branch()
 struct Leaf;
 struct Branch;
+
+// abstract base class for Leaf and Branch
 struct Node {
+	// can default-construct and move Nodes...
 	Node() = default;
-	Node(const Node &) = delete;
-	Node &operator=(const Node &) = delete;
 	Node(Node &&) = default;
 	Node &operator=(Node &&) = default;
+	// ...but not copy them to avoid accidentally copying a whole tree
+	Node(const Node &) = delete;
+	Node &operator=(const Node &) = delete;
+
 	virtual ~Node() {};
 
+	// is this a leaf?
 	virtual bool is_leaf() const = 0;
-	virtual bool is_branch() const { return !is_leaf(); }
+
+	// if is_leaf(), do the downcast
 	const Leaf &leaf() const;
+	// if is_branch(), do the downcast
 	const Branch &branch() const;
 };
 
+// a choice available at a branch
 struct Choice {
+	// take this action
 	Action action;
+	// end up in this subtree
 	std::unique_ptr<Node> node;
 };
 
+// leaf node
 struct Leaf final : public Node {
 	virtual bool is_leaf() const { return true; }
+	// utilities for each player: NB in lexicographic order of players!
 	std::vector<Utility> utilities;
 };
 
+// branch node
 struct Branch final : public Node {
 	Branch(unsigned player) : player(player) {}
 	virtual bool is_leaf() const { return false; }
 
+	// do a linear-time lookup of `action` in the branch, which must be present
 	const Choice &get_choice(const std::string &action) const {
 		for(const Choice &choice : choices)
 			if(choice.action.name == action)
 				return choice;
-		throw std::logic_error("Branch::get_choice() failed to find anything");
+		assert(false);
 	}
 
+	// whose turn is it?
 	unsigned player;
+	// available choices, from which actions should be unique
 	std::vector<Choice> choices;
 };
 
@@ -65,9 +84,8 @@ inline const Branch &Node::branch() const {
 	return *static_cast<const Branch *>(this);
 }
 
-class Input {
-public:
-	// parse an input from `path`
+struct Input {
+	// parse an input from `path`, exiting if malformed
 	Input(const char *path);
 
 	// list of players in alphabetical order
@@ -77,15 +95,25 @@ public:
 	// a real or infinitesimal utility for each string
 	std::unordered_map<std::string, Utility> utilities;
 
+	// constraint: at each branch exactly one action must be taken
 	z3::Bool action_constraint;
+
+	// global initial constraints
 	z3::Bool initial_constraint;
+	// weak immunity initial constraints
 	z3::Bool weak_immunity_constraint;
+	// weaker immunity initial constraints
 	z3::Bool weaker_immunity_constraint;
+	// collusion resilience initial constraints
 	z3::Bool collusion_resilience_constraint;
+	// collusion resilience initial constraints
 	z3::Bool practicality_constraint;
+	// practicality initial constraints
 	std::vector<z3::Bool> honest_histories;
-	// the leaves reached by each honest history
+
+	// the leaves reached by each honest history, living as long as the containing input
 	std::vector<std::reference_wrapper<const Leaf>> honest_history_leaves;
+
 	// root: NB must be a branch
 	std::unique_ptr<Branch> root;
 
