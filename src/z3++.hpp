@@ -1,6 +1,13 @@
 #ifndef __checkmate_z3pp__
 #define __checkmate_z3pp__
 
+/**
+ * Our own wrapper around the Z3 C API
+ * 
+ * Z3 has a similar C++ wrapper, but it doesn't suit our purposes very well.
+ * This should be quite small and easy to maintain.
+ **/
+
 #include <cassert>
 #include <ostream>
 #include <stdexcept>
@@ -19,17 +26,22 @@ namespace z3 {
 	}
 
 	class Solver;
-	struct Bool;
-	struct Real;
-	// base class for Real and Bool
-	struct Expression {
-		friend Solver;
-		Expression() : ast(nullptr) {}
-		Expression(Z3_ast ast) : ast(ast) {}
+	class Bool;
+	class Real;
 
+	// base class for Real and Bool: trivially-copyable, just wraps a pointer
+	class Expression {
+		// Solver wants to access `ast`
+		friend Solver;
+
+	public:
+		// default constructor very convenient - initialises `ast` to `nullptr`
+		Expression() : ast(nullptr) {}
+
+		// does this point to a valid expression?
 		inline bool null() const { return ast == nullptr; }
 
-		// this expression is exactly the same as another
+		// is this expression exactly the same as `other`?
 		inline bool is(Expression other) const { return ast == other.ast; }
 
 		// Z3's internal ID for this AST
@@ -39,6 +51,7 @@ namespace z3 {
 			return result;
 		}
 
+		// invoke Z3's internal printer
 		friend std::ostream &operator<<(std::ostream &out, Expression expr) {
 			std::ostream &result = out << Z3_ast_to_string(CONTEXT, expr.ast);
 			check_error();
@@ -46,6 +59,9 @@ namespace z3 {
 		}
 
 	protected:
+		// wrap `ast`
+		Expression(Z3_ast ast) : ast(ast) {}
+
 		// are we of Boolean sort? moderately expensive so protected
 		bool is_bool() {
 			Z3_sort sort = Z3_get_sort(CONTEXT, ast);
@@ -60,17 +76,23 @@ namespace z3 {
 			return sort == REAL_SORT;
 		}
 
-		// pointer to Z3 AST: possibly null
+		// pointer to Z3 AST, possibly null if default-constructed
 		Z3_ast ast;
 
-		static Z3_sort BOOL_SORT, REAL_SORT;
+		// Z3's Boolean sort
+		static Z3_sort BOOL_SORT;
+		// Z3's real sort
+		static Z3_sort REAL_SORT;
 	};
 
-	// Expression of Boolean sort by construction
-	struct Bool: public Expression {
+	// an Expression of Boolean sort, by construction
+	class Bool: public Expression {
+		// Real wants to construct Booleans from e.g. `x > y`
 		friend Real;
+		// Solver wants to construct Booleans from unsat cores
 		friend Solver;
 
+	public:
 		Bool() : Expression() {}
 
 		// construct a fresh Boolean variable
@@ -181,14 +203,18 @@ namespace z3 {
 			return result;
 		}
 
+		// Boolean constants
 		static Bool FALSE, TRUE;
 
 	private:
 		Bool(Z3_ast ast) : Expression(ast) { assert(is_bool()); }
 
+		// index for generating fresh names
 		static unsigned FRESH_INDEX;
+		// a vector of 1 values for `exactly_one`
 		static std::vector<int> ONES;
 	};
+	// we reinterpret_cast Bool to Z3_ast sometimes for performance reasons
 	static_assert(
 		sizeof(Bool) == sizeof(Z3_ast),
 		"the size of Bool must be equal to that of Z3_ast to allow cast magic"
@@ -201,7 +227,8 @@ namespace z3 {
 	inline Bool forall(const std::vector<Real> &bind, Bool bound) { return Bool::forall(bind, bound); }
 
 	// Expression of real sort by construction
-	struct Real: public Expression {
+	class Real: public Expression {
+	public:
 		Real() : Expression() {}
 		
 		// construct an integer-valued real expression
@@ -299,11 +326,14 @@ namespace z3 {
 			return result;
 		}
 
+		// real constants
 		static Real ZERO, ONE;
+
 	private:
 		Real(Z3_ast ast) : Expression(ast) { assert(is_real()); }
 	};
 
+	// possible results from a `solve()` call
 	enum class Result {
 		SAT,
 		UNSAT
@@ -313,6 +343,7 @@ namespace z3 {
 		return out << (result == Result::SAT ? "sat" : "unsat");
 	}
 
+	// wrapper around a Z3 solver object
 	class Solver {
 	public:
 		Solver() : solver(Z3_mk_simple_solver(CONTEXT)) {
@@ -343,16 +374,19 @@ namespace z3 {
 			const Solver &solver;
 		};
 
+		// add to the current frame, forgotten on ~Pop()
 		void assert_(Bool assertion) {
 			Z3_solver_assert(CONTEXT, solver, assertion.ast);
 			check_error();
 		}
 
+		// same as assert_() but enable the assertion to appear in unsat cores
 		void assert_and_track(Bool assertion) {
 			Z3_solver_assert_and_track(CONTEXT, solver, assertion.ast, assertion.ast);
 			check_error();
 		}
 
+		// invoke the solver
 		Result solve() {
 			Z3_lbool result = Z3_solver_check(CONTEXT, solver);
 			check_error();
@@ -366,6 +400,7 @@ namespace z3 {
 			}
 		}
 
+		// invoke the solver with extra `assumptions`
 		Result solve(const std::vector<Bool> &assumptions) {
 			Z3_lbool result = Z3_solver_check_assumptions(
 				CONTEXT,
@@ -385,6 +420,7 @@ namespace z3 {
 			}
 		}
 
+		// invoke the solver with extra assumptions, using `assumptions` as a buffer for `extra` and `others`
 		template<typename... BoolList>
 		Result solve(std::vector<Bool> &assumptions, Bool extra, BoolList... others) {
 			assumptions.push_back(extra);
@@ -393,6 +429,7 @@ namespace z3 {
 			return result;
 		}
 
+		// retrieve an unsat core - must have just returned unsat
 		std::vector<Bool> unsat_core() {
 			Z3_ast_vector core = Z3_solver_get_unsat_core(CONTEXT, solver);
 			check_error();
@@ -415,10 +452,12 @@ namespace z3 {
 		}
 
 	private:
+		// wrapper solver
 		Z3_solver solver;
 	};
 }
 
+// used in e.g. hash tables rather than operator==
 template<>
 struct std::equal_to<z3::Bool> {
 	bool operator()(const z3::Bool &left, const z3::Bool &right) const {
@@ -426,6 +465,7 @@ struct std::equal_to<z3::Bool> {
 	}
 };
 
+// used in e.g. hash tables rather than operator==
 template<>
 struct std::equal_to<z3::Real> {
 	bool operator()(const z3::Real &left, const z3::Real &right) const {

@@ -3,14 +3,17 @@
 
 #include <climits>
 #include <ostream>
+// NB standard-library <utility>, not this file
 #include <utility>
 
 #include "z3++.hpp"
 
 // a real/infinitesimal pair
 struct Utility {
+	// real and infinitesimal parts
 	z3::Real real, infinitesimal;
 
+	// is this exactly the same as `other`
 	bool is(Utility other) const {
 		return real.is(other.real) && infinitesimal.is(other.infinitesimal);
 	}
@@ -68,6 +71,7 @@ inline std::ostream &operator<<(std::ostream &out, Utility utility) {
 	return out << utility.real << " + " << utility.infinitesimal;
 }
 
+// used in e.g. hash tables instead of operator==
 template<>
 struct std::equal_to<Utility> {
 	bool operator()(Utility left, Utility right) const {
@@ -75,6 +79,7 @@ struct std::equal_to<Utility> {
 	}
 };
 
+// hash a utility by combining the bits of its constituent ids, then hash _that_
 template<>
 struct std::hash<Utility> {
 	bool operator()(Utility utility) const {

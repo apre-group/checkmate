@@ -10,7 +10,7 @@
 using z3::Bool;
 using z3::Solver;
 
-// data for labelling expressions
+// helpers for labelling expressions
 struct Labels {
 public:
 	// produce a fresh (or cached) label for `expr` and return `label => expr`
@@ -56,34 +56,60 @@ public:
 	std::vector<Bool> trigger_implications;
 };
 
-void solve(const Input &input, const Labels &labels, Bool property, Bool property_constraint, Bool honest_history) {
+// common behaviour for all properties
+static void solve(
+	// the input game
+	const Input &input,
+	// labels we made earlier for expressions
+	const Labels &labels,
+	// the property we want a solution for, without quantification or precondition
+	Bool property,
+	// the initial constraint for said property
+	Bool property_constraint,
+	// the honest history
+	Bool honest_history
+) {
+	// wrap up property:
+	// forall <variables> (splits && initial constraints) => property
 	property = forall(input.quantify, (
 		conjunction(labels.trigger_implications) &&
 		input.initial_constraint &&
 		property_constraint
 	).implies(property));
 
+	// the main solver
 	Solver solver;
+	// it should know about action constraints, the wrapped property, the honest history, and labels
 	solver.assert_(input.action_constraint);
 	solver.assert_(property);
 	solver.assert_(honest_history);
 	for(const auto &label : labels.label2expr)
 		solver.assert_and_track(label.first);
 
+	// the solver used to minimise splits
 	Solver minimize_solver;
 	minimize_solver.assert_(input.initial_constraint);
 	minimize_solver.assert_(property_constraint);
 
+	// is a certain split currently active?
 	std::vector<bool> triggered(labels.triggers.size());
+	// the current case as a series of expressions
 	std::vector<Bool> case_;
+	// are we solving the split for the first time, or negated for the last time?
 	std::vector<bool> finished;
+
+	// source of pseudo-random noise to shuffle unsat cores with
 	std::minstd_rand prng;
+
+	// process one case each trip around the loop
 	while(true) {
+		// new frame for active splits
 		Solver::Pop pop_triggers(solver);
 		for(unsigned i = 0; i < triggered.size(); i++)
 			solver.assert_(triggered[i] ? labels.triggers[i] : !labels.triggers[i]);
 
 		std::cout << "case: " << case_ << std::endl;
+		// solved the case
 		if(solver.solve() == z3::Result::SAT) {
 			std::cout << "solved" << std::endl;
 			while(!finished.empty()) {
@@ -111,20 +137,26 @@ void solve(const Input &input, const Labels &labels, Bool property, Bool propert
 		std::cout << "failed, trying split" << std::endl;
 
 		auto core = solver.unsat_core();
-		// don't get "stuck" too often
+		// don't get "stuck" in an unproductive area: shuffle the unsat core
 		shuffle(core.begin(), core.end(), prng);
+
+		// assigned if we find a suitable split
 		Bool split;
 		for(auto label : core) {
+			// there should be nothing except labels in the unsat core, throws otherwise
 			auto expr = labels.label2expr.at(label);
+			// if either the split or its negation tells us nothing new, it's pointless to split on it
 			if(
 				minimize_solver.solve(case_, expr) == z3::Result::UNSAT ||
 				minimize_solver.solve(case_, !expr) == z3::Result::UNSAT
 			)
 				continue;
+			// otherwise, it'll do
 			split = expr;
 			break;
 		}
 
+		// didn't find anything worth splitting on
 		if(split.null()) {
 			std::cout << "no more splits, failed" << std::endl;
 			return;
@@ -137,6 +169,12 @@ void solve(const Input &input, const Labels &labels, Bool property, Bool propert
 	}
 }
 
+/**
+ * all properties are recursive in nature
+ *
+ * we have to simulate this: I hope you like stacks!
+ **/
+
 // stack frame in simulated recursion over a tree
 template<typename T>
 struct Frame {
@@ -146,17 +184,24 @@ struct Frame {
 		choices(branch.choices.begin()),
 		data(args...)
 	{}
+	// the branch passed to the simulated function call
 	const Branch &branch;
+	// how far through the branch's choices we are
 	std::vector<Choice>::const_iterator choices;
+	// the property's stuff
 	T data;
 };
 
+// logic is very similar for weak/weaker immunity, so we template it
 template<bool weaker>
 void weak_immunity(const Input &input) {
 	std::cout << (weaker ? "weaker immunity" : "weak immunity") << std::endl;
 	Labels labels;
 	std::vector<Bool> conjuncts;
+
+	// for each player...
 	for(unsigned player = 0; player < input.players.size(); player++) {
+		// our stack only contains the player's decisions to reach a branch
 		std::vector<Frame<Bool>> stack;
 		stack.emplace_back(*input.root);
 		while(!stack.empty()) {
@@ -167,15 +212,20 @@ void weak_immunity(const Input &input) {
 			}
 
 			const auto &choice = *current.choices++;
+			// retrieve the player's decisions to reach here
 			auto player_decisions = current.data;
+			// if it's the player's turn at a branch, set the current decision
 			if(current.branch.player == player)
 				player_decisions = player_decisions.null()
 					? choice.action.variable
 					: (choice.action.variable && player_decisions);
 
 			if(choice.node->is_leaf()) {
+				// ...and we reached a leaf ...
 				const auto &leaf = choice.node->leaf();
+				// ...with known utility for us...
 				auto utility = leaf.utilities[player];
+				// ...then (the real part of) the utility should be greater than zero.
 				auto comparison = weaker
 					? labels.label(utility.real >= z3::Real::ZERO)
 					: labels.label_geq(utility, {z3::Real::ZERO, z3::Real::ZERO});
@@ -183,6 +233,7 @@ void weak_immunity(const Input &input) {
 				continue;
 			}
 
+			// branch: recurse
 			stack.emplace_back(choice.node->branch(), player_decisions);
 		}
 	}
@@ -191,12 +242,14 @@ void weak_immunity(const Input &input) {
 		? input.weak_immunity_constraint
 		: input.weaker_immunity_constraint;
 	auto property = conjunction(conjuncts);
+	// property is the same for all honest histories
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << "honest history #" << history + 1 << std::endl;
 		solve(input, labels, property, property_constraint, input.honest_histories[history]);
 	}
 }
 
+// instantiate for true/false, prevents linker errors
 template void weak_immunity<false>(const Input &);
 template void weak_immunity<true>(const Input &);
 
@@ -204,18 +257,27 @@ void collusion_resilience(const Input &input) {
 	std::cout << "collusion resilience" << std::endl;
 	assert(input.players.size() < Input::MAX_PLAYERS);
 
+	// property is different for each honest history
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
 		Labels labels;
+		// lookup the leaf for this history
 		const Leaf &honest_leaf = input.honest_history_leaves[history];
 		std::vector<Bool> conjuncts;
-		// C++ standard mandates that `long long` has at least 64 bits
+
+		// sneaky hack follows: all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
+		// C++ standard mandates that `long long` has at least 64 bits, so we can have up to 64 players - this should be enough
+		// done this way more for concision than efficiency
 		for(unsigned long long binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++) {
+			// convert to a std::bitset to get some nice operators for free
 			std::bitset<Input::MAX_PLAYERS> group(binary_counter);
+
+			// the total honest utility for players in this subgroup
 			Utility honest_total {z3::Real::ZERO, z3::Real::ZERO};
 			for(size_t player = 0; player < input.players.size(); player++)
 				if(group[player])
 					honest_total = honest_total + honest_leaf.utilities[player];
 
+			// our stack only contains the decisions _not_ made by the group to reach a branch
 			std::vector<Frame<Bool>> stack;
 			stack.emplace_back(*input.root);
 			while(!stack.empty()) {
@@ -225,6 +287,7 @@ void collusion_resilience(const Input &input) {
 					continue;
 				}
 
+				// if it's _not_ the players' turn at a branch, set the current decision
 				const auto &choice = *current.choices++;
 				auto nongroup_decisions = current.data;
 				if(!group[current.branch.player])
@@ -233,16 +296,20 @@ void collusion_resilience(const Input &input) {
 						: (choice.action.variable && nongroup_decisions);
 
 				if(choice.node->is_leaf()) {
+					// we reached a leaf
 					const auto &leaf = choice.node->leaf();
+					// compute the total utility for the player group here...
 					Utility total {z3::Real::ZERO, z3::Real::ZERO};
 					for(size_t player = 0; player < input.players.size(); player++)
 						if(group[player])
 							total = total + leaf.utilities[player];
+					// ..and compare it to the honest total
 					auto comparison = labels.label_geq(honest_total, total);
 					conjuncts.push_back(nongroup_decisions.null() ? comparison : nongroup_decisions.implies(comparison));
 					continue;
 				}
 
+				// branch: recurse
 				stack.emplace_back(choice.node->branch(), nongroup_decisions);
 			}
 		}
@@ -270,10 +337,11 @@ void practicality(const Input &input) {
 	// utility map per-player per-action
 	using PlayerUtilitiesByAction = std::vector<PlayerUtilities>;
 
-	std::vector<Frame<PlayerUtilitiesByAction>> stack;
-	stack.emplace_back(*input.root);
 	std::vector<Bool> conjuncts;
 	Labels labels;
+	// our stack contains the utility map for each player and each action at each branch
+	std::vector<Frame<PlayerUtilitiesByAction>> stack;
+	stack.emplace_back(*input.root);
 	while(true) {
 		auto &current = stack.back();
 
@@ -357,10 +425,13 @@ void practicality(const Input &input) {
 				player_utilities[player][leaf.utilities[player]].combined = Bool::TRUE;
 			continue;
 		}
+
+		// branch: recurse
 		stack.emplace_back(choice.node->branch());
 	}
 
 	auto property = conjunction(conjuncts);
+	// property is the same for all honest histories
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << "honest history #" << history + 1 << std::endl;
 		solve(input, labels, property, input.practicality_constraint, input.honest_histories[history]);

@@ -2,8 +2,10 @@
 
 namespace z3 {
 
+// the only Z3 context - mostly just hangs out here to be passed to the Z3 API
 Z3_context CONTEXT;
 
+// thing constructed on program start to create a Z3 context
 struct Global {
 	Global() {
 		// TODO should we try and minimize unsat cores?
@@ -16,8 +18,7 @@ struct Global {
 	~Global() {
 		Z3_del_context(CONTEXT);
 	}
-};
-struct Global GLOBAL;
+} GLOBAL;
 
 Z3_sort Expression::BOOL_SORT = Z3_mk_bool_sort(CONTEXT);
 Z3_sort Expression::REAL_SORT = Z3_mk_real_sort(CONTEXT);
