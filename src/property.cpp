@@ -22,12 +22,12 @@ public:
 		auto label = Bool::fresh();
 		label2expr[label] = expr;
 		cached_label = label;
-		expr2trigger[expr] = triggers.size();
-		expr2trigger[!expr] = triggers.size() + 1;
+		unsigned index = triggers.size();
+		expr2trigger[expr] = index;
+		expr2trigger[!expr] = index;
 		auto positive = Bool::fresh();
 		auto negative = Bool::fresh();
-		triggers.push_back(positive);
-		triggers.push_back(negative);
+		triggers.emplace_back(positive, negative);
 		trigger_implications.push_back(positive.implies(expr));
 		trigger_implications.push_back(negative.implies(!expr));
 		return label.implies(expr);
@@ -43,20 +43,35 @@ public:
 			(label(left.real == right.real) && label(left.infinitesimal >= right.infinitesimal));
 	}
 
+	/**
+	 * labels:
+	 *
+	 * we label comparison expressions in properties with a fresh label
+	 * if the label shows up in an unsat core later, we can perform a case split
+	 **/
 	// label-to-expression map
 	std::unordered_map<Bool, Bool> label2expr;
-	// expression-to-label map
+	// expression-to-label map, used for caching
 	std::unordered_map<Bool, Bool> expr2label;
 
-	// expr-to-trigger map
+	/**
+	 * split triggers:
+	 *
+	 * to perform a case split on a certain expression, we set a Boolean "trigger" variable true
+	 * usually, triggers are forced false, which has no effect on the overall property formula
+	 * when set true, they add a precondition to the property
+	 * there is a separate trigger for positive and negative versions of a split,
+	 * which should never both be assigned true simultaneously
+	 **/
+	// expr-to-trigger map: maps a comparison expression to an index into `triggers`
 	std::unordered_map<Bool, unsigned> expr2trigger;
-	// list of trigger booleans
-	std::vector<Bool> triggers;
-	// trigger implications
+	// positive/negative pairs of trigger booleans
+	std::vector<std::pair<Bool, Bool>> triggers;
+	// trigger implications to be inserted into the property
 	std::vector<Bool> trigger_implications;
 };
 
-// common behaviour for all properties
+// common solving behaviour for all properties
 static void solve(
 	// the input game
 	const Input &input,
@@ -70,7 +85,7 @@ static void solve(
 	Bool honest_history
 ) {
 	// wrap up property:
-	// forall <variables> (splits && initial constraints) => property
+	// forall <variables> (triggers && initial constraints) => property
 	property = forall(input.quantify, (
 		conjunction(labels.trigger_implications) &&
 		input.initial_constraint &&
@@ -91,8 +106,8 @@ static void solve(
 	minimize_solver.assert_(input.initial_constraint);
 	minimize_solver.assert_(property_constraint);
 
-	// is a certain split currently active?
-	std::vector<bool> triggered(labels.triggers.size());
+	// is a certain split trigger currently active?
+	std::vector<std::pair<bool, bool>> active_splits(labels.triggers.size());
 	// the current case as a series of expressions
 	std::vector<Bool> case_;
 	// are we solving the split for the first time, or negated for the last time?
@@ -105,8 +120,10 @@ static void solve(
 	while(true) {
 		// new frame for active splits
 		Solver::Pop pop_triggers(solver);
-		for(unsigned i = 0; i < triggered.size(); i++)
-			solver.assert_(triggered[i] ? labels.triggers[i] : !labels.triggers[i]);
+		for(unsigned i = 0; i < active_splits.size(); i++) {
+			solver.assert_(active_splits[i].first ? labels.triggers[i].first : !labels.triggers[i].first);
+			solver.assert_(active_splits[i].second ? labels.triggers[i].second : !labels.triggers[i].second);
+		}
 
 		std::cout << "case: " << case_ << std::endl;
 		// solved the case
@@ -116,18 +133,24 @@ static void solve(
 				auto top = finished.back();
 				auto &last_split = case_.back();
 				auto trigger_index = labels.expr2trigger.at(last_split);
+				// finished with the top split, keep popping until we hit one we're not done with
 				if(top) {
 					case_.pop_back();
 					finished.pop_back();
-					triggered[trigger_index] = false;
+					active_splits[trigger_index].second = false;
 					continue;
 				}
+				// flip the split and continue
 				top = true;
-				triggered[trigger_index] = false;
-				triggered[trigger_index + 1] = true;
+				// disable positive trigger
+				active_splits[trigger_index].first = false;
+				// enable negative trigger
+				active_splits[trigger_index].second = true;
+				// flip the split
 				last_split = !last_split;
 				break;
 			}
+			// finished all splits, done
 			if(finished.empty()) {
 				std::cout << "done" << std::endl;
 				return;
@@ -164,7 +187,8 @@ static void solve(
 
 		std::cout << "split: " << split << std::endl;
 		case_.push_back(split);
-		triggered[labels.expr2trigger.at(split)] = true;
+		// enable positive trigger
+		active_splits[labels.expr2trigger.at(split)].first = true;
 		finished.push_back(false);
 	}
 }
