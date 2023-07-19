@@ -6,7 +6,7 @@ from abc import ABCMeta, abstractmethod
 import itertools
 import json
 
-from typing import Any, Dict, Iterable, List, Union
+from typing import Any, Dict, Iterable, List, Union, Tuple
 import z3
 from auxfunz3 import Boolean
 from constants import CONSTRAINT_FUNS
@@ -24,14 +24,16 @@ class Tree(metaclass=ABCMeta):
 class Leaf(Tree):
     """a leaf node"""
     utility: Dict[str, Utility]
+    condition: Boolean
 
     def get_utility_of_terminal_history(self, history: List[str]) -> Dict[str, Utility]:
         assert not history
         return self.utilities
 
-    def __init__(self, utilities: Dict[str, Utility]):
+    def __init__(self, condition: Boolean, utilities: Dict[str, Utility]):
         """initialise from a set of player utilities"""
         self.utilities = utilities
+        self.condition = condition
 
     def __repr__(self) -> str:
         return '\n'.join(
@@ -43,6 +45,7 @@ class Leaf(Tree):
 class Branch(Tree):
     """a non-leaf node with children"""
     player: str
+    condition: Boolean
     actions: Dict[str, Tree]
 
     def get_player(self) -> str:
@@ -52,9 +55,10 @@ class Branch(Tree):
         assert len(history) > 0
         return self.actions[history[0]].get_utility_of_terminal_history(history[1:])
 
-    def __init__(self, player: str, actions: Dict[str, Tree]):
+    def __init__(self, player: str, condition: Boolean, actions: Dict[str, Tree]):
         """initialise from a player (whose turn it is) and a set of actions"""
         self.player = player
+        self.condition = condition
         self.actions = actions
 
     def __repr__(self) -> str:
@@ -63,10 +67,29 @@ class Branch(Tree):
             return '\n'.join(f"| {line}" for line in x)
 
         actions = '\n'.join(
-            f"`>{action}\n{pad(repr(tree).splitlines())}"
+            f"`>{action}, if {tree.condition}\n{pad(repr(tree).splitlines())}"
             for action, tree in self.actions.items()
         )
         return f"{self.player}\n{actions}"
+
+
+class HistoryTree:
+    """class for history trees"""
+
+    def __init__(self, action_name: str, children: List[HistoryTree]):
+        self.action = action_name
+        self.children = children
+
+    def __repr__(self) -> str:
+        # magic for pretty trees
+        def pad(x: Iterable[str]) -> str:
+            return '\n'.join(f"| {line}" for line in x)
+
+        offspring = '\n'.join(
+            f"`>{pad(repr(tree).splitlines())}"
+            for tree in self.children
+        )
+        return f"{self.action}\n{offspring}"
 
 
 class Input:
@@ -79,7 +102,7 @@ class Input:
     weaker_immunity_constraints: List[Boolean]
     collusion_resilience_constraints: List[Boolean]
     practicality_constraints: List[Boolean]
-    honest_histories: List[List[str]]
+    honest_histories: List[HistoryTree]
     tree: Tree
 
     def __init__(self, path: str):
@@ -116,7 +139,7 @@ class Input:
             self.load_constraint(constraint)
             for constraint in obj['property_constraints']['practicality']
         ]
-        self.honest_histories = obj['honest_histories']
+        self.honest_histories = [self._load_history_tree(t) for t in obj['honest_histories']]
         self.tree = self._load_tree(obj['tree'])
 
     def __repr__(self) -> str:
@@ -154,17 +177,30 @@ class Input:
         """recursively load subtrees in the input"""
         if 'player' in tree:
             player = tree['player']
+            try:
+                condition = tree['condition']
+            except KeyError:
+                condition = True
             children = {
                 child['action']: self._load_tree(child['child'])
                 for child in tree['children']
             }
-            return Branch(player, children)
+            return Branch(player, condition, children)
         else:
+            try:
+                condition = tree['condition']
+            except KeyError:
+                condition = True
             utilities = {
                 utility['player']: self._load_utility(utility['value'])
                 for utility in tree['utility']
             }
-            return Leaf(utilities)
+            return Leaf(condition, utilities)
+
+    def _load_history_tree(self, tree: Dict[str, Any]) -> HistoryTree:
+        """recursively load history subtrees in the input"""
+        children = [self._load_history_tree(child) for child in tree["children"]]
+        return HistoryTree(tree["action"], children)
 
     def get_tree(self) -> Tree:
         return self.tree
