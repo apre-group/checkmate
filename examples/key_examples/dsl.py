@@ -223,22 +223,47 @@ def mul_expr(left: LExpr, right: LExpr) -> LExpr:
     return MultiplicationExpr(left, right)
 
 
+class HistoryTree:
+
+    def __init__(self, action_name: str, children: List[HistoryTree]):
+        self.action = action_name
+        self.children = children
+
+    def json(self):
+        return {
+            'action': self.action,
+            'children': [
+                ch.json() for ch in self.children
+            ]
+        }
+
+
 class Tree:
     def graphviz(self):
         raise NotImplementedError()
 
 
 class Leaf(Tree):
-    def __init__(self, utilities: Dict[Player, LExpr]):
+    def __init__(self, utilities: Dict[Player, LExpr], condition=None):
+        self.condition = condition
         self.utilities = utilities
 
     def json(self):
-        return {
-            'utility': [
-                {'player': player, 'value': utility}
-                for player, utility in self.utilities.items()
-            ]
-        }
+        if self.condition:
+            return {
+                'condition' : self.condition.json(),
+                'utility': [
+                    {'player': player, 'value': utility}
+                    for player, utility in self.utilities.items()
+                ]
+            }
+        else:
+            return {
+                'utility': [
+                    {'player': player, 'value': utility}
+                    for player, utility in self.utilities.items()
+                ]
+            }
 
     def graphviz(self):
         print(f'\tn{id(self)} [label="*"];')
@@ -247,20 +272,22 @@ class Leaf(Tree):
             print(f'\tn{id(self)} -> n{id(self)}_{player} [label="{player}"];')
 
 
-def leaf(utilities: Dict[Player, LExpr]) -> Leaf:
-    return Leaf(utilities)
+def leaf(utilities: Dict[Player, LExpr], condition=None) -> Leaf:
+    return Leaf(utilities, condition)
 
 # CheckMate currently does not support conditions
 class Branch(Tree):
-    def __init__(self, player: Player, actions: Dict[Action, Tree], condition: Union[None, bool] = None):
+    def __init__(self, player: Player, actions: Dict[Action, Tree], condition=None):
         self.player = player
+        self.condition = condition
         self.actions = actions
         self.condition = condition
 
     def json(self):
-        if self.condition == None:
+        if self.condition:
             return {
                 'player': self.player,
+                'condition' : self.condition.json(),
                 'children': [
                     {'action': action, 'child': child}
                     for action, child in self.actions.items()
@@ -272,8 +299,7 @@ class Branch(Tree):
                 'children': [
                     {'action': action, 'child': child}
                     for action, child in self.actions.items()
-                ],
-                'condition': self.condition
+                ]
             }
 
     def graphviz(self):
@@ -283,7 +309,7 @@ class Branch(Tree):
             print(f'\tn{id(self)} -> n{id(child)} [label="{action}"];')
 
 
-def branch(player: Player, actions: Dict[Action, Tree], condition: Union[None, bool] = None) -> Branch:
+def branch(player: Player, actions: Dict[Action, Tree], condition=None) -> Branch:
     return Branch(player, actions, condition)
 
 
@@ -351,7 +377,7 @@ def finish(
         weaker_immunity_constraints: List[Constraint],
         collusion_resilience_constraints: List[Constraint],
         practicality_constraints: List[Constraint],
-        honest_histories: List[List[Action]],
+        honest_histories: List[HistoryTree],
         tree: Tree,
 ):
     import sys

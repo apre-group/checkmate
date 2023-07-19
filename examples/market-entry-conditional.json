@@ -1,0 +1,106 @@
+{
+  "players": [
+    "N",
+    "E"
+  ],
+  "actions": [
+    "o",
+    "e",
+    "i",
+    "s"
+  ],
+  "infinitesimals": [],
+  "constants": [
+    "a",
+    "p"
+  ],
+  "initial_constraints": [
+    "a > 0",
+    "p > 0"
+  ],
+  "property_constraints": {
+    "weak_immunity": [],
+    "weaker_immunity": [],
+    "collusion_resilience": [],
+    "practicality": []
+  },
+  "honest_histories": [
+    {
+      "action": "o",
+      "children": []
+    },
+    {
+      "action": "e",
+      "children": [
+        {
+          "action": "i",
+          "children": []
+        },
+        {
+          "action": "s",
+          "children": []
+        }
+      ]
+    }
+  ],
+  "tree": {
+    "player": "N",
+    "children": [
+      {
+        "action": "o",
+        "child": {
+          "utility": [
+            {
+              "player": "N",
+              "value": 0
+            },
+            {
+              "player": "E",
+              "value": "2 * p"
+            }
+          ]
+        }
+      },
+      {
+        "action": "e",
+        "child": {
+          "player": "E",
+          "children": [
+            {
+              "action": "i",
+              "child": {
+                "condition": "p <= 2 * a",
+                "utility": [
+                  {
+                    "player": "N",
+                    "value": "p"
+                  },
+                  {
+                    "player": "E",
+                    "value": "p"
+                  }
+                ]
+              }
+            },
+            {
+              "action": "s",
+              "child": {
+                "condition": "p > 2 * a",
+                "utility": [
+                  {
+                    "player": "N",
+                    "value": "-a"
+                  },
+                  {
+                    "player": "E",
+                    "value": "-a"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
