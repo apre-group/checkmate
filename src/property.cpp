@@ -22,7 +22,7 @@ public:
 		auto label = Bool::fresh();
 		label2expr[label] = expr;
 		cached_label = label;
-		unsigned index = triggers.size();
+		size_t index = triggers.size();
 		expr2trigger[expr] = index;
 		expr2trigger[!expr] = index;
 		auto positive = Bool::fresh();
@@ -64,7 +64,7 @@ public:
 	 * which should never both be assigned true simultaneously
 	 **/
 	// expr-to-trigger map: maps a comparison expression to an index into `triggers`
-	std::unordered_map<Bool, unsigned> expr2trigger;
+	std::unordered_map<Bool, size_t> expr2trigger;
 	// positive/negative pairs of trigger booleans
 	std::vector<std::pair<Bool, Bool>> triggers;
 	// trigger implications to be inserted into the property
@@ -120,7 +120,7 @@ static void solve(
 	while(true) {
 		// new frame for active splits
 		Solver::Pop pop_triggers(solver);
-		for(unsigned i = 0; i < active_splits.size(); i++) {
+		for(size_t i = 0; i < active_splits.size(); i++) {
 			solver.assert_(active_splits[i].first ? labels.triggers[i].first : !labels.triggers[i].first);
 			solver.assert_(active_splits[i].second ? labels.triggers[i].second : !labels.triggers[i].second);
 		}
@@ -193,81 +193,56 @@ static void solve(
 	}
 }
 
-/**
- * all properties are recursive in nature
- *
- * we have to simulate this: I hope you like stacks!
- **/
+// helper struct for computing the weak immunity property
+template<bool weaker>
+struct WeakImmunity {
+	WeakImmunity(size_t player, Labels &labels) : player(player), labels(labels) {}
 
-// stack frame in simulated recursion over a tree
-template<typename T>
-struct Frame {
-	template<typename... Args>
-	Frame(const Branch &branch, Args &&...args) :
-		branch(branch),
-		choices(branch.choices.begin()),
-		data(args...)
-	{}
-	// the branch passed to the simulated function call
-	const Branch &branch;
-	// how far through the branch's choices we are
-	std::vector<Choice>::const_iterator choices;
-	// the property's stuff
-	T data;
+	z3::Bool compute(const Node &node) const {
+		if(node.is_leaf()) {
+			const auto &leaf = node.leaf();
+			// known utility for us
+			auto utility = leaf.utilities[player];
+			// so (the real part of) the utility should be greater than zero
+			return weaker
+				? labels.label(utility.real >= z3::Real::ZERO)
+				: labels.label_geq(utility, {z3::Real::ZERO, z3::Real::ZERO});
+		}
+
+		std::vector<z3::Bool> conjuncts;
+		const auto &branch = node.branch();
+		bool player_choice  = branch.player == player;
+		for(const auto &choice : branch.choices) {
+			auto choice_property = compute(*choice.node);
+			// we only care about the current player's choices
+			if(player_choice)
+				choice_property = choice.action.variable.implies(choice_property);
+			conjuncts.push_back(choice_property);
+		}
+		return conjunction(conjuncts);
+	}
+
+	// current player
+	size_t player;
+	Labels &labels;
 };
 
 // logic is very similar for weak/weaker immunity, so we template it
 template<bool weaker>
 void weak_immunity(const Input &input) {
 	std::cout << (weaker ? "weaker immunity" : "weak immunity") << std::endl;
+
 	Labels labels;
 	std::vector<Bool> conjuncts;
-
-	// for each player...
-	for(unsigned player = 0; player < input.players.size(); player++) {
-		// our stack only contains the player's decisions to reach a branch
-		std::vector<Frame<Bool>> stack;
-		stack.emplace_back(*input.root);
-		while(!stack.empty()) {
-			auto &current = stack.back();
-			if(current.choices == current.branch.choices.end()) {
-				stack.pop_back();
-				continue;
-			}
-
-			const auto &choice = *current.choices++;
-			// retrieve the player's decisions to reach here
-			auto player_decisions = current.data;
-			// if it's the player's turn at a branch, set the current decision
-			if(current.branch.player == player)
-				player_decisions = player_decisions.null()
-					? choice.action.variable
-					: (choice.action.variable && player_decisions);
-
-			if(choice.node->is_leaf()) {
-				// ...and we reached a leaf ...
-				const auto &leaf = choice.node->leaf();
-				// ...with known utility for us...
-				auto utility = leaf.utilities[player];
-				// ...then (the real part of) the utility should be greater than zero.
-				auto comparison = weaker
-					? labels.label(utility.real >= z3::Real::ZERO)
-					: labels.label_geq(utility, {z3::Real::ZERO, z3::Real::ZERO});
-				conjuncts.push_back(player_decisions.null() ? comparison : player_decisions.implies(comparison));
-				continue;
-			}
-
-			// branch: recurse
-			stack.emplace_back(choice.node->branch(), player_decisions);
-		}
-	}
+	for(size_t player = 0; player < input.players.size(); player++)
+		conjuncts.push_back(WeakImmunity<weaker>(player, labels).compute(*input.root));
+	auto property = conjunction(conjuncts);
 
 	auto property_constraint = weaker
 		? input.weak_immunity_constraint
 		: input.weaker_immunity_constraint;
-	auto property = conjunction(conjuncts);
 	// property is the same for all honest histories
-	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
+	for(size_t history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << "honest history #" << history + 1 << std::endl;
 		solve(input, labels, property, property_constraint, input.honest_histories[history]);
 	}
@@ -277,12 +252,62 @@ void weak_immunity(const Input &input) {
 template void weak_immunity<false>(const Input &);
 template void weak_immunity<true>(const Input &);
 
+// helper struct for computing the collusion resilience property
+struct CollusionResilience {
+	CollusionResilience(size_t players, const Leaf &honest_leaf, Labels &labels, uint64_t binary) :
+		players(players),
+		labels(labels),
+		group(binary),
+		honest_total { z3::Real::ZERO, z3::Real::ZERO }
+	{
+		// compute the honest total for the current group
+		for(size_t player = 0; player < players; player++)
+			if(group[player])
+				honest_total = honest_total + honest_leaf.utilities[player];
+	}
+
+	z3::Bool compute(const Node &node) const {
+		if(node.is_leaf()) {
+			const auto &leaf = node.leaf();
+
+			// compute the total utility for the player group...
+			Utility total {z3::Real::ZERO, z3::Real::ZERO};
+			for(size_t player = 0; player < players; player++)
+				if(group[player])
+					total = total + leaf.utilities[player];
+
+			// ..and compare it to the honest total
+			return labels.label_geq(honest_total, total);
+		}
+
+		std::vector<z3::Bool> conjuncts;
+		const auto &branch = node.branch();
+		bool nongroup_decision = !group[branch.player];
+		for(const auto &choice : branch.choices) {
+			auto choice_property = compute(*choice.node);
+			// we only care about decisions the group _doesn't_ make
+			if(nongroup_decision)
+				choice_property = choice.action.variable.implies(choice_property);
+			conjuncts.push_back(choice_property);
+		}
+		return conjunction(conjuncts);
+	}
+
+	// the total number of players
+	size_t players;
+	Labels &labels;
+	// the current group of players
+	std::bitset<Input::MAX_PLAYERS> group;
+	// their honest total
+	Utility honest_total;
+};
+
 void collusion_resilience(const Input &input) {
 	std::cout << "collusion resilience" << std::endl;
 	assert(input.players.size() < Input::MAX_PLAYERS);
 
 	// property is different for each honest history
-	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
+	for(size_t history = 0; history < input.honest_histories.size(); history++) {
 		Labels labels;
 		// lookup the leaf for this history
 		const Leaf &honest_leaf = input.honest_history_leaves[history];
@@ -291,52 +316,8 @@ void collusion_resilience(const Input &input) {
 		// sneaky hack follows: all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
 		// C++ standard mandates that `long long` has at least 64 bits, so we can have up to 64 players - this should be enough
 		// done this way more for concision than efficiency
-		for(unsigned long long binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++) {
-			// convert to a std::bitset to get some nice operators for free
-			std::bitset<Input::MAX_PLAYERS> group(binary_counter);
-
-			// the total honest utility for players in this subgroup
-			Utility honest_total {z3::Real::ZERO, z3::Real::ZERO};
-			for(size_t player = 0; player < input.players.size(); player++)
-				if(group[player])
-					honest_total = honest_total + honest_leaf.utilities[player];
-
-			// our stack only contains the decisions _not_ made by the group to reach a branch
-			std::vector<Frame<Bool>> stack;
-			stack.emplace_back(*input.root);
-			while(!stack.empty()) {
-				auto &current = stack.back();
-				if(current.choices == current.branch.choices.end()) {
-					stack.pop_back();
-					continue;
-				}
-
-				// if it's _not_ the players' turn at a branch, set the current decision
-				const auto &choice = *current.choices++;
-				auto nongroup_decisions = current.data;
-				if(!group[current.branch.player])
-					nongroup_decisions = nongroup_decisions.null()
-						? choice.action.variable
-						: (choice.action.variable && nongroup_decisions);
-
-				if(choice.node->is_leaf()) {
-					// we reached a leaf
-					const auto &leaf = choice.node->leaf();
-					// compute the total utility for the player group here...
-					Utility total {z3::Real::ZERO, z3::Real::ZERO};
-					for(size_t player = 0; player < input.players.size(); player++)
-						if(group[player])
-							total = total + leaf.utilities[player];
-					// ..and compare it to the honest total
-					auto comparison = labels.label_geq(honest_total, total);
-					conjuncts.push_back(nongroup_decisions.null() ? comparison : nongroup_decisions.implies(comparison));
-					continue;
-				}
-
-				// branch: recurse
-				stack.emplace_back(choice.node->branch(), nongroup_decisions);
-			}
-		}
+		for(unsigned long long binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++)
+			conjuncts.push_back(CollusionResilience(input.players.size(), honest_leaf, labels, binary_counter).compute(*input.root));
 
 		auto property = conjunction(conjuncts);
 		std::cout << "honest history #" << history + 1 << std::endl;
@@ -344,117 +325,98 @@ void collusion_resilience(const Input &input) {
 	}
 }
 
-void practicality(const Input &input) {
-	std::cout << "practicality" << std::endl;
-	// possible routes from an _action_ to a leaf
-	struct Routes {
-		// possibilities after the action
-		std::vector<Bool> disjuncts;
-		// if not null, the disjunction of `disjuncts` or "true" for leaves
-		Bool combined;
-	};
-
+// helper struct for computing the practicality property
+struct Practicality {
 	// routes that yield a certain utility
-	using UtilityMap = std::unordered_map<Utility, Routes>;
+	using UtilityMap = std::unordered_map<Utility, Bool>;
 	// utility map per-player
 	using PlayerUtilities = std::vector<UtilityMap>;
-	// utility map per-player per-action
-	using PlayerUtilitiesByAction = std::vector<PlayerUtilities>;
 
-	std::vector<Bool> conjuncts;
-	Labels labels;
-	// our stack contains the utility map for each player and each action at each branch
-	std::vector<Frame<PlayerUtilitiesByAction>> stack;
-	stack.emplace_back(*input.root);
-	while(true) {
-		auto &current = stack.back();
+	Practicality(size_t players, Labels &labels) : players(players), labels(labels) {}
 
-		// finish processing a branch after all choices have been recursed into
-		if(current.choices == current.branch.choices.end()) {
-			// `current` will be invalidated shortly, move stuff out of the call stack
-			auto player_utilities_by_action = std::move(current.data);
-			const auto &current_branch = current.branch;
+	// build the utility map players->utility->condition
+	// the map gives a single boolean condition for "player p gets utility u starting from this subtree"
+	// also, add constraints to `conjuncts` as we go
+	PlayerUtilities utilities(const Node &node) {
+		PlayerUtilities result(players);
+		if(node.is_leaf()) {
+			const auto &leaf = node.leaf();
+			for(size_t player = 0; player < players; player++)
+				result[player][leaf.utilities[player]] = Bool::TRUE;
+			return result;
+		}
 
-			// fill in the `combined` field of `Routes`
-			for(auto &player_utilities : player_utilities_by_action)
-				for(auto &map : player_utilities)
-					for(auto &pair : map) {
-						auto &routes = pair.second;
-						if(routes.combined.null())
-							routes.combined = disjunction(routes.disjuncts);
-					}
+		// compute player utility maps for each child recursively
+		const auto &branch = node.branch();
+		std::vector<PlayerUtilities> player_utilities_by_choice;
+		for(const auto &choice : branch.choices)
+			player_utilities_by_choice.push_back(utilities(*choice.node));
 
-			// for each possible action a in a branch...
-			for(unsigned action = 0; action < current_branch.choices.size(); action++) {
-				const auto &utilities_action = player_utilities_by_action[action][current_branch.player];
-				auto action_variable = current_branch.choices[action].action.variable;
-				// for other possible actions a' in a branch...
-				for(unsigned other = 0; other < current_branch.choices.size(); other++) {
-					if(action == other)
-						continue;
+		// for each possible action a in a branch...
+		for(size_t choice = 0; choice < branch.choices.size(); choice++) {
+			const auto &utilities_action = player_utilities_by_choice[choice][branch.player];
+			auto action_variable = branch.choices[choice].action.variable;
+			// for other possible actions a' in a branch...
+			for(size_t other = 0; other < branch.choices.size(); other++) {
+				if(choice == other)
+					continue;
 
-					const auto &utilities_other = player_utilities_by_action[other][current_branch.player];
-					// for each utility u reachable from a under condition c...
-					for(const auto &action_pair : utilities_action) {
-						auto action_utility = action_pair.first;
-						auto action_condition = action_pair.second.combined;
-						// for each utility u' reachable from a' under condition c'...
-						for(const auto &other_pair: utilities_other) {
-							auto other_utility = other_pair.first;
-							auto other_condition = other_pair.second.combined;
-							// if a and c and c'...
-							auto conjunction = action_variable && action_condition && other_condition;
-							// ...then u is at least as good as u', otherwise we'd switch
-							auto comparison = labels.label_geq(action_utility, other_utility);
-							conjuncts.push_back(conjunction.implies(comparison));
-						}
+				const auto &utilities_other = player_utilities_by_choice[other][branch.player];
+				// for each utility u reachable from a under condition c...
+				for(const auto &action_pair : utilities_action) {
+					auto action_utility = action_pair.first;
+					auto action_condition = action_pair.second;
+					// for each utility u' reachable from a' under condition c'...
+					for(const auto &other_pair: utilities_other) {
+						auto other_utility = other_pair.first;
+						auto other_condition = other_pair.second;
+						// if a and c and c'...
+						auto conjunction = action_variable && action_condition && other_condition;
+						// ...then u is at least as good as u', otherwise we'd switch
+						auto comparison = labels.label_geq(action_utility, other_utility);
+						conjuncts.push_back(conjunction.implies(comparison));
 					}
 				}
 			}
+		}
 
-			// `current` invalidated here
-			stack.pop_back();
-			if(stack.empty())
-				break;
-
-			// put all of our routes into the parent
-			auto &parent = stack.back();
-			auto &parent_player_utilities_by_action = parent.data;
-			parent_player_utilities_by_action.emplace_back(input.players.size());
-			auto &parent_player_utilities = parent_player_utilities_by_action.back();
-			for(unsigned choice = 0; choice < current_branch.choices.size(); choice++) {
-				const auto &player_utilities = player_utilities_by_action[choice];
-				auto action = current_branch.choices[choice].action.variable;
-				for(unsigned player = 0; player < player_utilities.size(); player++) {
-					const auto &utility_map = player_utilities[player];
-					auto &parent_utility_map = parent_player_utilities[player];
-					for(const auto &pair : utility_map) {
-						auto utility = pair.first;
-						auto condition = pair.second.combined;
-						parent_utility_map[utility].disjuncts.push_back(action && condition);
-					}
+		// combine child maps into a larger map for this node
+		for(size_t choice = 0; choice < branch.choices.size(); choice++) {
+			auto action = branch.choices[choice].action.variable;
+			const auto &player_utilities = player_utilities_by_choice[choice];
+			for(size_t player = 0; player < players; player++) {
+				auto &player_result = result[player];
+				const auto &utility_map = player_utilities[player];
+				for(const auto &pair : utility_map) {
+					auto utility = pair.first;
+					auto condition = action && pair.second;
+					auto &resulting_condition = player_result[utility];
+					resulting_condition = resulting_condition.null()
+						? condition
+						: (resulting_condition || condition);
 				}
 			}
-			continue;
 		}
 
-		auto &player_utilities_by_action = current.data;
-		const auto &choice = *current.choices++;
-		// the next choice is a leaf, do all the usual logic
-		if(choice.node->is_leaf()) {
-			const auto &leaf = choice.node->leaf();
-			player_utilities_by_action.emplace_back(leaf.utilities.size());
-			auto &player_utilities = player_utilities_by_action.back();
-			for(unsigned player = 0; player < leaf.utilities.size(); player++)
-				player_utilities[player][leaf.utilities[player]].combined = Bool::TRUE;
-			continue;
-		}
-
-		// branch: recurse
-		stack.emplace_back(choice.node->branch());
+		return result;
 	}
 
-	auto property = conjunction(conjuncts);
+	z3::Bool compute(const Node &node) {
+		conjuncts.clear();
+		utilities(node);
+		return conjunction(conjuncts);
+	}
+
+	size_t players;
+	Labels &labels;
+	std::vector<z3::Bool> conjuncts;
+};
+
+void practicality(const Input &input) {
+	std::cout << "practicality" << std::endl;
+	Labels labels;
+	auto property = Practicality(input.players.size(), labels).compute(*input.root);
+
 	// property is the same for all honest histories
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << "honest history #" << history + 1 << std::endl;

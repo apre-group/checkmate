@@ -6,8 +6,9 @@
 #include <string>
 #include <unordered_map>
 
-#include "z3++.hpp"
 #include "utility.hpp"
+#include "utils.hpp"
+#include "z3++.hpp"
 
 // an action available at a branch
 struct Action {
@@ -67,7 +68,9 @@ struct Branch final : public Node {
 		for(const Choice &choice : choices)
 			if(choice.action.name == action)
 				return choice;
+
 		assert(false);
+		UNREACHABLE;
 	}
 
 	// whose turn is it?
