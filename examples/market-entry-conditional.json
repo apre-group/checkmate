@@ -26,19 +26,29 @@
   },
   "honest_histories": [
     {
-      "action": "o",
-      "children": []
+      "action" : "",
+      "children":[
+        {
+          "action": "o",
+          "children": []
+        }
+      ]
     },
     {
-      "action": "e",
+      "action": "",
       "children": [
         {
-          "action": "i",
-          "children": []
-        },
-        {
-          "action": "s",
-          "children": []
+          "action": "e",
+          "children": [
+            {
+              "action": "i",
+              "children": []
+            },
+            {
+              "action": "s",
+              "children": []
+            }
+          ]
         }
       ]
     }

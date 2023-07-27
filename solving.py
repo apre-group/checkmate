@@ -10,7 +10,7 @@ import logging
 from auxfunz3 import *
 from output import SolvingResult, CaseWithStrategy, Counterexample
 from utility import Utility, ZERO
-from input import Tree, Leaf, Branch, Input
+from input import Tree, Leaf, Branch, Input, HistoryTree
 
 
 class StrategySolver(metaclass=ABCMeta):
@@ -21,7 +21,7 @@ class StrategySolver(metaclass=ABCMeta):
     to implement e.g. weak immunity
     """
     input: Input
-    checked_history: List[str]
+    checked_history: HistoryTree
     generate_preconditions: bool
     generate_counterexamples: bool
     _solver: z3.Solver
@@ -68,7 +68,7 @@ class StrategySolver(metaclass=ABCMeta):
     def __init__(
             self,
             checked_input: Input,
-            checked_history: List[str],
+            checked_history: HistoryTree,
             generate_preconditions: bool,
             generate_counterexamples: bool
     ):
@@ -242,28 +242,38 @@ class StrategySolver(metaclass=ABCMeta):
             self._minimize_solver.add(constraint)
 
     def _add_action_constraints(self, history: List[str], tree: Tree, solver):
-        """exactly one action must be taken at this subtree"""
+        """exactly one action for each condition must be taken at this subtree"""
         if isinstance(tree, Leaf):
             return
 
         assert isinstance(tree, Branch)
-        actions = [
-            self._action_variable(history, action)
-            for action in tree.actions
-        ]
-        solver.add(disjunction(*actions))
-        for (left, right) in itertools.combinations(actions, 2):
-            solver.add(disjunction(negation(left), negation(right)))
+        conditions_dict = {}
+        for action, tree in tree.actions.items():
+            conditions_dict[tree.condition] = conditions_dict.get(tree.condition, []).append(self._action_variable(history, action))
+
+        # At least one action per condition
+        for cond in conditions_dict:
+            solver.add(disjunction(*conditions_dict[cond]))
+
+        # At most one action per condition
+        for cond in conditions_dict:
+            for (left, right) in itertools.combinations(conditions_dict[cond], 2):
+                solver.add(disjunction(negation(left), negation(right)))
 
         for action, tree in tree.actions.items():
             self._add_action_constraints(history + [action], tree, solver)
 
-    def _add_history_constraints(self, checked_history: List[str]):
+    def _add_history_constraints(self, checked_history: HistoryTree, history: List[str]):
         """we only care about this history"""
-        for i in range(len(checked_history)):
-            self._solver.add(self._action_variable(
-                checked_history[:i], checked_history[i]
-            ))
+        if len(checked_history.children) == 0:
+            return
+        else:
+            if checked_history.action:
+                self._solver.add(self._action_variable(
+                    history, checked_history.action
+                ))
+            for child in checked_history.children:
+                self._add_history_constraints(child, history + [checked_history.action])
 
     def _property_constraint_for_case(self, *case: Boolean, generated_preconditions: Set[z3.BoolRef]) -> z3.BoolRef:
         """
