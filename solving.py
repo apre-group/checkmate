@@ -100,7 +100,7 @@ class StrategySolver(metaclass=ABCMeta):
         self._solver.set('core.minimize_partial', True)
 
         self._add_action_constraints([], self.input.tree, self._solver)
-        self._add_history_constraints(self.checked_history)
+        self._add_history_constraints(self.checked_history, [])
 
     def solve(self) -> SolvingResult:
         """
@@ -247,13 +247,19 @@ class StrategySolver(metaclass=ABCMeta):
             return
 
         assert isinstance(tree, Branch)
-        actions = [
-            self._action_variable(history, action)
-            for action in tree.actions
-        ]
-        solver.add(disjunction(*actions))
-        for (left, right) in itertools.combinations(actions, 2):
-            solver.add(disjunction(negation(left), negation(right)))
+        conditions_dict = {}
+        for action, tree in tree.actions.items():
+            conditions_dict[tree.condition] = conditions_dict.get(tree.condition, [])
+            conditions_dict[tree.condition].append(self._action_variable(history, action))
+
+        # At least one action per condition
+        for cond in conditions_dict:
+            solver.add(disjunction(*conditions_dict[cond]))
+
+        # At most one action per condition
+        for cond in conditions_dict:
+            for (left, right) in itertools.combinations(conditions_dict[cond], 2):
+                solver.add(disjunction(negation(left), negation(right)))
 
         for action, tree in tree.actions.items():
             self._add_action_constraints(history + [action], tree, solver)
@@ -382,7 +388,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
         constraints = []
         for player in self.input.players:
             self._collect_weak_immunity_constraints(
-                constraints, player, [], [], self.input.tree
+                constraints, [], player, [], [], self.input.tree
             )
         return conjunction(*constraints)
 
@@ -424,15 +430,17 @@ class FeebleImmuneStrategySolver(StrategySolver):
     def _collect_weak_immunity_constraints(
             self,
             constraints: List[z3.BoolRef],
+            conditions: List[z3.BoolRef],
             player: str,
             player_decisions: List[z3.BoolRef],
             history: List[str],
             tree: Tree
     ):
+
         # if the player makes player_decisions, then its utility should be more than 0.
         if isinstance(tree, Leaf):
             impl = implication(
-                conjunction(*player_decisions),
+                conjunction(*player_decisions, *conditions),
                 self._compare_utilities(tree.utilities[player])
             )
             if self.generate_counterexamples:
@@ -448,8 +456,13 @@ class FeebleImmuneStrategySolver(StrategySolver):
             action_variable = [self._action_variable(history, action)] \
                 if player_decision \
                 else []
+            child_cond = conditions[:]
+            if not child.condition == True:
+                child_cond.append(child.condition)
+
             self._collect_weak_immunity_constraints(
                 constraints,
+                child_cond,
                 player,
                 player_decisions + action_variable,
                 history + [action],
@@ -485,23 +498,19 @@ class CollusionResilienceStrategySolver(StrategySolver):
         return self.input.collusion_resilience_constraints
 
     def _property_constraint_implementation(self) -> z3.BoolRef:
-        utilities_of_checked_history = self.input.tree.get_utility_of_terminal_history(
-            self.checked_history
-        )
 
         constraints = []
         for group_size in range(1, len(self.input.players)):
             for colluding_group in itertools.combinations(self.input.players, group_size):
-                old_utility = sum((
-                    utilities_of_checked_history[player]
-                    for player in colluding_group
-                ), start=ZERO)
                 self._collect_collusion_resilience_constraints(
                     constraints,
-                    old_utility,
+                    [],
                     colluding_group,
                     [],
+                    True,
                     [],
+                    self.checked_history,
+                    self.input.tree,
                     self.input.tree
                 )
 
@@ -541,10 +550,13 @@ class CollusionResilienceStrategySolver(StrategySolver):
     def _collect_collusion_resilience_constraints(
             self,
             constraints: List[z3.BoolRef],
-            old_utility: Utility,
+            conditions: List[z3.BoolRef],
             colluding_group: Tuple[str],
             non_group_decisions: List[z3.BoolRef],
+            cutting_honest_hist: bool,
             history: List[str],
+            honest_histories: HistoryTree,
+            corresponding_honest_subtree: Tree,
             tree: Tree
     ):
         # the colluding group should not benefit
@@ -552,17 +564,25 @@ class CollusionResilienceStrategySolver(StrategySolver):
         # that is the strategy we are trying to find (so `non_group_decisions` is antecedent)
         if isinstance(tree, Leaf):
             colluding_utility = sum((
-                tree.utilities[player]
-                for player in colluding_group
-            ), start=ZERO)
-            impl = implication(
-                conjunction(*non_group_decisions),
-                Utility.__ge__(old_utility, colluding_utility, self._pair_label)
-            )
-            if self.generate_counterexamples:
-                impl = implication(self._subtree_label(colluding_group, history), impl)
+                                        tree.utilities[player]
+                                        for player in colluding_group
+                                     ), start=ZERO)
 
-            constraints.append(impl)
+            for honest_cond, old_utility in self.iterate_honest_histories(honest_histories,
+                                                                          [],
+                                                                          corresponding_honest_subtree):
+                honest_utility = sum((
+                                        old_utility[player]
+                                        for player in colluding_group
+                                     ), start=ZERO)
+                impl = implication(
+                    conjunction(*non_group_decisions,*honest_cond,*conditions),
+                    Utility.__ge__(honest_utility, colluding_utility, self._pair_label)
+                )
+                if self.generate_counterexamples:
+                    impl = implication(self._subtree_label(colluding_group, history), impl)
+
+                constraints.append(impl)
             return
 
         assert isinstance(tree, Branch)
@@ -571,15 +591,56 @@ class CollusionResilienceStrategySolver(StrategySolver):
             action_variable = [] \
                 if group_decision \
                 else [self._action_variable(history, action)]
+            
+            child_conditions = conditions[:]
+            if not child.condition == True:
+                child_conditions.append(child.condition)
+
+            if not cutting_honest_hist:
+                child_cutting = False
+                child_honest_hist = honest_histories
+                child_corresponding_honest = corresponding_honest_subtree
+            else:
+                for hist_child in honest_histories.children:
+                    if hist_child.condition == child.condition:
+                        if hist_child.action == action: #still along honest history, thus cutting
+                            child_cutting = True
+                            child_honest_hist = hist_child
+                            child_corresponding_honest = corresponding_honest_subtree.actions[action]
+                        else:
+                            child_cutting = False
+                            child_honest_hist = honest_histories
+                            child_corresponding_honest = corresponding_honest_subtree
+
             self._collect_collusion_resilience_constraints(
                 constraints,
-                old_utility,
+                child_conditions,
                 colluding_group,
                 non_group_decisions + action_variable,
+                child_cutting,
                 history + [action],
+                child_honest_hist,
+                child_corresponding_honest,
                 child
             )
 
+    def iterate_honest_histories(self, 
+                                 honest_hist: HistoryTree,
+                                 collected_cond: List[z3.BoolRef],
+                                 tree: Tree) \
+                                 -> Tuple[List[z3.BoolRef],Utility]:
+        
+        if isinstance(tree, Leaf):
+            yield collected_cond, tree.utilities
+
+        else:
+            assert isinstance(tree,Branch)
+            for child in honest_hist.children:
+                child_collected_conditions = collected_cond[:]
+                if not child.condition == True:
+                    child_collected_conditions.append(child.condition)
+                self.iterate_honest_histories(child,child_collected_conditions,tree.actions[child.action])
+ 
 
 class PracticalityStrategySolver(StrategySolver):
     """solver for practicality - linear (ish) version"""
