@@ -76,8 +76,9 @@ class Branch(Tree):
 class HistoryTree:
     """class for history trees"""
 
-    def __init__(self, action_name: str, children: List[HistoryTree]):
+    def __init__(self, action_name: str, condition: z3.BoolRef, children: List[HistoryTree]):
         self.action = action_name
+        self.condition = condition
         self.children = children
 
     def __repr__(self) -> str:
@@ -89,7 +90,7 @@ class HistoryTree:
             f"`>{pad(repr(tree).splitlines())}"
             for tree in self.children
         )
-        return f"{self.action}\n{offspring}"
+        return f"{self.action} if {self.condition}\n{offspring}"
 
 
 class Input:
@@ -139,8 +140,9 @@ class Input:
             self.load_constraint(constraint)
             for constraint in obj['property_constraints']['practicality']
         ]
-        self.honest_histories = [self._load_history_tree(t) for t in obj['honest_histories']]
         self.tree = self._load_tree(obj['tree'])
+        self.honest_histories = [self._load_history_tree(t, self.tree) for t in obj['honest_histories']]
+        
 
     def __repr__(self) -> str:
         return (
@@ -178,7 +180,7 @@ class Input:
         if 'player' in tree:
             player = tree['player']
             try:
-                condition = tree['condition']
+                condition = self.load_constraint(tree['condition'])
             except KeyError:
                 condition = True
             children = {
@@ -188,7 +190,7 @@ class Input:
             return Branch(player, condition, children)
         else:
             try:
-                condition = tree['condition']
+                condition = self.load_constraint(tree['condition'])
             except KeyError:
                 condition = True
             utilities = {
@@ -197,10 +199,14 @@ class Input:
             }
             return Leaf(condition, utilities)
 
-    def _load_history_tree(self, tree: Dict[str, Any]) -> HistoryTree:
+    def _load_history_tree(self, hist_tree: Dict[str, Any], tree: Tree) -> HistoryTree:
         """recursively load history subtrees in the input"""
-        children = [self._load_history_tree(child) for child in tree["children"]]
-        return HistoryTree(tree["action"], children)
+        if hist_tree['action'] == '':
+            condition = True
+        else:
+            condition = tree.condition 
+        children = [self._load_history_tree(child, tree.actions[child['action']]) for child in hist_tree["children"]]
+        return HistoryTree(hist_tree["action"], condition, children)
 
     def get_tree(self) -> Tree:
         return self.tree
