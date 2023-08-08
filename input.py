@@ -92,6 +92,9 @@ class HistoryTree:
         )
         return f"{self.action} if {self.condition}\n{offspring}"
 
+    def json(self):
+        return self.__repr__()
+
 
 class Input:
     """an input problem"""
@@ -142,7 +145,7 @@ class Input:
         ]
         self.tree = self._load_tree(obj['tree'])
         self.honest_histories = [self._load_history_tree(t, self.tree) for t in obj['honest_histories']]
-        
+
 
     def __repr__(self) -> str:
         return (
@@ -204,7 +207,7 @@ class Input:
         if hist_tree['action'] == '':
             condition = True
         else:
-            condition = tree.condition 
+            condition = tree.condition
         children = [self._load_history_tree(child, tree.actions[child['action']]) for child in hist_tree["children"]]
         return HistoryTree(hist_tree["action"], condition, children)
 
