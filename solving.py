@@ -248,9 +248,9 @@ class StrategySolver(metaclass=ABCMeta):
 
         assert isinstance(tree, Branch)
         conditions_dict = {}
-        for action, tree in tree.actions.items():
-            conditions_dict[tree.condition] = conditions_dict.get(tree.condition, [])
-            conditions_dict[tree.condition].append(self._action_variable(history, action))
+        for action, child in tree.actions.items():
+            conditions_dict[child.condition] = conditions_dict.get(child.condition, [])
+            conditions_dict[child.condition].append(self._action_variable(history, action))
 
         # At least one action per condition
         for cond in conditions_dict:
@@ -261,15 +261,24 @@ class StrategySolver(metaclass=ABCMeta):
             for (left, right) in itertools.combinations(conditions_dict[cond], 2):
                 solver.add(disjunction(negation(left), negation(right)))
 
-        for action, tree in tree.actions.items():
-            self._add_action_constraints(history + [action], tree, solver)
+        for action, child in tree.actions.items():
+            self._add_action_constraints(history + [action], child, solver)
 
     def _add_history_constraints(self, checked_history: List[str]):
         """we only care about this history"""
-        for i in range(len(checked_history)):
-            self._solver.add(self._action_variable(
-                checked_history[:i], checked_history[i]
-            ))
+        if len(checked_history.children) == 0:
+            if checked_history.action:
+                self._solver.add(self._action_variable(
+                    history, checked_history.action
+                ))
+            return
+        else:
+            if checked_history.action:
+                self._solver.add(self._action_variable(
+                    history, checked_history.action
+                ))
+            for child in checked_history.children:
+                self._add_history_constraints(child, history + [checked_history.action])
 
     def _property_constraint_for_case(self, *case: Boolean, generated_preconditions: Set[z3.BoolRef]) -> z3.BoolRef:
         """
@@ -591,7 +600,7 @@ class CollusionResilienceStrategySolver(StrategySolver):
             action_variable = [] \
                 if group_decision \
                 else [self._action_variable(history, action)]
-            
+
             child_conditions = conditions[:]
             if not child.condition == True:
                 child_conditions.append(child.condition)
@@ -624,12 +633,12 @@ class CollusionResilienceStrategySolver(StrategySolver):
                 child
             )
 
-    def iterate_honest_histories(self, 
+    def iterate_honest_histories(self,
                                  honest_hist: HistoryTree,
                                  collected_cond: List[z3.BoolRef],
                                  tree: Tree) \
                                  -> Tuple[List[z3.BoolRef],Utility]:
-        
+
         if isinstance(tree, Leaf):
             yield collected_cond, tree.utilities
 
@@ -640,7 +649,7 @@ class CollusionResilienceStrategySolver(StrategySolver):
                 if not child.condition == True:
                     child_collected_conditions.append(child.condition)
                 self.iterate_honest_histories(child,child_collected_conditions,tree.actions[child.action])
- 
+
 
 class PracticalityStrategySolver(StrategySolver):
     """solver for practicality - linear (ish) version"""
@@ -808,8 +817,8 @@ class PracticalityStrategySolver(StrategySolver):
             utility_map[action] = self._practicality_constraints(constraints, history + [action], child)
 
         action_variables = {
-            action: self._action_variable(history, action)
-            for action in tree.actions
+            action: conjunction(self._action_variable(history, action), child.condition)
+            for action, child in tree.actions.items()
         }
         # subtree_label = self._subtree_label((tree.player,), history)
 
@@ -844,7 +853,7 @@ class PracticalityStrategySolver(StrategySolver):
                                 Utility.__ge__(utility, other_utility, label_fn=self._pair_label),
                             ))
                         else:
-                            constraints.append(implication(
+                            constr = implication(
                                 conjunction(
                                     # ...then we know that taking action a means that u >= u'
                                     action_variables[action],
@@ -853,7 +862,8 @@ class PracticalityStrategySolver(StrategySolver):
                                     other_condition,
                                 ),
                                 Utility.__ge__(utility, other_utility, label_fn=self._pair_label),
-                            ))
+                            )
+                            constraints.append(constr)
         # build the utility map players->utility->condition
         # the inner map gives a single boolean condition for "player p gets utility u starting from this subtree"
         result = {
