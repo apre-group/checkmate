@@ -268,8 +268,9 @@ class StrategySolver(metaclass=ABCMeta):
         """we only care about this history"""
         if len(checked_history.children) == 0:
             if checked_history.action:
+                assert(len(history) > 0) # the history should begin with ''.
                 self._solver.add(self._action_variable(
-                    history, checked_history.action
+                    history[1:], checked_history.action
                 ))
             return
         else:
@@ -571,6 +572,7 @@ class CollusionResilienceStrategySolver(StrategySolver):
         # the colluding group should not benefit
         # players that are not in the colluding group have their strategy "fixed"
         # that is the strategy we are trying to find (so `non_group_decisions` is antecedent)
+
         if isinstance(tree, Leaf):
             colluding_utility = sum((
                                         tree.utilities[player]
@@ -637,7 +639,7 @@ class CollusionResilienceStrategySolver(StrategySolver):
                                  honest_hist: HistoryTree,
                                  collected_cond: List[z3.BoolRef],
                                  tree: Tree) \
-                                 -> Tuple[List[z3.BoolRef],Utility]:
+                                 -> Generator[Tuple[List[z3.BoolRef],Utility],None,None]:
 
         if isinstance(tree, Leaf):
             yield collected_cond, tree.utilities
@@ -648,7 +650,7 @@ class CollusionResilienceStrategySolver(StrategySolver):
                 child_collected_conditions = collected_cond[:]
                 if not child.condition == True:
                     child_collected_conditions.append(child.condition)
-                self.iterate_honest_histories(child,child_collected_conditions,tree.actions[child.action])
+                yield from self.iterate_honest_histories(child,child_collected_conditions,tree.actions[child.action])
 
 
 class PracticalityStrategySolver(StrategySolver):
