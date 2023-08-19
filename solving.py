@@ -226,6 +226,25 @@ class StrategySolver(metaclass=ABCMeta):
         logging.info("no more cases, done")
         return result
 
+    def _history_constraints_ce(self, hstar: HistoryTree, history: List[str]):
+        """computing list of all hstar action variables for counterexample extraction"""
+        action_var_list = []
+        if len(hstar.children) == 0:
+            if hstar.action:
+                assert(len(history) > 0) # the history should begin with ''.
+                action_var_list.append(self._action_variable(
+                    history[1:], hstar.action
+                ))
+        else:
+            for child in hstar.children:
+                action_var_list = self._history_constraints_ce(child, history + [hstar.action])
+            if hstar.action:
+                action_var_list.append(self._action_variable(
+                    history, hstar.action
+                ))
+
+        return action_var_list
+
     def _reset_case_and_minimize_solver(self, generated_preconditions: Set[z3.BoolRef] = None):
         self._case_solver.reset()
         self._minimize_solver.reset()
@@ -690,6 +709,8 @@ class PracticalityStrategySolver(StrategySolver):
                 prefix.append(h[i])
         return prefix
 
+
+
     def _extract_ces(self, case, reals, infinitesimals, model):
         subgame = []
         ce = []
@@ -703,10 +724,13 @@ class PracticalityStrategySolver(StrategySolver):
 
         property_constraint = \
             self._property_constraint_for_case(*case, generated_preconditions=set())
-        hstar_constraint = conjunction(*[self._action_variable(hstar[:i], hstar[i]) for i in range(len(hstar))])
+        
+        hstar_constraint = conjunction(*self._history_constraints_ce(hstar,[]))
+   
         checked_constriant = conjunction(property_constraint, hstar_constraint)
         check_result_with_hstar = ce_solver.check(checked_constriant, *self._label2pair.keys(), *labels_in_subgame)
 
+        #code adapted until here, think about what pr ce means for conditional actions
         while check_result_with_hstar == z3.unsat and isinstance(game, Branch):
             no_more_hist = False
             pr = []
@@ -775,6 +799,8 @@ class PracticalityStrategySolver(StrategySolver):
                         case = order_according_to_model(model, self._minimize_solver, reals) |\
                             order_according_to_model(model, self._minimize_solver, infinitesimals)
                         logging.info(f"current case assumes {case if case else 'nothing'}")
+            # to be adapted to HistoryTree
+            #subgame shall be the history leading to the counterexample I guess
             if len(pr) == 0:
                 shortest_h = [hstar[0]]
             hstar = hstar[:len(shortest_h)]
