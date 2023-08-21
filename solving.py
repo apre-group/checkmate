@@ -185,6 +185,7 @@ class StrategySolver(metaclass=ABCMeta):
                     # delete existing strategies from result because property is not fulfilled
                     result.delete_strategies()
 
+                    #from here on to be adapted
                     if self.generate_counterexamples:
                         # property constraint is now fixed
                         self._solver.add(property_constraint)
@@ -562,6 +563,7 @@ class CollusionResilienceStrategySolver(StrategySolver):
         cestrat_output = []
         cestrat = {}
 
+        setofp = None
         for label_expr in core:
             setofp, hist, _action, _other_action, _condition, _other_condition = self._label2subtree[label_expr]
 

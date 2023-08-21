@@ -4,7 +4,7 @@ from typing import List
 from constants import SecurityProperty, PROPERTY_TO_STR
 from input import Input
 from output import AnalysisResult
-from solving import WeakImmunityStrategySolver, WeakerImmunityStrategySolver, CollusionResilienceStrategySolver, \
+from solving_newcases import WeakImmunityStrategySolver, WeakerImmunityStrategySolver, CollusionResilienceStrategySolver, \
     PracticalityStrategySolver
 
 
@@ -56,7 +56,6 @@ def analyze_input(checked_input: Input,
                 generate_preconditions,
                 generate_counterexamples
             ).solve()
-
         results.append(AnalysisResult(honest_history, wi_res, weri_res, cr_res, p_res))
 
     # nice summary of the check

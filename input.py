@@ -35,6 +35,9 @@ class Leaf(Tree):
         self.utilities = utilities
         self.condition = condition
 
+    def get_condition(self) -> str:
+        return self.condition
+
     def __repr__(self) -> str:
         return '\n'.join(
             f"{player}: {utility}"
@@ -50,6 +53,9 @@ class Branch(Tree):
 
     def get_player(self) -> str:
         return self.player
+    
+    def get_condition(self) -> str:
+        return self.condition
 
     def get_utility_of_terminal_history(self, history: List[str]) -> Dict[str, Utility]:
         assert len(history) > 0
@@ -214,14 +220,14 @@ class Input:
     def get_tree(self) -> Tree:
         return self.tree
 
-    def get_players_in_hist(self, Tree, history: List(str)) -> List(str):
+    def get_players_in_hist(self, tree, history: List(str)) -> List(str):
         """get the players along the provided history"""
         if len(history) == 0:
             return []
         else:
-            assert type(Tree) == Branch
-            player_list = [Tree.get_player()]
-            player_list.extend(self.get_players_in_hist(Tree.actions[history[0]],history[1:]))
+            assert type(tree) == Branch
+            player_list = [tree.get_player()]
+            player_list.extend(self.get_players_in_hist(tree.actions[history[0]],history[1:]))
             return player_list
 
     def get_player_at_hist(self, tree, history: List[str]) -> str:
@@ -231,6 +237,13 @@ class Input:
             return tree.get_player()
         else:
             return self.get_player_at_hist(tree.actions[history[0]], history[1:])
+
+    def get_condition_at_hist(self, tree, history: List[str]) -> z3.BoolRef:
+        """get the condition at the node of the history"""
+        if len(history) == 0:
+            return tree.get_condition()
+        else:
+            return self.get_condition_at_hist(tree.actions[history[0]], history[1:])
 
     def get_subtree_at_hist(self, tree: Tree, history: List[str]) -> Tree:
         if len(history) == 0:
