@@ -59,11 +59,11 @@ class StrategySolver(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, reals, infinitesimlas, model):
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, comp_values, model):
         pass
 
     @abstractmethod
-    def _generate_counterexamples(self, core, labels, case, reals, infinitesimals, model) -> Counterexample:
+    def _generate_counterexamples(self, core, labels, case, comp_values, model) -> Counterexample:
         pass
 
     def __init__(
@@ -113,54 +113,11 @@ class StrategySolver(metaclass=ABCMeta):
         result = SolvingResult()
         result, b = self.case_splitting(True, {True}, [])
 
-                #to be considered from here for counterexamples and preconditions
-
-
-                # if self.generate_counterexamples:
-                #     # property constraint is now fixed
-                #     self._solver.add(property_constraint)
-                #     # we no longer care about unsat cores for expression comparisons,
-                #     # so just assert it and move along
-                #     self._solver.add(*self._label2pair.keys())
-
-                #     labels = set(self._label2subtree.keys())
-
-                #     counterexample = self._generate_counterexamples(core, labels, case, reals, infinitesimals, model)
-                #     result.counterexamples.append(counterexample)
-
-                #     logging.info("no more counterexamples")
-
-                # if not self.generate_preconditions or not case:
-                #     if self.generate_preconditions and not case:
-                #         logging.info(
-                #             "failed case is implied by preconditions"
-                #         )
-
-                #     return result
-
-                # else:
-                #     result.generated_preconditions.add(disjunction(*(
-                #         simplify_boolean(negation(constr)) for constr in case
-                #     )))
-
-                #     logging.info(
-                #         f"here are the generated preconditions: {result.generated_preconditions}"
-                #     )
-                #     logging.info(
-                #         "restarting solving routine with the generated set of preconditions"
-                #     )
-
-                #     # reset case and minimizing solver to initial constraints plus generated preconditions
-                #     self._reset_case_and_minimize_solver(result.generated_preconditions)
-
         # there are no more possible models, i.e. no more cases to be discharged
         logging.info("no more cases, done")
         return result
     
-    def case_splitting(self, new_condition: z3.BoolRef, current_case: Set[z3.BoolRef], comp_values) -> SolvingResult():
-        # print(new_condition)
-        # print(current_case)
-        
+    def case_splitting(self, new_condition: z3.BoolRef, current_case: Set[z3.BoolRef], comp_values) -> (SolvingResult(), z3.BoolRef):
 
         result = SolvingResult()
 
@@ -184,16 +141,13 @@ class StrategySolver(metaclass=ABCMeta):
         if contrad_result == z3.unsat:
             logging.info(f"case {new_condition} impossible, hence trivially satisfied, next case considered")
             return result, True
-        
-        #print(current_case)
+        elif contrad_result == z3.unsat:
+            model = self._case_solver.model(contradiction_constraints)
 
         case={new_condition}
         for elem in current_case:
             case.add(elem)
 
-        # print(current_case)
-        # print(new_condition)
-        # print(case)
 
         logging.info(f"current case assumes {case}")
 
@@ -287,12 +241,7 @@ class StrategySolver(metaclass=ABCMeta):
 
                     labels = set(self._label2subtree.keys())
 
-                    #only used in ce generation for pr, probably unecessary
-                    reals = []
-                    infinitesimals = []
-                    model = []
-
-                    counterexample = self._generate_counterexamples(core, labels, case, reals, infinitesimals, model)
+                    counterexample = self._generate_counterexamples(core, labels, case, comp_values, model)
                     result.counterexamples.append(counterexample)
 
                     logging.info("no more counterexamples")
@@ -361,7 +310,24 @@ class StrategySolver(metaclass=ABCMeta):
                 new_condition
                 )
 
+    def _history_constraints_ce(self, hstar: HistoryTree, history: List[str]):
+        """computing list of all hstar action variables for counterexample extraction"""
+        action_var_list = []
+        if len(hstar.children) == 0:
+            if hstar.action:
+                assert(len(history) > 0) # the history should begin with ''.
+                action_var_list.append(self._action_variable(
+                    history[1:], hstar.action
+                ))
+        else:
+            for child in hstar.children:
+                action_var_list = self._history_constraints_ce(child, history + [hstar.action])
+            if hstar.action:
+                action_var_list.append(self._action_variable(
+                    history, hstar.action
+                ))
 
+        return action_var_list
 
     def _reset_case_and_minimize_solver(self, generated_preconditions: Set[z3.BoolRef] = None):
         self._case_solver.reset()
@@ -498,6 +464,27 @@ class StrategySolver(metaclass=ABCMeta):
 
         return label_expr
 
+    def _list_of_prhist(self, strategy) -> List[str]:
+        terminal = False
+        hh = strategy[""]
+        if strategy.get(hh, None) is None:
+            terminal = True
+        #think about what do we want as counterexample?
+        while not terminal:
+            new_hh = []
+            terminal = True
+            for hist in hh:
+                if strategy.get(hist, None) is not None:
+                    terminal = False
+                    new_hist = []
+                    for elem in strategy[hist]:
+                        new_hist.append(hist + ";" + elem)
+                else:
+                    new_hist = [hist]
+                new_hh.extend(new_hist)
+            hh = new_hh
+                  
+
     def _extract_strategy(self, solver, case: Set[z3.BoolRef], give_history=False) -> Union[CaseWithStrategy, Tuple[CaseWithStrategy, str]]:
         """Extracting strategies from the solver for the current case split."""
         strategy = {}
@@ -511,17 +498,11 @@ class StrategySolver(metaclass=ABCMeta):
             # Only take action variables for strategies
             if variable in self._action_variables and model[name]:
                 history, action = self._action_variables[variable]
-                strategy[';'.join(history)] = action
+                if ';'.join(history) not in strategy.keys():
+                    strategy[';'.join(history)] = []
+                strategy[';'.join(history)].append(action)
         if give_history:
-            terminal = False
-            hh = strategy[""]
-            if strategy.get(hh, None) is None:
-                terminal = True
-            while not terminal:
-                hh += ";" + strategy[hh]
-                if strategy.get(hh, None) is None:
-                    terminal = True
-            return CaseWithStrategy(case, strategy), hh
+            return CaseWithStrategy(case, strategy), self._list_of_prstrat(strategy)
         else:
             return CaseWithStrategy(case, strategy)
 
@@ -541,16 +522,18 @@ class FeebleImmuneStrategySolver(StrategySolver):
             )
         return conjunction(*constraints)
 
-    def _generate_counterexamples(self, core, labels, case, reals, infinitesimals, model):
+    def _generate_counterexamples(self, core, labels, case, comp_values, model):
         """collecting all counterexamples for w(er)i, one per unsat core"""
         ces = []
+        problematic_cases = set()
         strong_weak_constraint = []
         for core in minimal_unsat_cores(self._solver, labels):
             logging.info("counterexample found - property cannot be fulfilled because of:")
             for item in core:
                 assert self._solver.check(*(core - {item})) == z3.sat
-            counterexample, conditions = self._extract_counterexample_core(core, case, reals, infinitesimals, model)
-            if not conditions == []:
+            counterexample, conditions = self._extract_counterexample_core(core, case, comp_values, model)
+            if len(conditions):
+                problematic_cases.update(conditions)
                 strong_weak_constraint.append(negation(conjunction(*conditions)))
             
             # adapt what we save in the result!
@@ -559,27 +542,27 @@ class FeebleImmuneStrategySolver(StrategySolver):
         strong_weak_solver = z3.Solver()
         strong_weak_solver.add(conjunction(*strong_weak_constraint))
         if strong_weak_solver.check() == z3.sat:
-            logging.info("wi only weakly violated, model to be added")
+            logging.info(f"Property only weakly violated, the problematic scenarios are {str(problematic_cases)}.")
         elif strong_weak_solver.check() == z3.unsat:
-            logging.info("wi strongly violated")
+            logging.info("Property strongly violated, every scenario is problematic.")
         else:
             logging.info("something went wrong")
 
         return Counterexample(case, ces, [])
 
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, reals, infinitesimals, model):
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, comp_values, model):
         """generate readable counterexamples one per unsat core"""
         cestrat_output = []
         cestrat = {}
         conditions = []
 
         setofp = None
-        conditions = []
+        conditions = set()
         for label_expr in core:
             setofp, hist, _action, _other_action, condition, other_condition = self._label2subtree[label_expr]
 
-            if not condition == True:
-                conditions.append(condition)
+            if (not condition == True) and (not str(condition) == "And"):
+                conditions.add(condition)
 
             players_in_hist = self.input.get_players_in_hist(self.input.get_tree(), hist)
             for i, elem in enumerate(hist):
@@ -616,7 +599,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
                 self._compare_utilities(tree.utilities[player])
             )
             if self.generate_counterexamples:
-                impl = implication(self._subtree_label((player), history, "", "", conjunction(*conditions)), impl)
+                impl = implication(self._subtree_label((player,), history, "", "", conjunction(*conditions)), impl)
 
             constraints.append(impl)
             return
@@ -669,29 +652,6 @@ class CollusionResilienceStrategySolver(StrategySolver):
     def _property_initial_constraints(self) -> List[Boolean]:
         return self.input.collusion_resilience_constraints
 
-    # def _property_constraint_implementation(self) -> z3.BoolRef:
-    #     utilities_of_checked_history = self.input.tree.get_utility_of_terminal_history(
-    #         self.checked_history
-    #     )
-
-    #     constraints = []
-    #     for group_size in range(1, len(self.input.players)):
-    #         for colluding_group in itertools.combinations(self.input.players, group_size):
-    #             old_utility = sum((
-    #                 utilities_of_checked_history[player]
-    #                 for player in colluding_group
-    #             ), start=ZERO)
-    #             self._collect_collusion_resilience_constraints(
-    #                 constraints,
-    #                 old_utility,
-    #                 colluding_group,
-    #                 [],
-    #                 [],
-    #                 self.input.tree
-    #             )
-
-    #     return conjunction(*constraints)
-
     def _property_constraint_implementation(self) -> z3.BoolRef:
 
         constraints = []
@@ -711,33 +671,50 @@ class CollusionResilienceStrategySolver(StrategySolver):
 
         return conjunction(*constraints)
 
-    def _generate_counterexamples(self, core, labels, case, reals, infinitesimals, model):
+    def _generate_counterexamples(self, core, labels, case, comp_values, model):
         """collecting all counterexamples for cr, one per unsat core"""
         ces = []
+        problematic_cases = set()
+        strong_weak_constraint = []
         for core in minimal_unsat_cores(self._solver, labels):
             logging.info("counterexample found - property cannot be fulfilled because of:")
             for item in core:
                 assert self._solver.check(*(core - {item})) == z3.sat
-            counterexample = self._extract_counterexample_core(core, case, reals, infinitesimals, model)
+            counterexample, conditions = self._extract_counterexample_core(core, case, comp_values, model)
+            if len(conditions):
+                problematic_cases.update(conditions)
+                strong_weak_constraint.append(negation(conjunction(*conditions)))
+
             # adapt what we save in the result!
             ces.append(counterexample)
-        return Counterexample(case, ces, [])
 
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, reals, infinitesimals, model):
+        strong_weak_solver = z3.Solver()
+        strong_weak_solver.add(conjunction(*strong_weak_constraint))
+        if strong_weak_solver.check() == z3.sat:
+            logging.info(f"Collusion Resilience only weakly violated, the problematic scenarios are {str(problematic_cases)}.")
+        elif strong_weak_solver.check() == z3.unsat:
+            logging.info("Collusion Resilience strongly violated, every scenario is problematic.")
+        else:
+            logging.info("something went wrong")
+
+        return Counterexample(case, ces, [])
+    
+
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, comp_values, model):
         """generate readable counterexamples one per unsat core"""
         cestrat_output = []
         cestrat = {}
 
         setofp = None
-        conditions = []
+        conditions = set()
         for label_expr in core:
             setofp, hist, _action, _other_action, condition, other_condition = self._label2subtree[label_expr]
             players_in_hist = self.input.get_players_in_hist(self.input.get_tree(), hist)
-            
-            if not condition == True:
-                conditions.append(condition)
+
+            if (not condition == True) and (not str(condition) == "And"):
+                conditions.add(condition)
             if not other_condition == True:
-                conditions.append(other_condition)
+                conditions.add(other_condition)
             for i, elem in enumerate(hist):
                 if players_in_hist[i] in setofp:
                     cestrat[";".join(hist[:i])] = elem
@@ -745,52 +722,10 @@ class CollusionResilienceStrategySolver(StrategySolver):
                 # to track weak vs strong violence of property, check whether there exists a counterexample for all other cases too 
                 # after one with a non-trivial condition was found
 
-        logging.info(f"- If conditions {str(conditions[:])} are met, players {setofp} profit from deviating to strategy:")
+        logging.info(f"- If conditions {str(conditions)} are met, players {str(setofp[:])} profit from deviating to strategy:")
         for line in cestrat_output:
             logging.info(f"- {line}")
-        return cestrat
-
-    # def _collect_collusion_resilience_constraints(
-    #         self,
-    #         constraints: List[z3.BoolRef],
-    #         old_utility: Utility,
-    #         colluding_group: Tuple[str],
-    #         non_group_decisions: List[z3.BoolRef],
-    #         history: List[str],
-    #         tree: Tree
-    # ):
-    #     # the colluding group should not benefit
-    #     # players that are not in the colluding group have their strategy "fixed"
-    #     # that is the strategy we are trying to find (so `non_group_decisions` is antecedent)
-    #     if isinstance(tree, Leaf):
-    #         colluding_utility = sum((
-    #             tree.utilities[player]
-    #             for player in colluding_group
-    #         ), start=ZERO)
-    #         impl = implication(
-    #             conjunction(*non_group_decisions),
-    #             Utility.__ge__(old_utility, colluding_utility, self._pair_label)
-    #         )
-    #         if self.generate_counterexamples:
-    #             impl = implication(self._subtree_label(colluding_group, history), impl)
-
-    #         constraints.append(impl)
-    #         return
-
-    #     assert isinstance(tree, Branch)
-    #     group_decision = tree.player in colluding_group
-    #     for action, child in tree.actions.items():
-    #         action_variable = [] \
-    #             if group_decision \
-    #             else [self._action_variable(history, action)]
-    #         self._collect_collusion_resilience_constraints(
-    #             constraints,
-    #             old_utility,
-    #             colluding_group,
-    #             non_group_decisions + action_variable,
-    #             history + [action],
-    #             child
-    #         )
+        return cestrat, conditions
 
     def _collect_collusion_resilience_constraints(
             self,
@@ -900,157 +835,262 @@ class PracticalityStrategySolver(StrategySolver):
         self._practicality_constraints(constraints, [], self.input.tree)
         return conjunction(*constraints)
 
-    def _generate_counterexamples(self, core, labels, case, reals, infinitesimals, model):
+    def _generate_counterexamples(self, core, labels, case, comp_values, model):
         """generate all counterexamples to pr, which is independent of unsat cores"""
-        return self._extract_counterexample_core(core, case, reals, infinitesimals, model)
+        return self._extract_counterexample_core(core, case, comp_values, model)
 
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, reals, infinitesimals, model):
-        """generate readable counterexamples by listing all pr histories"""
-        ce_solver = z3.Solver()
-        self._add_action_constraints([], self.input.tree, ce_solver)
+    def _pr_case_splitting(self, new_case: z3.BoolRef, current_case: Set[z3.BoolRef], comp_values, ce_solver: z3.Solver)-> (z3.BoolRef, Set[z3.BoolRef]) :
+        
+        # implication_constraints=self._implied_constraints(new_case, current_case) 
+        # implied_result =  self._case_solver.check(implication_constraints)
+        # #check if new condition is contradictory to init and current_case
+        # #assert init, current_case, new_case
+        # contradiction_constraints=self._contrad_constraints(new_case, current_case) 
+        # contrad_result =  self._case_solver.check(contradiction_constraints)
+
+        # if implied_result == z3.unsat and new_case is not True:
+        #     logging.info(f"case {new_case} implied, the result is unsat")
+        #     #this result is always the result from the parent call
+        #     #unsat no further splits to be considered, 
+        # not so sure about that!
+        #     return result, False
+        
+        # if contrad_result == z3.unsat:
+        #     #logging.info(f"case {new_case} impossible, hence trivially satisfied, next case considered")
+        #     new_case = negation(new_case)
+        
+
+        case={new_case}
+        for elem in current_case:
+            case.add(elem)
+        case.discard(True)
+
+        # if not new_case == True:
+        #     logging.info(f"current case assumes {case}")
 
         property_constraint = \
             self._property_constraint_for_case(*case, generated_preconditions=set())
         check_result = ce_solver.check(property_constraint, *self._label2pair.keys(), *self._label2subtree.keys())
 
-        # If we cannot find a practical strategy, we are not in a final case split, so we split further.
-        while check_result == z3.unsat:
-            new_pair = False
+        if check_result == z3.unknown:
+            logging.warning("internal solver returned 'unknown', which shouldn't happen")
+            reason = self._solver.reason_unknown()
+            logging.warning(f"reason given was: {reason}")
+            logging.info("trying again...")
+            check_result = self._solver.check(property_constraint,
+                                            *self._label2pair.keys(),
+                                            *self._label2subtree.keys())
+            if check_result == z3.unknown:
+                logging.error("solver still says 'unknown', bailing out")
+                assert False
+
+        if check_result == z3.sat:
+            logging.info(f"counterexamples for case {case}")
+            return property_constraint, case
+            
+        else:
+            # we need to compare more expressions
 
             core = {
                 label_expr
-                for label_expr in ce_solver.unsat_core()
+                for label_expr in self._solver.unsat_core()
                 if isinstance(label_expr, z3.BoolRef) and z3.is_app(label_expr)
             }
 
-            for label_expr in core:
+            core_list = list(core)
+            shuffle(core_list)
+
+            for label_expr in core_list:
                 if label_expr not in self._label2pair:
                     continue
 
                 # `left op right` was in an unsat core
                 left, right, real = self._label2pair[label_expr]
                 # partition reals/infinitesimals
-                add_to = reals if real else infinitesimals
+                #add_to = reals if real else infinitesimals
 
-                if (left, right) not in add_to:
-                    logging.info(f"new comparison: ({left}, {right})")
-                    add_to.add((left, right))
-                    add_to.add((right, left))
-                    new_pair = True
+                if [left, right] not in comp_values:
+                    #call recursively with this split in mind and break for loof here
+                    #sat or unsat return value of case_splitting(self, left, right, cases)
+                    # unsat breaks the recursion, sat too, only proceed if further cases
+                    #logging.info(f"new comparison: ({left}, {right})")
+                    new_comp = comp_values
+                    new_comp.append([left, right])
+                    new_comp.append([right, left])
 
-            if not new_pair:
-                raise Exception("We should not reach this branch, we are in a final case.")
+
+                    return self._pr_case_splitting(left <= right, case , new_comp, ce_solver)
+                    #return  self.case_splitting(left > right, case , new_comp)
+                    
+
+            # we didn't find a new case split
+            raise Exception("We should not reach this branch, we are in a final case.")
+
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, comp_values, model):
+        """generate readable counterexamples by listing all pr histories"""
+        ce, case = self._extract_ces(case, comp_values, model)
+        # logging.info("counterexample(s) found - property cannot be fulfilled because of:")
+        # logging.info(ce)
+        return Counterexample(case, [], ce)
+
+    def _isprefix(self, h, subgame):
+        for i in range(min(len(h), len(subgame))):
+            if h[i] != subgame[i]:
+                return False
+        return True
+
+    def _maxprefix(self, h: List[str], hstar: HistoryTree):
+        prefix = []
+        subtree_hstar = hstar.copy() 
+        for elem in h:
+            children_actions = [child.action for child in subtree_hstar.children]
+            if elem not in children_actions:
+                break
             else:
-                case = order_according_to_model(model, self._minimize_solver, reals) |\
-                    order_according_to_model(model, self._minimize_solver, infinitesimals)
-                logging.info(f"current case assumes {case if case else 'nothing'}")
+                prefix.append(elem)
+                i = children_actions.index(elem) #look for correct subHistoryTree
+                subtree_hstar = subtree_hstar.children[i].copy()
+        return prefix
 
+
+
+    def _extract_ces(self, case, comp_values, model):
+        subgame = []
+        ce = []
+        game = self.input.tree
+        hstar = self.checked_history
+        deleted_branches = []
+        labels_in_subgame = self._label2subtree.keys()
+
+        ce_solver = z3.Solver()
+        self._add_action_constraints([], self.input.tree, ce_solver)
+
+        #are conditions implemented in the fct already? YES
+        property_constraint = \
+            self._property_constraint_for_case(*case, generated_preconditions=set()) 
+        
+        hstar_constraint = conjunction(*self._history_constraints_ce(hstar,[]))
+   
+        checked_constriant = conjunction(property_constraint, hstar_constraint)
+        check_result_with_hstar = ce_solver.check(checked_constriant, *self._label2pair.keys(), *labels_in_subgame)
+
+        #code adapted until here, think about what pr ce means for conditional actions
+        while check_result_with_hstar == z3.unsat and isinstance(game, Branch):
+            no_more_hist = False
+            pr = []
+            shortest_h = hstar
+            while not no_more_hist:
                 property_constraint = \
                     self._property_constraint_for_case(*case, generated_preconditions=set())
-                check_result = ce_solver.check(property_constraint,
-                                                  *self._label2pair.keys(),
-                                                  *self._label2subtree.keys())
+                subgame_actions = conjunction(*[self._action_variable(subgame[:i], subgame[i]) for i in range(len(subgame))])
+                checked_constriant = conjunction(property_constraint, subgame_actions)
+                check_result = ce_solver.check(checked_constriant, *self._label2pair.keys(), *labels_in_subgame)
+                if check_result == z3.sat:
 
-        ce_strategies = []
-        ce_histories = []
-        ce_solver.add(property_constraint)
+                    # hist is now a list of pr strat (all from the same conditional strategy)
+                    _strat, hist = self._extract_strategy(ce_solver, set(), True)
 
-        while check_result == z3.sat:
-            strat, hist = self._extract_strategy(ce_solver, set(), True)
-            ce_histories.append(hist)
-            ce_strategies.append(strat)
-            histlist = hist.split(";")
-            # print(histlist)
-            history_actions = []
-            for i, action in enumerate(histlist):
-                history_actions.append(self._action_variable(list(histlist[:i]),action))
-            ce_solver.add(negation(conjunction(*history_actions)))
-            check_result = ce_solver.check(*self._label2pair.keys(), *self._label2subtree.keys())
+                    # for simplicity pick the first history of hist for now
+                    histlist_all = hist[0].split(";")
 
-        # logging.info(f"practical strategy(s) found at deviation point {deviation_point}")
-        logging.info("counterexample(s) found - property cannot be fulfilled because of:")
-        logging.info(ce_histories)
-        # return value is the last strategy found or an empty list in case it was unsat
-        return Counterexample(case, ce_strategies, ce_histories)
+                    histlist = histlist_all[len(subgame):]
+                    h = self._maxprefix(histlist, hstar)
+                    ph = self.input.get_player_at_hist(game, h)
+                    #to be adapted, multiple honest histories to be considered 
+                    cond = self.collect_conditions_along_history(histlist)
+                    hstar_terminals = self.terminals_that_sat_conditions(hstar, cond)
 
-    # def _practicality_constraints(self, constraints: List[Boolean], history: List[str], tree: Tree) -> \
-    #         Dict[str, Dict[Tuple[Real, Real], Boolean]]:
-    #     if isinstance(tree, Leaf):
-    #         return {
-    #             player: {(utility.real, utility.inf): True}
-    #             for player, utility in tree.utilities.items()
-    #         }
+                    # for simplicity pick the first one now
+                    hstar = hstar_terminals[0]
 
-    #     """
-    #     if len(history) < 5:
-    #         print("start", history)
-    #     """
+                    ut_hstar = game.get_utility_of_terminal_history(hstar)[ph]
 
-    #     assert isinstance(tree, Branch)
-    #     utility_map = {}
-    #     for action, child in tree.actions.items():
-    #         utility_map[action] = self._practicality_constraints(constraints, history + [action], child)
+                    ut_histlist = game.get_utility_of_terminal_history(histlist)[ph]
 
-    #     action_variables = {
-    #         action: self._action_variable(history, action)
-    #         for action in tree.actions
-    #     }
-    #     # subtree_label = self._subtree_label((tree.player,), history)
+                    #valuation trick to be adapted, no model exisiting in new case split..
+                    comparison_real = valuation(ut_hstar.real, model) < valuation(ut_histlist.real, model)
+                    comparison_real_eq = valuation(ut_hstar.real, model) == valuation(ut_histlist.real, model)
+                    comparison_infinitesimal = valuation(ut_hstar.inf, model) < valuation(ut_histlist.inf, model)
+                    if comparison_real or (comparison_real_eq and comparison_infinitesimal):
+                        pr.append(histlist)
+                        ce.append(subgame + histlist)
+                        #add condition
+                        logging.info("counterexample found - property cannot be fulfilled because of:")
+                        logging.info(subgame + histlist)
 
-    #     # if we take an action a and get a certain utility u for it...
-    #     for action, utilities in utility_map.items():
-    #         # (we only care about the current player)
-    #         utilities = utilities[tree.player]
-    #         # for every other a', u'...
-    #         for other, other_utilities in utility_map.items():
-    #             if action == other:
-    #                 continue
+                        #shortest_h now HistoryTree, probs h has to become a HistoryTree too
+                        #if len(h) < len(shortest_h):
+                        if shortest_h.has_subtree(h):
+                            shortest_h = h
 
-    #             # (we only care about the current player)
-    #             other_utilities = other_utilities[tree.player]
+                    history_actions = []
+                    for i, action in enumerate(histlist):
+                        history_actions.append(self._action_variable(list(histlist[:i]), action))
+                    ce_solver.add(negation(conjunction(*history_actions)))
 
-    #             # (utilities are conditional upon taking actions below us in the tree)
-    #             for utility, condition in utilities.items():
-    #                 utility = Utility(*utility)
-    #                 for other_utility, other_condition in other_utilities.items():
-    #                     subtree_label = self._subtree_label((tree.player,), history, action, other, condition, other_condition,)
-    #                     other_utility = Utility(*other_utility)
-    #                     constraints.append(implication(
-    #                         conjunction(
-    #                             # ...then we know that taking action a means that u >= u'
-    #                             action_variables[action],
-    #                             # (conditionally upon taking certain actions below us)
-    #                             condition,
-    #                             other_condition,
-    #                             subtree_label,
-    #                         ),
-    #                         Utility.__ge__(utility, other_utility, label_fn=self._pair_label),
-    #                     ))
+                elif check_result == z3.unknown:
+                    logging.warning("internal solver returned 'unknown', which shouldn't happen")
+                    reason = ce_solver.reason_unknown()
+                    logging.warning(f"reason given was: {reason}")
 
-    #     # build the utility map players->utility->condition
-    #     # the inner map gives a single boolean condition for "player p gets utility u starting from this subtree"
-    #     result = {
-    #         player: {}
-    #         for player in self.input.players
-    #     }
-    #     for action, player_utilities in utility_map.items():
-    #         for player, utilities in player_utilities.items():
-    #             player_result = result[player]
-    #             for utility, condition in utilities.items():
-    #                 condition = conjunction(action_variables[action], condition)
-    #                 if utility in player_result:
-    #                     player_result[utility] = disjunction(condition, player_result[utility])
-    #                 else:
-    #                     player_result[utility] = condition
+                else:
+                    new_pair = False
+                    #to be removed
+                    reals = []
+                    infinitesimals = []
 
-    #     #if len(history) == 0:
-    #     #    print(history, result, constraints)
-    #     """
-    #     if len(history) < 5:
-    #         print("end", history)
-    #     """
+                    core = {
+                        label_expr
+                        for label_expr in ce_solver.unsat_core()
+                        if isinstance(label_expr, z3.BoolRef) and z3.is_app(label_expr)
+                    }
 
-    #     return result
+                    for label_expr in core:
+                        if label_expr not in self._label2pair:
+                            continue
+
+                        # `left op right` was in an unsat core
+                        left, right, real = self._label2pair[label_expr]
+                        # partition reals/infinitesimals
+                        add_to = reals if real else infinitesimals
+
+                        if (left, right) not in add_to:
+                            logging.info(f"new comparison: ({left}, {right})")
+                            add_to.add((left, right))
+                            add_to.add((right, left))
+                            new_pair = True
+
+                    if not new_pair:
+                        no_more_hist = True
+                    else:
+                        case = order_according_to_model(model, self._minimize_solver, reals) |\
+                            order_according_to_model(model, self._minimize_solver, infinitesimals)
+                        logging.info(f"current case assumes {case if case else 'nothing'}")
+            # to be adapted to HistoryTree
+            #subgame shall be the history leading to the counterexample I guess
+            if len(pr) == 0:
+                shortest_h = [hstar[0]]
+            hstar = hstar[:len(shortest_h)]
+            subgame = subgame + shortest_h
+
+            # remove all branches after shortest_h, that appear in pr.
+            for action in game.actions.keys():
+                if any([self._isprefix(prh, shortest_h + [action]) for prh in pr]):
+                    deleted_branches.append(shortest_h + [action])
+                    ce_solver.add(negation(self._action_variable(shortest_h, action)))
+
+            game = self.input.get_subtree_at_hist(game, shortest_h)
+            labels_in_subgame = []
+            for key in self._subtree2label.keys():
+                h = key[1]
+                act = key[2]
+                if self._isprefix(h, subgame):
+                    if not any([self._isprefix(h, br) for br in deleted_branches]):
+                        labels_in_subgame.append(self._subtree2label[key])
+            hstar_constraint = conjunction(*[self._action_variable(hstar[:i], hstar[i]) for i in range(len(hstar))])
+            checked_constriant = conjunction(property_constraint, hstar_constraint)
+            check_result_with_hstar = ce_solver.check(checked_constriant, *self._label2pair.keys(), *labels_in_subgame)
+        return ce, case
 
     def _practicality_constraints(self, constraints: List[Boolean], history: List[str], tree: Tree) -> \
             Dict[str, Dict[Tuple[Real, Real], Boolean]]:
@@ -1142,3 +1182,4 @@ class PracticalityStrategySolver(StrategySolver):
         """
 
         return result
+    

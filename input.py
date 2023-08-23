@@ -81,6 +81,9 @@ class Branch(Tree):
 
 class HistoryTree:
     """class for history trees"""
+    action: str
+    condition: z3.BoolRef
+    children: List[HistoryTree]
 
     def __init__(self, action_name: str, condition: z3.BoolRef, children: List[HistoryTree]):
         self.action = action_name
@@ -100,7 +103,10 @@ class HistoryTree:
 
     def json(self):
         return self.__repr__()
-
+    
+    def copy(self)-> HistoryTree:
+        new_histtree = HistoryTree(self.action, self.condition, [child.copy() for child in self.children])
+        return new_histtree
 
 class Input:
     """an input problem"""
