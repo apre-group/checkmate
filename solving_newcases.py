@@ -939,7 +939,7 @@ class PracticalityStrategySolver(StrategySolver):
                 return False
         return True
 
-    def _maxprefix(self, h: List[str], hstar: HistoryTree):
+    def _maxprefix_historytree(self, h: List[str], hstar: HistoryTree):
         prefix = []
         subtree_hstar = hstar.copy() 
         for elem in h:
@@ -951,10 +951,29 @@ class PracticalityStrategySolver(StrategySolver):
                 i = children_actions.index(elem) #look for correct subHistoryTree
                 subtree_hstar = subtree_hstar.children[i].copy()
         return prefix
+    
+    def _maxprefix(self, h, hstar):
+        prefix = []
+        for i in range(max(len(h), len(hstar))): #max works due to h, hstar being histories
+            #they cannot diverge at a leaf
+            if h[i] != hstar[i]:
+                break
+            else:
+                prefix.append(h[i])
+        return prefix
 
+    def _historytree_to_list(self, hstar: HistoryTree, h_terminal: List[str])-> List[List[str]]:
+        h_terms = []
+        if hstar.children == []:
+            return [h_terminal]
+        else:
+            for child in hstar.children:
+                h_terms.extend(self._historytree_to_list(child, h_terminal.append(child.action)))
+        return h_terms
 
 
     def _extract_ces(self, case, comp_values, model):
+        #think about model, if it does the trick too
         subgame = []
         ce = []
         game = self.input.tree
@@ -974,11 +993,10 @@ class PracticalityStrategySolver(StrategySolver):
         checked_constriant = conjunction(property_constraint, hstar_constraint)
         check_result_with_hstar = ce_solver.check(checked_constriant, *self._label2pair.keys(), *labels_in_subgame)
 
-        #code adapted until here, think about what pr ce means for conditional actions
         while check_result_with_hstar == z3.unsat and isinstance(game, Branch):
             no_more_hist = False
             pr = []
-            shortest_h = hstar
+            shortest_h = hstar #?
             while not no_more_hist:
                 property_constraint = \
                     self._property_constraint_for_case(*case, generated_preconditions=set())
@@ -986,32 +1004,46 @@ class PracticalityStrategySolver(StrategySolver):
                 checked_constriant = conjunction(property_constraint, subgame_actions)
                 check_result = ce_solver.check(checked_constriant, *self._label2pair.keys(), *labels_in_subgame)
                 if check_result == z3.sat:
+                    utility_solver = z3.Solver()
 
                     # hist is now a list of pr strat (all from the same conditional strategy)
                     _strat, hist = self._extract_strategy(ce_solver, set(), True)
 
-                    # for simplicity pick the first history of hist for now
-                    histlist_all = hist[0].split(";")
+                    list_of_terminals = []
 
-                    histlist = histlist_all[len(subgame):]
-                    h = self._maxprefix(histlist, hstar)
-                    ph = self.input.get_player_at_hist(game, h)
-                    #to be adapted, multiple honest histories to be considered 
-                    cond = self.collect_conditions_along_history(histlist)
-                    hstar_terminals = self.terminals_that_sat_conditions(hstar, cond)
+                    for terminal_h in hist:
+                        histlist_all = terminal_h.split(";")
+                        #consider that subgame might be after a conditional action, 
+                        #how were we sure it worked before?
+                        if self._isprefix(histlist_all, subgame):
+                            list_of_terminals.append(histlist_all[len(subgame):])
 
-                    # for simplicity pick the first one now
-                    hstar = hstar_terminals[0]
+                    
+                    hstar_terminals = self._historytree_to_list(hstar) #hstar_terminals is List[List[str]]
 
-                    ut_hstar = game.get_utility_of_terminal_history(hstar)[ph]
+                    checked_utilities =[]
+                    for t in list_of_terminals:
+                            for h_term in hstar_terminals:
+                                h = self._maxprefix(t, h_term) 
+                                ph = self.input.get_player_at_hist(game, h)
+                                ut_hstar = game.get_utility_of_terminal_history(h_term)[ph]
+                                ut_histlist = game.get_utility_of_terminal_history(t)[ph]
+                                condition_constraints = conjunction(*self.collect_conditions(h_term), *self.collect_conditions(t))
+                                checked_utilities.append(implication(condition_constraints, Utility.__gt__(ut_histlist, ut_hstar)))
+                    
+                    utility_constraint = self._quantify_constants(implication(
+                         conjunction(
+                             *self.input.initial_constraints,
+                             *set(),
+                             *self._property_initial_constraints(),
+                             *case
+                         ),
+                         checked_utilities
+                     )) 
 
-                    ut_histlist = game.get_utility_of_terminal_history(histlist)[ph]
-
-                    #valuation trick to be adapted, no model exisiting in new case split..
-                    comparison_real = valuation(ut_hstar.real, model) < valuation(ut_histlist.real, model)
-                    comparison_real_eq = valuation(ut_hstar.real, model) == valuation(ut_histlist.real, model)
-                    comparison_infinitesimal = valuation(ut_hstar.inf, model) < valuation(ut_histlist.inf, model)
-                    if comparison_real or (comparison_real_eq and comparison_infinitesimal):
+                    utility_result = utility_solver.check(utility_constraint)
+                    if utility_result == z3.sat: #property satisfied
+                        #code adapted until here
                         pr.append(histlist)
                         ce.append(subgame + histlist)
                         #add condition
