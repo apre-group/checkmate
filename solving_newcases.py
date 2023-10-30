@@ -196,93 +196,135 @@ class StrategySolver(metaclass=ABCMeta):
 
         logging.info(f"current case assumes {case}")
 
-        property_constraint = \
-            self._property_constraint_for_case(*case, generated_preconditions=result.generated_preconditions)
-        check_result = self._solver.check(property_constraint,
-                                        *self._label2pair.keys(),
-                                        *self._label2subtree.keys())
-        if check_result == z3.unknown:
-            logging.warning("internal solver returned 'unknown', which shouldn't happen")
-            reason = self._solver.reason_unknown()
-            logging.warning(f"reason given was: {reason}")
-            logging.info("trying again...")
+        strategies_per_player = {}
+        sat = True
+
+        for player in self.input.players:
+
+            property_constraint = \
+                self._property_constraint_for_case(*case, generated_preconditions=result.generated_preconditions, player=player)
             check_result = self._solver.check(property_constraint,
                                             *self._label2pair.keys(),
                                             *self._label2subtree.keys())
             if check_result == z3.unknown:
-                logging.error("solver still says 'unknown', bailing out")
-                assert False
+                logging.warning("internal solver returned 'unknown', which shouldn't happen")
+                reason = self._solver.reason_unknown()
+                logging.warning(f"reason given was: {reason}")
+                logging.info("trying again...")
+                check_result = self._solver.check(property_constraint,
+                                                *self._label2pair.keys(),
+                                                *self._label2subtree.keys())
+                if check_result == z3.unknown:
+                    logging.error("solver still says 'unknown', bailing out")
+                    assert False
 
-        if check_result == z3.sat:
-            case = set(case)
-            logging.info("case solved")
-            result.strategies.append(self._extract_strategy(self._solver, case))
-            return result, True
+            if check_result == z3.sat:
+                case = set(case)
+                logging.info(f"case solved for player: {player}")
+                result_player = self._extract_strategy(self._solver, case)
+                player_strategy = result_player.strategy
+                #logging.info(f"--------------{result_player}")
+                strategies_per_player[player] = player_strategy
+                #result.strategies.append(self._extract_strategy(self._solver, case))
+                #return result, True
             
-        else:
-            # we need to compare more expressions
-            logging.info("no solution, trying case split")
+            else:
+                # we need to compare more expressions
+                logging.info("no solution, trying case split")
 
-            # track whether we actually found any more
-            new_pair = False
+                # track whether we actually found any more
+                new_pair = False
 
-            core = {
-                label_expr
-                for label_expr in self._solver.unsat_core()
-                if isinstance(label_expr, z3.BoolRef) and z3.is_app(label_expr)
-            }
+                core = {
+                    label_expr
+                    for label_expr in self._solver.unsat_core()
+                    if isinstance(label_expr, z3.BoolRef) and z3.is_app(label_expr)
+                }
 
-            for label_expr in core:
-                if label_expr not in self._label2pair:
-                    continue
+                for label_expr in core:
+                    if label_expr not in self._label2pair:
+                        continue
 
-                # `left op right` was in an unsat core
-                left, right, real = self._label2pair[label_expr]
-                # partition reals/infinitesimals
-                #add_to = reals if real else infinitesimals
+                    # `left op right` was in an unsat core
+                    left, right, real = self._label2pair[label_expr]
+                    # partition reals/infinitesimals
+                    #add_to = reals if real else infinitesimals
 
-                if [left, right] not in comp_values:
-                    #call recursively with this split in mind and break for loof here
-                    #sat or unsat return value of case_splitting(self, left, right, cases)
-                    # unsat breaks the recursion, sat too, only proceed if further cases
-                    logging.info(f"new comparison: ({left}, {right})")
-                    new_comp = comp_values
-                    new_comp.append([left, right])
-                    new_comp.append([right, left])
+                    if [left, right] not in comp_values:
+                        #call recursively with this split in mind and break for loof here
+                        #sat or unsat return value of case_splitting(self, left, right, cases)
+                        # unsat breaks the recursion, sat too, only proceed if further cases
+                        logging.info(f"new comparison: ({left}, {right})")
+                        new_comp = comp_values
+                        new_comp.append([left, right])
+                        new_comp.append([right, left])
 
-                    output1, sat1 = self.case_splitting(left < right, case , new_comp)
-                    if not sat1:
-                        return output1, False
-                    else:
-                        result.strategies.extend(output1.strategies)
+                        output1, sat1 = self.case_splitting(left < right, case , new_comp)
+                        if not sat1:
+                            return output1, False
+                        else:
+                            strategies_per_player[player] = output1.strategies[0]
+                            # result.strategies.extend(output1.strategies)
 
-                    output2, sat2 = self.case_splitting(left == right, case , new_comp)
-                    if not sat2:
-                        return output2, False
-                    else:
-                        result.strategies.extend(output2.strategies)
-                    
-                    output3, sat3 = self.case_splitting(left > right, case , new_comp)
-                    if not sat3:
-                        return output3, False
-                    else:
-                        result.strategies.extend(output3.strategies)
-                    new_pair = True
-                    sat = True
-                    break
+                        output2, sat2 = self.case_splitting(left == right, case , new_comp)
+                        if not sat2:
+                            return output2, False
+                        else:
+                            strategies_per_player[player] = output2.strategies[0]
+                            # result.strategies.extend(output2.strategies)
+                        
+                        output3, sat3 = self.case_splitting(left > right, case , new_comp)
+                        if not sat3:
+                            return output3, False
+                        else:
+                            strategies_per_player[player] = output3.strategies[0]
+                            # result.strategies.extend(output3.strategies)
+                        new_pair = True
+                        sat = True
+                        break
 
-            # we saturated, give up
-            if not new_pair:
-                logging.error("no more splits, failed")
-                logging.error(f"here is a case I cannot solve: {case}")
+                # we saturated, give up
+                if not new_pair:
+                    logging.error("no more splits, failed")
+                    logging.error(f"here is a case I cannot solve: {case}")
 
-                # delete existing strategies from result because property is not fulfilled
-                result.delete_strategies()
-                sat = False
+                    sat = False
 
-            return result, sat
+                    # delete existing strategies from result because property is not fulfilled
+                    #result.delete_strategies()
+                    #sat = False
+        
+        if sat:
+            full_strategy = {}
+            self._combine_strategies(strategies_per_player, full_strategy, '', self.input.tree)
+            result.strategies.append(full_strategy)
 
-    
+        return result, sat
+
+    def _combine_strategies(
+        self,
+        strategies_per_player: [Dict[str, Dict[str, str]]],
+        full_strategy: Dict[str, str],
+        history: str,
+        tree: Tree
+    ):
+        if isinstance(tree, Leaf):
+            return
+
+        assert isinstance(tree, Branch)
+        current_player = tree.player
+        relevant_p_strategy = strategies_per_player[current_player]
+        relevant_action = relevant_p_strategy[history]
+        full_strategy[history] = relevant_action
+        for action, child in tree.actions.items():
+
+            self._combine_strategies(
+                strategies_per_player,
+                full_strategy,
+                action if history == '' else history + ';' + action,
+                child
+            )
+
     def _implied_constraints(self, new_condition: z3.BoolRef, current_case: Set[z3.BoolRef]) -> z3.BoolRef:
         """
         create a universally-quantified constraint for a given property of the form
@@ -360,7 +402,7 @@ class StrategySolver(metaclass=ABCMeta):
                 checked_history[:i], checked_history[i]
             ))
 
-    def _property_constraint_for_case(self, *case: Boolean, generated_preconditions: Set[z3.BoolRef]) -> z3.BoolRef:
+    def _property_constraint_for_case(self, *case: Boolean, generated_preconditions: Set[z3.BoolRef], player: str) -> z3.BoolRef:
         """
         create a universally-quantified constraint for a given property of the form
         ```
@@ -379,7 +421,7 @@ class StrategySolver(metaclass=ABCMeta):
                 *self._property_initial_constraints(),
                 *case
             ),
-            self._computed_property_constraint
+            self._property_constraint_implementation_compositionality(player)
         ))
 
     def _quantify_constants(self, constraint: z3.BoolRef) -> z3.BoolRef:
@@ -479,6 +521,13 @@ class FeebleImmuneStrategySolver(StrategySolver):
             self._collect_weak_immunity_constraints(
                 constraints, player, [], [], self.input.tree
             )
+        return conjunction(*constraints)
+
+    def _property_constraint_implementation_compositionality(self, player) -> z3.BoolRef:
+        constraints = []
+        self._collect_weak_immunity_constraints(
+            constraints, player, [], [], self.input.tree
+        )
         return conjunction(*constraints)
 
     def _generate_counterexamples(self, core, labels, case, reals, infinitesimals, model):
