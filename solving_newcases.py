@@ -201,6 +201,16 @@ class StrategySolver(metaclass=ABCMeta):
 
         for player in self.input.players:
 
+            strategy_player, sat_player = self._solve_wi_for_player_numeric(player, [], '', self.input.tree)
+
+            if sat_player == False:
+                sat = False
+                break
+            else:
+                strategies_per_player[player] = strategy_player
+                logging.info(f"*************strategy for {player}: {strategy_player}")
+
+            """
             property_constraint = \
                 self._property_constraint_for_case(*case, generated_preconditions=result.generated_preconditions, player=player)
             check_result = self._solver.check(property_constraint,
@@ -293,11 +303,13 @@ class StrategySolver(metaclass=ABCMeta):
                     # delete existing strategies from result because property is not fulfilled
                     #result.delete_strategies()
                     #sat = False
+            """
         
         if sat:
             full_strategy = {}
             self._combine_strategies(strategies_per_player, full_strategy, '', self.input.tree)
             result.strategies.append(full_strategy)
+            logging.info(f"*************full strategy: {full_strategy}")
 
         return result, sat
 
@@ -314,6 +326,11 @@ class StrategySolver(metaclass=ABCMeta):
         assert isinstance(tree, Branch)
         current_player = tree.player
         relevant_p_strategy = strategies_per_player[current_player]
+        
+        if not history in relevant_p_strategy:
+            return
+
+        assert history in relevant_p_strategy
         relevant_action = relevant_p_strategy[history]
         full_strategy[history] = relevant_action
         for action, child in tree.actions.items():
@@ -324,6 +341,83 @@ class StrategySolver(metaclass=ABCMeta):
                 action if history == '' else history + ';' + action,
                 child
             )
+
+    def _solve_wi_for_player_numeric(
+        self,
+        player: str,
+        history: List[str],
+        history_str: str,
+        tree: Tree
+    ):   
+        if isinstance(tree, Leaf):
+            if tree.utilities[player].real >= 0:
+                #logging.info(f"+++player: {player}; {tree.utilities[player].real} -> True")
+                return {}, True
+            else:
+                #logging.info(f"+++player: {player}; {tree.utilities[player].real} -> False")
+                return {}, False
+
+        assert isinstance(tree, Branch)
+        current_player = tree.player
+        if current_player == player:
+            if self._is_along_checked_history(history, self.checked_history):
+                a_star = self.checked_history[len(history)]
+                h_a_star = a_star if history_str == '' else history_str + ';' + a_star
+                res = {}
+                sat = False
+                for action, subtree in tree.actions.items():
+                    if action == a_star:
+                        history_new = history[:]
+                        history_new.append(action)
+                        res, sat = self._solve_wi_for_player_numeric(player, history_new, h_a_star, subtree)
+                if sat:
+                    res[history_str] = a_star
+                    return res, True
+                else:
+                    return {}, False
+            else:
+                res = {}
+                for action, subtree in tree.actions.items():
+                    h_a = action if history_str == '' else history_str + ';' + action
+                    history_new = history[:]
+                    history_new.append(action)
+                    res, sat = self._solve_wi_for_player_numeric(player, history_new, h_a, subtree)
+                    if sat == True:
+                        res[history_str] = action
+                        return res, True
+                return {}, False
+        else:
+            res = {} 
+            for action, subtree in tree.actions.items():
+                res_intermediate = {}
+                sat = True
+                h_a = action if history_str == '' else history_str + ';' + action
+                history_new = history[:]
+                history_new.append(action)
+                res_intermediate, sat = self._solve_wi_for_player_numeric(player, history_new, h_a, subtree) 
+                #logging.info(f"----------here  {xyz}  ")
+                if sat == False:
+                    return {}, False
+                else:
+                    # we need this to capture the partial strategies for p in the different subtrees
+                    # the top-most action gets overwritten in each interation, but this does not matter as this action 
+                    # does not belong to the player for which we check wi
+                    res.update(res_intermediate)  
+            return res, True
+        
+
+    def _is_along_checked_history(
+        self,
+        history: List[str],
+        checked_history: List[str]
+    ):
+        if len(history) > len(checked_history):
+            return False
+        else:
+            for i in range(len(history)):
+                if history[i] != checked_history[i]:
+                    return False
+            return True
 
     def _implied_constraints(self, new_condition: z3.BoolRef, current_case: Set[z3.BoolRef]) -> z3.BoolRef:
         """
