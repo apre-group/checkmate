@@ -202,6 +202,16 @@ class StrategySolver(metaclass=ABCMeta):
 
         for player in self.input.players:
 
+            strategy_player, sat_player, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=result.generated_preconditions, player=player, history=[], history_str='', tree=self.input.tree)
+
+            if sat_player == False:
+                all_sat = False
+                break
+            else:
+                strategies_per_player[player] = strategy_player
+                #logging.info(f"*************strategy for {player}: {strategy_player}")
+
+            """
             property_constraint = \
                 self._property_constraint_for_case(*case, generated_preconditions=result.generated_preconditions, player=player)
             check_result = self._solver.check(property_constraint,
@@ -231,6 +241,7 @@ class StrategySolver(metaclass=ABCMeta):
             else:
                 all_sat = False
                 break
+            """
 
         if all_sat:
             full_strategy = {}
@@ -604,7 +615,157 @@ class FeebleImmuneStrategySolver(StrategySolver):
                 history + [action],
                 child
             )
+    
+    def _is_along_checked_history(
+        self,
+        history: List[str],
+        checked_history: List[str]
+    ):
+        if len(history) > len(checked_history):
+            return False
+        else:
+            for i in range(len(history)):
+                if history[i] != checked_history[i]:
+                    return False
+            return True
 
+
+    def _property_constraint_for_leaf(self, *case: Boolean, generated_preconditions: Set[z3.BoolRef], player: str, tree: Tree) -> z3.BoolRef:
+        """
+        create a universally-quantified constraint for a given property of the form
+        ```
+        forall <input constants>.
+            <initial constraints> &&
+            self._property_initial_constraints() &&
+            <generated preconditions> &&
+            <case split> => xxx
+        ```
+        """
+
+        return self._quantify_constants(implication(
+            conjunction(
+                *self.input.initial_constraints,
+                *generated_preconditions,
+                *self._property_initial_constraints(),
+                *case
+            ),
+            self._compare_utilities(tree.utilities[player]) 
+        ))
+
+    def _solve_wi_for_player_compositionality(
+        self,
+        *case,
+        generated_preconditions, 
+        player: str,
+        history: List[str],
+        history_str: str,
+        tree: Tree
+    ):   
+        if isinstance(tree, Leaf):
+            property_constraint = self._property_constraint_for_leaf(*case, generated_preconditions=generated_preconditions, player=player, tree=tree)
+
+            check_result = self._solver.check(property_constraint,
+                                            *self._label2pair.keys(),
+                                            *self._label2subtree.keys())
+            
+            if check_result == z3.unknown:
+                logging.warning("internal solver returned 'unknown', which shouldn't happen")
+                reason = self._solver.reason_unknown()
+                logging.warning(f"reason given was: {reason}")
+                logging.info("trying again...")
+                check_result = self._solver.check(property_constraint,
+                                                *self._label2pair.keys(),
+                                                *self._label2subtree.keys())
+                if check_result == z3.unknown:
+                    logging.error("solver still says 'unknown', bailing out")
+                    assert False
+
+            if check_result == z3.sat:
+                case = set(case)
+                logging.info(f"case solved for player: {player}")
+                result_player = self._extract_strategy(self._solver, case)
+                player_strategy = result_player.strategy
+                constraint_leaf_utility = self._compare_utilities(tree.utilities[player])
+                return player_strategy, True, [constraint_leaf_utility]
+
+            return {}, False, [z3.Bool(True)]
+
+
+        assert isinstance(tree, Branch)
+        current_player = tree.player
+        if current_player == player:
+            if self._is_along_checked_history(history, self.checked_history):
+                a_star = self.checked_history[len(history)]
+                h_a_star = a_star if history_str == '' else history_str + ';' + a_star
+                res = {}
+                sat = False
+                history_new = history[:]
+                history_new.append(a_star)
+                subtree = tree.actions[a_star]
+                res, sat, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=generated_preconditions, player=player, history=history_new, history_str=h_a_star, tree=subtree)
+                """
+                for action, subtree in tree.actions.items():
+                    if action == a_star:
+                        history_new = history[:]
+                        history_new.append(action)
+                        res, sat, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=generated_preconditions, player=player, history=history_new, history_str=h_a_star, tree=subtree)
+                """
+                if sat:
+                    res[history_str] = a_star
+                    return res, True, constraints_leaves
+                else:
+                    return {}, False, z3.Bool(True)
+            else:
+                res = {}
+                for action, subtree in tree.actions.items():
+                    h_a = action if history_str == '' else history_str + ';' + action
+                    history_new = history[:]
+                    history_new.append(action)
+                    res, sat, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=generated_preconditions, player=player, history=history_new, history_str=h_a, tree=subtree)
+                    if sat == True:
+                        res[history_str] = action
+                        return res, True, constraints_leaves
+                return {}, False, z3.Bool(True)
+        else:
+            res = {} 
+            constraints_leaves_all = []
+            for action, subtree in tree.actions.items():
+                res_intermediate = {}
+                sat = True
+                h_a = action if history_str == '' else history_str + ';' + action
+                history_new = history[:]
+                history_new.append(action)
+                res_intermediate, sat, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=generated_preconditions, player=player, history=history_new, history_str=h_a, tree=subtree) 
+                constraints_leaves_all.extend(constraints_leaves)
+                if sat == False:
+                    return {}, False, z3.Bool(True)
+                else:
+                    # we need this to capture the partial strategies for p in the different subtrees
+                    # the top-most action gets overwritten in each interation, but this does not matter as this action 
+                    # does not belong to the player for which we check wi
+                    res.update(res_intermediate) 
+            
+            # check whether there is a solution for all collected generated_preconditions
+            check_result_combine_all = self._solver.check(conjunction(*constraints_leaves_all),
+                                                *self._label2pair.keys(),
+                                                *self._label2subtree.keys())
+            if check_result_combine_all == z3.unknown:
+                logging.warning("internal solver returned 'unknown', which shouldn't happen")
+                reason = self._solver.reason_unknown()
+                logging.warning(f"reason given was: {reason}")
+                logging.info("trying again...")
+                check_result_combine_all = self._solver.check(conjunction(*constraints_leaves_all),
+                                                *self._label2pair.keys(),
+                                                *self._label2subtree.keys())
+                if check_result_combine_all == z3.unknown:
+                    logging.error("solver still says 'unknown', bailing out")
+                    assert False
+            
+            if not check_result_combine_all == z3.sat:
+                logging.error("ERROR: cannot propagate the strategies from the subtrees upwards")
+                assert False
+
+            return res, True, constraints_leaves_all
 
 class WeakImmunityStrategySolver(FeebleImmuneStrategySolver):
     """solver for weak immunity"""
