@@ -688,7 +688,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
                 constraint_leaf_utility = self._compare_utilities(tree.utilities[player])
                 return player_strategy, True, [constraint_leaf_utility]
 
-            return {}, False, [z3.Bool(True)]
+            return {}, False, []
 
 
         assert isinstance(tree, Branch)
@@ -714,7 +714,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
                     res[history_str] = a_star
                     return res, True, constraints_leaves
                 else:
-                    return {}, False, z3.Bool(True)
+                    return {}, False, []
             else:
                 res = {}
                 for action, subtree in tree.actions.items():
@@ -725,7 +725,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
                     if sat == True:
                         res[history_str] = action
                         return res, True, constraints_leaves
-                return {}, False, z3.Bool(True)
+                return {}, False, []
         else:
             res = {} 
             constraints_leaves_all = []
@@ -738,7 +738,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
                 res_intermediate, sat, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=generated_preconditions, player=player, history=history_new, history_str=h_a, tree=subtree) 
                 constraints_leaves_all.extend(constraints_leaves)
                 if sat == False:
-                    return {}, False, z3.Bool(True)
+                    return {}, False, []
                 else:
                     # we need this to capture the partial strategies for p in the different subtrees
                     # the top-most action gets overwritten in each interation, but this does not matter as this action 
@@ -746,6 +746,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
                     res.update(res_intermediate) 
             
             # check whether there is a solution for all collected generated_preconditions
+            #logging.info(f"----------------->constaints_leaves_all:  {constraints_leaves_all}")
             check_result_combine_all = self._solver.check(conjunction(*constraints_leaves_all),
                                                 *self._label2pair.keys(),
                                                 *self._label2subtree.keys())
