@@ -15,6 +15,7 @@ from utility import Utility
 
 class Tree(metaclass=ABCMeta):
     """base class for game trees"""
+    max_depth: int
 
     @abstractmethod
     def get_utility_of_terminal_history(self, history: List[str]) -> Dict[str, Utility]:

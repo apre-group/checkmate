@@ -6,6 +6,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Dict, List, Tuple
 import itertools
 import logging
+import math
 
 from auxfunz3 import *
 from output import SolvingResult, CaseWithStrategy, Counterexample
@@ -202,7 +203,11 @@ class StrategySolver(metaclass=ABCMeta):
 
         for player in self.input.players:
 
-            strategy_player, sat_player, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=result.generated_preconditions, player=player, history=[], history_str='', tree=self.input.tree)
+            self._calculate_tree_depths(self.input.tree)
+
+            max_depth_root = self.input.tree.max_depth
+
+            strategy_player, sat_player, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=result.generated_preconditions, player=player, history=[], history_str='', tree=self.input.tree, max_depth=max_depth_root)
 
             if sat_player == False:
                 all_sat = False
@@ -319,6 +324,24 @@ class StrategySolver(metaclass=ABCMeta):
 
         return result, sat
 
+    def _calculate_tree_depths(
+        self,
+        tree: Tree
+    ):
+        if isinstance(tree, Leaf):
+            tree.max_depth = 0
+            return
+
+        assert isinstance(tree, Branch)
+        subtrees_depth = []
+        for action, child in tree.actions.items():
+            self._calculate_tree_depths(child)
+            subtrees_depth.append(child.max_depth)
+
+        tree.max_depth = 1 + max(subtrees_depth)
+        return
+
+    
     def _combine_strategies(
         self,
         strategies_per_player: [Dict[str, Dict[str, str]]],
@@ -659,7 +682,8 @@ class FeebleImmuneStrategySolver(StrategySolver):
         player: str,
         history: List[str],
         history_str: str,
-        tree: Tree
+        tree: Tree,
+        max_depth: int
     ):   
         if isinstance(tree, Leaf):
             property_constraint = self._property_constraint_for_leaf(*case, generated_preconditions=generated_preconditions, player=player, tree=tree)
@@ -692,6 +716,39 @@ class FeebleImmuneStrategySolver(StrategySolver):
 
 
         assert isinstance(tree, Branch)
+
+        # check here: if tree depth <=treshold, solve without compositionality
+        if tree.max_depth <= math.ceil(max_depth * 0.2):
+            property_constraint = \
+                self._property_constraint_for_case(*case, generated_preconditions=generated_preconditions, player=player)
+            check_result = self._solver.check(property_constraint,
+                                            *self._label2pair.keys(),
+                                            *self._label2subtree.keys())
+            if check_result == z3.unknown:
+                logging.warning("internal solver returned 'unknown', which shouldn't happen")
+                reason = self._solver.reason_unknown()
+                logging.warning(f"reason given was: {reason}")
+                logging.info("trying again...")
+                check_result = self._solver.check(property_constraint,
+                                                *self._label2pair.keys(),
+                                                *self._label2subtree.keys())
+                if check_result == z3.unknown:
+                    logging.error("solver still says 'unknown', bailing out")
+                    assert False
+
+            if check_result == z3.sat:
+                case = set(case)
+                logging.info(f"case solved for player: {player}")
+                result_player = self._extract_strategy(self._solver, case)
+                player_strategy = result_player.strategy
+                # for 3rd return value:
+                # TODO: go in the subtree and collect constraints only for the leaves??
+                # Or just take property constaint?
+                return player_strategy, True, [property_constraint]
+            
+            return {}, False, []
+
+
         current_player = tree.player
         if current_player == player:
             if self._is_along_checked_history(history, self.checked_history):
@@ -702,7 +759,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
                 history_new = history[:]
                 history_new.append(a_star)
                 subtree = tree.actions[a_star]
-                res, sat, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=generated_preconditions, player=player, history=history_new, history_str=h_a_star, tree=subtree)
+                res, sat, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=generated_preconditions, player=player, history=history_new, history_str=h_a_star, tree=subtree, max_depth=max_depth)
                 """
                 for action, subtree in tree.actions.items():
                     if action == a_star:
@@ -721,7 +778,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
                     h_a = action if history_str == '' else history_str + ';' + action
                     history_new = history[:]
                     history_new.append(action)
-                    res, sat, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=generated_preconditions, player=player, history=history_new, history_str=h_a, tree=subtree)
+                    res, sat, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=generated_preconditions, player=player, history=history_new, history_str=h_a, tree=subtree, max_depth=max_depth)
                     if sat == True:
                         res[history_str] = action
                         return res, True, constraints_leaves
@@ -735,7 +792,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
                 h_a = action if history_str == '' else history_str + ';' + action
                 history_new = history[:]
                 history_new.append(action)
-                res_intermediate, sat, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=generated_preconditions, player=player, history=history_new, history_str=h_a, tree=subtree) 
+                res_intermediate, sat, constraints_leaves = self._solve_wi_for_player_compositionality(*case, generated_preconditions=generated_preconditions, player=player, history=history_new, history_str=h_a, tree=subtree, max_depth=max_depth) 
                 constraints_leaves_all.extend(constraints_leaves)
                 if sat == False:
                     return {}, False, []
