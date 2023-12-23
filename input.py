@@ -87,7 +87,7 @@ class Input:
 
     def _load_constraint(self, source: str) -> Boolean:
         """load a string expression into a Boolean constraint, via `eval()`"""
-        return eval(source, {}, self.constants)
+        return eval(source, {'Or': z3.Or, 'And': z3.And}, self.constants)
 
     def _load_utility(self, utility: Union[int, float, str]) -> Utility:
         """load a string expression or a number into a Utility, via `eval()`"""
@@ -120,6 +120,7 @@ class Input:
 
     def start_honest_history(self, honest_history: list[str]):
         """start work on a new honest history"""
+        self.tree.reset_honest()
         self.honest_utilities = self.tree.mark_honest(honest_history)
 
     def property(self, property: str):
@@ -140,13 +141,14 @@ class Input:
             for player in self.players:
                 logging.info(f"player {player}")
                 if not self.tree.weak_immune(solver, player, weaker):
-                    print(self.tree.reason)
+                    print("failed, split:", self.tree.reason)
         elif property == 'collusion_resilience':
+            solver.add(*self.collusion_resilience_constraints)
             for group_size in range(1, len(self.players)):
                 for group in itertools.combinations(self.players, group_size):
                     logging.info(f"group {group}")
                     honest = sum(self.honest_utilities[player] for player in group)
                     if not self.tree.collusion_resilient(solver, group, honest):
-                        print(self.tree.reason)
+                        print("failed, split:", self.tree.reason)
 
-        self.tree.reset()
+        self.tree.reset_strategy()

@@ -14,10 +14,11 @@ class Tree:
         self.honest = False
         self.reason = None
 
-    def reset(self):
-        """reset all search data"""
-        self.honest = False
-        self.reason = None
+    def reset_honest(self):
+        assert False
+
+    def reset_strategy(self):
+        assert False
 
     def mark_honest(self, *_) -> dict[str, Utility]:
         assert False
@@ -43,6 +44,12 @@ class Leaf(Tree):
             f"{player}: {utility}"
             for player, utility in self.utilities.items()
         )
+
+    def reset_honest(self):
+        self.honest = False
+
+    def reset_strategy(self):
+        self.reason = False
 
     def mark_honest(self, honest_history: list[str]) -> dict[str, Utility]:
         """mark this branch as honest"""
@@ -117,11 +124,16 @@ class Branch(Tree):
         index = [action.name for action in self.actions].index(honest_history[0])
         return self.actions[index].tree.mark_honest(honest_history[1:])
 
-    def reset(self):
-        super().reset()
+    def reset_honest(self):
+        self.honest = False
+        for branch in self.actions:
+            branch.tree.reset_honest()
+
+    def reset_strategy(self):
+        self.reason = None
         self.current = 0
         for branch in self.actions:
-            branch.tree.reset()
+            branch.tree.reset_strategy()
 
     def weak_immune(self, solver: z3.Solver, player: str, weaker: bool) -> bool:
         if player == self.player:
@@ -173,6 +185,7 @@ class Branch(Tree):
                 if self.actions[self.current].tree.reason is not None:
                     self.reason = self.actions[self.current].tree.reason
                 self.current += 1
+            return False
 
         for action in self.actions:
             if not action.tree.collusion_resilient(solver, group, honest):
