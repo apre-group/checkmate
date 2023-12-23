@@ -150,5 +150,9 @@ class Input:
                     honest = sum(self.honest_utilities[player] for player in group)
                     if not self.tree.collusion_resilient(solver, group, honest):
                         print("failed, split:", self.tree.reason)
+        elif property == 'practicality':
+            solver.add(*self.collusion_resilience_constraints)
+            if not self.tree.practical(solver):
+                print("failed, split:", self.tree.reason)
 
         self.tree.reset_strategy()

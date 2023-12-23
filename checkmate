@@ -35,3 +35,4 @@ if __name__ == '__main__':
         loaded.property('weak_immunity')
         loaded.property('weaker_immunity')
         loaded.property('collusion_resilience')
+        loaded.property('practicality')

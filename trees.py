@@ -29,6 +29,8 @@ class Tree:
     def collusion_resilient(self, *_) -> bool:
         assert False
 
+    def practical(self, *_) -> Optional[dict[str, Utility]]:
+        assert False
 
 class Leaf(Tree):
     """a leaf node"""
@@ -49,7 +51,7 @@ class Leaf(Tree):
         self.honest = False
 
     def reset_strategy(self):
-        self.reason = False
+        self.reason = None
 
     def mark_honest(self, honest_history: list[str]) -> dict[str, Utility]:
         """mark this branch as honest"""
@@ -81,6 +83,10 @@ class Leaf(Tree):
         self.reason = condition
         return False
 
+    def practical(self, _: z3.Solver) -> Optional[dict[str, Utility]]:
+        return self.utilities
+
+
 class Action:
     name: str
     """the action name"""
@@ -94,17 +100,17 @@ class Action:
 class Branch(Tree):
     """a non-leaf node with children"""
     player: str
-    """the current player"""
+    """the player at this node"""
     actions: list[Action]
     """available actions leading to sub-trees"""
-    current: int
-    """the current action for the strategy"""
+    strategy: int
+    """the action index to take for the strategy"""
 
     def __init__(self, player: str, actions: dict[str, Tree]):
         super().__init__()
         self.player = player
         self.actions = [Action(action, tree) for action, tree in actions.items()]
-        self.current = 0
+        self.strategy = 0
 
     def __repr__(self) -> str:
         # magic for pretty trees
@@ -131,30 +137,30 @@ class Branch(Tree):
 
     def reset_strategy(self):
         self.reason = None
-        self.current = 0
+        self.strategy = 0
         for branch in self.actions:
             branch.tree.reset_strategy()
 
     def weak_immune(self, solver: z3.Solver, player: str, weaker: bool) -> bool:
         if player == self.player:
             if self.honest:
-                self.current = next(
+                self.strategy = next(
                     index for index in
                     range(len(self.actions))
                     if self.actions[index].tree.honest
                 )
-                if self.actions[self.current].tree.weak_immune(solver, player, weaker):
+                if self.actions[self.strategy].tree.weak_immune(solver, player, weaker):
                     return True
-                if self.actions[self.current].tree.reason is not None:
-                    self.reason = self.actions[self.current].tree.reason
+                if self.actions[self.strategy].tree.reason is not None:
+                    self.reason = self.actions[self.strategy].tree.reason
                 return False
 
-            while self.current < len(self.actions):
-                if self.actions[self.current].tree.weak_immune(solver, player, weaker):
+            while self.strategy < len(self.actions):
+                if self.actions[self.strategy].tree.weak_immune(solver, player, weaker):
                     return True
-                if self.actions[self.current].tree.reason is not None:
-                    self.reason = self.actions[self.current].tree.reason
-                self.current += 1
+                if self.actions[self.strategy].tree.reason is not None:
+                    self.reason = self.actions[self.strategy].tree.reason
+                self.strategy += 1
 
             return False
 
@@ -168,23 +174,23 @@ class Branch(Tree):
     def collusion_resilient(self, solver: z3.Solver, group: set[str], honest: Utility) -> bool:
         if self.player not in group:
             if self.honest:
-                self.current = next(
+                self.strategy = next(
                     index for index in
                     range(len(self.actions))
                     if self.actions[index].tree.honest
                 )
-                if self.actions[self.current].tree.collusion_resilient(solver, group, honest):
+                if self.actions[self.strategy].tree.collusion_resilient(solver, group, honest):
                     return True
-                if self.actions[self.current].tree.reason is not None:
-                    self.reason = self.actions[self.current].tree.reason
+                if self.actions[self.strategy].tree.reason is not None:
+                    self.reason = self.actions[self.strategy].tree.reason
                 return False
 
-            while self.current < len(self.actions):
-                if self.actions[self.current].tree.collusion_resilient(solver, group, honest):
+            while self.strategy < len(self.actions):
+                if self.actions[self.strategy].tree.collusion_resilient(solver, group, honest):
                     return True
-                if self.actions[self.current].tree.reason is not None:
-                    self.reason = self.actions[self.current].tree.reason
-                self.current += 1
+                if self.actions[self.strategy].tree.reason is not None:
+                    self.reason = self.actions[self.strategy].tree.reason
+                self.strategy += 1
             return False
 
         for action in self.actions:
@@ -193,3 +199,24 @@ class Branch(Tree):
                 return False
 
         return True
+
+    def practical(self, solver: z3.Solver) -> Optional[dict[str, Utility]]:
+        utilities: list[dict[str, Utility]] = []
+        for action in self.actions:
+            utility = action.tree.practical(solver)
+            if not utility:
+                self.reason = action.tree.reason
+                return None
+            utilities.append(utility)
+
+        for index in range(1, len(utilities)):
+            condition = utilities[self.strategy][self.player] >= utilities[index][self.player]
+            if solver.check(not_(condition)) == z3.unsat:
+                continue
+            if solver.check(condition) == z3.unsat:
+                self.strategy = index
+                continue
+            self.reason = condition
+            return None
+
+        return utilities[self.strategy]
