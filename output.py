@@ -65,12 +65,23 @@ class Counterexample:
             COUNTEREXAMPLE_TERMINAL_HISTORY_JSON_KEY: self.terminal_history
         }
 
+class CaseWithCounterexamples:
+    ordering_case = Set[z3.BoolRef]
+    counterexamples = List[Counterexample]
+
+    def __init__(self, case: Set[z3.BoolRef], counterexamples: List[Counterexample] = []):
+        self.ordering_case = case
+        self.counterexamples = counterexamples
+
+    def __repr__(self):
+        return f"---- case: {self.ordering_case}\n" \
+               f"---- counterexamples: {self.counterexamples}"
 
 class SolvingResult:
     """result of the analysis of one security property"""
     strategies: List[CaseWithStrategy]
     generated_preconditions: Set[z3.BoolRef]
-    counterexamples: List[Counterexample]
+    counterexamples: List[CaseWithCounterexamples]
 
     def __init__(self):
         self.strategies = []

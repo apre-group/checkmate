@@ -29,7 +29,7 @@ def analyze_input(checked_input: Input,
                 generate_preconditions,
                 generate_counterexamples
             )
-            wi_res = wi_solver.solve()
+            wi_res, is_wi = wi_solver.solve()
 
         if SecurityProperty.WEAKER_IMMUNITY in analyzed_properties:
             logging.info("checking weaker immunity")
@@ -39,7 +39,7 @@ def analyze_input(checked_input: Input,
                 generate_preconditions,
                 generate_counterexamples
             )
-            weri_res = weri_solver.solve()
+            weri_res, is_weri = weri_solver.solve()
 
         if SecurityProperty.COLLUSION_RESILIENCE in analyzed_properties:
             logging.info("checking collusion resilience")
@@ -49,7 +49,7 @@ def analyze_input(checked_input: Input,
                 generate_preconditions,
                 generate_counterexamples
             )
-            cr_res = cr_solver.solve()
+            cr_res, is_cr = cr_solver.solve()
 
         if SecurityProperty.PRACTICALITY in analyzed_properties:
             logging.info("checking practicality")
@@ -59,7 +59,7 @@ def analyze_input(checked_input: Input,
                 generate_preconditions,
                 generate_counterexamples
             )
-            p_res = pr_solver.solve()
+            p_res, is_pr = pr_solver.solve()
 
         results.append(AnalysisResult(honest_history, wi_res, weri_res, cr_res, p_res))
 
@@ -69,11 +69,12 @@ def analyze_input(checked_input: Input,
         logging.info(f"Honest history {result.honest_history}")
 
         for security_property in analyzed_properties:
-            property_result, sat = result.get_property_result(security_property)
+            property_result = result.get_property_result(security_property)
             found_strategies = property_result.strategies
+            found_counterexample_cases = property_result.counterexamples
             gen_preconditions = property_result.generated_preconditions
 
-            if not found_strategies:
+            if found_counterexample_cases:
                 logging.info(f"-- doesn't have {PROPERTY_TO_STR[security_property]}")
 
             elif len(found_strategies) == 1:
@@ -83,6 +84,8 @@ def analyze_input(checked_input: Input,
                 )
 
             else:
+
+                assert len(found_strategies) > 0, "no strategy but also no unsat case found"
                 logging.info(
                     f"-- has {PROPERTY_TO_STR[security_property]} "
                     f"with different strategies for cases" if not gen_preconditions

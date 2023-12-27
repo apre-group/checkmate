@@ -8,7 +8,7 @@ import itertools
 import logging
 
 from auxfunz3 import *
-from output import SolvingResult, CaseWithStrategy, Counterexample
+from output import SolvingResult, CaseWithStrategy, Counterexample, CaseWithCounterexamples
 from utility import Utility, ZERO
 from input import Tree, Leaf, Branch, Input
 
@@ -102,7 +102,7 @@ class StrategySolver(metaclass=ABCMeta):
         self._add_action_constraints([], self.input.tree, self._solver)
         self._add_history_constraints(self.checked_history)
 
-    def solve(self) -> SolvingResult:
+    def solve(self) -> Tuple[SolvingResult, bool]:
         """
         the main solving routine
 
@@ -110,7 +110,9 @@ class StrategySolver(metaclass=ABCMeta):
         otherwise, returns a solution to report later
         """
         result = SolvingResult()
-        result = self.case_splitting(True, {True}, [])
+        result, sat = self.case_splitting_allCE(True, {True}, [])
+        for elem in result.counterexamples:
+            print(elem.ordering_case)
 
                 #to be considered from here for counterexamples and preconditions
 
@@ -154,7 +156,7 @@ class StrategySolver(metaclass=ABCMeta):
 
         # there are no more possible models, i.e. no more cases to be discharged
         logging.info("no more cases, done")
-        return result
+        return result, sat
     
     def case_splitting(self, new_condition: z3.BoolRef, current_case: Set[z3.BoolRef], comp_values) -> SolvingResult():
         # print(new_condition)
@@ -278,6 +280,140 @@ class StrategySolver(metaclass=ABCMeta):
 
                 # delete existing strategies from result because property is not fulfilled
                 result.delete_strategies()
+                sat = False
+
+            return result, sat
+        
+    def case_splitting_allCE(self, new_condition: z3.BoolRef, current_case: Set[z3.BoolRef], comp_values) -> Tuple[SolvingResult(), bool]:
+        # print(new_condition)
+        # print(current_case)
+        
+        # collect unsat case splits to generate all CEs later
+        result = SolvingResult()
+
+        #check if new condition is implied by init and current_case
+        #assert init, current_case, not new_condition
+        #init and property -->  
+
+        implication_constraints=self._implied_constraints(new_condition, current_case) 
+        implied_result =  self._case_solver.check(implication_constraints)
+        #check if new condition is contradictory to init and current_case
+        #assert init, current_case, new_condition
+        contradiction_constraints=self._contrad_constraints(new_condition, current_case) 
+        contrad_result =  self._case_solver.check(contradiction_constraints)
+
+        if implied_result == z3.unsat and new_condition is not True:
+            logging.info(f"case {new_condition} implied, the result is unsat")
+            #this result is always the result from the parent call
+            #unsat no further splits to be considered
+            unsat_case = CaseWithCounterexamples(current_case)
+            result.counterexamples.append(unsat_case)
+            return result, False
+        
+        if contrad_result == z3.unsat:
+            logging.info(f"case {new_condition} impossible, hence trivially satisfied, next case considered")
+            return result, True
+        
+        #print(current_case)
+
+        case={new_condition}
+        for elem in current_case:
+            case.add(elem)
+
+        # print(current_case)
+        # print(new_condition)
+        # print(case)
+
+        logging.info(f"current case assumes {case}")
+
+        property_constraint = \
+            self._property_constraint_for_case(*case, generated_preconditions=result.generated_preconditions)
+        check_result = self._solver.check(property_constraint,
+                                        *self._label2pair.keys(),
+                                        *self._label2subtree.keys())
+        if check_result == z3.unknown:
+            logging.warning("internal solver returned 'unknown', which shouldn't happen")
+            reason = self._solver.reason_unknown()
+            logging.warning(f"reason given was: {reason}")
+            logging.info("trying again...")
+            check_result = self._solver.check(property_constraint,
+                                            *self._label2pair.keys(),
+                                            *self._label2subtree.keys())
+            if check_result == z3.unknown:
+                logging.error("solver still says 'unknown', bailing out")
+                assert False
+
+        if check_result == z3.sat:
+            case = set(case)
+            logging.info("case solved")
+            result.strategies.append(self._extract_strategy(self._solver, case))
+            return result, True
+            
+        else:
+            # we need to compare more expressions
+            logging.info("no solution, trying case split")
+
+            # track whether we actually found any more
+            new_pair = False
+
+            core = {
+                label_expr
+                for label_expr in self._solver.unsat_core()
+                if isinstance(label_expr, z3.BoolRef) and z3.is_app(label_expr)
+            }
+
+            for label_expr in core:
+                if label_expr not in self._label2pair:
+                    continue
+
+                # `left op right` was in an unsat core
+                left, right, real = self._label2pair[label_expr]
+                # partition reals/infinitesimals
+                #add_to = reals if real else infinitesimals
+
+                if [left, right] not in comp_values:
+                    #call recursively with this split in mind and break for loof here
+                    #sat or unsat return value of case_splitting(self, left, right, cases)
+                    # unsat breaks the recursion, sat too, only proceed if further cases
+                    logging.info(f"new comparison: ({left}, {right})")
+                    new_comp = comp_values
+                    new_comp.append([left, right])
+                    new_comp.append([right, left])
+
+                    output1, sat1 = self.case_splitting_allCE(left < right, case , new_comp)
+                    if not sat1:
+                        result.counterexamples.extend(output1.counterexamples)
+                        sat = False
+                    else:
+                        result.strategies.extend(output1.strategies)
+                        sat = True
+
+                    output2, sat2 = self.case_splitting_allCE(left == right, case , new_comp)
+                    if not sat2:
+                        result.counterexamples.extend(output2.counterexamples)
+                        sat = False
+                    else:
+                        result.strategies.extend(output2.strategies)
+                    
+                    output3, sat3 = self.case_splitting_allCE(left > right, case , new_comp)
+                    if not sat3:
+                        result.counterexamples.extend(output3.counterexamples)
+                        sat = False
+                    else:
+                        result.strategies.extend(output3.strategies)
+                    new_pair = True
+                    break
+
+            # we saturated, give up
+            if not new_pair:
+                logging.error("no more splits, failed")
+                logging.error(f"here is a case I cannot solve: {case}")
+
+                # delete existing strategies from result because property is not fulfilled
+                # result.delete_strategies()
+
+                unsat_case = CaseWithCounterexamples(case)
+                result.counterexamples.append(unsat_case)
                 sat = False
 
             return result, sat
