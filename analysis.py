@@ -52,7 +52,7 @@ def analyze_input(checked_input: Input,
 
         if SecurityProperty.PRACTICALITY in analyzed_properties:
             logging.info("checking practicality")
-            pr_solver = PracticalityStrategySolver2(
+            pr_solver = PracticalityStrategySolver(
                 checked_input,
                 honest_history,
                 generate_preconditions,

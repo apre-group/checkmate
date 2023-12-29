@@ -25,9 +25,6 @@ class Leaf(Tree):
     """a leaf node"""
     utility: Dict[str, Utility]
 
-    def get_utility_of_terminal_history(self, history: List[str]) -> Dict[str, Utility]:
-        assert not history
-        return self.utilities
 
     def __init__(self, utilities: Dict[str, Utility]):
         """initialise from a set of player utilities"""
@@ -39,15 +36,14 @@ class Leaf(Tree):
             for player, utility in self.utilities.items()
         )
 
+    def get_utility_of_terminal_history(self, history: List[str]) -> Dict[str, Utility]:
+        assert not history
+        return self.utilities
 
 class Branch(Tree):
     """a non-leaf node with children"""
     player: str
     actions: Dict[str, Tree]
-
-    def get_utility_of_terminal_history(self, history: List[str]) -> Dict[str, Utility]:
-        assert len(history) > 0
-        return self.actions[history[0]].get_utility_of_terminal_history(history[1:])
 
     def __init__(self, player: str, actions: Dict[str, Tree]):
         """initialise from a player (whose turn it is) and a set of actions"""
@@ -65,6 +61,13 @@ class Branch(Tree):
         )
         return f"{self.player}\n{actions}"
 
+
+    def get_utility_of_terminal_history(self, history: List[str]) -> Dict[str, Utility]:
+        assert len(history) > 0
+        return self.actions[history[0]].get_utility_of_terminal_history(history[1:])
+
+    def get_player(self) -> str:
+        return self.player
 
 class Input:
     """an input problem"""
@@ -166,14 +169,14 @@ class Input:
     def get_tree(self) -> Tree:
         return self.tree
 
-    def get_players_in_hist(self, Tree, history: List(str)) -> List(str):
+    def get_players_in_hist(self, tree, history: List(str)) -> List(str):
         """get the players along the provided history"""
         if len(history) == 0:
             return []
         else:
-            assert type(Tree) == Branch
-            player_list = [Tree.get_player()]
-            player_list.extend(self.get_players_in_hist(Tree.actions[history[0]],history[1:]))
+            assert type(tree) == Branch
+            player_list = [tree.get_player()]
+            player_list.extend(self.get_players_in_hist(tree.actions[history[0]],history[1:]))
             return player_list
 
     def get_player_at_hist(self, tree, history: List[str]) -> str:
