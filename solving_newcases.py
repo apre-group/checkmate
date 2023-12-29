@@ -62,7 +62,7 @@ class StrategySolver(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def _generate_counterexamples(self, core, labels, case, reals, infinitesimals, model) -> List[Counterexample]:
+    def _generate_counterexamples(self, labels, case) -> List[Counterexample]:
         pass
 
     def __init__(
@@ -643,13 +643,14 @@ class FeebleImmuneStrategySolver(StrategySolver):
             ces.append(counterexample)
         return [Counterexample(case, ces, [])]
 
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef], case):
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef], _case):
         """generate readable counterexamples one per unsat core"""
+        _ = _case
         cestrat_output = []
         cestrat = {}
 
         for label_expr in core:
-            setofp, hist, _action, _other_action, _condition, _other_condition = self._label2subtree[label_expr]
+            setofp, hist, _, _, _, _ = self._label2subtree[label_expr]
 
             players_in_hist = self.input.get_players_in_hist(self.input.get_tree(), hist)
             for i, elem in enumerate(hist):
@@ -657,6 +658,7 @@ class FeebleImmuneStrategySolver(StrategySolver):
                     cestrat[";".join(hist[:i])] = elem
                     cestrat_output.append("player "+players_in_hist[i]+" chooses action "+elem+" after history "+str(hist[:i]))
 
+        assert setofp is not None, "expected non-empty unsat core"
         logging.info(f"- If player {setofp[0]} follows the honest history, {setofp[0]} can be harmed by strategy:")
         for line in cestrat_output:
             logging.info(f"- {line}")
@@ -696,6 +698,8 @@ class FeebleImmuneStrategySolver(StrategySolver):
                 history + [action],
                 child
             )
+            
+            
 
 
 class WeakImmunityStrategySolver(FeebleImmuneStrategySolver):
@@ -760,13 +764,14 @@ class CollusionResilienceStrategySolver(StrategySolver):
             ces.append(counterexample)
         return [Counterexample(case, ces, [])]
 
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef], case):
+    def _extract_counterexample_core(self, core: Set[z3.BoolRef], _case):
         """generate readable counterexamples one per unsat core"""
+        _ = _case
         cestrat_output = []
         cestrat = {}
 
         for label_expr in core:
-            setofp, hist, _action, _other_action, _condition, _other_condition = self._label2subtree[label_expr]
+            setofp, hist, _, _, _, _ = self._label2subtree[label_expr]
 
             players_in_hist = self.input.get_players_in_hist(self.input.get_tree(), hist)
             for i, elem in enumerate(hist):
@@ -822,178 +827,8 @@ class CollusionResilienceStrategySolver(StrategySolver):
             )
 
 
+
 class PracticalityStrategySolver(StrategySolver):
-    """solver for practicality"""
-
-    def _property_initial_constraints(self) -> List[Boolean]:
-        return self.input.practicality_constraints
-
-    def _property_constraint_implementation(self) -> z3.BoolRef:
-        constraints = []
-        self._practicality_constraints(constraints, [], self.input.tree)
-        return conjunction(*constraints)
-
-    def _extract_counterexample_core(self, core: Set[z3.BoolRef], case, reals, infinitesimals, model):
-        raise Exception(NotImplemented)
-
-    def _utility_variable(self, starting_from: List[str], player: str) -> Utility:
-        """create real/infinitesimal variables to represent a utility"""
-        # utility variable belongs to a subtree -> we tag which subtree by the history where we start from
-        tag = ''.join(starting_from)
-        utility = Utility(
-            z3.Real(f'ur[{tag}][{player}]'),
-            z3.Real(f'ui[{tag}][{player}]')
-        )
-        self._exclude_variables.update((utility.real, utility.inf))
-        return utility
-
-    def _add_utility_constraints(
-            self,
-            constraints: List[z3.BoolRef],
-            player_utilities: Dict[str, Utility],
-            history: List[str],
-            decisions: List[z3.BoolRef],
-            tree: Tree,
-            player: str
-    ):
-        """add constraints to give the semantics of a utility variable"""
-        if isinstance(tree, Leaf):
-            # experiment
-            # TODO cleanup
-            equalities = [Utility.__eq__(player_utilities[player], tree.utilities[player], self._pair_label)]
-            # equalities = [Utility.__eq__(ut, tree.utilities[player], self._pair_label) for player, ut in
-            #              player_utilities.items()]
-            # if we take `decisions` to a leaf, the utility variable has a known value
-            constraints.append(implication(
-                conjunction(*decisions),
-                conjunction(*equalities)
-            ))
-            return
-
-        assert isinstance(tree, Branch)
-        for action, child in tree.actions.items():
-            self._add_utility_constraints(
-                constraints,
-                player_utilities,
-                history + [action],
-                decisions + [self._action_variable(history, action)],
-                child,
-                player
-            )
-
-    def _practicality_constraints(
-            self,
-            constraints: List[z3.BoolRef],
-            history: List[str],
-            tree: Tree
-    ):
-        """
-        adds the practicality constraints to the list constraints.
-        tree is the current subtree.
-        history is how we got to the subtree.
-        """
-        if isinstance(tree, Leaf):
-            return
-
-        assert isinstance(tree, Branch)
-        utility_variables = {
-            player: self._utility_variable(history, player)
-            for player in self.input.players
-        }
-
-        utility_constraints = []
-        self._add_utility_constraints(
-            utility_constraints,
-            utility_variables,
-            history,
-            [],
-            tree,
-            tree.player
-        )
-
-        nash_constraints = []
-
-        # experiment
-        player = tree.player
-        self._nash_constraints(
-            nash_constraints,
-            utility_variables[player],
-            player,
-            history,
-            [],
-            tree
-        )
-        # TODO cleanup
-        # for player in self.input.players:
-        #    self._nash_constraints(
-        #        nash_constraints,
-        #        utility_variables[player],
-        #        player,
-        #        history,
-        #        [],
-        #        tree
-        #    )
-
-        constraints.append(z3.ForAll(
-            [
-                var
-                for value in utility_variables.values()
-                for var in (value.real, value.inf)
-            ],
-            implication(
-                conjunction(*utility_constraints),
-                conjunction(*nash_constraints)
-            )
-        ))
-
-        for action, child in tree.actions.items():
-            self._practicality_constraints(
-                constraints,
-                history + [action],
-                child
-            )
-
-    def _nash_constraints(
-            self,
-            constraints: List[z3.BoolRef],
-            old_utility: Utility,
-            player: str,
-            history: List[str],
-            non_player_decisions: List[z3.BoolRef],
-            tree: Tree
-    ):
-        # player should not benefit from deviating in this subtree.
-        if isinstance(tree, Leaf):
-            deviating_utility = tree.utilities[player]
-            impl = implication(
-                conjunction(*non_player_decisions),
-                Utility.__ge__(old_utility, deviating_utility, self._pair_label)
-            )
-            if self.generate_counterexamples:
-                impl = implication(self._subtree_label((player,), history), impl)
-
-            constraints.append(impl)
-            return
-
-        # all the other players have the strategy fixed (non_player_decisions)
-        # we collect these decisions for implication above at the Leaf case
-        assert isinstance(tree, Branch)
-        player_decision = player == tree.player
-        for action, child in tree.actions.items():
-            action_variable = [] \
-                if player_decision \
-                else [self._action_variable(history, action)]
-            self._nash_constraints(
-                constraints,
-                old_utility,
-                player,
-                history + [action],
-                non_player_decisions + action_variable,
-                child
-            )
-
-
-class PracticalityStrategySolver2(StrategySolver):
     """solver for practicality - linear (ish) version"""
 
     def _property_initial_constraints(self) -> List[Boolean]:
@@ -1004,9 +839,9 @@ class PracticalityStrategySolver2(StrategySolver):
         self._practicality_constraints(constraints, [], self.input.tree)
         return conjunction(*constraints)
 
-    def _generate_counterexamples(self, core, labels, case, ce_solver):
+    def _generate_counterexamples(self, labels, case, ce_solver):
         """generate all counterexamples to pr, which is independent of unsat cores"""
-        return self._extract_counterexample_core(core, case)
+        return self._extract_counterexample_core(set(), case)
 
     def _extract_counterexample_core(self, core: Set[z3.BoolRef], case):
         """generate readable counterexamples by listing all pr histories"""

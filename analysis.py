@@ -5,8 +5,7 @@ from constants import SecurityProperty, PROPERTY_TO_STR
 from input import Input
 from output import AnalysisResult
 from solving_newcases import WeakImmunityStrategySolver, WeakerImmunityStrategySolver, CollusionResilienceStrategySolver, \
-    PracticalityStrategySolver2
-
+    PracticalityStrategySolver
 
 def analyze_input(checked_input: Input,
                   analyzed_properties: List[SecurityProperty],
