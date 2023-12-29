@@ -103,6 +103,21 @@ def order_according_to_model(model: z3.ModelRef, minimize: z3.Solver, terms: Set
 
     return comparisons - redundant
 
+def valuation_case(ineq: z3.BoolRef, case: Set[z3.BoolRef]) -> bool:
+    impl_solver = z3.Solver()
+
+    conj_case = conjunction(*case)
+    impl = z3.And(conj_case, z3.Not(ineq))
+
+    check_impl = impl_solver.check(impl)
+
+    if check_impl == z3.unsat:
+        return True
+    elif check_impl == z3.sat:
+        return False
+    else: 
+        assert False, "unknown implication"
+
 
 # following functions adapted from "Programming Z3"
 def maximal_satisfying_subset(solver: z3.Solver,
