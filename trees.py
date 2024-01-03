@@ -1,14 +1,14 @@
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Union
 import z3
 
-from auxfunz3 import Boolean, not_
+from auxfunz3 import Real, not_
 from utility import Utility
 
 class Tree:
     """base class for game trees"""
     honest: bool
     """if this node is along the honest history"""
-    reason: Optional[Boolean]
+    reason: Optional[tuple[Union[Real, Utility], Union[Real, Utility]]]
 
     def __init__(self):
         self.honest = False
@@ -69,7 +69,7 @@ class Leaf(Tree):
         elif solver.check(condition) == z3.unsat:
             return False
 
-        self.reason = condition
+        self.reason = utility, 0
         return False
 
     def collusion_resilient(self, solver: z3.Solver, group: set[str], honest: Utility) -> bool:
@@ -80,10 +80,10 @@ class Leaf(Tree):
         elif solver.check(condition) == z3.unsat:
             return False
 
-        self.reason = condition
+        self.reason = group_utility, honest
         return False
 
-    def practical(self, _: z3.Solver) -> Optional[dict[str, Utility]]:
+    def practical(self, *_) -> Optional[dict[str, Utility]]:
         return self.utilities
 
 
@@ -200,23 +200,67 @@ class Branch(Tree):
 
         return True
 
-    def practical(self, solver: z3.Solver) -> Optional[dict[str, Utility]]:
-        utilities: list[dict[str, Utility]] = []
+    def practical(self, solver: z3.Solver, players: list[str]) -> Optional[dict[str, Utility]]:
+        players = [self.player] + [
+            player for player in players
+            if player != self.player
+        ]
+        utilities = []
         for action in self.actions:
-            utility = action.tree.practical(solver)
-            if not utility:
+            utility = action.tree.practical(solver, players)
+            if utility is None:
                 self.reason = action.tree.reason
                 return None
             utilities.append(utility)
 
-        for index in range(1, len(utilities)):
-            condition = utilities[self.strategy][self.player] >= utilities[index][self.player]
-            if solver.check(not_(condition)) == z3.unsat:
-                continue
-            if solver.check(condition) == z3.unsat:
-                self.strategy = index
-                continue
-            self.reason = condition
-            return None
+        if self.honest:
+            self.strategy = next(
+                index for index in
+                range(len(self.actions))
+                if self.actions[index].tree.honest
+            )
+            maximum = utilities[self.strategy][self.player]
+            for utility in utilities:
+                if solver.check(not_(maximum >= utility[self.player])) != z3.unsat:
+                    if solver.check(not_(maximum < utility[self.player])) != z3.unsat:
+                        self.reason = maximum, utility[self.player]
+                    return None
 
-        return utilities[self.strategy]
+        def find_maxima(utilities: list[dict[str, Utility]], player: str) -> Optional[list[dict[str, Utility]]]:
+            maxima = []
+            for utility in utilities:
+                if any(
+                    solver.check(not_(maximum[player] > utility[player])) == z3.unsat
+                    for maximum in maxima
+                ):
+                    continue
+                maxima = [
+                    maximum
+                    for maximum in maxima
+                    if solver.check(
+                        not_(utility[player] > maximum[player])
+                    ) != z3.unsat
+                ]
+                maxima.append(utility)
+
+            for i in range(0, len(maxima) - 1):
+                lhs = maxima[i][player]
+                rhs = maxima[i + 1][player]
+                if solver.check(not_(lhs == rhs)) != z3.unsat:
+                    self.reason = lhs, rhs
+                    return None
+
+            return maxima
+
+        maxima = utilities
+        for player in players:
+            maxima = find_maxima(maxima, player)
+            if maxima is None:
+                return None
+
+        result = maxima[0]
+        self.strategy = next(
+            index for index in range(len(utilities))
+            if id(utilities[index]) == id(result)
+        )
+        return result

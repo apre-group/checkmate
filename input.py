@@ -123,36 +123,67 @@ class Input:
         self.tree.reset_honest()
         self.honest_utilities = self.tree.mark_honest(honest_history)
 
-    def property(self, property: str):
-        """determine if the input has some property for the current honest history"""
+    def property_under_split(self, solver: z3.Solver, property: str) -> bool:
+        """determine if the input has some property for the current honest history under the current split"""
 
         assert self.honest_utilities is not None
+        self.tree.reset_strategy()
+        if property == 'weak_immunity' or property == 'weaker_immunity':
+            weaker = property == 'weaker_immunity'
+            for player in self.players:
+                if not self.tree.weak_immune(solver, player, weaker):
+                    return False
+            return True
+        elif property == 'collusion_resilience':
+            for group_size in range(1, len(self.players)):
+                for group in itertools.combinations(self.players, group_size):
+                    honest = sum(self.honest_utilities[player] for player in group)
+                    if not self.tree.collusion_resilient(solver, group, honest):
+                        return False
+            return True
+        elif property == 'practicality':
+            return self.tree.practical(solver, []) is not None
+
+        assert False
+
+    def property_rec(self, solver: z3.Solver, property: str) -> bool:
+        """determine if the input has some property for the current honest history, splitting recursively"""
+
+        if solver.check() == z3.unsat:
+            logging.info("trivial")
+            return True
+
+        if self.property_under_split(solver, property):
+            logging.info("OK")
+            return True
+
+        split = self.tree.reason
+        logging.info(f"failed, split: {split}")
+        if split is None:
+            return False
+
+        lhs, rhs = split
+        for comparison in lhs < rhs, lhs == rhs, lhs > rhs:
+            solver.push()
+            solver.add(comparison)
+            attempt = self.property_rec(solver, property)
+            solver.pop()
+            if not attempt:
+                return False
+
+        return True
+
+    def property(self, property: str):
+        """determine if the input has some property for the current honest history"""
         logging.info(property)
         solver = z3.Solver()
         solver.add(*self.initial_constraints)
+        solver.add(*{
+            'weak_immunity': self.weak_immunity_constraints,
+            'weaker_immunity': self.weaker_immunity_constraints,
+            'collusion_resilience': self.collusion_resilience_constraints,
+            'practicality': self.practicality_constraints
+        }[property])
         assert solver.check() == z3.sat
 
-        if property == 'weak_immunity' or property == 'weaker_immunity':
-            weaker = property == 'weaker_immunity'
-            if weaker:
-                solver.add(*self.weaker_immunity_constraints)
-            else:
-                solver.add(*self.weak_immunity_constraints)
-            for player in self.players:
-                logging.info(f"player {player}")
-                if not self.tree.weak_immune(solver, player, weaker):
-                    print("failed, split:", self.tree.reason)
-        elif property == 'collusion_resilience':
-            solver.add(*self.collusion_resilience_constraints)
-            for group_size in range(1, len(self.players)):
-                for group in itertools.combinations(self.players, group_size):
-                    logging.info(f"group {group}")
-                    honest = sum(self.honest_utilities[player] for player in group)
-                    if not self.tree.collusion_resilient(solver, group, honest):
-                        print("failed, split:", self.tree.reason)
-        elif property == 'practicality':
-            solver.add(*self.collusion_resilience_constraints)
-            if not self.tree.practical(solver):
-                print("failed, split:", self.tree.reason)
-
-        self.tree.reset_strategy()
+        return self.property_rec(solver, property)
