@@ -240,7 +240,7 @@ class Branch(Tree):
                     if solver.check(
                         not_(utility[player] > maximum[player])
                     ) != z3.unsat
-                ]
+               ]
                 maxima.append(utility)
 
             for i in range(0, len(maxima) - 1):
@@ -254,9 +254,30 @@ class Branch(Tree):
 
         maxima = utilities
         for player in players:
-            maxima = find_maxima(maxima, player)
-            if maxima is None:
-                return None
+            next_maxima = []
+            for utility in maxima:
+                if any(
+                    solver.check(not_(maximum[player] > utility[player])) == z3.unsat
+                    for maximum in next_maxima
+                ):
+                    continue
+                next_maxima = [
+                    maximum
+                    for maximum in next_maxima
+                    if solver.check(
+                        not_(utility[player] > maximum[player])
+                    ) != z3.unsat
+                ]
+                next_maxima.append(utility)
+
+            for i in range(0, len(next_maxima) - 1):
+                lhs = next_maxima[i][player]
+                rhs = next_maxima[i + 1][player]
+                if solver.check(not_(lhs == rhs)) != z3.unsat:
+                    self.reason = lhs, rhs
+                    return None
+
+            maxima = next_maxima
 
         result = maxima[0]
         self.strategy = next(
