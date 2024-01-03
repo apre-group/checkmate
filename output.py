@@ -1,7 +1,7 @@
 from typing import Set, Dict, List, Any
 
 from z3 import z3
-
+from auxfunz3 import *
 from constants import SecurityProperty, PROPERTY_TO_JSON_KEY, HONEST_HISTORY_JSON_KEY, \
     GENERATED_PRECONDITIONS_JSON_KEY, JOINT_STRATEGIES_JSON_KEY, COUNTEREXAMPLES_JSON_KEY, \
     COUNTEREXAMPLE_ORDERING_JSON_KEY, COUNTEREXAMPLE_STRATEGIES_JSON_KEY, COUNTEREXAMPLE_HISTORIES_JSON_KEY, JOINT_STRATEGY_ORDERING_JSON_KEY, \
@@ -33,7 +33,7 @@ class Counterexample:
     """counterexample to analyzed property"""
     ordering_case: Set[z3.BoolRef]
     strategies: List[Dict[str, str]]
-    histories: List[str]
+    histories: List[List[str]]
 
     def __init__(self,
                  ordering_case: Set[z3.BoolRef],
@@ -60,32 +60,38 @@ class Counterexample:
             COUNTEREXAMPLE_HISTORIES_JSON_KEY: self.histories
         }
 
-class CaseWithCounterexamples:
-    ordering_case = Set[z3.BoolRef]
-    counterexamples = List[Counterexample]
+class UnsatCase:
+    unsat_case: Set[z3.BoolRef]
+    comp_values: List[Tuple[Real]]
 
-    def __init__(self, case: Set[z3.BoolRef], counterexamples: List[Counterexample] = []):
-        self.ordering_case = case
-        self.counterexamples = counterexamples
+    def __init__(self,
+                 unsat_case: Set[z3.BoolRef],
+                 comp_values: List[Tuple[Real]]):
+        self.unsat_case = unsat_case
+        self.comp_values = comp_values
 
     def __repr__(self):
-        return f"---- case: {self.ordering_case}\n" \
-               f"---- counterexamples: {self.counterexamples}"
+        outstr = f"\n\t\tcase: {self.unsat_case}\n\t\t"
+        outstr += f"\n\t\tcomp_values: {self.comp_values}\n\t\t"
+        return outstr
 
 class SolvingResult:
     """result of the analysis of one security property"""
     strategies: List[CaseWithStrategy]
     generated_preconditions: Set[z3.BoolRef]
-    counterexamples: List[CaseWithCounterexamples]
+    unsat_cases: List[UnsatCase]
+    counterexamples: List[Counterexample]
 
     def __init__(self):
         self.strategies = []
         self.generated_preconditions = set()
+        self.unsat_cases = []
         self.counterexamples = []
 
     def __repr__(self):
         return f"---- strategies: {self.strategies}\n" \
                f"---- generated_preconditions: {self.generated_preconditions}\n" \
+               f"---- unsat_cases: {self.unsat_cases}\n" \
                f"---- counterexamples: {self.counterexamples}"
 
     def delete_strategies(self):

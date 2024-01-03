@@ -75,6 +75,16 @@ def analyze_input(checked_input: Input,
 
             if found_counterexample_cases:
                 logging.info(f"-- doesn't have {PROPERTY_TO_STR[security_property]}")
+                if generate_counterexamples:
+                    logging.info(f"--- the counterexamples are:")
+                    for ce in found_counterexample_cases:
+                        logging.info(f"---- in case {ce.ordering_case}")
+                        if security_property == SecurityProperty.PRACTICALITY:
+                            logging.info(f"----- histories: {ce.histories}")
+                        else:
+                            logging.info(f"----- strategies: {ce.strategies}")
+
+
 
             elif len(found_strategies) == 1:
                 logging.info(
