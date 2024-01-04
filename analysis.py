@@ -73,7 +73,7 @@ def analyze_input(checked_input: Input,
             found_counterexample_cases = property_result.counterexamples
             gen_preconditions = property_result.generated_preconditions
 
-            if found_counterexample_cases:
+            if property_result.unsat_cases:
                 logging.info(f"-- doesn't have {PROPERTY_TO_STR[security_property]}")
                 if generate_counterexamples:
                     logging.info(f"--- the counterexamples are:")

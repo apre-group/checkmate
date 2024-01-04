@@ -110,18 +110,17 @@ class StrategySolver(metaclass=ABCMeta):
         otherwise, returns a solution to report later
         """
         result = SolvingResult()
-        result, sat = self.case_splitting_allCE(True, {True}, [])
+        result = self.case_splitting_smart()
+        # result, _ = self.case_splitting_allCE(True, {True}, [])
 
         #to be considered from here for counterexamples and preconditions
             
         if self.generate_counterexamples:  
-            # simplify cases
-            
-
 
             print(len(result.unsat_cases))
-            for elem in result.unsat_cases:
-                print(elem.unsat_case)
+            # for elem in result.unsat_cases:
+            #     print(elem.unsat_case)
+            #     print(elem.comp_values)
             for elem in result.unsat_cases:
                 #print(elem.ordering_case)
 
@@ -149,29 +148,6 @@ class StrategySolver(metaclass=ABCMeta):
                 result.counterexamples.extend(counterexamples) 
 
                 logging.info("no more counterexamples for current case")
-
-                # if not self.generate_preconditions or not case:
-                #     if self.generate_preconditions and not case:
-                #         logging.info(
-                #             "failed case is implied by preconditions"
-                #         )
-
-                #     return result
-
-                # else:
-                #     result.generated_preconditions.add(disjunction(*(
-                #         simplify_boolean(negation(constr)) for constr in case
-                #     )))
-
-                #     logging.info(
-                #         f"here are the generated preconditions: {result.generated_preconditions}"
-                #     )
-                #     logging.info(
-                #         "restarting solving routine with the generated set of preconditions"
-                #     )
-
-                #     # reset case and minimizing solver to initial constraints plus generated preconditions
-                #     self._reset_case_and_minimize_solver(result.generated_preconditions)
 
         # there are no more possible models, i.e. no more cases to be discharged
         logging.info("no more cases, done")
@@ -307,34 +283,7 @@ class StrategySolver(metaclass=ABCMeta):
             return result, sat
         
     def case_splitting_allCE(self, new_condition: z3.BoolRef, current_case: Set[z3.BoolRef], comp_values) -> Tuple[SolvingResult(), bool]:
-        # print(new_condition)
-        # print(current_case)
-        
-        # collect unsat case splits to generate all CEs later
         result = SolvingResult()
-
-        #check if new condition is implied by init and current_case
-        #assert init, current_case, not new_condition
-        #init and property -->  
-
-        # implication_constraints=self._implied_constraints(new_condition, current_case) 
-        # implied_result =  self._case_solver.check(implication_constraints)
-        # #check if new condition is contradictory to init and current_case
-        # #assert init, current_case, new_condition
-        # contradiction_constraints=self._contrad_constraints(new_condition, current_case) 
-        # contrad_result =  self._case_solver.check(contradiction_constraints)
-
-        # if implied_result == z3.unsat and new_condition is not True:
-        #     logging.info(f"case {new_condition} implied, the result is unsat")
-        #     #this result is always the result from the parent call
-        #     #unsat no further splits to be considered
-        #     unsat_case = CaseWithCounterexamples(current_case, comp_values)
-        #     result.counterexamples.append(unsat_case)
-        #     return result, False
-        
-        # if contrad_result == z3.unsat:
-        #     logging.info(f"case {new_condition} impossible, hence trivially satisfied, next case considered")
-        #     return result, True
 
         case={new_condition}
         for elem in current_case:
@@ -442,8 +391,624 @@ class StrategySolver(metaclass=ABCMeta):
                 sat = False
 
             return result, sat
+        
+
+
+    def case_splitting_smart(self) -> SolvingResult:
+
+        result = SolvingResult()
+
+        high, sat, strategy, core = self.high_prio_check( True, set(), []) 
+
+        if high: 
+            if sat == z3.sat:
+                logging.info(f"YES, property satisfied.")
+                result.strategies.append(strategy)
+            else:
+                assert sat == z3.unsat
+                logging.info(f"NO, property violated.")
+                result.unsat_cases.append(UnsatCase(set(), []))
+
+        else:
+            logging.info(f"UNKNOWN result - further case split needed.")
+            output, new_sat = self.case_splitting_split(set(), [], core)
+            if not new_sat:
+                #logging.info(f"NO, property violated.")
+                result.unsat_cases.extend(output.unsat_cases)
+            else:
+                #logging.info(f"YES, property satisfied.")
+                result.strategies.extend(output.strategies)
+
+        return result
+
+
+
+
+    # def case_splitting_smart(self) -> SolvingResult:
+
+    #     result = SolvingResult()
+
+    #     property_constraint = \
+    #         self._property_constraint_for_case(*set(), generated_preconditions=result.generated_preconditions)
+    #     check_result = self._solver.check(property_constraint,
+    #                                     *self._label2pair.keys(),
+    #                                     *self._label2subtree.keys())
+    #     if check_result == z3.unknown:
+    #         logging.warning("internal solver returned 'unknown', which shouldn't happen")
+    #         reason = self._solver.reason_unknown()
+    #         logging.warning(f"reason given was: {reason}")
+    #         logging.info("trying again...")
+    #         check_result = self._solver.check(property_constraint,
+    #                                         *self._label2pair.keys(),
+    #                                         *self._label2subtree.keys())
+    #         if check_result == z3.unknown:
+    #             logging.error("solver still says 'unknown', bailing out")
+    #             assert False
+
+    #     if check_result == z3.sat:
+    #         logging.info("Honest history satisfies property.")
+    #         result.strategies.append(self._extract_strategy(self._solver, set()))
+    #         return result
+            
+    #     else:
+    #         # we need to compare more expressions
+
+    #         core = {
+    #             label_expr
+    #             for label_expr in self._solver.unsat_core()
+    #             if isinstance(label_expr, z3.BoolRef) and z3.is_app(label_expr)
+    #         }
+
+    #         prec = self.input.initial_constraints + self._property_initial_constraints()
+
+    #         low_prio_pair = None
+    #         high_prio = False
+
+    #         for label_expr in core:
+    #             if label_expr not in self._label2pair:
+    #                 continue
+
+    #             # `left op right` was in an unsat core
+    #             left, right, _ = self._label2pair[label_expr]
+
+    #             # triviality check
+    #             gt = valuation_case(left > right, set(), prec)
+    #             eq = valuation_case(left == right, set(), prec)
+    #             lt = valuation_case(left < right, set(), prec)
+
+    #             if gt or lt or eq:
+    #                 # do not case split on trivial stuff
+    #                 continue
+
+    #             logging.info(f"Result unknown - further case splitting needed")
+
+    #             #call recursively with this split in mind and break for loof here
+    #             #sat or unsat return value of case_splitting(self, left, right, cases)
+    #             # unsat breaks the recursion, sat too, only proceed if further cases
+
+    #             # compute whether current split is high prio here
+    #             high1, sat1, strategy1, core1 = self.high_prio_check(left < right, set(), [(left, right)])
+    #             high2, sat2, strategy2, core2 = self.high_prio_check(left == right, set(), [(left, right)])
+    #             high3, sat3, strategy3, core3 = self.high_prio_check(left > right, set(), [(left, right)])
+
+    #             # high_prio = high1 or high2 or high3
+    #             high_prio = high1 and high2 and high3
+
+    #             if high_prio:
+    #                 # note that we already know that one of the cases is sat/unsat and we should use this info!
+
+    #                 logging.info(f"Splitting on: ({left}, {right})")
+    #                 new_comp = [(left, right), (right, left)]
+
+    #                 if high1: 
+    #                     if sat1 == z3.sat:
+    #                         logging.info(f"Case {{left < right}} satifies property.")
+    #                         result.strategies.append(strategy1)
+    #                     else:
+    #                         assert sat1 == z3.unsat
+    #                         logging.info(f"Case {{left < right}} does not satify property.")
+    #                         result.unsat_cases.append(UnsatCase({left < right}, new_comp))
+    #                 # else to be commented out for AND version
+    #                 # else:
+    #                 #     output1, sat1 = self.case_splitting_split({left < right}, new_comp, core1)
+    #                 #     if not sat1:
+    #                 #         result.unsat_cases.extend(output1.unsat_cases)
+    #                 #     else:
+    #                 #         result.strategies.extend(output1.strategies)
+
+    #                 if high2: 
+    #                     if sat2 == z3.sat:
+    #                         logging.info(f"Case {{left == right}} satifies property.")
+    #                         result.strategies.append(strategy2)
+    #                     else:
+    #                         assert sat2 == z3.unsat
+    #                         logging.info(f"Case {{left == right}} does not satify property.")
+    #                         result.unsat_cases.append(UnsatCase({left == right}, new_comp))
+    #                         print(result.unsat_cases[-1])
+    #                 # else to be commented out for AND version
+    #                 # else:
+    #                 #     output2, sat2 = self.case_splitting_split({left == right}, new_comp, core2)
+    #                 #     if not sat2:
+    #                 #         result.unsat_cases.extend(output2.unsat_cases)
+    #                 #     else:
+    #                 #         result.strategies.extend(output2.strategies)
+
+    #                 if high3: 
+    #                     if sat3 == z3.sat:
+    #                         logging.info(f"Case {{left > right}} satifies property.")
+    #                         result.strategies.append(strategy3)
+    #                     else:
+    #                         assert sat3 == z3.unsat
+    #                         logging.info(f"Case {{left > right}} does not satify property.")
+    #                         result.unsat_cases.append(UnsatCase({left > right}, new_comp))
+    #                 # else to be commented out for AND version
+    #                 # else:
+    #                 #     output3, sat3 = self.case_splitting_split({left > right}, new_comp, core3)
+    #                 #     if not sat3:
+    #                 #         result.unsat_cases.extend(output3.unsat_cases)
+    #                 #     else:
+    #                 #         result.strategies.extend(output3.strategies)
+    #                 break
+
+    #             elif not low_prio_pair:
+    #                 low_prio_pair = (left, right)
+                    
+    #                 # to be commented out for OR version
+    #                 lp_sat1 = sat1
+    #                 lp_sat2 = sat2
+    #                 lp_sat3 = sat3
+
+    #                 if high1: 
+    #                     if sat1 == z3.sat:
+    #                         lp_strategy1 = strategy1
+    #                     else:
+    #                         assert sat1 == z3.unsat
+    #                         lp_unsatcase1 = UnsatCase({left < right}, [low_prio_pair])
+    #                 else:
+    #                     lp_core1 = core1
+
+    #                 if high2: 
+    #                     if sat2 == z3.sat:
+    #                         lp_strategy2 = strategy2
+    #                     else:
+    #                         assert sat2 == z3.unsat
+    #                         lp_unsatcase2 = UnsatCase({left == right}, [low_prio_pair])
+    #                 else:
+    #                     lp_core2 = core2
+
+    #                 if high3: 
+    #                     if sat3 == z3.sat:
+    #                         lp_strategy3 = strategy3
+    #                     else:
+    #                         assert sat3 == z3.unsat
+    #                         lp_unsatcase3 = UnsatCase({left > right}, [low_prio_pair])
+    #                 else:
+    #                     lp_core3 = core3
+
+    #                 # to be commented out for AND version
+    #                 # lp_core1 = core1
+    #                 # lp_core2 = core2
+    #                 # lp_core3 = core3
+
+    #         if low_prio_pair and not high_prio:
+    #             # there is a new pair but none was high prio; 
+    #             # in this case we split on the first pair encountered a.k.a low_prio_pair
+
+    #             # note we already know we have to case split in all cases, use this info!
+
+    #             left = low_prio_pair[0]
+    #             right = low_prio_pair[1]
+    #             logging.info(f"Splitting on: ({low_prio_pair})")
+    #             new_comp = [(left, right), (right, left)]
+
+    #             # to be commented out for OR version
+    #             if lp_sat1: 
+    #                 if lp_sat1 == z3.sat:
+    #                     logging.info(f"Case {{left < right}} satifies property.")
+    #                     result.strategies.append(lp_strategy1)
+    #                 else:
+    #                     assert lp_sat1 == z3.unsat
+    #                     logging.info(f"Case {{left < right}} does not satify property.")
+    #                     result.unsat_cases.append(lp_unsatcase1)
+    #             else:
+    #                 logging.info(f"Case {{left < right}} unknown - further case splitting needed.")
+    #                 output1, sat1 = self.case_splitting_split({left < right}, new_comp, lp_core1)
+    #                 if not sat1:
+    #                     logging.info(f"Case {{left < right}} does not satify property.")
+    #                     result.unsat_cases.extend(output1.unsat_cases)
+    #                 else:
+    #                     logging.info(f"Case {{left < right}} satifies property.")
+    #                     result.strategies.extend(output1.strategies)
+
+    #             if lp_sat2: 
+    #                 if lp_sat2 == z3.sat:
+    #                     logging.info(f"Case {{left == right}} satifies property.")
+    #                     result.strategies.append(lp_strategy2)
+    #                 else:
+    #                     assert lp_sat2 == z3.unsat
+    #                     logging.info(f"Case {{left == right}} does not satify property.")
+    #                     result.unsat_cases.append(lp_unsatcase2)
+    #             else:
+    #                 logging.info(f"Case {{left == right}} unknown - further case splitting needed.")
+    #                 output2, sat2 = self.case_splitting_split({left == right}, new_comp, lp_core2)
+    #                 if not sat2:
+    #                     logging.info(f"Case {{left == right}} does not satify property.")
+    #                     result.unsat_cases.extend(output2.unsat_cases)
+    #                 else:
+    #                     logging.info(f"Case {{left == right}} satifies property.")
+    #                     result.strategies.extend(output2.strategies)
+
+    #             if lp_sat3: 
+    #                 if lp_sat3 == z3.sat:
+    #                     logging.info(f"Case {{left > right}} satifies property.")
+    #                     result.strategies.append(lp_strategy3)
+    #                 else:
+    #                     assert lp_sat3 == z3.unsat
+    #                     logging.info(f"Case {{left > right}} does not satify property.")
+    #                     result.unsat_cases.append(lp_unsatcase3)
+    #             else:
+    #                 logging.info(f"Case {{left > right}} unknown - further case splitting needed.")
+    #                 output3, sat3 = self.case_splitting_split({left > right}, new_comp, lp_core3)
+    #                 if not sat3:
+    #                     logging.info(f"Case {{left > right}} does not satify property.")
+    #                     result.unsat_cases.extend(output3.unsat_cases)
+    #                 else:
+    #                     logging.info(f"Case {{left > right}} satifies property.")
+    #                     result.strategies.extend(output3.strategies)
+
+    #             # to be commented out for AND version
+    #             # output1, sat1 = self.case_splitting_split({left < right}, new_comp, lp_core1)
+    #             # if not sat1:
+    #             #     result.unsat_cases.extend(output1.unsat_cases)
+    #             # else:
+    #             #     result.strategies.extend(output1.strategies)
+
+    #             # output2, sat2 = self.case_splitting_split({left == right}, new_comp, lp_core2)
+    #             # if not sat2:
+    #             #     result.unsat_cases.extend(output2.unsat_cases)
+    #             # else:
+    #             #     result.strategies.extend(output2.strategies)
+                
+    #             # output3, sat3 = self.case_splitting_split({left > right}, new_comp, lp_core3)
+    #             # if not sat3:
+    #             #     result.unsat_cases.extend(output3.unsat_cases)
+    #             # else:
+    #             #     result.strategies.extend(output3.strategies)
+
+    #         # we saturated, give up
+    #         elif not low_prio_pair and not high_prio:
+    #             # logging.error("no more splits, failed")
+    #             # logging.error(f"here is a case I cannot solve: {set()}")
+
+    #             unsat_case = UnsatCase(set(), [])
+    #             result.unsat_cases.append(unsat_case)
+
+    #         return result
 
     
+    def case_splitting_split(self, case: Set[z3.BoolRef], comp_values: List[Tuple[Real]], core: Set[z3.BoolRef]) -> Tuple[SolvingResult, bool]:
+        result = SolvingResult()
+
+        prec = self.input.initial_constraints + self._property_initial_constraints()
+
+        low_prio_pair = None
+        high_prio = False
+
+        for label_expr in core:
+            if label_expr not in self._label2pair:
+                continue
+
+            # `left op right` was in an unsat core
+            left, right, real = self._label2pair[label_expr]
+
+            if (left, right) not in comp_values:
+                # triviality check
+                gt = valuation_case(left > right, case, prec)
+                eq = valuation_case(left == right, case, prec)
+                lt = valuation_case(left < right, case, prec)
+
+                if gt or lt or eq:
+                    # do not case split on trivial stuff
+                    continue
+
+                #call recursively with this split in mind and break for loof here
+                #sat or unsat return value of case_splitting(self, left, right, cases)
+                # unsat breaks the recursion, sat too, only proceed if further cases
+
+                # compute whether current split is high prio here
+                high1, sat1, strategy1, core1 = self.high_prio_check(left < right, case, comp_values + [(left, right)])
+                high2, sat2, strategy2, core2 = self.high_prio_check(left == right, case, comp_values + [(left, right)])
+                high3, sat3, strategy3, core3 = self.high_prio_check(left > right, case, comp_values + [(left, right)])
+
+                # high_prio = high1 or high2 or high3
+                high_prio = high1 and high2 and high3
+
+                if high_prio:
+                    # note that we already know that one of the cases is sat/unsat and we should use this info!
+
+                    logging.info(f"Splitting on: ({left}, {right})")
+                    new_comp = [elem for elem in comp_values]
+                    new_comp.append((left, right))
+                    new_comp.append((right, left))
+
+                    if high1: 
+                        if sat1 == z3.sat:
+                            logging.info(f"YES, case {case.union({left < right})} satifies property.")
+                            result.strategies.append(strategy1)
+                            sat = True
+                        else:
+                            assert sat1 == z3.unsat
+                            logging.info(f"NO, case {case.union({left < right})} violates property.")
+                            result.unsat_cases.append(UnsatCase(case.union({left < right}), new_comp))
+                            sat = False
+                    # to be commented out for AND version
+                    # else:
+                    #     print("high_prio_split")
+                    #     output1, sat1 = self.case_splitting_split(case.union({left < right}), new_comp, core1)
+                    #     if not sat1:
+                    #         result.unsat_cases.extend(output1.unsat_cases)
+                    #         sat = False
+                    #     else:
+                    #         result.strategies.extend(output1.strategies)
+                    #         sat = True
+
+                    if high2: 
+                        if sat2 == z3.sat:
+                            logging.info(f"YES, case {case.union({left == right})} satifies property.")
+                            result.strategies.append(strategy2)
+                        else:
+                            assert sat2 == z3.unsat
+                            logging.info(f"NO, case {case.union({left == right})} violates property.")
+                            result.unsat_cases.append(UnsatCase(case.union({left == right}), new_comp))
+                            sat = False
+                    # to be commented out for AND version
+                    # else:
+                    #     print("high_prio_split")
+                    #     output2, sat2 = self.case_splitting_split(case.union({left == right}), new_comp, core2)
+                    #     if not sat2:
+                    #         result.unsat_cases.extend(output2.unsat_cases)
+                    #         sat = False
+                    #     else:
+                    #         result.strategies.extend(output2.strategies)
+
+                    if high3: 
+                        if sat3 == z3.sat:
+                            result.strategies.append(strategy3)
+                            logging.info(f"YES, case {case.union({left > right})} satifies property.")
+                        else:
+                            assert sat3 == z3.unsat
+                            logging.info(f"NO, case {case.union({left > right})} violates property.")
+                            result.unsat_cases.append(UnsatCase(case.union({left > right}), new_comp))
+                            sat = False
+                    # to be commented out for AND version
+                    # else:
+                    #     print("high_prio_split")
+                    #     output3, sat3 = self.case_splitting_split(case.union({left > right}), new_comp, core3)
+                    #     if not sat3:
+                    #         result.unsat_cases.extend(output3.unsat_cases)
+                    #         sat = False
+                    #     else:
+                    #         result.strategies.extend(output3.strategies)
+
+                    break
+
+                elif not low_prio_pair:
+                    low_prio_pair = (left, right)
+
+                    # to be commented out for OR version
+                    lp_sat1 = sat1
+                    lp_sat2 = sat2
+                    lp_sat3 = sat3
+
+                    if high1: 
+                        if sat1 == z3.sat:
+                            lp_strategy1 = strategy1
+                        else:
+                            assert sat1 == z3.unsat
+                            lp_unsatcase1 = UnsatCase(case.union({left < right}), comp_values + [low_prio_pair])
+                    else:
+                        lp_core1 = core1
+
+                    if high2: 
+                        if sat2 == z3.sat:
+                            lp_strategy2 = strategy2
+                        else:
+                            assert sat2 == z3.unsat
+                            lp_unsatcase2 = UnsatCase(case.union({left == right}), comp_values + [low_prio_pair])
+                    else:
+                        lp_core2 = core2
+
+                    if high3: 
+                        if sat3 == z3.sat:
+                            lp_strategy3 = strategy3
+                        else:
+                            assert sat3 == z3.unsat
+                            lp_unsatcase3 = UnsatCase(case.union({left > right}), comp_values + [low_prio_pair])
+                    else:
+                        lp_core3 = core3
+
+                    # to be commented out for AND version
+                    # lp_core1 = core1
+                    # lp_core2 = core2
+                    # lp_core3 = core3
+
+        if low_prio_pair and not high_prio:
+            # there is a new pair but none was high prio; 
+            # in this case we split on the first pair encountered a.k.a low_prio_pair
+
+            # note we already know we have to case split in all cases, use this info!
+
+            left = low_prio_pair[0]
+            right = low_prio_pair[1]
+            logging.info(f"Splitting on: ({low_prio_pair})")
+            new_comp = [elem for elem in comp_values]
+            new_comp.append(low_prio_pair)
+            new_comp.append((right, left))
+
+            # to be commented out for OR version
+            if lp_sat1: 
+                if lp_sat1 == z3.sat:
+                    logging.info(f"YES, case {case.union({left < right})} satifies property.")
+                    result.strategies.append(lp_strategy1)
+                    sat = True
+                else:
+                    assert lp_sat1 == z3.unsat
+                    logging.info(f"NO, case {case.union({left < right})} violates property.")
+                    result.unsat_cases.append(lp_unsatcase1)
+                    sat = False
+            else:
+                logging.info(f"UNKNOWN, case {case.union({left < right})} needs further case splitting.")
+                output1, sat1 = self.case_splitting_split(case.union({left < right}), new_comp, lp_core1)
+                if not sat1:
+                    #logging.info(f"Case {case.union({left < right})} does not satify property.")
+                    result.unsat_cases.extend(output1.unsat_cases)
+                    sat = False
+                else:
+                    #logging.info(f"Case {case.union({left < right})} satifies property.")
+                    result.strategies.extend(output1.strategies)
+                    sat = True
+
+            if lp_sat2: 
+                if lp_sat2 == z3.sat:
+                    logging.info(f"YES, case {case.union({left == right})} satifies property.")
+                    result.strategies.append(lp_strategy2)
+                else:
+                    assert lp_sat2 == z3.unsat
+                    logging.info(f"NO, case {case.union({left == right})} violates property.")
+                    result.unsat_cases.append(lp_unsatcase2)
+                    sat = False
+            else:
+                logging.info(f"UNKNOWN, case {case.union({left < right})} needs further case splitting.")
+                output2, sat2 = self.case_splitting_split(case.union({left == right}), new_comp, lp_core2)
+                if not sat2:
+                    #logging.info(f"Case {case.union({left == right})} does not satify property.")
+                    result.unsat_cases.extend(output2.unsat_cases)
+                    sat = False
+                else:
+                    #logging.info(f"Case {case.union({left == right})} satifies property.")
+                    result.strategies.extend(output2.strategies)
+
+            if lp_sat3: 
+                if lp_sat3 == z3.sat:
+                    logging.info(f"YES, case {case.union({left > right})} satifies property.")
+                    result.strategies.append(lp_strategy3)
+                else:
+                    assert lp_sat3 == z3.unsat
+                    logging.info(f"NO, case {case.union({left > right})} violates property.")
+                    result.unsat_cases.append(lp_unsatcase3)
+                    sat = False
+            else:
+                logging.info(f"UNKOWN, case {case.union({left < right})} needs further case splitting.")
+                output3, sat3 = self.case_splitting_split(case.union({left > right}), new_comp, lp_core3)
+                if not sat3:
+                    result.unsat_cases.extend(output3.unsat_cases)
+                    #logging.info(f"Case {case.union({left > right})} does not satify property.")
+                    sat = False
+                else:
+                    #logging.info(f"Case {case.union({left > right})} satifies property.")
+                    result.strategies.extend(output3.strategies)
+
+            # to be commented out for AND version
+            # output1, sat1 = self.case_splitting_split(case.union({left < right}), new_comp, lp_core1)
+            # if not sat1:
+            #     result.unsat_cases.extend(output1.unsat_cases)
+            #     sat = False
+            # else:
+            #     result.strategies.extend(output1.strategies)
+            #     sat = True
+
+            # output2, sat2 = self.case_splitting_split(case.union({left == right}), new_comp, lp_core2)
+            # if not sat2:
+            #     result.unsat_cases.extend(output2.unsat_cases)
+            #     sat = False
+            # else:
+            #     result.strategies.extend(output2.strategies)
+            
+            # output3, sat3 = self.case_splitting_split(case.union({left > right}), new_comp, lp_core3)
+            # if not sat3:
+            #     result.unsat_cases.extend(output3.unsat_cases)
+            #     sat = False
+            # else:
+            #     result.strategies.extend(output3.strategies)
+
+        # we saturated, give up
+        elif not low_prio_pair and not high_prio:
+            assert False
+
+        return result, sat
+
+
+    def high_prio_check(self, new_condition: z3.BoolRef, current_case: Set[z3.BoolRef], comp_values: List[Tuple[Real]]) -> Tuple:
+        case={new_condition}
+        for elem in current_case:
+            case.add(elem)
+
+        property_constraint = \
+            self._property_constraint_for_case(*case, generated_preconditions=set())
+        check_result = self._solver.check(property_constraint,
+                                        *self._label2pair.keys(),
+                                        *self._label2subtree.keys())
+        if check_result == z3.unknown:
+            logging.warning("internal solver returned 'unknown', which shouldn't happen")
+            reason = self._solver.reason_unknown()
+            logging.warning(f"reason given was: {reason}")
+            logging.info("trying again...")
+            check_result = self._solver.check(property_constraint,
+                                            *self._label2pair.keys(),
+                                            *self._label2subtree.keys())
+            if check_result == z3.unknown:
+                logging.error("solver still says 'unknown', bailing out")
+                assert False
+
+        if check_result == z3.sat:
+            return (True, check_result, self._extract_strategy(self._solver, case), None)
+            
+        else:
+            # track whether we actually found any more
+            new_pair = False
+
+            core = {
+                label_expr
+                for label_expr in self._solver.unsat_core()
+                if isinstance(label_expr, z3.BoolRef) and z3.is_app(label_expr)
+            }
+
+            prec = self.input.initial_constraints + self._property_initial_constraints()
+
+            for label_expr in core:
+                if label_expr not in self._label2pair:
+                    continue
+
+                # `left op right` was in an unsat core
+                left, right, real = self._label2pair[label_expr]
+
+                if (left, right) not in comp_values:
+                    # triviality check
+                    gt = valuation_case(left > right, case, prec)
+                    eq = valuation_case(left == right, case, prec)
+                    lt = valuation_case(left < right, case, prec)
+
+                    if gt or lt or eq:
+                        # do not case split on trivial stuff
+                        continue
+
+                    new_pair = True
+                    break
+
+            if new_pair:
+                return (False, None, None, core)
+
+            # we saturated, give up -> high prio
+            else:
+                # logging.info("no more splits, failed")
+                # logging.info(f"here is a case I cannot solve: {case}")
+                return (True, check_result, None, core)
+
+
+
+
+
+
     def _implied_constraints(self, new_condition: z3.BoolRef, current_case: Set[z3.BoolRef]) -> z3.BoolRef:
         """
         create a universally-quantified constraint for a given property of the form
