@@ -10,61 +10,75 @@ from solving_newcases import WeakImmunityStrategySolver, WeakerImmunityStrategyS
 def analyze_input(checked_input: Input,
                   analyzed_properties: List[SecurityProperty],
                   generate_preconditions: bool,
-                  generate_counterexamples: bool) -> List[AnalysisResult]:
+                  generate_counterexamples: bool,
+                  generate_all_counterexamples: bool) -> List[AnalysisResult]:
     logging.info(
-        f"input OK, checking {len(checked_input.honest_histories)} histories..."
+        f"Input OK, checking {len(checked_input.honest_histories)} histories."
     )
 
     results = []
     for honest_history in checked_input.honest_histories:
         wi_res, weri_res, cr_res, p_res = None, None, None, None
-        logging.info(f"history {honest_history}")
+        logging.info("")
+        logging.info("")
+        logging.info(f"Is history {honest_history}...")
 
         if SecurityProperty.WEAK_IMMUNITY in analyzed_properties:
-            logging.info("checking weak immunity")
+            logging.info("")
+            logging.info("...weak immune?")
             wi_solver = WeakImmunityStrategySolver(
                 checked_input,
                 honest_history,
                 generate_preconditions,
-                generate_counterexamples
+                generate_counterexamples,
+                generate_all_counterexamples
             )
             wi_res = wi_solver.solve()
 
         if SecurityProperty.WEAKER_IMMUNITY in analyzed_properties:
-            logging.info("checking weaker immunity")
+            logging.info("")
+            logging.info("...weaker immune?")
             weri_solver = WeakerImmunityStrategySolver(
                 checked_input,
                 honest_history,
                 generate_preconditions,
-                generate_counterexamples
+                generate_counterexamples,
+                generate_all_counterexamples
             )
             weri_res = weri_solver.solve()
 
         if SecurityProperty.COLLUSION_RESILIENCE in analyzed_properties:
-            logging.info("checking collusion resilience")
+            logging.info("")
+            logging.info("...collusion resilient?")
             cr_solver = CollusionResilienceStrategySolver(
                 checked_input,
                 honest_history,
                 generate_preconditions,
-                generate_counterexamples
+                generate_counterexamples,
+                generate_all_counterexamples
             )
             cr_res = cr_solver.solve()
 
         if SecurityProperty.PRACTICALITY in analyzed_properties:
-            logging.info("checking practicality")
+            logging.info("")
+            logging.info("...practical?")
             pr_solver = PracticalityStrategySolver(
                 checked_input,
                 honest_history,
                 generate_preconditions,
-                generate_counterexamples
+                generate_counterexamples,
+                generate_all_counterexamples
             )
             p_res = pr_solver.solve()
 
         results.append(AnalysisResult(honest_history, wi_res, weri_res, cr_res, p_res))
 
     # nice summary of the check
-    logging.info("####### Summary: ######")
+    logging.info("")
+    logging.info("")
+    logging.info("######## Summary: ########")
     for result in results:
+        logging.info("")
         logging.info(f"Honest history {result.honest_history}")
 
         for security_property in analyzed_properties:

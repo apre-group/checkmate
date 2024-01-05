@@ -72,6 +72,11 @@ if __name__ == '__main__':
         action='store_true',
         help="generate counterexamples if a case fails"
     )
+    generation.add_argument(
+        '--all_counterexamples',
+        action='store_true',
+        help="generate all counterexamples in all failing cases"
+    )
 
     check_parser.add_argument(
         'STRATEGIES',
@@ -84,7 +89,7 @@ if __name__ == '__main__':
 
     if args.subcommand == Subcommand.ANALYZE.value:
         analyzed_properties = [sec_prop for sec_prop in SecurityProperty if sec_prop.value in args.properties]
-        results = analyze_input(checked_input, analyzed_properties, args.preconditions, args.counterexamples)
+        results = analyze_input(checked_input, analyzed_properties, args.preconditions, args.counterexamples, args.all_counterexamples)
 
         if args.output:
             result_jsons = [result.to_json() for result in results]
