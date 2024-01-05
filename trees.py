@@ -285,21 +285,17 @@ class Branch(Tree):
             for utility in maxima:
                 # if any other utility is larger, `utility` is not a maximum
                 if any(
-                    solver.check(not_(maximum[player] > utility[player])) == z3.unsat
+                    solver.check(maximum[player] <= utility[player]) == z3.unsat
                     for maximum in next_maxima
                 ):
                     continue
 
-                # if `utility` is larger than any candidate maximum, discard the candidate
+                # retain only candidate maxima not less than `utility`
                 next_maxima = [
                     maximum
                     for maximum in next_maxima
-                    if solver.check(
-                        not_(utility[player] > maximum[player])
-                    ) != z3.unsat
+                    if solver.check(utility[player] <= maximum[player]) == z3.sat
                 ]
-
-                # add it to the candidates
                 next_maxima.append(utility)
 
             # all maxima should be equal - otherwise we need to case-split
