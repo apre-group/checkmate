@@ -6,6 +6,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Dict, List, Tuple
 import itertools
 import logging
+from random import randint
 
 from auxfunz3 import *
 from output import SolvingResult, CaseWithStrategy, Counterexample, UnsatCase
@@ -24,6 +25,7 @@ class StrategySolver(metaclass=ABCMeta):
     checked_history: List[str]
     generate_preconditions: bool
     generate_counterexamples: bool
+    generate_all_counterexamples: bool
     _solver: z3.Solver
 
     # a solver that manages case splits, AVATAR style
@@ -126,7 +128,7 @@ class StrategySolver(metaclass=ABCMeta):
 
         #to be considered from here for counterexamples and preconditions
         # this should work for all case split and CE types
-        if self.generate_counterexamples or all_ce:  
+        if self.generate_counterexamples:  
             if all_ce and result.unsat_cases:
                 if len(result.unsat_cases) == 1:
                     logging.info(f"There is {len(result.unsat_cases)} case violating the property.")
@@ -152,9 +154,12 @@ class StrategySolver(metaclass=ABCMeta):
                 ce_solver.add(pair_labels)
                 ce_solver.add(property_constraint)
 
-                # also have an init that manages the different CE types 
                 counterexamples = self._generate_counterexamples(labels, case, ce_solver, comp_values)
                 result.counterexamples.extend(counterexamples) 
+
+        if self.generate_preconditions:
+            # continue here
+            pass
 
         return result
     
@@ -441,25 +446,25 @@ class StrategySolver(metaclass=ABCMeta):
                 # unsat breaks the recursion, sat too, only proceed if further cases
 
                 # compute whether current split is high prio here
-                high1, sat1, strategy1, core1 = self.high_prio_check(left < right, case, comp_values + [(left, right)])
+                high1, sat1, strategy1, core1 = self.high_prio_check(left < right, case, comp_values + [(left, right), (right, left)])
                 if sat1 == z3.unsat:
                     logging.info(f"   Splitting on: ({left}, {right})")
                     logging.info(f"NO, case {case.union({left < right})} violates property.")
-                    result.unsat_cases.append(UnsatCase(case.union({left < right}), comp_values + [(left, right)]))
+                    result.unsat_cases.append(UnsatCase(case.union({left < right}), comp_values + [(left, right), (right, left)]))
                     return result, False
 
-                high2, sat2, strategy2, core2 = self.high_prio_check(left == right, case, comp_values + [(left, right)])
+                high2, sat2, strategy2, core2 = self.high_prio_check(left == right, case, comp_values + [(left, right), (right, left)])
                 if sat2 == z3.unsat:
                     logging.info(f"   Splitting on: ({left}, {right})")
                     logging.info(f"NO, case {case.union({left == right})} violates property.")
-                    result.unsat_cases.append(UnsatCase(case.union({left == right}), comp_values + [(left, right)]))
+                    result.unsat_cases.append(UnsatCase(case.union({left == right}), comp_values + [(left, right), (right, left)]))
                     return result, False
 
-                high3, sat3, strategy3, core3 = self.high_prio_check(left > right, case, comp_values + [(left, right)])
+                high3, sat3, strategy3, core3 = self.high_prio_check(left > right, case, comp_values + [(left, right), (right, left)])
                 if sat3 == z3.unsat:
                     logging.info(f"   Splitting on: ({left}, {right})")
                     logging.info(f"NO, case {case.union({left > right})} violates property.")
-                    result.unsat_cases.append(UnsatCase(case.union({left > right}), comp_values + [(left, right)]))
+                    result.unsat_cases.append(UnsatCase(case.union({left > right}), comp_values + [(left, right), (right, left)]))
                     return result, False
 
                 # i.e. at least one is sat, no one is unsat (would have returned already)
@@ -787,6 +792,7 @@ class StrategySolver(metaclass=ABCMeta):
                 # unsat breaks the recursion, sat too, only proceed if further cases
 
                 # compute whether current split is high prio here
+                
                 high1, sat1, strategy1, core1 = self.high_prio_check(left < right, case, comp_values + [(left, right)])
                 high2, sat2, strategy2, core2 = self.high_prio_check(left == right, case, comp_values + [(left, right)])
                 high3, sat3, strategy3, core3 = self.high_prio_check(left > right, case, comp_values + [(left, right)])
@@ -800,6 +806,7 @@ class StrategySolver(metaclass=ABCMeta):
                     new_comp.append((left, right))
                     new_comp.append((right, left))
 
+                    
                     if high1: 
                         if sat1 == z3.sat:
                             logging.info(f"   Case {case.union({left < right})} satifies property.")
@@ -1135,7 +1142,7 @@ class StrategySolver(metaclass=ABCMeta):
     ) -> z3.BoolRef:
         """label subtrees for unsat cores"""
         history = tuple(subtree_history)
-        label_expr = self._subtree2label.get((players, history, action, other, condition, other_condition,))
+        label_expr = self._subtree2label.get((players, history, action, other, condition, other_condition))
         if label_expr is None:
             label_expr = z3.Bool(f'ce[{players}][{history}][{action}][{other}][{str(condition)}][{str(other_condition)}]')
             self._subtree2label[(players, history, action, other, condition, other_condition)] = label_expr
@@ -1187,12 +1194,11 @@ class FeebleImmuneStrategySolver(StrategySolver):
             )
         return conjunction(*constraints)
 
-    def _generate_counterexamples(self, labels, case, ce_solver, comp_values):
+    def _generate_counterexamples(self, labels, case, ce_solver: z3.Solver, comp_values):
         """collecting all counterexample for w(er)i, one per unsat core"""
         ces = []
-    
         for core in minimal_unsat_cores(ce_solver, labels):
-            logging.info("counterexample found - property cannot be fulfilled because of:")
+            logging.info("   Counterexample found:")
             for item in core:
                 assert ce_solver.check(*(core - {item})) == z3.sat
             counterexample = self._extract_counterexample_core(core, case)
@@ -1217,9 +1223,9 @@ class FeebleImmuneStrategySolver(StrategySolver):
                     cestrat_output.append("player "+players_in_hist[i]+" chooses action "+elem+" after history "+str(hist[:i]))
 
         assert setofp is not None, "expected non-empty unsat core"
-        logging.info(f"- If player {setofp[0]} follows the honest history, {setofp[0]} can be harmed by strategy:")
+        logging.info(f"   - If player {setofp[0]} follows the honest history, {setofp[0]} can be harmed by strategy:")
         for line in cestrat_output:
-            logging.info(f"- {line}")
+            logging.info(f"   - {line}")
         return cestrat
 
     def _collect_weak_immunity_constraints(
@@ -1314,7 +1320,7 @@ class CollusionResilienceStrategySolver(StrategySolver):
         """collecting all counterexample for cr, one per unsat core"""
         ces = []
         for core in minimal_unsat_cores(ce_solver, labels):
-            logging.info("counterexample found - property cannot be fulfilled because of:")
+            logging.info("   Counterexample found:")
             for item in core:
                 assert ce_solver.check(*(core - {item})) == z3.sat
             counterexample = self._extract_counterexample_core(core, case)
@@ -1337,9 +1343,9 @@ class CollusionResilienceStrategySolver(StrategySolver):
                     cestrat[";".join(hist[:i])] = elem
                     cestrat_output.append("player "+players_in_hist[i]+" chooses action "+elem+" after history "+str(hist[:i]))
 
-        logging.info(f"- Players {setofp} profit from deviating to strategy:")
+        logging.info(f"   - Players {setofp} profit from deviating to strategy:")
         for line in cestrat_output:
-            logging.info(f"- {line}")
+            logging.info(f"   - {line}")
         return cestrat
 
     def _collect_collusion_resilience_constraints(
@@ -1432,7 +1438,6 @@ class PracticalityStrategySolver(StrategySolver):
                                             labels_in_subgame, ce_solver, comp_values: List[Tuple[Real]],
                                             case: Set[z3.BoolRef]) -> List[Counterexample]:
         
-        
         ce = []
         all_ces = []
 
@@ -1443,20 +1448,16 @@ class PracticalityStrategySolver(StrategySolver):
         check_result_with_hstar = ce_solver.check(checked_constriant, *self._label2pair.keys(), *labels_in_subgame)
 
         while check_result_with_hstar == z3.unsat and isinstance(game, Branch):
-            #print("outer")
             no_more_hist = False
             pr = []
             shortest_h = hstar
-            while not no_more_hist:
-                # print("inner")
-                # property_constraint = \
-                #     self._property_constraint_for_case(*case, generated_preconditions=set())
+            check_result = z3.sat
+            while not no_more_hist and check_result == z3.sat:
                 subgame_actions = conjunction(*[self._action_variable(subgame[:i], subgame[i]) for i in range(len(subgame))])
                 checked_constriant = conjunction(property_constraint, subgame_actions)
                 check_result = ce_solver.check(checked_constriant, *self._label2pair.keys(), *labels_in_subgame)
                 prec = self.input.initial_constraints + self._property_initial_constraints()
                 if check_result == z3.sat:
-                    #print("sat")
                     _strat, hist = self._extract_strategy(ce_solver, set(), True)
                     histlist_all = hist.split(";")
                     histlist = histlist_all[len(subgame):]
@@ -1466,18 +1467,13 @@ class PracticalityStrategySolver(StrategySolver):
                     ut_hstar = game.get_utility_of_terminal_history(hstar)[ph]
                     ut_histlist = game.get_utility_of_terminal_history(histlist)[ph]
                     comparison_real = valuation_case(ut_hstar.real < ut_histlist.real, case, prec)
-                    #print(comparison_real)
                     comparison_real_eq = valuation_case(ut_hstar.real == ut_histlist.real, case, prec)
-                    #print(comparison_real_eq)
                     comparison_infinitesimal = valuation_case(ut_hstar.inf < ut_histlist.inf, case, prec)
-                    #print(comparison_infinitesimal)
                     if comparison_real or (comparison_real_eq and comparison_infinitesimal):
                         pr.append(histlist)
                         ce.append(subgame + histlist)
-                        # print("first computation")
-                        # print(ce)
-                        logging.info("counterexample found - the following history is practical and yields better pay-off for the deviator:")
-                        logging.info(subgame + histlist)
+                        logging.info("   Counterexample found:")
+                        logging.info(f"   History {subgame + histlist} is practical and deviator {ph} profits.")
                         if len(h) < len(shortest_h):
                             shortest_h = h
                     history_actions = []
@@ -1513,54 +1509,84 @@ class PracticalityStrategySolver(StrategySolver):
                             eq = valuation_case(left == right, case, prec)
                             lt = valuation_case(left < right, case, prec)
 
-                            # print(comp_values)
-                            # print((left, right))
                             if gt or lt or eq:
                                 # do not case split on trivial stuff
-                                # print("trivial, no split")
                                 continue
 
-                            logging.info(f"new comparison: ({left}, {right})")
-                            comp_values.append((left, right))
-                            comp_values.append((right, left))
-                            new_comp = comp_values[:]
+                                
+                            if self.generate_all_counterexamples:
 
-                            new_pair = True
+                                logging.info(f"   new comparison: ({left}, {right})")
+                                comp_values.append((left, right))
+                                comp_values.append((right, left))
+                                new_comp = comp_values[:]
 
-                            new_case1 = {left < right}
-                            for elem in case:
-                                new_case1.add(elem)
-                            # print("rec1")
-                            ce_solver.push()
-                            counterexamples1 = self._extract_counterexample_core(subgame, game, hstar, deleted_branches,
-                                                     labels_in_subgame, ce_solver, new_comp,
-                                                     new_case1) 
-                            ce_solver.pop()
-                            new_case2 = {left == right}
-                            for elem in case:
-                                new_case2.add(elem)
-                            # print("rec2")
-                            ce_solver.push()
-                            counterexamples2 = self._extract_counterexample_core(subgame, game, hstar, deleted_branches,
-                                                     labels_in_subgame, ce_solver, new_comp,
-                                                     new_case2) 
-                            ce_solver.pop()
-                            new_case3 = {left > right}
-                            for elem in case:
-                                new_case3.add(elem)
-                            # print("rec3")
-                            ce_solver.push()
-                            counterexamples3 = self._extract_counterexample_core(subgame, game, hstar, deleted_branches,
-                                                     labels_in_subgame, ce_solver, new_comp,
-                                                     new_case3) 
-                            ce_solver.pop()
-                            all_ces.extend(counterexamples1)
-                            all_ces.extend(counterexamples2)
-                            all_ces.extend(counterexamples3)
+                                new_pair = True
+
+                                new_case1 = {left < right}
+                                for elem in case:
+                                    new_case1.add(elem)
+                                ce_solver.push()
+                                counterexamples1 = self._extract_counterexample_core(subgame, game, hstar, deleted_branches,
+                                                        labels_in_subgame, ce_solver, new_comp,
+                                                        new_case1) 
+                                ce_solver.pop()
+                                new_case2 = {left == right}
+                                for elem in case:
+                                    new_case2.add(elem)
+                                ce_solver.push()
+                                counterexamples2 = self._extract_counterexample_core(subgame, game, hstar, deleted_branches,
+                                                        labels_in_subgame, ce_solver, new_comp,
+                                                        new_case2) 
+                                ce_solver.pop()
+                                new_case3 = {left > right}
+                                for elem in case:
+                                    new_case3.add(elem)
+                                ce_solver.push()
+                                counterexamples3 = self._extract_counterexample_core(subgame, game, hstar, deleted_branches,
+                                                        labels_in_subgame, ce_solver, new_comp,
+                                                        new_case3) 
+                                ce_solver.pop()
+                                all_ces.extend(counterexamples1)
+                                all_ces.extend(counterexamples2)
+                                all_ces.extend(counterexamples3)
+
+                            else:
+                                # in c++ code assert C or not C randomly with 50:50 chance
+
+                                comp_values.append((left, right))
+                                comp_values.append((right, left))
+                                new_comp = comp_values[:]
+
+                                new_pair = True
+                                which_comp = randint(1,3)
+
+                                if which_comp == 1:
+                                    new_case = {left < right}
+                                elif which_comp == 2:
+                                    new_case = {left == right}
+                                elif which_comp == 3:
+                                    new_case = {left > right}
+                                else:
+                                    assert False
+
+                                logging.info(f"   new subcase: ({new_case})")
+
+                                for elem in case:
+                                    new_case.add(elem)
+                                ce_solver.push()
+                                counterexamples = self._extract_counterexample_core(subgame, game, hstar, deleted_branches,
+                                                        labels_in_subgame, ce_solver, new_comp,
+                                                        new_case) 
+                                ce_solver.pop()
+                                all_ces.extend(counterexamples)
+
+
                             break
 
                     if not new_pair:
                         no_more_hist = True
+
 
             if len(pr) == 0:
                 shortest_h = [hstar[0]]

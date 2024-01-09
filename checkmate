@@ -87,6 +87,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     checked_input = Input(args.GAME)
 
+    if args.all_counterexamples:
+        args.counterexamples = True
+
+
     if args.subcommand == Subcommand.ANALYZE.value:
         analyzed_properties = [sec_prop for sec_prop in SecurityProperty if sec_prop.value in args.properties]
         results = analyze_input(checked_input, analyzed_properties, args.preconditions, args.counterexamples, args.all_counterexamples)
