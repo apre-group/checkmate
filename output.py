@@ -78,7 +78,7 @@ class UnsatCase:
 class SolvingResult:
     """result of the analysis of one security property"""
     strategies: List[CaseWithStrategy]
-    generated_preconditions: Set[z3.BoolRef]
+    generated_preconditions: List[z3.BoolRef]
     unsat_cases: List[UnsatCase]
     counterexamples: List[Counterexample]
 

@@ -62,7 +62,7 @@ if __name__ == '__main__':
         action='store_true',
         help="print strategies as JSON to standard output"
     )
-    generation.add_argument(
+    analyze_parser.add_argument(
         '--preconditions',
         action='store_true',
         help="generate preconditions if a case fails"

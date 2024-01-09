@@ -97,7 +97,9 @@ def analyze_input(checked_input: Input,
                             logging.info(f"----- histories: {ce.histories}")
                         else:
                             logging.info(f"----- strategies: {ce.strategies}")
-
+                if generate_preconditions:
+                    logging.info(f"--- the weakest precondition is:")
+                    logging.info(f"---- {gen_preconditions}")
 
 
             elif len(found_strategies) == 1:

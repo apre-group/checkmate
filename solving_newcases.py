@@ -26,8 +26,9 @@ class StrategySolver(metaclass=ABCMeta):
     generate_preconditions: bool
     generate_counterexamples: bool
     generate_all_counterexamples: bool
+    stop_report: bool
     _solver: z3.Solver
-
+    
     # a solver that manages case splits, AVATAR style
     _case_solver: z3.Solver
     # a solver that minimizes assumptions in case splits
@@ -81,6 +82,7 @@ class StrategySolver(metaclass=ABCMeta):
         self.generate_preconditions = generate_preconditions
         self.generate_counterexamples = generate_counterexamples
         self.generate_all_counterexamples = generate_all_counterexamples
+        self.stop_report = False
 
         self._pair2label = {}
         self._label2pair = {}
@@ -114,10 +116,9 @@ class StrategySolver(metaclass=ABCMeta):
         otherwise, returns a solution to report later
         """
         result = SolvingResult()
-        all_ce = self.generate_all_counterexamples
 
         # look ahead case split alg:
-        result = self.case_splitting_init(all_ce)
+        result = self.case_splitting_init()
 
         # no look_ahead versions:
         # if all_ce:
@@ -128,13 +129,39 @@ class StrategySolver(metaclass=ABCMeta):
 
         #to be considered from here for counterexamples and preconditions
         # this should work for all case split and CE types
-        if self.generate_counterexamples:  
-            if all_ce and result.unsat_cases:
+        if self.generate_counterexamples and result.unsat_cases:  
+            # compute all ces for all unsat cases
+            if self.generate_all_counterexamples:
                 if len(result.unsat_cases) == 1:
                     logging.info(f"There is {len(result.unsat_cases)} case violating the property.")
                 else:
                     logging.info(f"There are {len(result.unsat_cases)} cases violating the property.")
-            for elem in result.unsat_cases:
+                for elem in result.unsat_cases:
+                    case = elem.unsat_case
+                    comp_values = elem.comp_values
+                    logging.info(f"Computing counterexamples for case {case}")
+
+                    property_constraint = \
+                        self._property_constraint_for_case(*case, generated_preconditions=result.generated_preconditions)
+
+                    pair_labels = set(self._label2pair.keys())
+                    labels = set(self._label2subtree.keys())
+
+                    ce_solver = z3.Solver()
+                    ce_solver.set('ctrl_c', False)
+                    ce_solver.set('core.minimize_partial', True)
+                    self._add_action_constraints([], self.input.tree, ce_solver)
+                    self._add_history_constraints_to_solver(self.checked_history, ce_solver)
+
+                    ce_solver.add(pair_labels)
+                    ce_solver.add(property_constraint)
+
+                    counterexamples = self._generate_counterexamples(labels, case, ce_solver, comp_values)
+                    result.counterexamples.extend(counterexamples) 
+
+            # compute all ce's of one subcase of the first encountered unsat case
+            elif self.generate_counterexamples:
+                elem = result.unsat_cases[0]
                 case = elem.unsat_case
                 comp_values = elem.comp_values
                 logging.info(f"Computing counterexamples for case {case}")
@@ -157,12 +184,25 @@ class StrategySolver(metaclass=ABCMeta):
                 counterexamples = self._generate_counterexamples(labels, case, ce_solver, comp_values)
                 result.counterexamples.extend(counterexamples) 
 
-        if self.generate_preconditions:
-            # continue here
-            pass
 
+        if self.generate_preconditions and result.unsat_cases:
+            conjuncts = []
+            for case in result.unsat_cases:
+                conjuncts.append(z3.Not(conjunction(*case.unsat_case)))
+            # add already giveninitial_preconditions
+           
+            
+            prec = conjunction(*conjuncts, *self.input.initial_constraints, *self._property_initial_constraints())
+            simp_prec = z3.simplify(prec)
+
+            result.generated_preconditions = simp_prec.children()
+            logging.info("The weakest precondition (implying the given precondition) to satisfy the property is:")
+            logging.info(simp_prec.children())
+
+            
         return result
     
+    # currently unused
     # case split for one unsat case, no look-ahead
     def case_splitting(self, new_condition: z3.BoolRef, current_case: Set[z3.BoolRef], comp_values) -> SolvingResult():
 
@@ -270,7 +310,7 @@ class StrategySolver(metaclass=ABCMeta):
 
             return result, sat
 
-
+    # currently unused
     # case split for all unsat cases, no look ahead
     def case_splitting_allCE(self, new_condition: z3.BoolRef, current_case: Set[z3.BoolRef], comp_values) -> Tuple[SolvingResult(), bool]:
         result = SolvingResult()
@@ -384,8 +424,9 @@ class StrategySolver(metaclass=ABCMeta):
         
 
     # case split init for look aheads
-    def case_splitting_init(self, all_ce: bool) -> SolvingResult:
+    def case_splitting_init(self) -> SolvingResult:
 
+        all_ce = self.generate_all_counterexamples
         result = SolvingResult()
         high, sat, strategy, core = self.high_prio_check( True, set(), []) 
 
@@ -400,7 +441,7 @@ class StrategySolver(metaclass=ABCMeta):
 
         else:
             logging.info(f"   Case split needed.")
-            if all_ce:
+            if all_ce or self.generate_preconditions:
                 output, new_sat = self.case_splitting_OR(set(), [], core)
             else:
                 output, new_sat = self.case_splitting_notallCE_OR(set(), [], core)
@@ -800,8 +841,8 @@ class StrategySolver(metaclass=ABCMeta):
                 high_prio = high1 or high2 or high3
 
                 if high_prio:
-
-                    logging.info(f"   Splitting on: ({left}, {right})")
+                    if not self.stop_report:
+                        logging.info(f"   Splitting on: ({left}, {right})")
                     new_comp = [elem for elem in comp_values]
                     new_comp.append((left, right))
                     new_comp.append((right, left))
@@ -809,16 +850,23 @@ class StrategySolver(metaclass=ABCMeta):
                     
                     if high1: 
                         if sat1 == z3.sat:
-                            logging.info(f"   Case {case.union({left < right})} satifies property.")
+                            if not self.stop_report:
+                                logging.info(f"   Case {case.union({left < right})} satifies property.")
                             result.strategies.append(strategy1)
                             sat = True
                         else:
                             assert sat1 == z3.unsat
-                            logging.info(f"   Case {case.union({left < right})} violates property.")
+                            if not self.stop_report:
+                                if self.generate_preconditions:
+                                    logging.info(f"NO, case {case.union({left < right})} violates property.")
+                                    self.stop_report = True
+                                else:
+                                    logging.info(f"   Case {case.union({left < right})} violates property.")
                             result.unsat_cases.append(UnsatCase(case.union({left < right}), new_comp))
                             sat = False
                     else:
-                        logging.info(f"   Case {case.union({left < right})} needs further case splitting.")
+                        if not self.stop_report:
+                            logging.info(f"   Case {case.union({left < right})} needs further case splitting.")
                         output1, sat1 = self.case_splitting_OR(case.union({left < right}), new_comp, core1)
                         if not sat1:
                             result.unsat_cases.extend(output1.unsat_cases)
@@ -829,15 +877,22 @@ class StrategySolver(metaclass=ABCMeta):
 
                     if high2: 
                         if sat2 == z3.sat:
-                            logging.info(f"   Case {case.union({left == right})} satifies property.")
+                            if not self.stop_report:
+                                logging.info(f"   Case {case.union({left == right})} satifies property.")
                             result.strategies.append(strategy2)
                         else:
                             assert sat2 == z3.unsat
-                            logging.info(f"   Case {case.union({left == right})} violates property.")
+                            if not self.stop_report:
+                                if self.generate_preconditions:
+                                    logging.info(f"NO, case {case.union({left == right})} violates property.")
+                                    self.stop_report = True
+                                else:
+                                    logging.info(f"   Case {case.union({left == right})} violates property.")
                             result.unsat_cases.append(UnsatCase(case.union({left == right}), new_comp))
                             sat = False
                     else:
-                        logging.info(f"   Case {case.union({left == right})} needs further case splitting.")
+                        if not self.stop_report:
+                            logging.info(f"   Case {case.union({left == right})} needs further case splitting.")
                         output2, sat2 = self.case_splitting_OR(case.union({left == right}), new_comp, core2)
                         if not sat2:
                             result.unsat_cases.extend(output2.unsat_cases)
@@ -848,14 +903,21 @@ class StrategySolver(metaclass=ABCMeta):
                     if high3: 
                         if sat3 == z3.sat:
                             result.strategies.append(strategy3)
-                            logging.info(f"   Case {case.union({left > right})} satifies property.")
+                            if not self.stop_report:
+                                logging.info(f"   Case {case.union({left > right})} satifies property.")
                         else:
                             assert sat3 == z3.unsat
-                            logging.info(f"   Case {case.union({left > right})} violates property.")
+                            if not self.stop_report:
+                                if self.generate_preconditions:
+                                     logging.info(f"NO, case {case.union({left > right})} violates property.")
+                                     self.stop_report = True
+                                else:
+                                    logging.info(f"   Case {case.union({left > right})} violates property.")
                             result.unsat_cases.append(UnsatCase(case.union({left > right}), new_comp))
                             sat = False
                     else:
-                        logging.info(f"   Case {case.union({left > right})} needs further case splitting.")
+                        if not self.stop_report:
+                            logging.info(f"   Case {case.union({left > right})} needs further case splitting.")
                         output3, sat3 = self.case_splitting_OR(case.union({left > right}), new_comp, core3)
                         if not sat3:
                             result.unsat_cases.extend(output3.unsat_cases)
@@ -880,12 +942,15 @@ class StrategySolver(metaclass=ABCMeta):
 
             left = low_prio_pair[0]
             right = low_prio_pair[1]
-            logging.info(f"   Splitting on: ({low_prio_pair})")
+            
+            if not self.stop_report:
+                logging.info(f"   Splitting on: ({low_prio_pair})")
             new_comp = [elem for elem in comp_values]
             new_comp.append(low_prio_pair)
             new_comp.append((right, left))
 
-            logging.info(f"   Case {case.union({left < right})} needs further case splitting.")
+            if not self.stop_report:
+                logging.info(f"   Case {case.union({left < right})} needs further case splitting.")
             output1, sat1 = self.case_splitting_OR(case.union({left < right}), new_comp, lp_core1)
             if not sat1:
                 result.unsat_cases.extend(output1.unsat_cases)
@@ -894,7 +959,8 @@ class StrategySolver(metaclass=ABCMeta):
                 result.strategies.extend(output1.strategies)
                 sat = True
 
-            logging.info(f"   Case {case.union({left < right})} needs further case splitting.")
+            if not self.stop_report:
+                logging.info(f"   Case {case.union({left < right})} needs further case splitting.")
             output2, sat2 = self.case_splitting_OR(case.union({left == right}), new_comp, lp_core2)
             if not sat2:
                 result.unsat_cases.extend(output2.unsat_cases)
@@ -902,7 +968,8 @@ class StrategySolver(metaclass=ABCMeta):
             else:
                 result.strategies.extend(output2.strategies)
             
-            logging.info(f"   Case {case.union({left < right})} needs further case splitting.")
+            if not self.stop_report:
+                logging.info(f"   Case {case.union({left < right})} needs further case splitting.")
             output3, sat3 = self.case_splitting_OR(case.union({left > right}), new_comp, lp_core3)
             if not sat3:
                 result.unsat_cases.extend(output3.unsat_cases)
