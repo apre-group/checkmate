@@ -6,11 +6,6 @@ struct Options {
 	// parse options from `argv` - exits the program on failure
 	Options(char **argv);
 
-	// what mode we're in - currently only 'analyze'
-	enum class Mode {
-		ANALYZE
-	} mode;
-
 	// input game we should load
 	const char *input_path;
 

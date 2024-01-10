@@ -357,24 +357,19 @@ namespace z3 {
 			check_error();
 		}
 
-		// represents Z3's push/pop semantics: push on construction, pop on destruction
-		class Pop {
-		public:
-			Pop(const Solver &solver) : solver(solver) {
-				Z3_solver_push(CONTEXT, solver.solver);
-				check_error();
-			}
+		// push a new frame for assertions
+		void push() {
+			Z3_solver_push(CONTEXT, solver);
+			check_error();
+		}
 
-			~Pop() {
-				Z3_solver_pop(CONTEXT, solver.solver, 1);
-				check_error();
-			}
+		// pop the frame, forgetting everything asserted in it
+		void pop() {
+			Z3_solver_pop(CONTEXT, solver, 1);
+			check_error();
+		}
 
-		private:
-			const Solver &solver;
-		};
-
-		// add to the current frame, forgotten on ~Pop()
+		// add to the current frame
 		void assert_(Bool assertion) {
 			Z3_solver_assert(CONTEXT, solver, assertion.ast);
 			check_error();

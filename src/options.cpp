@@ -4,7 +4,7 @@
 #include "options.hpp"
 
 // usage message
-const char *USAGE = R"(usage: checkmate analyze PATH
+const char *USAGE = R"(usage: checkmate PATH
 	--weak_immunity
 	--weaker_immunity
 	--collusion_resilience
@@ -18,23 +18,16 @@ const char *USAGE = R"(usage: checkmate analyze PATH
 	std::exit(EXIT_FAILURE);
 }
 
-using std::strcmp;
-
 Options::Options(char **argv) {
+	using std::strcmp;
+
 	// skip name of program, we don't care
 	if(*argv) argv++;
 
-	if(!strcmp(*argv, "--help")) {
+	if(*argv && !strcmp(*argv, "--help")) {
 		std::cerr << USAGE;
 		std::exit(EXIT_SUCCESS);
 	}
-
-	if(!*argv)
-		bail("expected a mode");
-	if(strcmp(*argv, "analyze"))
-		bail("expected mode to be 'analyze'");
-	mode = Mode::ANALYZE;
-	argv++;
 
 	if(!*argv)
 		bail("expected an input path");

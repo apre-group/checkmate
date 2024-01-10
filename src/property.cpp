@@ -10,6 +10,9 @@
 using z3::Bool;
 using z3::Solver;
 
+// source of pseudo-random noise to shuffle unsat cores with
+std::minstd_rand PRNG;
+
 // helpers for labelling expressions
 struct Labels {
 public:
@@ -71,6 +74,93 @@ public:
 	std::vector<Bool> trigger_implications;
 };
 
+static bool solve_rec(
+	// precomputed labels
+	const Labels &labels,
+	// the solver with which we solve cases
+	Solver &solver,
+	// the solver to minimize splits with
+	Solver &minimize_solver,
+	// current case
+	std::vector<Bool> case_,
+	// currently-active triggers
+	std::vector<std::pair<bool, bool>> &active_splits
+) {
+	std::cout << "case: " << case_ << std::endl;
+
+	// make a fresh frame for current case
+	solver.push();
+
+	// assert all the case's triggers
+	// NB must include also those that are *not* active
+	for(size_t i = 0; i < active_splits.size(); i++) {
+		solver.assert_(active_splits[i].first ? labels.triggers[i].first : !labels.triggers[i].first);
+		solver.assert_(active_splits[i].second ? labels.triggers[i].second : !labels.triggers[i].second);
+	}
+
+	// actually do the work
+	z3::Result result = solver.solve();
+	// ...and remove the case triggers to keep everything clean
+	solver.pop();
+
+	// solved the case immediately
+	if(result == z3::Result::SAT) {
+		std::cout << "solved" << std::endl;
+		return true;
+	}
+
+	// didn't solve it, need to consider case splits
+
+	auto core = solver.unsat_core();
+	// don't get "stuck" in an unproductive area: shuffle the unsat core
+	shuffle(core.begin(), core.end(), PRNG);
+
+	// assigned if we find a suitable split
+	Bool split;
+	for(auto label : core) {
+		// there should be nothing except labels in the unsat core, throws otherwise
+		auto expr = labels.label2expr.at(label);
+		// if either the split or its negation tells us nothing new, it's pointless to split on it
+		if(
+			minimize_solver.solve(case_, expr) == z3::Result::UNSAT ||
+			minimize_solver.solve(case_, !expr) == z3::Result::UNSAT
+		)
+			continue;
+		// otherwise, it'll do
+		split = expr;
+		break;
+	}
+
+	// didn't find anything worth splitting on
+	if(split.null()) {
+		std::cout << "no more splits, failed" << std::endl;
+		return false;
+	}
+
+	std::cout << "split: " << split << std::endl;
+	size_t trigger = labels.expr2trigger.at(split);
+
+	// positive split
+	case_.push_back(split);
+	active_splits[trigger].first = true;
+	bool positive = solve_rec(labels, solver, minimize_solver, case_, active_splits);
+	active_splits[trigger].first = false;
+	case_.pop_back();
+	if(!positive)
+		return false;
+
+	// negative split
+	case_.push_back(split);
+	active_splits[trigger].second = true;
+	bool negative = solve_rec(labels, solver, minimize_solver, case_, active_splits);
+	active_splits[trigger].second = false;
+	case_.pop_back();
+	if(!negative)
+		return false;
+
+	return true;
+}
+
 // common solving behaviour for all properties
 static void solve(
 	// the input game
@@ -84,6 +174,9 @@ static void solve(
 	// the honest history
 	Bool honest_history
 ) {
+	// reinitialise PRNG so it's not affected by presence of other runs
+	new (&PRNG) std::minstd_rand;
+
 	// wrap up property:
 	// forall <variables> (triggers && initial constraints) => property
 	property = forall(input.quantify, (
@@ -106,91 +199,11 @@ static void solve(
 	minimize_solver.assert_(input.initial_constraint);
 	minimize_solver.assert_(property_constraint);
 
-	// is a certain split trigger currently active?
-	std::vector<std::pair<bool, bool>> active_splits(labels.triggers.size());
 	// the current case as a series of expressions
 	std::vector<Bool> case_;
-	// are we solving the split for the first time, or negated for the last time?
-	std::vector<bool> finished;
-
-	// source of pseudo-random noise to shuffle unsat cores with
-	std::minstd_rand prng;
-
-	// process one case each trip around the loop
-	while(true) {
-		// new frame for active splits
-		Solver::Pop pop_triggers(solver);
-		for(size_t i = 0; i < active_splits.size(); i++) {
-			solver.assert_(active_splits[i].first ? labels.triggers[i].first : !labels.triggers[i].first);
-			solver.assert_(active_splits[i].second ? labels.triggers[i].second : !labels.triggers[i].second);
-		}
-
-		std::cout << "case: " << case_ << std::endl;
-		// solved the case
-		if(solver.solve() == z3::Result::SAT) {
-			std::cout << "solved" << std::endl;
-			while(!finished.empty()) {
-				auto top = finished.back();
-				auto &last_split = case_.back();
-				auto trigger_index = labels.expr2trigger.at(last_split);
-				// finished with the top split, keep popping until we hit one we're not done with
-				if(top) {
-					case_.pop_back();
-					finished.pop_back();
-					active_splits[trigger_index].second = false;
-					continue;
-				}
-				// flip the split and continue
-				top = true;
-				// disable positive trigger
-				active_splits[trigger_index].first = false;
-				// enable negative trigger
-				active_splits[trigger_index].second = true;
-				// flip the split
-				last_split = !last_split;
-				break;
-			}
-			// finished all splits, done
-			if(finished.empty()) {
-				std::cout << "done" << std::endl;
-				return;
-			}
-			continue;
-		}
-		std::cout << "failed, trying split" << std::endl;
-
-		auto core = solver.unsat_core();
-		// don't get "stuck" in an unproductive area: shuffle the unsat core
-		shuffle(core.begin(), core.end(), prng);
-
-		// assigned if we find a suitable split
-		Bool split;
-		for(auto label : core) {
-			// there should be nothing except labels in the unsat core, throws otherwise
-			auto expr = labels.label2expr.at(label);
-			// if either the split or its negation tells us nothing new, it's pointless to split on it
-			if(
-				minimize_solver.solve(case_, expr) == z3::Result::UNSAT ||
-				minimize_solver.solve(case_, !expr) == z3::Result::UNSAT
-			)
-				continue;
-			// otherwise, it'll do
-			split = expr;
-			break;
-		}
-
-		// didn't find anything worth splitting on
-		if(split.null()) {
-			std::cout << "no more splits, failed" << std::endl;
-			return;
-		}
-
-		std::cout << "split: " << split << std::endl;
-		case_.push_back(split);
-		// enable positive trigger
-		active_splits[labels.expr2trigger.at(split)].first = true;
-		finished.push_back(false);
-	}
+	// active triggers for the current case
+	std::vector<std::pair<bool, bool>> active_splits(labels.triggers.size());
+	solve_rec(labels, solver, minimize_solver, case_, active_splits);
 }
 
 // helper struct for computing the weak immunity property
