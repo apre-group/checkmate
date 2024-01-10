@@ -32,8 +32,9 @@ class CaseWithStrategy:
 class Counterexample:
     """counterexample to analyzed property"""
     ordering_case: Set[z3.BoolRef]
-    strategies: List[Dict[str, str]]
-    histories: List[List[str]]
+    strategies: List[Dict[str, str]] # for wi, weri: partial strategy of other player, causing an honest one to lose money no matter what honest does;
+                                     # cr: partial strategy of deviators that yields better payoff for them no matter what others do
+    histories: List[List[str]] # a practical history that yields better pay-off for the deviator (from the honest history)
 
     def __init__(self,
                  ordering_case: Set[z3.BoolRef],

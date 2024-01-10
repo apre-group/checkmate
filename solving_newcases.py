@@ -1264,7 +1264,8 @@ class FeebleImmuneStrategySolver(StrategySolver):
     def _generate_counterexamples(self, labels, case, ce_solver: z3.Solver, comp_values):
         """collecting all counterexample for w(er)i, one per unsat core"""
         ces = []
-        for core in minimal_unsat_cores(ce_solver, labels):
+        # each core represents 1 counterexample
+        for core in minimal_unsat_cores(ce_solver, labels): 
             logging.info("   Counterexample found:")
             for item in core:
                 assert ce_solver.check(*(core - {item})) == z3.sat
@@ -1281,7 +1282,11 @@ class FeebleImmuneStrategySolver(StrategySolver):
         setofp = None
 
         for label_expr in core:
+            # each expression in the core gives us a hint on what actions have to be taken to make an honest player lose money
             setofp, hist, _, _, _, _ = self._label2subtree[label_expr]
+            # setofp contains exactly the harmed player
+            # hist is the history leading to a node that is part of the reason why we hit unsat => choices made
+            # by others than setofp[0] in this hist make up a part of the counterexample
 
             players_in_hist = self.input.get_players_in_hist(self.input.get_tree(), hist)
             for i, elem in enumerate(hist):
