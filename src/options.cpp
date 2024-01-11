@@ -38,12 +38,16 @@ Options::Options(char **argv) {
 	while(*argv) {
 		if(!strcmp(*argv, "--weak_immunity"))
 			weak_immunity = true;
-		if(!strcmp(*argv, "--weaker_immunity"))
+		else if(!strcmp(*argv, "--weaker_immunity"))
 			weaker_immunity = true;
-		if(!strcmp(*argv, "--collusion_resilience"))
+		else if(!strcmp(*argv, "--collusion_resilience"))
 			collusion_resilience = true;
-		if(!strcmp(*argv, "--practicality"))
+		else if(!strcmp(*argv, "--practicality"))
 			practicality = true;
+		else if(!strcmp(*argv, "--counterexamples"))
+			counterexamples = true;
+		else
+			bail("unknown option");
 		argv++;
 	}
 

@@ -60,7 +60,7 @@ struct Leaf final : public Node {
 
 // branch node
 struct Branch final : public Node {
-	Branch(unsigned player) : player(player) {}
+	Branch(unsigned player) : player(player), label(z3::Bool::fresh()) {}
 	virtual bool is_leaf() const { return false; }
 
 	// do a linear-time lookup of `action` in the branch, which must be present
@@ -75,6 +75,8 @@ struct Branch final : public Node {
 
 	// whose turn is it?
 	unsigned player;
+	// label for this branch
+	z3::Bool label;
 	// available choices, from which actions should be unique
 	std::vector<Choice> choices;
 };

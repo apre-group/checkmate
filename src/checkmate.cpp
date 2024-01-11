@@ -5,16 +5,16 @@
 #include <iostream>
 
 int main(int, char **argv) {
-	Options opts(argv);
-	Input input(opts.input_path);
+	Options options(argv);
+	Input input(options.input_path);
 
-	if(opts.weak_immunity)
-		weak_immunity<false>(input);
-	if(opts.weaker_immunity)
-		weak_immunity<true>(input);
-	if(opts.collusion_resilience)
+	if(options.weak_immunity)
+		weak_immunity<false>(options, input);
+	if(options.weaker_immunity)
+		weak_immunity<true>(options, input);
+	if(options.collusion_resilience)
 		collusion_resilience(input);
-	if(opts.practicality)
+	if(options.practicality)
 		practicality(input);
 
 	return EXIT_SUCCESS;

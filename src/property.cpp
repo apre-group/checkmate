@@ -4,20 +4,19 @@
 #include <random>
 
 #include "property.hpp"
+#include "options.hpp"
 #include "utils.hpp"
 #include "z3++.hpp"
 
 using z3::Bool;
 using z3::Solver;
 
-// source of pseudo-random noise to shuffle unsat cores with
-std::minstd_rand PRNG;
-
 // helpers for labelling expressions
+template<typename Property>
 struct Labels {
 public:
 	// produce a fresh (or cached) label for `expr` and return `label => expr`
-	Bool label(Bool expr) {
+	Bool label_comparison(Bool expr) {
 		auto &cached_label = expr2label[expr];
 		if(!cached_label.null())
 			return cached_label.implies(expr);
@@ -39,11 +38,18 @@ public:
 	// produce a labelled version of `left >= right`
 	Bool label_geq(Utility left, Utility right) {
 		if(left.real.is(right.real))
-			return label(left.infinitesimal >= right.infinitesimal);
+			return label_comparison(left.infinitesimal >= right.infinitesimal);
 		if(left.infinitesimal.is(right.infinitesimal))
-			return label(left.real >= right.real);
-		return label(left.real > right.real) ||
-			(label(left.real == right.real) && label(left.infinitesimal >= right.infinitesimal));
+			return label_comparison(left.real >= right.real);
+		return label_comparison(left.real > right.real) ||
+			(label_comparison(left.real == right.real) && label_comparison(left.infinitesimal >= right.infinitesimal));
+	}
+
+	// make a fresh label, associate it with `info` and return `label => expr`
+	Bool label_node(Bool expr, typename Property::NodeInfo info) {
+		auto label = Bool::fresh();
+		node_labels.insert({label, std::move(info)});
+		return label.implies(expr);
 	}
 
 	/**
@@ -51,11 +57,15 @@ public:
 	 *
 	 * we label comparison expressions in properties with a fresh label
 	 * if the label shows up in an unsat core later, we can perform a case split
+	 *
+	 * we also label branches similarly, so we can detect counterexamples
 	 **/
 	// label-to-expression map
 	std::unordered_map<Bool, Bool> label2expr;
 	// expression-to-label map, used for caching
 	std::unordered_map<Bool, Bool> expr2label;
+	// which branch does this label mark for counterexamples?
+	std::unordered_map<z3::Bool, typename Property::NodeInfo> node_labels;
 
 	/**
 	 * split triggers:
@@ -74,142 +84,158 @@ public:
 	std::vector<Bool> trigger_implications;
 };
 
-static bool solve_rec(
-	// precomputed labels
-	const Labels &labels,
-	// the solver with which we solve cases
-	Solver &solver,
-	// the solver to minimize splits with
-	Solver &minimize_solver,
-	// current case
-	std::vector<Bool> case_,
-	// currently-active triggers
-	std::vector<std::pair<bool, bool>> &active_splits
-) {
-	std::cout << "case: " << case_ << std::endl;
+template<typename Property>
+struct SolvingHelper {
+	SolvingHelper(
+		const Input &input,
+		const Labels<Property> &labels,
+		Bool raw_property,
+		Bool property_constraint,
+		Bool honest_history
+	) : input(input), labels(labels), active_splits(labels.triggers.size()) {
+		// wrap up property:
+		// forall <variables> (triggers && initial constraints) => property
+		property = forall(input.quantify, (
+			conjunction(labels.trigger_implications) &&
+			input.initial_constraint &&
+			property_constraint
+		).implies(raw_property));
 
-	// make a fresh frame for current case
-	solver.push();
+		// should know about action constraints, the wrapped property, the honest history, and labels
+		solver.assert_(input.action_constraint);
+		solver.assert_(property);
+		solver.assert_(honest_history);
+		for(const auto &label : labels.label2expr)
+			solver.assert_and_track(label.first);
+		for(const auto &label : labels.node_labels)
+			solver.assert_and_track(label.first);
 
-	// assert all the case's triggers
-	// NB must include also those that are *not* active
-	for(size_t i = 0; i < active_splits.size(); i++) {
-		solver.assert_(active_splits[i].first ? labels.triggers[i].first : !labels.triggers[i].first);
-		solver.assert_(active_splits[i].second ? labels.triggers[i].second : !labels.triggers[i].second);
+		// should know only about the initial constraints
+		minimize_solver.assert_(input.initial_constraint);
+		minimize_solver.assert_(property_constraint);
 	}
 
-	// actually do the work
-	z3::Result result = solver.solve();
-	// ...and remove the case triggers to keep everything clean
-	solver.pop();
+	bool solve() {
+		std::cout << "case: " << case_ << std::endl;
 
-	// solved the case immediately
-	if(result == z3::Result::SAT) {
-		std::cout << "solved" << std::endl;
+		// make a fresh frame for current case
+		solver.push();
+
+		// assert all the case's triggers
+		// NB must include also those that are *not* active
+		for(size_t i = 0; i < active_splits.size(); i++) {
+			solver.assert_(active_splits[i].first ? labels.triggers[i].first : !labels.triggers[i].first);
+			solver.assert_(active_splits[i].second ? labels.triggers[i].second : !labels.triggers[i].second);
+		}
+
+		// actually do the work
+		z3::Result result = solver.solve();
+		// ...and remove the case triggers to keep everything clean
+		solver.pop();
+
+		// solved the case immediately
+		if(result == z3::Result::SAT) {
+			std::cout << "solved" << std::endl;
+			return true;
+		}
+
+		// didn't solve it, need to consider case splits
+
+		auto core = solver.unsat_core();
+		// don't get "stuck" in an unproductive area: shuffle the unsat core
+		shuffle(core.begin(), core.end(), prng);
+
+		// assigned if we find a suitable split
+		Bool split;
+		std::vector<typename Property::NodeInfo> counterexample;
+		for(auto label : core) {
+			// ignore other non-comparison labels
+			auto location = labels.label2expr.find(label);
+			// if it's not a comparison, should be a counterexample label
+			if(location == labels.label2expr.end()) {
+				auto node_info = labels.node_labels.at(label);
+				counterexample.push_back(node_info);
+				continue;
+			}
+
+			auto expr = location->second;
+			// if either the split or its negation tells us nothing new, it's pointless to split on it
+			if(
+				minimize_solver.solve(case_, expr) == z3::Result::UNSAT ||
+				minimize_solver.solve(case_, !expr) == z3::Result::UNSAT
+			)
+				continue;
+			// otherwise, it'll do
+			split = expr;
+			break;
+		}
+
+		// didn't find anything worth splitting on
+		if(split.null()) {
+			std::cout << "no more splits, failed" << std::endl;
+			if(counterexample.size()) {
+				std::cout << "counterexample size: " << counterexample.size() << std::endl;
+				counterexamples.push_back(std::move(counterexample));
+			}
+			return false;
+		}
+
+		std::cout << "split: " << split << std::endl;
+		size_t trigger = labels.expr2trigger.at(split);
+
+		// positive split
+		case_.push_back(split);
+		active_splits[trigger].first = true;
+		bool positive = solve();
+		active_splits[trigger].first = false;
+		case_.pop_back();
+		if(!positive)
+			return false;
+
+		// negative split
+		case_.push_back(!split);
+		active_splits[trigger].second = true;
+		bool negative = solve();
+		active_splits[trigger].second = false;
+		case_.pop_back();
+		if(!negative)
+			return false;
+
 		return true;
 	}
 
-	// didn't solve it, need to consider case splits
-
-	auto core = solver.unsat_core();
-	// don't get "stuck" in an unproductive area: shuffle the unsat core
-	shuffle(core.begin(), core.end(), PRNG);
-
-	// assigned if we find a suitable split
-	Bool split;
-	for(auto label : core) {
-		// there should be nothing except labels in the unsat core, throws otherwise
-		auto expr = labels.label2expr.at(label);
-		// if either the split or its negation tells us nothing new, it's pointless to split on it
-		if(
-			minimize_solver.solve(case_, expr) == z3::Result::UNSAT ||
-			minimize_solver.solve(case_, !expr) == z3::Result::UNSAT
-		)
-			continue;
-		// otherwise, it'll do
-		split = expr;
-		break;
-	}
-
-	// didn't find anything worth splitting on
-	if(split.null()) {
-		std::cout << "no more splits, failed" << std::endl;
-		return false;
-	}
-
-	std::cout << "split: " << split << std::endl;
-	size_t trigger = labels.expr2trigger.at(split);
-
-	// positive split
-	case_.push_back(split);
-	active_splits[trigger].first = true;
-	bool positive = solve_rec(labels, solver, minimize_solver, case_, active_splits);
-	active_splits[trigger].first = false;
-	case_.pop_back();
-	if(!positive)
-		return false;
-
-	// negative split
-	case_.push_back(split);
-	active_splits[trigger].second = true;
-	bool negative = solve_rec(labels, solver, minimize_solver, case_, active_splits);
-	active_splits[trigger].second = false;
-	case_.pop_back();
-	if(!negative)
-		return false;
-
-	return true;
-}
-
-// common solving behaviour for all properties
-static void solve(
-	// the input game
-	const Input &input,
-	// labels we made earlier for expressions
-	const Labels &labels,
-	// the property we want a solution for, without quantification or precondition
-	Bool property,
-	// the initial constraint for said property
-	Bool property_constraint,
-	// the honest history
-	Bool honest_history
-) {
-	// reinitialise PRNG so it's not affected by presence of other runs
-	new (&PRNG) std::minstd_rand;
-
-	// wrap up property:
-	// forall <variables> (triggers && initial constraints) => property
-	property = forall(input.quantify, (
-		conjunction(labels.trigger_implications) &&
-		input.initial_constraint &&
-		property_constraint
-	).implies(property));
-
+	const Input &input;
+	// labels we need
+	const Labels<Property> &labels;
+	// the property we're testing
+	Bool property;
 	// the main solver
 	Solver solver;
-	// it should know about action constraints, the wrapped property, the honest history, and labels
-	solver.assert_(input.action_constraint);
-	solver.assert_(property);
-	solver.assert_(honest_history);
-	for(const auto &label : labels.label2expr)
-		solver.assert_and_track(label.first);
-
 	// the solver used to minimise splits
 	Solver minimize_solver;
-	minimize_solver.assert_(input.initial_constraint);
-	minimize_solver.assert_(property_constraint);
-
+	// source of pseudo-random noise to shuffle unsat cores with
+	std::minstd_rand prng;
 	// the current case as a series of expressions
 	std::vector<Bool> case_;
 	// active triggers for the current case
-	std::vector<std::pair<bool, bool>> active_splits(labels.triggers.size());
-	solve_rec(labels, solver, minimize_solver, case_, active_splits);
-}
+	std::vector<std::pair<bool, bool>> active_splits;
+
+	std::vector<std::vector<typename Property::NodeInfo>> counterexamples;
+};
 
 // helper struct for computing the weak immunity property
 template<bool weaker>
 struct WeakImmunity {
-	WeakImmunity(size_t player, Labels &labels) : player(player), labels(labels) {}
+	struct NodeInfo {
+		const Leaf &leaf;
+		size_t player;
+	};
+
+	WeakImmunity(
+		const Options &options,
+		Labels<WeakImmunity<weaker>> &labels,
+		size_t player
+	) : options(options), labels(labels), player(player) {}
 
 	z3::Bool compute(const Node &node) const {
 		if(node.is_leaf()) {
@@ -217,14 +243,18 @@ struct WeakImmunity {
 			// known utility for us
 			auto utility = leaf.utilities[player];
 			// so (the real part of) the utility should be greater than zero
-			return weaker
-				? labels.label(utility.real >= z3::Real::ZERO)
+			auto comparison = weaker
+				? labels.label_comparison(utility.real >= z3::Real::ZERO)
 				: labels.label_geq(utility, {z3::Real::ZERO, z3::Real::ZERO});
+
+			if(options.counterexamples)
+				comparison = labels.label_node(comparison, {leaf, player});
+			return comparison;
 		}
 
 		std::vector<z3::Bool> conjuncts;
 		const auto &branch = node.branch();
-		bool player_choice  = branch.player == player;
+		bool player_choice = branch.player == player;
 		for(const auto &choice : branch.choices) {
 			auto choice_property = compute(*choice.node);
 			// we only care about the current player's choices
@@ -235,20 +265,24 @@ struct WeakImmunity {
 		return conjunction(conjuncts);
 	}
 
+	const Options &options;
+	Labels<WeakImmunity<weaker>> &labels;
 	// current player
 	size_t player;
-	Labels &labels;
 };
 
 // logic is very similar for weak/weaker immunity, so we template it
 template<bool weaker>
-void weak_immunity(const Input &input) {
+void weak_immunity(const Options &options, const Input &input) {
 	std::cout << (weaker ? "weaker immunity" : "weak immunity") << std::endl;
 
-	Labels labels;
+	Labels<WeakImmunity<weaker>> labels;
 	std::vector<Bool> conjuncts;
 	for(size_t player = 0; player < input.players.size(); player++)
-		conjuncts.push_back(WeakImmunity<weaker>(player, labels).compute(*input.root));
+		conjuncts.push_back(
+			WeakImmunity<weaker>(options, labels, player)
+				.compute(*input.root)
+		);
 	auto property = conjunction(conjuncts);
 
 	auto property_constraint = weaker
@@ -257,17 +291,32 @@ void weak_immunity(const Input &input) {
 	// property is the same for all honest histories
 	for(size_t history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << "honest history #" << history + 1 << std::endl;
-		solve(input, labels, property, property_constraint, input.honest_histories[history]);
+		SolvingHelper<WeakImmunity<weaker>>(
+			input,
+			labels,
+			property,
+			property_constraint,
+			input.honest_histories[history]
+		).solve();
 	}
 }
 
 // instantiate for true/false, prevents linker errors
-template void weak_immunity<false>(const Input &);
-template void weak_immunity<true>(const Input &);
+template void weak_immunity<false>(const Options &, const Input &);
+template void weak_immunity<true>(const Options &, const Input &);
 
 // helper struct for computing the collusion resilience property
 struct CollusionResilience {
-	CollusionResilience(size_t players, const Leaf &honest_leaf, Labels &labels, uint64_t binary) :
+	struct NodeInfo {
+		const Leaf &leaf;
+	};
+
+	CollusionResilience(
+		size_t players,
+		const Leaf &honest_leaf,
+		Labels<CollusionResilience> &labels,
+		uint64_t binary
+	) :
 		players(players),
 		labels(labels),
 		group(binary),
@@ -308,7 +357,7 @@ struct CollusionResilience {
 
 	// the total number of players
 	size_t players;
-	Labels &labels;
+	Labels<CollusionResilience> &labels;
 	// the current group of players
 	std::bitset<Input::MAX_PLAYERS> group;
 	// their honest total
@@ -321,7 +370,7 @@ void collusion_resilience(const Input &input) {
 
 	// property is different for each honest history
 	for(size_t history = 0; history < input.honest_histories.size(); history++) {
-		Labels labels;
+		Labels<CollusionResilience> labels;
 		// lookup the leaf for this history
 		const Leaf &honest_leaf = input.honest_history_leaves[history];
 		std::vector<Bool> conjuncts;
@@ -334,18 +383,29 @@ void collusion_resilience(const Input &input) {
 
 		auto property = conjunction(conjuncts);
 		std::cout << "honest history #" << history + 1 << std::endl;
-		solve(input, labels, property, input.collusion_resilience_constraint, input.honest_histories[history]);
+		SolvingHelper<CollusionResilience>(
+			input,
+			labels,
+			property,
+			input.collusion_resilience_constraint,
+			input.honest_histories[history]
+		).solve();
 	}
 }
 
 // helper struct for computing the practicality property
 struct Practicality {
+	struct NodeInfo {};
+
 	// routes that yield a certain utility
 	using UtilityMap = std::unordered_map<Utility, Bool>;
 	// utility map per-player
 	using PlayerUtilities = std::vector<UtilityMap>;
 
-	Practicality(size_t players, Labels &labels) : players(players), labels(labels) {}
+	Practicality(
+		size_t players,
+		Labels<Practicality> &labels
+	) : players(players), labels(labels) {}
 
 	// build the utility map players->utility->condition
 	// the map gives a single boolean condition for "player p gets utility u starting from this subtree"
@@ -421,18 +481,24 @@ struct Practicality {
 	}
 
 	size_t players;
-	Labels &labels;
+	Labels<Practicality> &labels;
 	std::vector<z3::Bool> conjuncts;
 };
 
 void practicality(const Input &input) {
 	std::cout << "practicality" << std::endl;
-	Labels labels;
+	Labels<Practicality> labels;
 	auto property = Practicality(input.players.size(), labels).compute(*input.root);
 
 	// property is the same for all honest histories
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << "honest history #" << history + 1 << std::endl;
-		solve(input, labels, property, input.practicality_constraint, input.honest_histories[history]);
+		SolvingHelper<Practicality>(
+			input,
+			labels,
+			property,
+			input.practicality_constraint,
+			input.honest_histories[history]
+		).solve();
 	}
 }

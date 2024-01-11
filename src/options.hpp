@@ -17,6 +17,9 @@ struct Options {
 	bool collusion_resilience = false;
 	// analyze practicality
 	bool practicality = false;
+
+	// compute counterexamples
+	bool counterexamples = false;
 };
 
 #endif
