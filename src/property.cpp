@@ -298,14 +298,13 @@ void weak_immunity(const Options &options, const Input &input) {
 		);
 		helper.solve();
 		for(const auto &counterexample : helper.counterexamples) {
-			// all weak(er) immunity counterexamples seem to be of size 1: is this true?
-			assert(counterexample.size() == 1);
-			typename WeakImmunity<weaker>::CounterExamplePart example(std::move(counterexample[0]));
-			std::cout << "counterexample: ";
-			std::cout << "player " << input.players[example.player] << " could be harmed at";
-			for(auto &action : example.leaf.compute_history())
-				std::cout << " " << action.get().name;
-			std::cout << std::endl;
+			std::cout << "counterexample:" << std::endl;
+			for(const auto &part : counterexample) {
+				std::cout << "player " << input.players[part.player] << " could be harmed at";
+				for(const auto &action : part.leaf.compute_history())
+					std::cout << " " << action.get().name;
+				std::cout << std::endl;
+			}
 		}
 	}
 }
