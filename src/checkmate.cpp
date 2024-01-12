@@ -15,7 +15,7 @@ int main(int, char **argv) {
 	if(options.collusion_resilience)
 		collusion_resilience(options, input);
 	if(options.practicality)
-		practicality(input);
+		practicality(options, input);
 
 	return EXIT_SUCCESS;
 }

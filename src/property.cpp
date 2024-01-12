@@ -46,10 +46,10 @@ public:
 	}
 
 	// make a fresh label, associate it with `info` and return `label => expr`
-	Bool label_node(Bool expr, typename Property::CounterExamplePart info) {
+	Bool label_counterexample(typename Property::CounterExamplePart info) {
 		auto label = Bool::fresh();
 		node_labels.insert({label, std::move(info)});
-		return label.implies(expr);
+		return label;
 	}
 
 	/**
@@ -246,7 +246,8 @@ struct WeakImmunity {
 				: labels.label_geq(utility, {z3::Real::ZERO, z3::Real::ZERO});
 
 			if(options.counterexamples)
-				comparison = labels.label_node(comparison, {leaf, player});
+				comparison = labels.label_counterexample({leaf, player})
+					.implies(comparison);
 			return comparison;
 		}
 
@@ -354,7 +355,8 @@ struct CollusionResilience {
 			// ..and compare it to the honest total
 			auto comparison = labels.label_geq(honest_total, total);
 			if(options.counterexamples)
-				comparison = labels.label_node(comparison, {leaf, group});
+				comparison = labels.label_counterexample({leaf, group})
+					.implies(comparison);
 			return comparison;
 		}
 
@@ -431,7 +433,10 @@ void collusion_resilience(const Options &options, const Input &input) {
 
 // helper struct for computing the practicality property
 struct Practicality {
-	struct CounterExamplePart {};
+	struct CounterExamplePart {
+		const Branch &branch;
+		size_t choice;
+	};
 
 	// routes that yield a certain utility
 	using UtilityMap = std::unordered_map<Utility, Bool>;
@@ -439,9 +444,10 @@ struct Practicality {
 	using PlayerUtilities = std::vector<UtilityMap>;
 
 	Practicality(
-		size_t players,
-		Labels<Practicality> &labels
-	) : players(players), labels(labels) {}
+		const Options &options,
+		Labels<Practicality> &labels,
+		size_t players
+	) : options(options), labels(labels), players(players) {}
 
 	// build the utility map players->utility->condition
 	// the map gives a single boolean condition for "player p gets utility u starting from this subtree"
@@ -470,6 +476,13 @@ struct Practicality {
 				if(choice == other)
 					continue;
 
+				Bool counterexample_label;
+				if(options.counterexamples)
+					counterexample_label = labels.label_counterexample({
+						branch,
+						other
+					});
+
 				const auto &utilities_other = player_utilities_by_choice[other][branch.player];
 				// for each utility u reachable from a under condition c...
 				for(const auto &action_pair : utilities_action) {
@@ -483,6 +496,8 @@ struct Practicality {
 						auto conjunction = action_variable && action_condition && other_condition;
 						// ...then u is at least as good as u', otherwise we'd switch
 						auto comparison = labels.label_geq(action_utility, other_utility);
+						if(options.counterexamples)
+							comparison = counterexample_label.implies(comparison);
 						conjuncts.push_back(conjunction.implies(comparison));
 					}
 				}
@@ -516,25 +531,39 @@ struct Practicality {
 		return conjunction(conjuncts);
 	}
 
-	size_t players;
+	const Options &options;
 	Labels<Practicality> &labels;
+	size_t players;
 	std::vector<z3::Bool> conjuncts;
 };
 
-void practicality(const Input &input) {
+void practicality(const Options &options, const Input &input) {
 	std::cout << "practicality" << std::endl;
 	Labels<Practicality> labels;
-	auto property = Practicality(input.players.size(), labels).compute(*input.root);
+	auto property = Practicality(options, labels, input.players.size()).compute(*input.root);
 
 	// property is the same for all honest histories
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << "honest history #" << history + 1 << std::endl;
-		SolvingHelper<Practicality>(
+		SolvingHelper<Practicality> helper(
 			input,
 			labels,
 			property,
 			input.practicality_constraint,
 			input.honest_histories[history]
-		).solve();
+		);
+		helper.solve();
+		for(const auto &counterexample : helper.counterexamples) {
+			std::cout << "counterexample:" << std::endl;
+			for(const auto &part : counterexample) {
+				std::cout << "player " << input.players[part.branch.player] << " obtains maximal utility at";
+				for(const auto &action : part.branch.compute_history())
+					std::cout << " " << action.get().name;
+				std::cout
+					<< " by taking action "
+					<< part.branch.choices[part.choice].action.name
+					<< std::endl;
+			}
+		}
 	}
 }

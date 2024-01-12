@@ -7,6 +7,6 @@
 template<bool weaker>
 void weak_immunity(const Options &options, const Input &input);
 void collusion_resilience(const Options &options, const Input &input);
-void practicality(const Input &input);
+void practicality(const Options &options, const Input &input);
 
 #endif
