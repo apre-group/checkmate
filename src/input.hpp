@@ -41,6 +41,11 @@ struct Node {
 	const Leaf &leaf() const;
 	// if is_branch(), do the downcast
 	const Branch &branch() const;
+
+	// parent node, or `nullptr` if the root
+	Branch *parent = nullptr;
+	// traverse upwards to compute the history for this node
+	std::vector<std::reference_wrapper<const Action>> compute_history() const;
 };
 
 // a choice available at a branch
@@ -63,7 +68,7 @@ struct Branch final : public Node {
 	Branch(unsigned player) : player(player), label(z3::Bool::fresh()) {}
 	virtual bool is_leaf() const { return false; }
 
-	// do a linear-time lookup of `action` in the branch, which must be present
+	// do a linear-time lookup of `action` by name in the branch, which must be present
 	const Choice &get_choice(const std::string &action) const {
 		for(const Choice &choice : choices)
 			if(choice.action.name == action)
@@ -72,6 +77,17 @@ struct Branch final : public Node {
 		assert(false);
 		UNREACHABLE;
 	}
+
+	// do a linear-time lookup of `action` by child address in the branch, which must be present
+	const Choice &get_choice(const Node *child) const {
+		for(const Choice &choice : choices)
+			if(choice.node.get() == child)
+				return choice;
+
+		assert(false);
+		UNREACHABLE;
+	}
+
 
 	// whose turn is it?
 	unsigned player;

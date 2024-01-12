@@ -46,7 +46,7 @@ public:
 	}
 
 	// make a fresh label, associate it with `info` and return `label => expr`
-	Bool label_node(Bool expr, typename Property::NodeInfo info) {
+	Bool label_node(Bool expr, typename Property::CounterExamplePart info) {
 		auto label = Bool::fresh();
 		node_labels.insert({label, std::move(info)});
 		return label.implies(expr);
@@ -65,7 +65,7 @@ public:
 	// expression-to-label map, used for caching
 	std::unordered_map<Bool, Bool> expr2label;
 	// which branch does this label mark for counterexamples?
-	std::unordered_map<z3::Bool, typename Property::NodeInfo> node_labels;
+	std::unordered_map<z3::Bool, typename Property::CounterExamplePart> node_labels;
 
 	/**
 	 * split triggers:
@@ -147,7 +147,7 @@ struct SolvingHelper {
 
 		// assigned if we find a suitable split
 		Bool split;
-		std::vector<typename Property::NodeInfo> counterexample;
+		std::vector<typename Property::CounterExamplePart> counterexample;
 		for(auto label : core) {
 			// ignore other non-comparison labels
 			auto location = labels.label2expr.find(label);
@@ -173,10 +173,8 @@ struct SolvingHelper {
 		// didn't find anything worth splitting on
 		if(split.null()) {
 			std::cout << "no more splits, failed" << std::endl;
-			if(counterexample.size()) {
-				std::cout << "counterexample size: " << counterexample.size() << std::endl;
+			if(!counterexample.empty())
 				counterexamples.push_back(std::move(counterexample));
-			}
 			return false;
 		}
 
@@ -220,13 +218,13 @@ struct SolvingHelper {
 	// active triggers for the current case
 	std::vector<std::pair<bool, bool>> active_splits;
 
-	std::vector<std::vector<typename Property::NodeInfo>> counterexamples;
+	std::vector<std::vector<typename Property::CounterExamplePart>> counterexamples;
 };
 
 // helper struct for computing the weak immunity property
 template<bool weaker>
 struct WeakImmunity {
-	struct NodeInfo {
+	struct CounterExamplePart {
 		const Leaf &leaf;
 		size_t player;
 	};
@@ -291,13 +289,24 @@ void weak_immunity(const Options &options, const Input &input) {
 	// property is the same for all honest histories
 	for(size_t history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << "honest history #" << history + 1 << std::endl;
-		SolvingHelper<WeakImmunity<weaker>>(
+		auto helper = SolvingHelper<WeakImmunity<weaker>>(
 			input,
 			labels,
 			property,
 			property_constraint,
 			input.honest_histories[history]
-		).solve();
+		);
+		helper.solve();
+		for(const auto &counterexample : helper.counterexamples) {
+			// all weak(er) immunity counterexamples seem to be of size 1: is this true?
+			assert(counterexample.size() == 1);
+			typename WeakImmunity<weaker>::CounterExamplePart example(std::move(counterexample[0]));
+			std::cout << "counterexample: ";
+			std::cout << "player " << input.players[example.player] << " could be harmed at";
+			for(auto &action : example.leaf.compute_history())
+				std::cout << " " << action.get().name;
+			std::cout << std::endl;
+		}
 	}
 }
 
@@ -307,7 +316,7 @@ template void weak_immunity<true>(const Options &, const Input &);
 
 // helper struct for computing the collusion resilience property
 struct CollusionResilience {
-	struct NodeInfo {
+	struct CounterExamplePart {
 		const Leaf &leaf;
 	};
 
@@ -395,7 +404,7 @@ void collusion_resilience(const Input &input) {
 
 // helper struct for computing the practicality property
 struct Practicality {
-	struct NodeInfo {};
+	struct CounterExamplePart {};
 
 	// routes that yield a certain utility
 	using UtilityMap = std::unordered_map<Utility, Bool>;

@@ -5,6 +5,18 @@
 #include "input.hpp"
 #include "utils.hpp"
 
+std::vector<std::reference_wrapper<const Action>> Node::compute_history() const {
+	std::vector<std::reference_wrapper<const Action>> result;
+	auto current = this;
+	while(current->parent) {
+		auto &choice = current->parent->get_choice(current);
+		result.emplace_back(choice.action);
+		current = current->parent;
+	}
+	std::reverse(result.begin(), result.end());
+	return result;
+}
+
 // lexical analysis for expressions
 struct Lexer {
 	// possible tokens in expressions
@@ -352,7 +364,6 @@ using json = nlohmann::json;
  * - `input` is the input parsed so far
  * - `action_constraints` are filled out as we go
  *
- * TODO should not be recursive
  * TODO does not check all aspects
  * (hoping to have new input format based on s-expressions, which would be much easier to parse)
  */
@@ -372,10 +383,9 @@ static std::unique_ptr<Node> load_tree(const Input &input, std::vector<z3::Bool>
 		for(const json &child : node["children"]) {
 			// fresh variable for each action
 			auto action = z3::Bool::fresh();
-			branch->choices.push_back({
-				{child["action"], action},
-				load_tree(input, action_constraints, parser, child["child"])
-			});
+			auto loaded = load_tree(input, action_constraints, parser, child["child"]);
+			loaded->parent = branch.get();
+			branch->choices.push_back({{child["action"], action}, std::move(loaded)});
 			actions.push_back(action);
 		}
 
