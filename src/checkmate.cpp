@@ -13,7 +13,7 @@ int main(int, char **argv) {
 	if(options.weaker_immunity)
 		weak_immunity<true>(options, input);
 	if(options.collusion_resilience)
-		collusion_resilience(input);
+		collusion_resilience(options, input);
 	if(options.practicality)
 		practicality(input);
 

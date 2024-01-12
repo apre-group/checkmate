@@ -289,7 +289,7 @@ void weak_immunity(const Options &options, const Input &input) {
 	// property is the same for all honest histories
 	for(size_t history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << "honest history #" << history + 1 << std::endl;
-		auto helper = SolvingHelper<WeakImmunity<weaker>>(
+		SolvingHelper<WeakImmunity<weaker>> helper(
 			input,
 			labels,
 			property,
@@ -315,18 +315,23 @@ template void weak_immunity<true>(const Options &, const Input &);
 
 // helper struct for computing the collusion resilience property
 struct CollusionResilience {
+	using ColludingGroup = std::bitset<Input::MAX_PLAYERS>;
+
 	struct CounterExamplePart {
 		const Leaf &leaf;
+		ColludingGroup group;
 	};
 
 	CollusionResilience(
+		const Options &options,
+		Labels<CollusionResilience> &labels,
 		size_t players,
 		const Leaf &honest_leaf,
-		Labels<CollusionResilience> &labels,
 		uint64_t binary
 	) :
-		players(players),
+		options(options),
 		labels(labels),
+		players(players),
 		group(binary),
 		honest_total { z3::Real::ZERO, z3::Real::ZERO }
 	{
@@ -347,7 +352,10 @@ struct CollusionResilience {
 					total = total + leaf.utilities[player];
 
 			// ..and compare it to the honest total
-			return labels.label_geq(honest_total, total);
+			auto comparison = labels.label_geq(honest_total, total);
+			if(options.counterexamples)
+				comparison = labels.label_node(comparison, {leaf, group});
+			return comparison;
 		}
 
 		std::vector<z3::Bool> conjuncts;
@@ -363,16 +371,17 @@ struct CollusionResilience {
 		return conjunction(conjuncts);
 	}
 
+	const Options &options;
+	Labels<CollusionResilience> &labels;
 	// the total number of players
 	size_t players;
-	Labels<CollusionResilience> &labels;
 	// the current group of players
 	std::bitset<Input::MAX_PLAYERS> group;
 	// their honest total
 	Utility honest_total;
 };
 
-void collusion_resilience(const Input &input) {
+void collusion_resilience(const Options &options, const Input &input) {
 	std::cout << "collusion resilience" << std::endl;
 	assert(input.players.size() < Input::MAX_PLAYERS);
 
@@ -384,20 +393,39 @@ void collusion_resilience(const Input &input) {
 		std::vector<Bool> conjuncts;
 
 		// sneaky hack follows: all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
-		// C++ standard mandates that `long long` has at least 64 bits, so we can have up to 64 players - this should be enough
 		// done this way more for concision than efficiency
-		for(unsigned long long binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++)
-			conjuncts.push_back(CollusionResilience(input.players.size(), honest_leaf, labels, binary_counter).compute(*input.root));
+		for(uint64_t binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++)
+			conjuncts.push_back(CollusionResilience(
+				options,
+				labels,
+				input.players.size(),
+				honest_leaf,
+				binary_counter
+			).compute(*input.root));
 
 		auto property = conjunction(conjuncts);
 		std::cout << "honest history #" << history + 1 << std::endl;
-		SolvingHelper<CollusionResilience>(
+		SolvingHelper<CollusionResilience> helper(
 			input,
 			labels,
 			property,
 			input.collusion_resilience_constraint,
 			input.honest_histories[history]
-		).solve();
+		);
+		helper.solve();
+		for(const auto &counterexample : helper.counterexamples) {
+			std::cout << "counterexample:" << std::endl;
+			for(const auto &part : counterexample) {
+				std::cout << "group";
+				for(size_t player = 0; player < input.players.size(); player++)
+					if(part.group[player])
+						std::cout << " " << input.players[player];
+				std::cout << " could profit at";
+				for(const auto &action : part.leaf.compute_history())
+					std::cout << " " << action.get().name;
+				std::cout << std::endl;
+			}
+		}
 	}
 }
 

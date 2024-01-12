@@ -9,6 +9,7 @@ const char *USAGE = R"(usage: checkmate PATH
 	--weaker_immunity
 	--collusion_resilience
 	--practicality
+	--counterexamples
 )";
 
 // print a message, the usage information and exit with failure code
