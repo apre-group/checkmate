@@ -116,7 +116,7 @@ struct SolvingHelper {
 	}
 
 	bool solve() {
-		std::cout << "case: " << case_ << std::endl;
+		// std::cout << "case: " << case_ << std::endl;
 
 		// make a fresh frame for current case
 		solver.push();
@@ -135,7 +135,7 @@ struct SolvingHelper {
 
 		// solved the case immediately
 		if(result == z3::Result::SAT) {
-			std::cout << "solved" << std::endl;
+			std::cout << "   Case " << case_ << " satisfies property." << std::endl;
 			return true;
 		}
 
@@ -172,13 +172,15 @@ struct SolvingHelper {
 
 		// didn't find anything worth splitting on
 		if(split.null()) {
-			std::cout << "no more splits, failed" << std::endl;
-			if(!counterexample.empty())
+			std::cout << "NO, case " << case_ << " violates property." << std::endl;
+			if(!counterexample.empty()) {
 				counterexamples.push_back(std::move(counterexample));
+			}
 			return false;
 		}
 
-		std::cout << "split: " << split << std::endl;
+		std::cout << "   Further case split required." << std::endl;
+		std::cout << "   Split on: " << split << std::endl;
 		size_t trigger = labels.expr2trigger.at(split);
 
 		// positive split
@@ -273,7 +275,9 @@ struct WeakImmunity {
 // logic is very similar for weak/weaker immunity, so we template it
 template<bool weaker>
 void weak_immunity(const Options &options, const Input &input) {
-	std::cout << (weaker ? "weaker immunity" : "weak immunity") << std::endl;
+	std::cout << std::endl;
+	std::cout << std::endl;
+	std::cout << (weaker ? "WEAK IMMUNITY" : "WEAKER IMMUNITY") << std::endl;
 
 	Labels<WeakImmunity<weaker>> labels;
 	std::vector<Bool> conjuncts;
@@ -289,7 +293,8 @@ void weak_immunity(const Options &options, const Input &input) {
 		: input.weaker_immunity_constraint;
 	// property is the same for all honest histories
 	for(size_t history = 0; history < input.honest_histories.size(); history++) {
-		std::cout << "honest history #" << history + 1 << std::endl;
+		std::cout << std::endl;
+		std::cout << "Is history " << input.honest_histories[history] << (weaker ? " weaker immune?" : " weak immune?") << std::endl;
 		SolvingHelper<WeakImmunity<weaker>> helper(
 			input,
 			labels,
@@ -297,14 +302,24 @@ void weak_immunity(const Options &options, const Input &input) {
 			property_constraint,
 			input.honest_histories[history]
 		);
-		helper.solve();
+		const bool is_sat = helper.solve();
+		if(is_sat) {
+			std::cout << "YES, it is" << (weaker ? " weaker immune." : " weak immune.") << std::endl;
+		}
+
 		for(const auto &counterexample : helper.counterexamples) {
-			std::cout << "counterexample:" << std::endl;
+			std::cout << "Counterexample:" << std::endl;
+			// the following is just 1 counterexample
 			for(const auto &part : counterexample) {
-				std::cout << "player " << input.players[part.player] << " could be harmed at";
-				for(const auto &action : part.leaf.compute_history())
-					std::cout << " " << action.get().name;
-				std::cout << std::endl;
+				std::cout << "   Player " << input.players[part.player] << " can be harmed if" << std::endl;
+				// const list list_of_players = player_at_hist(part.leaf.compute_history)
+				// for(player in list_of_players)
+				for(const auto &action : part.leaf.compute_history()) {
+					// if(player != input.players[part.player]){
+						// std::out << "   player " << player << "takes action" << action.get().name << "after history" << <actions so far> << std::endl;
+					std::cout << "   player XXX takes action " << action.get().name << " after history XXX" << std::endl;
+					//}
+				}
 			}
 		}
 	}
@@ -384,7 +399,9 @@ struct CollusionResilience {
 };
 
 void collusion_resilience(const Options &options, const Input &input) {
-	std::cout << "collusion resilience" << std::endl;
+	std::cout << std::endl;
+	std::cout << std::endl;
+	std::cout << "COLLUSION RESILIENCE" << std::endl;
 	assert(input.players.size() < Input::MAX_PLAYERS);
 
 	// property is different for each honest history
@@ -406,7 +423,8 @@ void collusion_resilience(const Options &options, const Input &input) {
 			).compute(*input.root));
 
 		auto property = conjunction(conjuncts);
-		std::cout << "honest history #" << history + 1 << std::endl;
+		std::cout << std::endl;
+		std::cout << "Is history " << input.honest_histories[history] << " collusion resilient?" << std::endl;
 		SolvingHelper<CollusionResilience> helper(
 			input,
 			labels,
@@ -414,18 +432,23 @@ void collusion_resilience(const Options &options, const Input &input) {
 			input.collusion_resilience_constraint,
 			input.honest_histories[history]
 		);
-		helper.solve();
+		const bool is_sat = helper.solve();
+		if(is_sat) {
+			std::cout << "YES, it is collusion resilient." << std::endl;
+		}
+
+
 		for(const auto &counterexample : helper.counterexamples) {
-			std::cout << "counterexample:" << std::endl;
+			std::cout << "Counterexample:" << std::endl;
 			for(const auto &part : counterexample) {
-				std::cout << "group";
+				std::cout << "   Group";
 				for(size_t player = 0; player < input.players.size(); player++)
 					if(part.group[player])
 						std::cout << " " << input.players[player];
-				std::cout << " could profit at";
+				std::cout << " profits from deviation, if" << std::endl;
+				// similar changes to WI: only list deviating players and the action they take at which non-term history
 				for(const auto &action : part.leaf.compute_history())
-					std::cout << " " << action.get().name;
-				std::cout << std::endl;
+					std::cout << "   Player XXX takes action " << action.get().name << " after history XXX" << std::endl;
 			}
 		}
 	}
@@ -538,13 +561,16 @@ struct Practicality {
 };
 
 void practicality(const Options &options, const Input &input) {
-	std::cout << "practicality" << std::endl;
+	std::cout << std::endl;
+	std::cout << std::endl;
+	std::cout << "PRACTICALITY" << std::endl;
 	Labels<Practicality> labels;
 	auto property = Practicality(options, labels, input.players.size()).compute(*input.root);
 
 	// property is the same for all honest histories
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
-		std::cout << "honest history #" << history + 1 << std::endl;
+		std::cout << std::endl;
+		std::cout << "Is history " << input.honest_histories[history] << " practical?" << std::endl;
 		SolvingHelper<Practicality> helper(
 			input,
 			labels,
@@ -552,11 +578,16 @@ void practicality(const Options &options, const Input &input) {
 			input.practicality_constraint,
 			input.honest_histories[history]
 		);
-		helper.solve();
+		const bool is_sat = helper.solve();
+		if(is_sat) {
+			std::cout << "YES, it is practical." << std::endl;
+		}
+
 		for(const auto &counterexample : helper.counterexamples) {
-			std::cout << "counterexample:" << std::endl;
+			std::cout << "Counterexample:" << std::endl;
+			// compute the resulting history of the counterexample strategy and only log the history
 			for(const auto &part : counterexample) {
-				std::cout << "player " << input.players[part.branch.player] << " obtains maximal utility at";
+				std::cout << "   player " << input.players[part.branch.player] << " obtains maximal utility at";
 				for(const auto &action : part.branch.compute_history())
 					std::cout << " " << action.get().name;
 				std::cout
