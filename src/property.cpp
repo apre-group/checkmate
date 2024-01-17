@@ -87,12 +87,13 @@ public:
 template<typename Property>
 struct SolvingHelper {
 	SolvingHelper(
+		const Options &options,
 		const Input &input,
 		const Labels<Property> &labels,
 		Bool raw_property,
 		Bool property_constraint,
 		Bool honest_history
-	) : input(input), labels(labels), active_splits(labels.triggers.size()) {
+	) : options(options), input(input), labels(labels), active_splits(labels.triggers.size()) {
 		// wrap up property:
 		// forall <variables> (triggers && initial constraints) => property
 		property = forall(input.quantify, (
@@ -177,7 +178,8 @@ struct SolvingHelper {
 					std::move(counterexample)
 				});
 			}
-			return false;
+			failed = true;
+			return options.all_cases;
 		}
 
 		std::cout << "\tFurther case split required." << std::endl;
@@ -205,6 +207,7 @@ struct SolvingHelper {
 		return true;
 	}
 
+	const Options &options;
 	const Input &input;
 	// labels we need
 	const Labels<Property> &labels;
@@ -220,6 +223,8 @@ struct SolvingHelper {
 	std::vector<Bool> case_;
 	// active triggers for the current case
 	std::vector<std::pair<bool, bool>> active_splits;
+	// did we fail at any point?
+	bool failed = false;
 
 	struct CounterExample {
 		std::vector<z3::Bool> case_;
@@ -302,16 +307,16 @@ void weak_immunity(const Options &options, const Input &input) {
 		std::cout << std::endl;
 		std::cout << "Is history " << input.readable_honest_histories[history] << (weaker ? " weaker immune?" : " weak immune?") << std::endl;
 		SolvingHelper<WeakImmunity<weaker>> helper(
+			options,
 			input,
 			labels,
 			property,
 			property_constraint,
 			input.honest_histories[history]
 		);
-		const bool is_sat = helper.solve();
-		if(is_sat) {
+		helper.solve();
+		if(!helper.failed)
 			std::cout << "YES, it is" << (weaker ? " weaker immune." : " weak immune.") << std::endl;
-		}
 
 		for(const auto &counterexample : helper.counterexamples) {
 			std::cout << "Counterexample for " << counterexample.case_ << std::endl;
@@ -444,17 +449,16 @@ void collusion_resilience(const Options &options, const Input &input) {
 		std::cout << std::endl;
 		std::cout << "Is history " << input.readable_honest_histories[history] << " collusion resilient?" << std::endl;
 		SolvingHelper<CollusionResilience> helper(
+			options,
 			input,
 			labels,
 			property,
 			input.collusion_resilience_constraint,
 			input.honest_histories[history]
 		);
-		const bool is_sat = helper.solve();
-		if(is_sat) {
+		helper.solve();
+		if(!helper.failed)
 			std::cout << "YES, it is collusion resilient." << std::endl;
-		}
-
 
 		for(const auto &counterexample : helper.counterexamples) {
 			std::cout << "Counterexample for " << counterexample.case_ << std::endl;
@@ -605,16 +609,16 @@ void practicality(const Options &options, const Input &input) {
 		std::cout << std::endl;
 		std::cout << "Is history " << input.readable_honest_histories[history] << " practical?" << std::endl;
 		SolvingHelper<Practicality> helper(
+			options,
 			input,
 			labels,
 			property,
 			input.practicality_constraint,
 			input.honest_histories[history]
 		);
-		const bool is_sat = helper.solve();
-		if(is_sat) {
+		helper.solve();
+		if(!helper.failed)
 			std::cout << "YES, it is practical." << std::endl;
-		}
 
 		for(const auto &counterexample : helper.counterexamples) {
 			std::cout << "Counterexample for " << counterexample.case_ << std::endl;

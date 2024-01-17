@@ -20,6 +20,8 @@ struct Options {
 
 	// compute counterexamples
 	bool counterexamples = false;
+	// continue to more cases even when one failed
+	bool all_cases = false;
 };
 
 #endif

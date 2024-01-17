@@ -10,6 +10,7 @@ const char *USAGE = R"(usage: checkmate PATH
 	--collusion_resilience
 	--practicality
 	--counterexamples
+	--all_cases
 )";
 
 // print a message, the usage information and exit with failure code
@@ -47,6 +48,8 @@ Options::Options(char **argv) {
 			practicality = true;
 		else if(!strcmp(*argv, "--counterexamples"))
 			counterexamples = true;
+		else if(!strcmp(*argv, "--all_cases"))
+			all_cases = true;
 		else
 			bail("unknown option");
 		argv++;
