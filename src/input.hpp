@@ -22,9 +22,10 @@ struct Action {
 	}
 };
 
-// forward declarations for Node::leaf() and Node::branch()
+// forward declarations for Node methods
 struct Leaf;
 struct Branch;
+struct Choice;
 
 // abstract base class for Leaf and Branch
 struct Node {
@@ -49,7 +50,7 @@ struct Node {
 	// parent node, or `nullptr` if the root
 	Branch *parent = nullptr;
 	// traverse upwards to compute the history for this node
-	std::vector<std::reference_wrapper<const Action>> compute_history() const;
+	std::vector<std::reference_wrapper<const Choice>> compute_history() const;
 	// the length of that history
 	size_t history_length() const;
 };
@@ -60,6 +61,10 @@ struct Choice {
 	Action action;
 	// end up in this subtree
 	std::unique_ptr<Node> node;
+
+	friend std::ostream &operator<<(std::ostream &out, const Choice &choice) {
+		return out << choice.action;
+	}
 };
 
 // leaf node

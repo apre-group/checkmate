@@ -316,13 +316,29 @@ void weak_immunity(const Options &options, const Input &input) {
 		for(const auto &counterexample : helper.counterexamples) {
 			std::cout << "Counterexample for " << counterexample.case_ << std::endl;
 			// the following is just 1 counterexample
-			for(const auto &part : counterexample.parts)
+			for(const auto &part : counterexample.parts) {
 				std::cout
 					<< "\tPlayer "
 					<< input.players[part.player]
-					<< " can be harmed at "
-					<< part.leaf.compute_history()
+					<< " can be harmed if:"
 					<< std::endl;
+
+				auto history = part.leaf.compute_history();
+				auto branch = input.root.get();
+				for(auto choice : part.leaf.compute_history()) {
+					if(branch->player != part.player)
+						std::cout
+							<< "\tPlayer "
+							<< input.players[branch->player]
+							<< " takes action "
+							<< choice.get().action.name
+							<< std::endl;
+
+					auto next = choice.get().node.get();
+					if(!next->is_leaf())
+						branch = static_cast<Branch *>(next);
+				}
+			}
 		}
 	}
 }
@@ -442,15 +458,30 @@ void collusion_resilience(const Options &options, const Input &input) {
 
 		for(const auto &counterexample : helper.counterexamples) {
 			std::cout << "Counterexample for " << counterexample.case_ << std::endl;
+
 			for(const auto &part : counterexample.parts) {
+
 				std::cout << "\tGroup";
 				for(size_t player = 0; player < input.players.size(); player++)
 					if(part.group[player])
 						std::cout << " " << input.players[player];
-				std::cout
-					<< " profits from deviation at "
-					<< part.leaf.compute_history()
-					<< std::endl;
+				std::cout << " profits from deviation if:" << std::endl;
+
+				auto history = part.leaf.compute_history();
+				auto branch = input.root.get();
+				for(auto choice : part.leaf.compute_history()) {
+					if(part.group[branch->player])
+						std::cout
+							<< "\tPlayer "
+							<< input.players[branch->player]
+							<< " takes action "
+							<< choice.get().action.name
+							<< std::endl;
+
+					auto next = choice.get().node.get();
+					if(!next->is_leaf())
+						branch = static_cast<Branch *>(next);
+				}
 			}
 		}
 	}

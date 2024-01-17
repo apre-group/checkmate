@@ -5,12 +5,12 @@
 #include "input.hpp"
 #include "utils.hpp"
 
-std::vector<std::reference_wrapper<const Action>> Node::compute_history() const {
-	std::vector<std::reference_wrapper<const Action>> result;
+std::vector<std::reference_wrapper<const Choice>> Node::compute_history() const {
+	std::vector<std::reference_wrapper<const Choice>> result;
 	auto current = this;
 	while(current->parent) {
 		auto &choice = current->parent->get_choice(current);
-		result.emplace_back(choice.action);
+		result.emplace_back(choice);
 		current = current->parent;
 	}
 	std::reverse(result.begin(), result.end());
