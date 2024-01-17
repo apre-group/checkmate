@@ -17,6 +17,16 @@ std::vector<std::reference_wrapper<const Action>> Node::compute_history() const 
 	return result;
 }
 
+size_t Node::history_length() const {
+	size_t result = 0;
+	auto current = this;
+	while(current->parent) {
+		result++;
+		current = current->parent;
+	}
+	return result;
+}
+
 // lexical analysis for expressions
 struct Lexer {
 	// possible tokens in expressions
@@ -551,6 +561,7 @@ Input::Input(const char *path) {
 		const auto &leaf = current->leaf();
 		honest_histories.push_back(conjunction(history));
 		honest_history_leaves.push_back(leaf);
+		readable_honest_histories.push_back(honest_history);
 	}
 	action_constraint = conjunction(action_constraints);
 }

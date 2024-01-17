@@ -16,6 +16,10 @@ struct Action {
 	std::string name;
 	// a Z3 variable representing taking this action
 	z3::Bool variable;
+
+	friend std::ostream &operator<<(std::ostream &out, const Action &action) {
+		return out << action.name;
+	}
 };
 
 // forward declarations for Node::leaf() and Node::branch()
@@ -46,6 +50,8 @@ struct Node {
 	Branch *parent = nullptr;
 	// traverse upwards to compute the history for this node
 	std::vector<std::reference_wrapper<const Action>> compute_history() const;
+	// the length of that history
+	size_t history_length() const;
 };
 
 // a choice available at a branch
@@ -127,10 +133,13 @@ struct Input {
 	z3::Bool weaker_immunity_constraint;
 	// collusion resilience initial constraints
 	z3::Bool collusion_resilience_constraint;
-	// collusion resilience initial constraints
-	z3::Bool practicality_constraint;
 	// practicality initial constraints
+	z3::Bool practicality_constraint;
+	// honest histories
 	std::vector<z3::Bool> honest_histories;
+
+	// honest histories for output
+	std::vector<std::vector<std::string>> readable_honest_histories;
 
 	// the leaves reached by each honest history, living as long as the containing input
 	std::vector<std::reference_wrapper<const Leaf>> honest_history_leaves;
