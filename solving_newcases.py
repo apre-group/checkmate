@@ -1585,7 +1585,7 @@ class PracticalityStrategySolver(StrategySolver):
                                 # do not case split on trivial stuff
                                 continue
 
-                                
+                            print("banana")
                             if self.generate_all_counterexamples:
 
                                 logging.info(f"   new comparison: ({left}, {right})")
@@ -1599,6 +1599,7 @@ class PracticalityStrategySolver(StrategySolver):
                                 for elem in case:
                                     new_case1.add(elem)
                                 ce_solver.push()
+                                print(game)
                                 counterexamples1 = self._extract_counterexample_core(subgame, game, hstar, deleted_branches,
                                                         labels_in_subgame, ce_solver, new_comp,
                                                         new_case1) 
@@ -1618,6 +1619,7 @@ class PracticalityStrategySolver(StrategySolver):
                                 counterexamples3 = self._extract_counterexample_core(subgame, game, hstar, deleted_branches,
                                                         labels_in_subgame, ce_solver, new_comp,
                                                         new_case3) 
+                                print(game)
                                 ce_solver.pop()
                                 all_ces.extend(counterexamples1)
                                 all_ces.extend(counterexamples2)
@@ -1653,16 +1655,14 @@ class PracticalityStrategySolver(StrategySolver):
                                 ce_solver.pop()
                                 all_ces.extend(counterexamples)
 
-
                             break
 
                     if not new_pair:
                         no_more_hist = True
 
-
             if len(pr) == 0:
                 shortest_h = [hstar[0]]
-            hstar = hstar[:len(shortest_h)]
+            hstar = hstar[len(shortest_h):]
             subgame = subgame + shortest_h
 
             # remove all branches after shortest_h, that appear in pr.
@@ -1671,6 +1671,8 @@ class PracticalityStrategySolver(StrategySolver):
                     deleted_branches.append(shortest_h + [action])
                     ce_solver.add(negation(self._action_variable(shortest_h, action)))
 
+
+            # continue here
             game = self.input.get_subtree_at_hist(game, shortest_h)
             labels_in_subgame = []
             for key in self._subtree2label.keys():
