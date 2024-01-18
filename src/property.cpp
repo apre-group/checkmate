@@ -48,7 +48,8 @@ public:
 	// make a fresh label, associate it with `info` and return `label => expr`
 	Bool label_counterexample(typename Property::CounterExamplePart info) {
 		auto label = Bool::fresh();
-		node_labels.insert({label, std::move(info)});
+		label2part.insert({label, std::move(info)});
+		counterexample_labels.push_back(label);
 		return label;
 	}
 
@@ -64,8 +65,10 @@ public:
 	std::unordered_map<Bool, Bool> label2expr;
 	// expression-to-label map, used for caching
 	std::unordered_map<Bool, Bool> expr2label;
-	// which branch does this label mark for counterexamples?
-	std::unordered_map<z3::Bool, typename Property::CounterExamplePart> node_labels;
+	// what information does this label mark for counterexamples?
+	std::unordered_map<z3::Bool, typename Property::CounterExamplePart> label2part;
+	// all counterexample labels
+	std::vector<z3::Bool> counterexample_labels;
 
 	/**
 	 * split triggers:
@@ -108,8 +111,6 @@ struct SolvingHelper {
 		solver.assert_(honest_history);
 		for(const auto &label : labels.label2expr)
 			solver.assert_and_track(label.first);
-		for(const auto &label : labels.node_labels)
-			solver.assert_and_track(label.first);
 
 		// should know only about the initial constraints
 		minimize_solver.assert_(input.initial_constraint);
@@ -128,7 +129,7 @@ struct SolvingHelper {
 		}
 
 		// actually do the work
-		z3::Result result = solver.solve();
+		auto result = solver.solve(labels.counterexample_labels);
 		// ...and remove the case triggers to keep everything clean
 		solver.pop();
 
@@ -152,7 +153,7 @@ struct SolvingHelper {
 			auto location = labels.label2expr.find(label);
 			// if it's not a comparison, should be a counterexample label
 			if(location == labels.label2expr.end()) {
-				auto node_info = labels.node_labels.at(label);
+				auto node_info = labels.label2part.at(label);
 				counterexample.push_back(node_info);
 				continue;
 			}
@@ -464,7 +465,6 @@ void collusion_resilience(const Options &options, const Input &input) {
 			std::cout << "Counterexample for " << counterexample.case_ << std::endl;
 
 			for(const auto &part : counterexample.parts) {
-
 				std::cout << "\tGroup";
 				for(size_t player = 0; player < input.players.size(); player++)
 					if(part.group[player])
@@ -527,23 +527,26 @@ struct Practicality {
 		for(const auto &choice : branch.choices)
 			player_utilities_by_choice.push_back(utilities(*choice.node));
 
-		// for each possible action a in a branch...
-		for(size_t choice = 0; choice < branch.choices.size(); choice++) {
-			const auto &utilities_action = player_utilities_by_choice[choice][branch.player];
-			auto action_variable = branch.choices[choice].action.variable;
-			// for other possible actions a' in a branch...
-			for(size_t other = 0; other < branch.choices.size(); other++) {
+		// loops exchanged below in order to reduce number of counterexample labels
+		// for other possible actions a' in a branch...
+		for(size_t other = 0; other < branch.choices.size(); other++) {
+			Bool counterexample_label;
+			if(options.counterexamples && branch.choices.size() > 1)
+				counterexample_label = labels.label_counterexample({
+					branch,
+					other
+				});
+
+			const auto &utilities_other = player_utilities_by_choice[other][branch.player];
+
+			// for each possible action a in a branch...
+			for(size_t choice = 0; choice < branch.choices.size(); choice++) {
 				if(choice == other)
 					continue;
 
-				Bool counterexample_label;
-				if(options.counterexamples)
-					counterexample_label = labels.label_counterexample({
-						branch,
-						other
-					});
+				auto action_variable = branch.choices[choice].action.variable;
+				const auto &utilities_action = player_utilities_by_choice[choice][branch.player];
 
-				const auto &utilities_other = player_utilities_by_choice[other][branch.player];
 				// for each utility u reachable from a under condition c...
 				for(const auto &action_pair : utilities_action) {
 					auto action_utility = action_pair.first;
@@ -556,9 +559,10 @@ struct Practicality {
 						auto conjunction = action_variable && action_condition && other_condition;
 						// ...then u is at least as good as u', otherwise we'd switch
 						auto comparison = labels.label_geq(action_utility, other_utility);
+						auto complete = conjunction.implies(comparison);
 						if(options.counterexamples)
-							comparison = counterexample_label.implies(comparison);
-						conjuncts.push_back(conjunction.implies(comparison));
+							complete = counterexample_label.implies(complete);
+						conjuncts.push_back(complete);
 					}
 				}
 			}
@@ -586,7 +590,6 @@ struct Practicality {
 	}
 
 	z3::Bool compute(const Node &node) {
-		conjuncts.clear();
 		utilities(node);
 		return conjunction(conjuncts);
 	}
@@ -621,7 +624,20 @@ void practicality(const Options &options, const Input &input) {
 			std::cout << "YES, it is practical." << std::endl;
 
 		for(const auto &counterexample : helper.counterexamples) {
+			std::cout << counterexample.parts.size() << std::endl;
 			std::cout << "Counterexample for " << counterexample.case_ << std::endl;
+
+			for(const auto &part : counterexample.parts) {
+				std::cout
+					<< "\tPlayer "
+					<< input.players[part.branch.player]
+					<< " obtains maximal utility at "
+					<< part.branch.compute_history()
+					<< " by taking action "
+					<< part.branch.choices[part.choice].action.name
+					<< std::endl;
+			}
+
 			size_t root_index;
 			auto root_length = std::numeric_limits<size_t>::max();
 			for(size_t i = 0; i < counterexample.parts.size(); i++) {

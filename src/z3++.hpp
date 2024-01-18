@@ -26,6 +26,7 @@ namespace z3 {
 	}
 
 	class Solver;
+	class Model;
 	class Bool;
 	class Real;
 
@@ -91,6 +92,8 @@ namespace z3 {
 		friend Real;
 		// Solver wants to construct Booleans from unsat cores
 		friend Solver;
+		// Model wants to construct Booleans from models
+		friend Model;
 
 	public:
 		Bool() : Expression() {}
@@ -343,6 +346,60 @@ namespace z3 {
 		return out << (result == Result::SAT ? "sat" : "unsat");
 	}
 
+	// wrapper around a Z3 model
+	class Model {
+		// `Solver` wants to access `model`
+		friend Solver;
+	public:
+		Model() = default;
+
+		Model(const Model &other) : model(other.model) {
+			Z3_model_inc_ref(CONTEXT, model);
+			check_error();
+		}
+
+		Model &operator=(Model other) {
+			model = other.model;
+			Z3_model_inc_ref(CONTEXT, model);
+			check_error();
+			return *this;
+		}
+
+		Model(Model &&other) noexcept {
+			model = other.model;
+			other.model = nullptr;
+		}
+
+		Model &operator=(Model &&other) noexcept {
+			model = other.model;
+			other.model = nullptr;
+			return *this;
+		}
+
+		~Model() {
+			if(!model)
+				return;
+			Z3_model_dec_ref(CONTEXT, model);
+			check_error();
+		}
+
+		bool operator[](Bool other) const {
+			Z3_ast ast;
+			Z3_model_eval(CONTEXT, model, other.ast, true, &ast);
+			check_error();
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			check_error();
+			Z3_func_decl decl = Z3_get_app_decl(CONTEXT, app);
+			check_error();
+			Z3_decl_kind kind = Z3_get_decl_kind(CONTEXT, decl);
+			check_error();
+			return kind == Z3_OP_TRUE;
+		}
+
+	private:
+		Z3_model model = nullptr;
+	};
+
 	// wrapper around a Z3 solver object
 	class Solver {
 	public:
@@ -442,6 +499,14 @@ namespace z3 {
 			return result;
 		}
 
+		// get a model - must have just returned sat
+		Model model() const {
+			Model result;
+			result.model = Z3_solver_get_model(CONTEXT, solver);
+			check_error();
+			return result;
+		}
+
 		friend std::ostream &operator<<(std::ostream &out, const Solver &solver) {
 			return out << Z3_solver_to_string(CONTEXT, solver.solver);
 		}
@@ -449,6 +514,19 @@ namespace z3 {
 	private:
 		// wrapper solver
 		Z3_solver solver;
+	};
+
+	class MinimalCores {
+	public:
+		MinimalCores(const Solver &solver, const std::vector<Bool> &labels)
+			: solver(solver), labels(labels) {}
+		bool more() { return map.solve() == Result::SAT; }
+		std::vector<Bool> core();
+
+	private:
+		const Solver &solver;
+		const std::vector<Bool> &labels;
+		Solver map;
 	};
 }
 
