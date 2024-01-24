@@ -13,6 +13,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include "z3.h"
 
@@ -390,27 +391,9 @@ namespace z3 {
 	public:
 		Model() = default;
 
-		Model(const Model &other) : model(other.model) {
-			Z3_model_inc_ref(CONTEXT, model);
-			check_error();
-		}
-
-		Model &operator=(Model other) {
-			model = other.model;
-			Z3_model_inc_ref(CONTEXT, model);
-			check_error();
-			return *this;
-		}
-
 		Model(Model &&other) noexcept {
 			model = other.model;
 			other.model = nullptr;
-		}
-
-		Model &operator=(Model &&other) noexcept {
-			model = other.model;
-			other.model = nullptr;
-			return *this;
 		}
 
 		~Model() {
@@ -420,9 +403,10 @@ namespace z3 {
 			check_error();
 		}
 
-		bool operator[](Bool other) const {
+		template<bool polarity>
+		bool assigns(Bool domain) const {
 			Z3_ast ast;
-			Z3_model_eval(CONTEXT, model, other.ast, true, &ast);
+			Z3_model_eval(CONTEXT, model, domain.ast, false, &ast);
 			check_error();
 			Z3_app app = Z3_to_app(CONTEXT, ast);
 			check_error();
@@ -430,7 +414,7 @@ namespace z3 {
 			check_error();
 			Z3_decl_kind kind = Z3_get_decl_kind(CONTEXT, decl);
 			check_error();
-			return kind == Z3_OP_TRUE;
+			return kind == (polarity ? Z3_OP_TRUE : Z3_OP_FALSE);
 		}
 
 	private:
@@ -445,6 +429,7 @@ namespace z3 {
 			Z3_solver_inc_ref(CONTEXT, solver);
 			check_error();
 		}
+		Solver(const Solver &) = delete;
 
 		~Solver() {
 			Z3_solver_dec_ref(CONTEXT, solver);
@@ -552,19 +537,6 @@ namespace z3 {
 		// wrapper solver
 		Z3_solver solver;
 	};
-
-	class MinimalCores {
-	public:
-		MinimalCores(const Solver &solver, const std::vector<Bool> &labels)
-			: solver(solver), labels(labels) {}
-		bool more() { return map.solve() == Result::SAT; }
-		std::vector<Bool> core();
-
-	private:
-		const Solver &solver;
-		const std::vector<Bool> &labels;
-		Solver map;
-	};
 }
 
 // used in e.g. hash tables rather than operator==
@@ -596,5 +568,24 @@ struct std::hash<z3::Real> {
 		return std::hash<unsigned>{}(expr.id());
 	}
 };
+
+namespace z3 {
+	class MinimalCores {
+	public:
+		MinimalCores(
+			Solver &solver,
+			const std::vector<Bool> &labels,
+			const std::unordered_map<Bool, Bool> &ignore
+		) : solver(solver), labels(labels), ignore(ignore) {}
+		bool more();
+		std::vector<Bool> core;
+
+	private:
+		Solver &solver;
+		const std::vector<Bool> &labels;
+		const std::unordered_map<Bool, Bool> &ignore;
+		Solver map;
+	};
+}
 
 #endif

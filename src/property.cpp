@@ -117,46 +117,18 @@ struct SolvingHelper {
 		minimize_solver.assert_(property_constraint);
 	}
 
-	bool solve() {
-		// make a fresh frame for current case
-		solver.push();
-
-		// assert all the case's triggers
-		// NB must include also those that are *not* active
-		for(size_t i = 0; i < active_splits.size(); i++) {
-			solver.assert_(active_splits[i].first ? labels.triggers[i].first : !labels.triggers[i].first);
-			solver.assert_(active_splits[i].second ? labels.triggers[i].second : !labels.triggers[i].second);
-		}
-
-		// actually do the work
-		auto result = solver.solve(labels.counterexample_labels);
-		// ...and remove the case triggers to keep everything clean
-		solver.pop();
-
-		// solved the case immediately
-		if(result == z3::Result::SAT) {
-			std::cout << "\tCase " << case_ << " satisfies property." << std::endl;
-			return true;
-		}
-
-		// didn't solve it, need to consider case splits
-
+	Bool find_split() {
 		auto core = solver.unsat_core();
 		// don't get "stuck" in an unproductive area: shuffle the unsat core
 		shuffle(core.begin(), core.end(), prng);
 
-		// assigned if we find a suitable split
 		Bool split;
-		std::vector<typename Property::CounterExamplePart> counterexample;
 		for(auto label : core) {
 			// ignore other non-comparison labels
 			auto location = labels.label2expr.find(label);
-			// if it's not a comparison, should be a counterexample label
-			if(location == labels.label2expr.end()) {
-				auto node_info = labels.label2part.at(label);
-				counterexample.push_back(node_info);
+			// ignore if it's not a comparison, could be a counterexample label
+			if(location == labels.label2expr.end())
 				continue;
-			}
 
 			auto expr = location->second;
 			// if either the split or its negation tells us nothing new, it's pointless to split on it
@@ -170,18 +142,59 @@ struct SolvingHelper {
 			break;
 		}
 
+		return split;
+	}
+
+	bool solve() {
+		// make a fresh frame for current case
+		solver.push();
+
+		// assert all the case's triggers
+		// NB must include also those that are *not* active
+		for(size_t i = 0; i < active_splits.size(); i++) {
+			solver.assert_(active_splits[i].first ? labels.triggers[i].first : !labels.triggers[i].first);
+			solver.assert_(active_splits[i].second ? labels.triggers[i].second : !labels.triggers[i].second);
+		}
+
+		// actually do the work
+		auto result = solver.solve(labels.counterexample_labels);
+
+		// solved the case immediately
+		if(result == z3::Result::SAT) {
+			std::cout << "\tCase " << case_ << " satisfies property." << std::endl;
+			// remove the case triggers
+			solver.pop();
+			return true;
+		}
+
+		// didn't solve it, need to consider case splits
+		auto split = find_split();
 		// didn't find anything worth splitting on
 		if(split.null()) {
 			std::cout << "\tNO, case " << case_ << " violates property." << std::endl;
-			if(!counterexample.empty()) {
-				counterexamples.push_back({
-					case_,
-					std::move(counterexample)
-				});
-			}
 			failed = true;
+
+			if(options.counterexamples) {
+				z3::MinimalCores cores(solver, labels.counterexample_labels, labels.label2expr);
+				while(cores.more()) {
+					std::vector<typename Property::CounterExamplePart> counterexample;
+					for(auto label : cores.core)
+						counterexample.push_back(labels.label2part.at(label));
+					counterexamples.push_back({
+						case_,
+						std::move(counterexample)
+					});
+					if(!options.all_counterexamples)
+						break;
+				}
+			}
+			// remove the case triggers
+			solver.pop();
 			return options.all_cases;
 		}
+
+		// remove the case triggers
+		solver.pop();
 
 		std::cout << "\tFurther case split required." << std::endl;
 		std::cout << "\tSplit on: " << split << std::endl;

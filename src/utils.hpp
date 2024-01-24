@@ -3,6 +3,7 @@
 
 #include <ostream>
 #include <vector>
+#include <unordered_set>
 
 #ifdef __GNUC__
 #define UNREACHABLE __builtin_unreachable();
@@ -10,8 +11,9 @@
 #define UNREACHABLE
 #endif
 
+namespace std {
 template<typename T>
-std::ostream &operator<<(std::ostream &out, const std::vector<T> &vector) {
+ostream &operator<<(ostream &out, const vector<T> &vector) {
 	out << '[';
 	bool comma = false;
 	for (const T &x : vector) {
@@ -22,6 +24,21 @@ std::ostream &operator<<(std::ostream &out, const std::vector<T> &vector) {
 	}
 	out << ']';
 	return out;
+}
+
+template<typename T>
+ostream &operator<<(ostream &out, const unordered_set<T> &vector) {
+	out << '{';
+	bool comma = false;
+	for (const T &x : vector) {
+		if(comma)
+			out << ", ";
+		comma = true;
+		out << x;
+	}
+	out << '}';
+	return out;
+}
 }
 
 #endif

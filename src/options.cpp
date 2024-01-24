@@ -10,6 +10,7 @@ const char *USAGE = R"(usage: checkmate PATH
 	--collusion_resilience
 	--practicality
 	--counterexamples
+	--all_counterexamples
 	--all_cases
 )";
 
@@ -48,6 +49,8 @@ Options::Options(char **argv) {
 			practicality = true;
 		else if(!strcmp(*argv, "--counterexamples"))
 			counterexamples = true;
+		else if(!strcmp(*argv, "--all_counterexamples"))
+			counterexamples = all_counterexamples = true;
 		else if(!strcmp(*argv, "--all_cases"))
 			all_cases = true;
 		else
