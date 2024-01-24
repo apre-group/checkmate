@@ -10,7 +10,6 @@
 
 #include <cassert>
 #include <ostream>
-#include <stdexcept>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -239,6 +238,9 @@ namespace z3 {
 			}
 			else if (decl_kind == Z3_OP_GE){
 				new_expr = Z3_mk_lt(CONTEXT, ast_left, ast_right);
+			}
+			else if (decl_kind == Z3_OP_EQ) {
+				return *this;
 			}
 			else{
 				assert(false);
