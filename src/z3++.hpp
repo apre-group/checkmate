@@ -386,10 +386,12 @@ namespace z3 {
 
 	// wrapper around a Z3 model
 	class Model {
-		// `Solver` wants to access `model`
-		friend Solver;
 	public:
-		Model() = default;
+		Model() = delete;
+		Model(Z3_model model) : model(model) {
+			Z3_model_inc_ref(CONTEXT, model);
+			check_error();
+		}
 
 		Model(Model &&other) noexcept {
 			model = other.model;
@@ -418,7 +420,7 @@ namespace z3 {
 		}
 
 	private:
-		Z3_model model = nullptr;
+		Z3_model model;
 	};
 
 	// wrapper around a Z3 solver object
@@ -503,6 +505,13 @@ namespace z3 {
 			return result;
 		}
 
+		// get a model - must have just returned sat
+		Model model() const {
+			Z3_model model = Z3_solver_get_model(CONTEXT, solver);
+			check_error();
+			return model;
+		}
+
 		// retrieve an unsat core - must have just returned unsat
 		std::vector<Bool> unsat_core() {
 			Z3_ast_vector core = Z3_solver_get_unsat_core(CONTEXT, solver);
@@ -517,14 +526,6 @@ namespace z3 {
 				result.push_back(item);
 			}
 			Z3_ast_vector_dec_ref(CONTEXT, core);
-			check_error();
-			return result;
-		}
-
-		// get a model - must have just returned sat
-		Model model() const {
-			Model result;
-			result.model = Z3_solver_get_model(CONTEXT, solver);
 			check_error();
 			return result;
 		}
@@ -574,16 +575,14 @@ namespace z3 {
 	public:
 		MinimalCores(
 			Solver &solver,
-			const std::vector<Bool> &labels,
-			const std::unordered_map<Bool, Bool> &ignore
-		) : solver(solver), labels(labels), ignore(ignore) {}
-		bool more();
+			const std::vector<Bool> &labels
+		) : solver(solver), labels(labels) {}
+		bool next_core();
 		std::vector<Bool> core;
 
 	private:
 		Solver &solver;
 		const std::vector<Bool> &labels;
-		const std::unordered_map<Bool, Bool> &ignore;
 		Solver map;
 	};
 }

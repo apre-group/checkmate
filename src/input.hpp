@@ -44,7 +44,7 @@ struct Node {
 
 	// if is_leaf(), do the downcast
 	const Leaf &leaf() const;
-	// if is_branch(), do the downcast
+	// if !is_leaf(), do the downcast
 	const Branch &branch() const;
 
 	// parent node, or `nullptr` if the root
@@ -98,7 +98,6 @@ struct Branch final : public Node {
 		assert(false);
 		UNREACHABLE;
 	}
-
 
 	// whose turn is it?
 	unsigned player;

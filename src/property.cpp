@@ -175,8 +175,8 @@ struct SolvingHelper {
 			failed = true;
 
 			if(options.counterexamples) {
-				z3::MinimalCores cores(solver, labels.counterexample_labels, labels.label2expr);
-				while(cores.more()) {
+				z3::MinimalCores cores(solver, labels.counterexample_labels);
+				while(cores.next_core()) {
 					std::vector<typename Property::CounterExamplePart> counterexample;
 					for(auto label : cores.core)
 						counterexample.push_back(labels.label2part.at(label));
@@ -184,6 +184,7 @@ struct SolvingHelper {
 						case_,
 						std::move(counterexample)
 					});
+					std::cout << "\tFound counterexample." << std::endl;
 					if(!options.all_counterexamples)
 						break;
 				}
@@ -542,9 +543,10 @@ struct Practicality {
 
 		// loops exchanged below in order to reduce number of counterexample labels
 		// for other possible actions a' in a branch...
+		bool should_label = options.counterexamples && branch.choices.size() > 1;
 		for(size_t other = 0; other < branch.choices.size(); other++) {
 			Bool counterexample_label;
-			if(options.counterexamples && branch.choices.size() > 1)
+			if(should_label)
 				counterexample_label = labels.label_counterexample({
 					branch,
 					other
@@ -573,7 +575,7 @@ struct Practicality {
 						// ...then u is at least as good as u', otherwise we'd switch
 						auto comparison = labels.label_geq(action_utility, other_utility);
 						auto complete = conjunction.implies(comparison);
-						if(options.counterexamples)
+						if(should_label)
 							complete = counterexample_label.implies(complete);
 						conjuncts.push_back(complete);
 					}
@@ -617,10 +619,11 @@ void practicality(const Options &options, const Input &input) {
 	std::cout << std::endl;
 	std::cout << std::endl;
 	std::cout << "PRACTICALITY" << std::endl;
+
+	// property is the same for all honest histories
 	Labels<Practicality> labels;
 	auto property = Practicality(options, labels, input.players.size()).compute(*input.root);
 
-	// property is the same for all honest histories
 	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << std::endl;
 		std::cout << "Is history " << input.readable_honest_histories[history] << " practical?" << std::endl;

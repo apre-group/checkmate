@@ -36,7 +36,9 @@ std::vector<int> Bool::ONES;
 Real Real::ZERO = Real::value(0);
 Real Real::ONE = Real::value(1);
 
-bool MinimalCores::more() {
+// MARCO algorithm for unsat cores
+// https://sun.iwu.edu/~mliffito/marco-viz/
+bool MinimalCores::next_core() {
 	while(map.solve() == Result::SAT) {
 		auto model = map.model();
 		std::vector<Bool> seed;
@@ -44,11 +46,13 @@ bool MinimalCores::more() {
 			if(!model.assigns<false>(label))
 				seed.push_back(label);
 
+		std::unordered_set<Bool> relevant(seed.begin(), seed.end());
+		// the seed doesn't say enough to cause unsat
 		if(solver.solve(seed) == Result::SAT) {
-			std::unordered_set<Bool> mss(seed.begin(), seed.end());
+			// grow it as much as possible...
 			std::vector<Bool> complement;
 			for(auto label: labels) {
-				if(mss.count(label))
+				if(relevant.count(label))
 					continue;
 				seed.push_back(label);
 				if(solver.solve(seed) == Result::UNSAT) {
@@ -56,92 +60,44 @@ bool MinimalCores::more() {
 					seed.pop_back();
 				}
 			}
-			std::cout << "mss: " << seed << std::endl;
+			// ...then assert that one of the other labels must be true
 			map.assert_(disjunction(complement));
+			std::cout << "\t(Found maximal satisfying subset, continuing...)" << std::endl;
 		}
+		// the seed contains an unsat core
 		else {
-			auto candidate = solver.unsat_core();
+			// get what Z3 thinks is an unsat core
 			core.clear();
-			for(unsigned i = 0; i < candidate.size(); i++) {
-				auto discard = candidate[i];
-				if(ignore.count(discard))
-					continue;
+			for(auto label : solver.unsat_core())
+				if(relevant.count(label))
+					core.push_back(label);
 
-				core.push_back(discard);
-				/*
-				candidate[i] = Bool::TRUE;
-				if(solver.solve(candidate) == Result::SAT) {
-					seed[i] = discard;
-					core.push_back(discard);
-				}
-				*/
+			std::cout << "core size: " << core.size() << std::endl;
+			// NB currently buggy, seems to sometimes return an insufficient unsat core
+			if(solver.solve(core) == Result::SAT) {
+				std::cout << "\t(Z3 bug, retrying...)" << std::endl;
+				// try again?
+				continue;
 			}
-			std::cout << "mus: " << core << std::endl;
+
+			// shrink it...
+			for(unsigned i = 0; i < core.size();) {
+				auto discard = core[i];
+				auto end = core[core.size() - 1];
+				core[i] = end;
+				core.pop_back();
+				if(solver.solve(core) == Result::SAT) {
+					core.push_back(end);
+					core[i++] = discard;
+				}
+			}
+			std::cout << "minimised to: " << core.size() << std::endl;
+			// ...then assert that we want a different core next time
 			map.assert_(!conjunction(core));
 			return true;
 		}
 	}
 	return false;
 }
-/*
-// MARCO algorithm for all unsat cores
-bool Cores::more() {
-	while(map.solve() == Result::SAT) {
-		auto model = map.model();
-		std::vector<Bool> seed;
-		for(auto label : labels)
-			if(!model.assigns<false>(label))
-				seed.push_back(label);
-
-		std::cout << "seed: " << seed << std::endl;
-		if(solver.solve(seed) == Result::SAT) {
-			std::unordered_set<Bool> mss(seed.begin(), seed.end());
-			std::unordered_set<Bool> ps, backbones;
-			for(auto label : labels)
-				if(!mss.count(label))
-					ps.insert(label);
-
-			while(!ps.empty()) {
-				std::cout << "ps: " << ps << std::endl;
-				std::cout << "mss: " << mss << std::endl;
-				std::cout << "backbones: " << backbones << std::endl;
-				auto p = *ps.begin();
-				std::cout << "p: " << p << std::endl;
-				ps.erase(ps.begin());
-				std::vector<Bool> combination(mss.begin(), mss.end());
-				for(auto backbone : backbones)
-					combination.push_back(backbone);
-				combination.push_back(p);
-				if(solver.solve(combination) == Result::SAT) {
-					mss.insert(p);
-					auto satisfying_model = solver.model();
-					for(auto q : ps)
-						if(satisfying_model.assigns<true>(q))
-							mss.insert(q);
-					for(auto it = ps.begin(); it != ps.end();)
-						if(mss.count(*it))
-							it = ps.erase(it);
-						else
-							++it;
-				}
-				else
-					backbones.insert(!p);
-			}
-			std::cout << "final mss: " << mss << std::endl;
-			std::vector<Bool> complement;
-			for(auto label: labels)
-				if(!mss.count(label))
-					complement.push_back(label);
-			std::cout << "complement: " << complement << std::endl;
-			map.assert_(disjunction(complement));
-		}
-		else {
-			std::cout << "unsat" << std::endl;
-			__builtin_trap();
-		}
-	}
-	return false;
-}
-*/
 
 }
