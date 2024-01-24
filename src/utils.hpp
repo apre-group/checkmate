@@ -39,6 +39,12 @@ ostream &operator<<(ostream &out, const unordered_set<T> &vector) {
 	out << '}';
 	return out;
 }
+
+template<typename T>
+ostream &operator<<(ostream &out, const std::reference_wrapper<T> &wrapper) {
+	return out << wrapper.get();
+}
+
 }
 
 #endif

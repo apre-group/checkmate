@@ -72,7 +72,6 @@ bool MinimalCores::next_core() {
 				if(relevant.count(label))
 					core.push_back(label);
 
-			std::cout << "core size: " << core.size() << std::endl;
 			// NB currently buggy, seems to sometimes return an insufficient unsat core
 			if(solver.solve(core) == Result::SAT) {
 				std::cout << "\t(Z3 bug, retrying...)" << std::endl;
@@ -80,6 +79,9 @@ bool MinimalCores::next_core() {
 				continue;
 			}
 
+			// minimising the unsat core does not seem to pay off, most of the time
+			// put behind a command-line option?
+			/*
 			// shrink it...
 			for(unsigned i = 0; i < core.size();) {
 				auto discard = core[i];
@@ -92,6 +94,7 @@ bool MinimalCores::next_core() {
 				}
 			}
 			std::cout << "minimised to: " << core.size() << std::endl;
+			*/
 			// ...then assert that we want a different core next time
 			map.assert_(!conjunction(core));
 			return true;

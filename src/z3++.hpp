@@ -387,7 +387,7 @@ namespace z3 {
 	// wrapper around a Z3 model
 	class Model {
 	public:
-		Model() = delete;
+		Model() = default;
 		Model(Z3_model model) : model(model) {
 			Z3_model_inc_ref(CONTEXT, model);
 			check_error();
@@ -398,12 +398,22 @@ namespace z3 {
 			other.model = nullptr;
 		}
 
+		Model &operator=(Model &&other) {
+			if(model)
+				Z3_model_dec_ref(CONTEXT, model);
+			model = other.model;
+			other.model = nullptr;
+			return *this;
+		}
+
 		~Model() {
 			if(!model)
 				return;
 			Z3_model_dec_ref(CONTEXT, model);
 			check_error();
 		}
+
+		operator bool() const { return model != nullptr; }
 
 		template<bool polarity>
 		bool assigns(Bool domain) const {
@@ -420,7 +430,7 @@ namespace z3 {
 		}
 
 	private:
-		Z3_model model;
+		Z3_model model = nullptr;
 	};
 
 	// wrapper around a Z3 solver object

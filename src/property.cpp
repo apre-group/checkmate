@@ -175,18 +175,26 @@ struct SolvingHelper {
 			failed = true;
 
 			if(options.counterexamples) {
-				z3::MinimalCores cores(solver, labels.counterexample_labels);
-				while(cores.next_core()) {
-					std::vector<typename Property::CounterExamplePart> counterexample;
-					for(auto label : cores.core)
-						counterexample.push_back(labels.label2part.at(label));
+				std::vector<typename Property::CounterExamplePart> counterexample;
+				if(Property::EXTERNAL_COUNTEREXAMPLES)
 					counterexamples.push_back({
 						case_,
 						std::move(counterexample)
 					});
-					std::cout << "\tFound counterexample." << std::endl;
-					if(!options.all_counterexamples)
-						break;
+				else {
+					z3::MinimalCores cores(solver, labels.counterexample_labels);
+					while(cores.next_core()) {
+						std::vector<typename Property::CounterExamplePart> counterexample;
+						for(auto label : cores.core)
+							counterexample.push_back(labels.label2part.at(label));
+						counterexamples.push_back({
+							case_,
+							std::move(counterexample)
+						});
+						std::cout << "\tFound counterexample." << std::endl;
+						if(!options.all_counterexamples)
+							break;
+					}
 				}
 			}
 			// remove the case triggers
@@ -222,6 +230,18 @@ struct SolvingHelper {
 		return true;
 	}
 
+	z3::Model solve_for_counterexample() {
+		// assert all the case's triggers
+		// NB must include also those that are *not* active
+		for(size_t i = 0; i < active_splits.size(); i++) {
+			solver.assert_(!labels.triggers[i].first);
+			solver.assert_(!labels.triggers[i].second);
+		}
+
+		// actually do the work
+		return solver.solve() == z3::Result::SAT ? solver.model() : z3::Model();
+	}
+
 	const Options &options;
 	const Input &input;
 	// labels we need
@@ -252,6 +272,7 @@ struct SolvingHelper {
 // helper struct for computing the weak immunity property
 template<bool weaker>
 struct WeakImmunity {
+	static const bool EXTERNAL_COUNTEREXAMPLES = false;
 	struct CounterExamplePart {
 		const Leaf &leaf;
 		size_t player;
@@ -371,6 +392,7 @@ template void weak_immunity<true>(const Options &, const Input &);
 struct CollusionResilience {
 	using ColludingGroup = std::bitset<Input::MAX_PLAYERS>;
 
+	static const bool EXTERNAL_COUNTEREXAMPLES = false;
 	struct CounterExamplePart {
 		const Leaf &leaf;
 		ColludingGroup group;
@@ -507,10 +529,8 @@ void collusion_resilience(const Options &options, const Input &input) {
 
 // helper struct for computing the practicality property
 struct Practicality {
-	struct CounterExamplePart {
-		const Branch &branch;
-		size_t choice;
-	};
+	static const bool EXTERNAL_COUNTEREXAMPLES = true;
+	struct CounterExamplePart {};
 
 	// routes that yield a certain utility
 	using UtilityMap = std::unordered_map<Utility, Bool>;
@@ -543,15 +563,8 @@ struct Practicality {
 
 		// loops exchanged below in order to reduce number of counterexample labels
 		// for other possible actions a' in a branch...
-		bool should_label = options.counterexamples && branch.choices.size() > 1;
 		for(size_t other = 0; other < branch.choices.size(); other++) {
 			Bool counterexample_label;
-			if(should_label)
-				counterexample_label = labels.label_counterexample({
-					branch,
-					other
-				});
-
 			const auto &utilities_other = player_utilities_by_choice[other][branch.player];
 
 			// for each possible action a in a branch...
@@ -575,8 +588,6 @@ struct Practicality {
 						// ...then u is at least as good as u', otherwise we'd switch
 						auto comparison = labels.label_geq(action_utility, other_utility);
 						auto complete = conjunction.implies(comparison);
-						if(should_label)
-							complete = counterexample_label.implies(complete);
 						conjuncts.push_back(complete);
 					}
 				}
@@ -640,38 +651,36 @@ void practicality(const Options &options, const Input &input) {
 			std::cout << "YES, it is practical." << std::endl;
 
 		for(const auto &counterexample : helper.counterexamples) {
-			std::cout << counterexample.parts.size() << std::endl;
 			std::cout << "Counterexample for " << counterexample.case_ << std::endl;
+			SolvingHelper<Practicality> helper(
+				options,
+				input,
+				labels,
+				property,
+				input.practicality_constraint && conjunction(counterexample.case_),
+				z3::Bool::TRUE
+			);
 
-			for(const auto &part : counterexample.parts) {
-				std::cout
-					<< "\tPlayer "
-					<< input.players[part.branch.player]
-					<< " obtains maximal utility at "
-					<< part.branch.compute_history()
-					<< " by taking action "
-					<< part.branch.choices[part.choice].action.name
-					<< std::endl;
-			}
-
-			size_t root_index;
-			auto root_length = std::numeric_limits<size_t>::max();
-			for(size_t i = 0; i < counterexample.parts.size(); i++) {
-				auto length = counterexample.parts[i].branch.history_length();
-				if(length < root_length) {
-					root_index = i;
-					root_length = length;
+			z3::Model model;
+			while((model = helper.solve_for_counterexample())) {
+				Node *next = input.root.get();
+				std::vector<std::reference_wrapper<const std::string>> history;
+				std::vector<Bool> conflict;
+				while(!next->is_leaf()) {
+					const Branch &current = next->branch();
+					for(const auto &choice : current.choices) {
+						if(model.assigns<true>(choice.action.variable)) {
+							history.push_back(choice.action.name);
+							conflict.push_back(choice.action.variable);
+							next = choice.node.get();
+						}
+					}
 				}
+				std::cout << "\tPractical history: " << history << std::endl;
+				helper.solver.assert_(!conjunction(conflict));
+				if(!options.all_counterexamples)
+					break;
 			}
-			const auto &root_part = counterexample.parts[root_index];
-			std::cout
-				<< "\tPlayer "
-				<< input.players[root_part.branch.player]
-				<< " obtains maximal utility at "
-				<< root_part.branch.compute_history()
-				<< " by taking action "
-				<< root_part.branch.choices[root_part.choice].action.name
-				<< std::endl;
 		}
 	}
 }
