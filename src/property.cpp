@@ -197,7 +197,7 @@ struct SolvingHelper {
 			return false;
 
 		// negative split
-		case_.push_back(!split);
+		case_.push_back(split.invert());
 		active_splits[trigger].second = true;
 		bool negative = solve();
 		active_splits[trigger].second = false;

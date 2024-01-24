@@ -59,6 +59,13 @@ namespace z3 {
 			return result;
 		}
 
+		// bool is_app() {
+		// 	bool app = Z3_is_app(CONTEXT, ast);
+		// 	check_error();
+		// 	return app;
+		// }
+
+
 	protected:
 		// wrap `ast`
 		Expression(Z3_ast ast) : ast(ast) {}
@@ -76,6 +83,7 @@ namespace z3 {
 			check_error();
 			return sort == REAL_SORT;
 		}
+
 
 		// pointer to Z3 AST, possibly null if default-constructed
 		Z3_ast ast;
@@ -208,6 +216,35 @@ namespace z3 {
 
 		// Boolean constants
 		static Bool FALSE, TRUE;
+
+		Bool invert() {
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			Z3_ast ast_left = Z3_get_app_arg(CONTEXT, app, 0);
+			Z3_ast ast_right = Z3_get_app_arg(CONTEXT, app, 1);
+
+			Z3_func_decl func_decl = Z3_get_app_decl(CONTEXT, app);
+			Z3_decl_kind decl_kind = Z3_get_decl_kind(CONTEXT, func_decl);
+
+			Bool new_expr;
+			if(decl_kind == Z3_OP_LT){
+				new_expr = Z3_mk_ge(CONTEXT, ast_left, ast_right);
+			}
+			else if (decl_kind == Z3_OP_LE)
+			{
+				new_expr = Z3_mk_gt(CONTEXT, ast_left, ast_right);
+			}
+			else if (decl_kind == Z3_OP_GT){
+				new_expr = Z3_mk_le(CONTEXT, ast_left, ast_right);
+			}
+			else if (decl_kind == Z3_OP_GE){
+				new_expr = Z3_mk_lt(CONTEXT, ast_left, ast_right);
+			}
+			else{
+				assert(false);
+			}
+			check_error();
+			return new_expr;
+		}
 
 	private:
 		Bool(Z3_ast ast) : Expression(ast) { assert(is_bool()); }
