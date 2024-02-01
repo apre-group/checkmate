@@ -171,16 +171,20 @@ struct SolvingHelper {
 		auto split = find_split();
 		// didn't find anything worth splitting on
 		if(split.null()) {
-			std::cout << "\tNO, case " << case_ << " violates property." << std::endl;
+			std::cout << "\tCase " << case_ << " violates property." << std::endl;
 			failed = true;
 
+			if(options.preconditions){
+				unsat_cases.push_back(case_);
+			}
 			if(options.counterexamples) {
 				std::vector<typename Property::CounterExamplePart> counterexample;
-				if(Property::EXTERNAL_COUNTEREXAMPLES)
+				if(Property::EXTERNAL_COUNTEREXAMPLES){
 					counterexamples.push_back({
 						case_,
 						std::move(counterexample)
 					});
+				}
 				else {
 					z3::MinimalCores cores(solver, labels.counterexample_labels);
 					while(cores.next_core()) {
@@ -191,7 +195,7 @@ struct SolvingHelper {
 							case_,
 							std::move(counterexample)
 						});
-						std::cout << "\tFound counterexample." << std::endl;
+						// std::cout << "\tFound counterexample." << std::endl;
 						if(!options.all_counterexamples)
 							break;
 					}
@@ -199,14 +203,13 @@ struct SolvingHelper {
 			}
 			// remove the case triggers
 			solver.pop();
-			return options.all_cases;
+			return options.all_cases || options.preconditions;
 		}
 
 		// remove the case triggers
 		solver.pop();
 
-		std::cout << "\tFurther case split required." << std::endl;
-		std::cout << "\tSplit on: " << split << std::endl;
+		std::cout << "\tRequire case split on: " << split << std::endl;
 		size_t trigger = labels.expr2trigger.at(split);
 
 		// positive split
@@ -267,6 +270,7 @@ struct SolvingHelper {
 	};
 
 	std::vector<CounterExample> counterexamples;
+	std::vector<std::vector<z3::Bool>> unsat_cases;
 };
 
 // helper struct for computing the weak immunity property
@@ -353,6 +357,25 @@ void weak_immunity(const Options &options, const Input &input) {
 		helper.solve();
 		if(!helper.failed)
 			std::cout << "YES, it is" << (weaker ? " weaker immune." : " weak immune.") << std::endl;
+		else {
+			std::cout << "NO, it is not" << (weaker ? " weaker immune." : " weak immune.") << std::endl;
+
+			if (options.preconditions){
+				std::vector<z3::Bool> conjuncts;
+				for(const auto &unsat_case : helper.unsat_cases) {
+					// negate each case, add init constr + prop cond, then conjunct all - voila weakest prec implying the init constr
+					z3::Bool smt_case = conjunction(unsat_case);
+					z3::Bool neg_case = not smt_case;
+					conjuncts.push_back(neg_case);
+				}
+				conjuncts.push_back(input.initial_constraint);
+				conjuncts.push_back(property_constraint);
+				z3::Bool raw_prec = conjunction(conjuncts);
+				z3::Bool simpl_prec = raw_prec.simplify();
+				std::cout << "Weakest Precondition: " << std::endl << simpl_prec << std::endl;
+			}
+		}
+
 
 		for(const auto &counterexample : helper.counterexamples) {
 			std::cout << "Counterexample for " << counterexample.case_ << std::endl;
@@ -496,6 +519,25 @@ void collusion_resilience(const Options &options, const Input &input) {
 		helper.solve();
 		if(!helper.failed)
 			std::cout << "YES, it is collusion resilient." << std::endl;
+		else{
+
+			std::cout << "NO, it is not collusion resilient." << std::endl;
+			if (options.preconditions){
+				std::vector<z3::Bool> conjuncts;
+				for(const auto &unsat_case : helper.unsat_cases) {
+					// negate each case, add init constr + prop cond, then conjunct all - voila weakest prec implying the init constr
+					z3::Bool smt_case = conjunction(unsat_case);
+					z3::Bool neg_case = not smt_case;
+					conjuncts.push_back(neg_case);
+				}
+				conjuncts.push_back(input.initial_constraint);
+				conjuncts.push_back(input.collusion_resilience_constraint);
+				z3::Bool raw_prec = conjunction(conjuncts);
+				z3::Bool simpl_prec = raw_prec.simplify();
+				std::cout << "Weakest Precondition: " << std::endl << simpl_prec << std::endl;
+			}
+
+		}
 
 		for(const auto &counterexample : helper.counterexamples) {
 			std::cout << "Counterexample for " << counterexample.case_ << std::endl;
@@ -649,6 +691,25 @@ void practicality(const Options &options, const Input &input) {
 		helper.solve();
 		if(!helper.failed)
 			std::cout << "YES, it is practical." << std::endl;
+		else{
+			std::cout << "NO, it is not practical." << std::endl;
+
+			if (options.preconditions){
+				std::vector<z3::Bool> conjuncts;
+				for(const auto &unsat_case : helper.unsat_cases) {
+					// negate each case, add init constr + prop cond, then conjunct all - voila weakest prec implying the init constr
+					z3::Bool smt_case = conjunction(unsat_case);
+					z3::Bool neg_case = not smt_case;
+					conjuncts.push_back(neg_case);
+				}
+				conjuncts.push_back(input.initial_constraint);
+				conjuncts.push_back(input.practicality_constraint);
+				z3::Bool raw_prec = conjunction(conjuncts);
+				z3::Bool simpl_prec = raw_prec.simplify();
+				std::cout << "Weakest Precondition: " << std::endl << simpl_prec << std::endl;
+			}
+
+		}
 
 		for(const auto &counterexample : helper.counterexamples) {
 			std::cout << "Counterexample for " << counterexample.case_ << std::endl;
@@ -676,6 +737,14 @@ void practicality(const Options &options, const Input &input) {
 						}
 					}
 				}
+				// compute deviating player from comparing honest history to history
+				// int dev_player = <index in utility vector?> 
+				// hon_utility = leaf.utility[dev_player]
+				// dev_utility = honest_leaf.utility[dev_player]
+				//if(hon_utility < dev_utility) {print as counterexample}
+				// otherwise dont;
+
+
 				std::cout << "\tPractical history: " << history << std::endl;
 				helper.solver.assert_(!conjunction(conflict));
 				if(!options.all_counterexamples)

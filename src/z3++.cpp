@@ -62,6 +62,7 @@ bool MinimalCores::next_core() {
 			}
 			// ...then assert that one of the other labels must be true
 			map.assert_(disjunction(complement));
+			// to be removed
 			std::cout << "\t(Found maximal satisfying subset, continuing...)" << std::endl;
 		}
 		// the seed contains an unsat core

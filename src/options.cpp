@@ -12,6 +12,8 @@ const char *USAGE = R"(usage: checkmate PATH
 	--counterexamples
 	--all_counterexamples
 	--all_cases
+	--preconditions
+	--strategies
 )";
 
 // print a message, the usage information and exit with failure code
@@ -53,6 +55,10 @@ Options::Options(char **argv) {
 			counterexamples = all_counterexamples = true;
 		else if(!strcmp(*argv, "--all_cases"))
 			all_cases = true;
+		else if(!strcmp(*argv, "--preconditions"))
+			preconditions = true;
+		else if(!strcmp(*argv, "--strategies"))
+			strategies = true;
 		else
 			bail("unknown option");
 		argv++;

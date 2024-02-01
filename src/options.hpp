@@ -24,6 +24,10 @@ struct Options {
 	bool all_counterexamples = false;
 	// continue to more cases even when one failed
 	bool all_cases = false;
+	// procude weakest precondition (implying the initial constraints) to make property satisfied
+	bool preconditions = false;
+	// provide witness strategy in case property satisfied
+	bool strategies = false;
 };
 
 #endif

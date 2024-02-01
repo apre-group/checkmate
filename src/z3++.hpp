@@ -217,10 +217,19 @@ namespace z3 {
 		// Boolean constants
 		static Bool FALSE, TRUE;
 
+		Bool simplify() {
+			Bool simp_exp = Z3_simplify(CONTEXT, ast);
+			return simp_exp;
+		}
+
+
 		Bool invert() {
 			Z3_app app = Z3_to_app(CONTEXT, ast);
 			Z3_ast ast_left = Z3_get_app_arg(CONTEXT, app, 0);
 			Z3_ast ast_right = Z3_get_app_arg(CONTEXT, app, 1);
+			Z3_ast args[2];
+			args[0] = ast_left;
+			args[1] = ast_right;
 
 			Z3_func_decl func_decl = Z3_get_app_decl(CONTEXT, app);
 			Z3_decl_kind decl_kind = Z3_get_decl_kind(CONTEXT, func_decl);
@@ -240,7 +249,10 @@ namespace z3 {
 				new_expr = Z3_mk_lt(CONTEXT, ast_left, ast_right);
 			}
 			else if (decl_kind == Z3_OP_EQ) {
-				return *this;
+				new_expr = Z3_mk_distinct(CONTEXT, 2, args);
+			}
+			else if (decl_kind == Z3_OP_DISTINCT) {
+				new_expr = Z3_mk_eq(CONTEXT, ast_left, ast_right);
 			}
 			else{
 				assert(false);
