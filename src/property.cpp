@@ -162,6 +162,14 @@ struct SolvingHelper {
 		// solved the case immediately
 		if(result == z3::Result::SAT) {
 			std::cout << "\tCase " << case_ << " satisfies property." << std::endl;
+			if(options.strategies) {
+				z3::Model model = solver.model();
+
+				case_models.push_back({
+							case_,
+							std::move(model)
+						});
+ 			}
 			// remove the case triggers
 			solver.pop();
 			return true;
@@ -274,8 +282,14 @@ struct SolvingHelper {
 		std::vector<typename Property::CounterExamplePart> parts;
 	};
 
+	struct CaseModel {
+		std::vector<z3::Bool> case_;
+		z3::Model model; 
+	};
+
 	std::vector<CounterExample> counterexamples;
 	std::vector<std::vector<z3::Bool>> unsat_cases;
+	std::vector<CaseModel> case_models;
 };
 
 // helper struct for computing the weak immunity property
@@ -328,6 +342,31 @@ struct WeakImmunity {
 	size_t player;
 };
 
+
+void print_strategy(Node *next, std::vector<std::reference_wrapper<const std::string>> history, const z3::Model &model) {
+
+	if (next->is_leaf()){
+		return;
+	}
+
+	const Branch &current = next->branch();
+	for(const auto &choice : current.choices) {
+		// TBC
+		std::vector<std::reference_wrapper<const std::string>> new_history = {choice.action.name};
+		for (const auto elem : history){
+			new_history.push_back(elem);
+		}
+
+		print_strategy(choice.node.get(), new_history, model);
+
+		if(model.assigns<true>(choice.action.variable)) {
+			std::cout << "\t Choose " << choice.action.name << " after history " << history << std::endl;
+		}
+	}
+	return;			
+}
+
+
 // logic is very similar for weak/weaker immunity, so we template it
 template<bool weaker>
 void weak_immunity(const Options &options, const Input &input) {
@@ -360,8 +399,21 @@ void weak_immunity(const Options &options, const Input &input) {
 			input.honest_histories[history]
 		);
 		helper.solve();
-		if(!helper.failed)
+		if(!helper.failed) {
 			std::cout << "YES, it is" << (weaker ? " weaker immune." : " weak immune.") << std::endl;
+			if(options.strategies){
+
+				for (const auto &casemodel : helper.case_models){
+					std::cout << "Strategy for case: " << casemodel.case_ << std::endl;
+					const z3::Model &model = casemodel.model;
+
+					// do model-to-strategy stuff
+					Node *next = input.root.get();
+					std::vector<std::reference_wrapper<const std::string>> history;
+					print_strategy(next, history, model);
+				}
+			}
+		}
 		else {
 			std::cout << "NO, it is not" << (weaker ? " weaker immune." : " weak immune.") << std::endl;
 
@@ -521,8 +573,21 @@ void collusion_resilience(const Options &options, const Input &input) {
 			input.honest_histories[history]
 		);
 		helper.solve();
-		if(!helper.failed)
+		if(!helper.failed){
 			std::cout << "YES, it is collusion resilient." << std::endl;
+			if(options.strategies){
+
+				for (const auto &casemodel : helper.case_models){
+					std::cout << "Strategy for case: " << casemodel.case_ << std::endl;
+					const z3::Model &model = casemodel.model;
+
+					// do model-to-strategy stuff
+					Node *next = input.root.get();
+					std::vector<std::reference_wrapper<const std::string>> history;
+					print_strategy(next, history, model);
+				}
+			}
+		}
 		else{
 
 			std::cout << "NO, it is not collusion resilient." << std::endl;
@@ -696,8 +761,21 @@ void practicality(const Options &options, const Input &input) {
 			input.honest_histories[history]
 		);
 		helper.solve();
-		if(!helper.failed)
+		if(!helper.failed) {
 			std::cout << "YES, it is practical." << std::endl;
+			if(options.strategies){
+
+				for (const auto &casemodel : helper.case_models){
+					std::cout << "Strategy for case: " << casemodel.case_ << std::endl;
+					const z3::Model &model = casemodel.model;
+
+					// do model-to-strategy stuff
+					Node *next = input.root.get();
+					std::vector<std::reference_wrapper<const std::string>> history;
+					print_strategy(next, history, model);
+				}
+			}
+			}
 		else{
 			std::cout << "NO, it is not practical." << std::endl;
 
