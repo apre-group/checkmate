@@ -194,8 +194,9 @@ struct SolvingHelper {
 						z3::MinimalCores cores(solver, labels.counterexample_labels);
 						while(cores.next_core()) {
 							std::vector<typename Property::CounterExamplePart> counterexample;
-							for(auto label : cores.core)
+							for(auto label : cores.core){
 								counterexample.push_back(labels.label2part.at(label));
+								}
 							counterexamples.push_back({
 								case_,
 								std::move(counterexample)
@@ -420,24 +421,40 @@ void weak_immunity(const Options &options, const Input &input) {
 			for(const auto &counterexample : helper.counterexamples) {
 				std::cout << "Counterexample for " << counterexample.case_ << std::endl;
 				// the following is just 1 counterexample
-				for(const auto &part : counterexample.parts) {
-					std::cout
-						<< "\tPlayer "
-						<< input.players[part.player]
-						<< " can be harmed if:"
-						<< std::endl;
+				const auto &part = counterexample.parts[0];
+				std::cout
+					<< "\tPlayer "
+					<< input.players[part.player]
+					<< " can be harmed if:"
+					<< std::endl;
 
+				std::vector<std::vector<std::string>> histories_of_counterexample;
+				for(const auto &part : counterexample.parts) {
+					
 					auto history = part.leaf.compute_history();
 					auto branch = input.root.get();
+					std::vector<std::string> actions_so_far;
+					
 					for(auto choice : part.leaf.compute_history()) {
-						if(branch->player != part.player)
+						std::string action = choice.get().action.name;
+						bool already_printed = false;
+						for (auto const &printed_history : histories_of_counterexample){
+							if (printed_history == actions_so_far){
+								already_printed = true;
+							}
+						}
+						if((branch->player != part.player) and !already_printed){
 							std::cout
 								<< "\tPlayer "
 								<< input.players[branch->player]
 								<< " takes action "
-								<< choice.get().action.name
+								<< action
+								<< " after history "
+								<< actions_so_far
 								<< std::endl;
-
+							histories_of_counterexample.push_back(actions_so_far);
+						}
+						actions_so_far.push_back(action);
 						auto next = choice.get().node.get();
 						if(!next->is_leaf())
 							branch = static_cast<Branch *>(next);
@@ -595,24 +612,40 @@ void collusion_resilience(const Options &options, const Input &input) {
 			for(const auto &counterexample : helper.counterexamples) {
 				std::cout << "Counterexample for " << counterexample.case_ << std::endl;
 
+				const auto &part = counterexample.parts[0];
+				std::cout << "\tGroup";
+				for(size_t player = 0; player < input.players.size(); player++)
+					if(part.group[player])
+						std::cout << " " << input.players[player];
+				std::cout << " profits from deviation if:" << std::endl;
+
+
+				std::vector<std::vector<std::string>> histories_of_counterexample;
 				for(const auto &part : counterexample.parts) {
-					std::cout << "\tGroup";
-					for(size_t player = 0; player < input.players.size(); player++)
-						if(part.group[player])
-							std::cout << " " << input.players[player];
-					std::cout << " profits from deviation if:" << std::endl;
 
 					auto history = part.leaf.compute_history();
 					auto branch = input.root.get();
+					std::vector<std::string> actions_so_far;
 					for(auto choice : part.leaf.compute_history()) {
-						if(part.group[branch->player])
+						std::string action = choice.get().action.name;
+						bool already_printed = false;
+						for (auto const &printed_history : histories_of_counterexample){
+							if (printed_history == actions_so_far){
+								already_printed = true;
+							}
+						}
+						if(part.group[branch->player] and !already_printed){
 							std::cout
 								<< "\tPlayer "
 								<< input.players[branch->player]
 								<< " takes action "
-								<< choice.get().action.name
+								<< action
+								<< " after history "
+								<< actions_so_far
 								<< std::endl;
-
+							histories_of_counterexample.push_back(actions_so_far);
+						}
+						actions_so_far.push_back(action);
 						auto next = choice.get().node.get();
 						if(!next->is_leaf())
 							branch = static_cast<Branch *>(next);
