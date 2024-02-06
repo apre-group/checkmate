@@ -814,9 +814,9 @@ void practicality(const Options &options, const Input &input) {
 		else{
 			std::cout << "NO, it is not practical." << std::endl;
 
-			for(const auto &counterexample : helper.counterexamples) {
-				std::cout << "Counterexample for " << counterexample.case_ << std::endl;
-				SolvingHelper<Practicality> helper(
+			for(size_t i = 0; i < helper.counterexamples.size(); i++) {
+				const auto &counterexample = helper.counterexamples[i];
+				SolvingHelper<Practicality> ce_helper(
 					options,
 					input,
 					labels,
@@ -824,12 +824,36 @@ void practicality(const Options &options, const Input &input) {
 					input.practicality_constraint && conjunction(counterexample.case_),
 					z3::Bool::TRUE
 				);
-
 				z3::Model model;
 				Node *next; 
-				while((model = helper.solve_for_counterexample())) {
+				// if there is no counterexample in the current case, we have to split further
+				if (!(model = ce_helper.solve_for_counterexample())){
+					// case split necessary to get a counterexample
+					auto split = ce_helper.find_split();
+					assert(!split.null());
+					// append positive and negative case splits
+					std::vector<z3::Bool> pos_case;
+					std::vector<z3::Bool> neg_case;
+					for(const z3::Bool exp: counterexample.case_){
+						pos_case.push_back(exp);
+						neg_case.push_back(exp);
+					}
+					pos_case.push_back(split);
+					neg_case.push_back(split.invert());
+					// positive case
+					helper.counterexamples.push_back({
+							pos_case,
+							std::move(counterexample.parts)
+						});
+					// negative case
+					helper.counterexamples.push_back({
+							neg_case,
+							std::move(counterexample.parts)
+						});
+				}
+				while((model = ce_helper.solve_for_counterexample())) {
+					std::cout << "Counterexample for " << counterexample.case_ << std::endl;
 					next = input.root.get();
-					// std::vector<std::reference_wrapper<const std::string>> dev_history;
 					std::vector<std::string> dev_history;
 					std::vector<Bool> conflict;
 					const auto hon_history = input.readable_honest_histories[history];
@@ -859,9 +883,8 @@ void practicality(const Options &options, const Input &input) {
 					Utility dev_utility = static_cast<Leaf*>(next)->utilities[dev_player];
 					const Leaf &honest_leaf = input.honest_history_leaves[history];
 					Utility hon_utility = honest_leaf.utilities[dev_player];
-					
-					// CONTINUE HERE
 
+					// check if deviation actually better
 					Solver actual_ce_solver;
 					z3::Bool conj_case = z3::conjunction(counterexample.case_);
 					z3::Bool conj_pr = input.practicality_constraint;
@@ -869,13 +892,12 @@ void practicality(const Options &options, const Input &input) {
 					z3::Bool conj = z3::conjunction({conj_case, conj_pr, conj_prec});
 					z3::Bool ineq = dev_utility > hon_utility;
 					z3::Bool impl = z3::conjunction({conj, !ineq});
-
 					actual_ce_solver.assert_(impl);
 					auto result = actual_ce_solver.solve();
-
+					// only a deviation with better utility is an actual counterexample
 					if(result == z3::Result::UNSAT) {
 						std::cout << "\tPlayer " << input.players[dev_player] << " profits from deviating to " << dev_history << std::endl;
-						helper.solver.assert_(!conjunction(conflict));
+						ce_helper.solver.assert_(!conjunction(conflict));
 						if(!options.all_counterexamples)
 							break;
 					}
