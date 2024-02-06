@@ -830,7 +830,7 @@ void practicality(const Options &options, const Input &input) {
 				while((model = helper.solve_for_counterexample())) {
 					next = input.root.get();
 					// std::vector<std::reference_wrapper<const std::string>> dev_history;
-					std::vector<const std::string> dev_history;
+					std::vector<std::string> dev_history;
 					std::vector<Bool> conflict;
 					const auto hon_history = input.readable_honest_histories[history];
 					int i = 0;
@@ -856,24 +856,29 @@ void practicality(const Options &options, const Input &input) {
 						}
 					}
 
-					std::vector<Utility> dev_utilities = static_cast<Leaf*>(next)->utilities;
+					Utility dev_utility = static_cast<Leaf*>(next)->utilities[dev_player];
 					const Leaf &honest_leaf = input.honest_history_leaves[history];
-					std::vector<Utility> hon_utilities = honest_leaf.utilities;
+					Utility hon_utility = honest_leaf.utilities[dev_player];
 					
 					// CONTINUE HERE
-					// dev_utility = leaf.utility[dev_player]
-					// hon_utility = honest_leaf.utility[dev_player]
 
-						
+					Solver actual_ce_solver;
+					z3::Bool conj_case = z3::conjunction(counterexample.case_);
+					z3::Bool conj_pr = input.practicality_constraint;
+					z3::Bool conj_prec = input.initial_constraint;
+					z3::Bool conj = z3::conjunction({conj_case, conj_pr, conj_prec});
+					z3::Bool ineq = dev_utility > hon_utility;
+					z3::Bool impl = z3::conjunction({conj, !ineq});
 
-					// if(hon_utilities[dev_player] < dev_utilities[dev_player]) {print as counterexample}
+					actual_ce_solver.assert_(impl);
+					auto result = actual_ce_solver.solve();
 
-
-
-					std::cout << "\tPractical history: " << dev_history << std::endl;
-					helper.solver.assert_(!conjunction(conflict));
-					if(!options.all_counterexamples)
-						break;
+					if(result == z3::Result::UNSAT) {
+						std::cout << "\tPlayer " << input.players[dev_player] << " profits from deviating to " << dev_history << std::endl;
+						helper.solver.assert_(!conjunction(conflict));
+						if(!options.all_counterexamples)
+							break;
+					}
 				}
 			}
 
