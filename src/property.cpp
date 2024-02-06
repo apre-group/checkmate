@@ -105,7 +105,8 @@ struct SolvingHelper {
 			property_constraint
 		).implies(raw_property));
 
-		// should know about action constraints, the wrapped property, the honest history, and labels
+		// should know about action constraints, the wrapped property, 
+		// the honest history, and labels
 		solver.assert_(input.action_constraint);
 		solver.assert_(property);
 		solver.assert_(honest_history);
@@ -131,7 +132,8 @@ struct SolvingHelper {
 				continue;
 
 			auto expr = location->second;
-			// if either the split or its negation tells us nothing new, it's pointless to split on it
+			// if either the split or its negation tells us nothing new, it's 
+			// pointless to split on it
 			if(
 				minimize_solver.solve(case_, expr) == z3::Result::UNSAT ||
 				minimize_solver.solve(case_, !expr) == z3::Result::UNSAT
@@ -824,29 +826,51 @@ void practicality(const Options &options, const Input &input) {
 				);
 
 				z3::Model model;
+				Node *next; 
 				while((model = helper.solve_for_counterexample())) {
-					Node *next = input.root.get();
-					std::vector<std::reference_wrapper<const std::string>> history;
+					next = input.root.get();
+					// std::vector<std::reference_wrapper<const std::string>> dev_history;
+					std::vector<const std::string> dev_history;
 					std::vector<Bool> conflict;
+					const auto hon_history = input.readable_honest_histories[history];
+					int i = 0;
+					bool already_deviated = false;
+					unsigned int dev_player;
 					while(!next->is_leaf()) {
 						const Branch &current = next->branch();
 						for(const auto &choice : current.choices) {
 							if(model.assigns<true>(choice.action.variable)) {
-								history.push_back(choice.action.name);
+								dev_history.push_back(choice.action.name);
 								conflict.push_back(choice.action.variable);
 								next = choice.node.get();
+								if (hon_history[i] == choice.action.name and !already_deviated){
+									i++;
+								}
+								else if (hon_history[i] != choice.action.name and !already_deviated)
+								{
+									already_deviated = true;
+									dev_player = current.player;
+								}
+								
 							}
 						}
 					}
-					// compute deviating player from comparing honest history to history
-					// int dev_player = <index in utility vector?> 
-					// hon_utility = leaf.utility[dev_player]
-					// dev_utility = honest_leaf.utility[dev_player]
-					//if(hon_utility < dev_utility) {print as counterexample}
-					// otherwise dont;
+
+					std::vector<Utility> dev_utilities = static_cast<Leaf*>(next)->utilities;
+					const Leaf &honest_leaf = input.honest_history_leaves[history];
+					std::vector<Utility> hon_utilities = honest_leaf.utilities;
+					
+					// CONTINUE HERE
+					// dev_utility = leaf.utility[dev_player]
+					// hon_utility = honest_leaf.utility[dev_player]
+
+						
+
+					// if(hon_utilities[dev_player] < dev_utilities[dev_player]) {print as counterexample}
 
 
-					std::cout << "\tPractical history: " << history << std::endl;
+
+					std::cout << "\tPractical history: " << dev_history << std::endl;
 					helper.solver.assert_(!conjunction(conflict));
 					if(!options.all_counterexamples)
 						break;
