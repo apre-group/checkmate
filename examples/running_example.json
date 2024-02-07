@@ -1,0 +1,28 @@
+{
+    "players":              ["A","B"],
+    "actions":              ["l_A","r_A","l_B","r_B"],
+    "infinitesimals":       [],
+    "constants":            ["a","b"],
+    "initial_constraints":  ["a > 0"],
+    "property_constraints": {"weak_immunity": [],
+                             "weaker_immunity": [],
+                             "collusion_resilience": [],
+                             "practicality": []},
+    "honest_histories":     [["r_A","l_B"]],
+    "tree":                 {
+      "player": "A",
+      "children": [
+        {"action": "l_A",
+         "child": {"utility": [{"player": "A","value": "a-1"},
+                                {"player": "B","value": "a"}]} },
+        {"action": "r_A",
+         "child": {"player": "B",
+                   "children": [
+                     {"action": "l_B",
+                      "child": {"utility": [{"player": "A","value": "a-2"},
+                                            {"player": "B","value": "b"}]}},
+                     {"action": "r_B",
+                      "child": {"utility": [{"player": "A","value": "b"},
+                                            {"player": "B","value": "a"}]}}
+                               ]}}
+      ]}}
