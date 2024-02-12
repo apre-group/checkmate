@@ -250,20 +250,31 @@ class Leaf(Tree):
 def leaf(utilities: Dict[Player, LExpr]) -> Leaf:
     return Leaf(utilities)
 
-
+# CheckMate currently does not support conditions
 class Branch(Tree):
-    def __init__(self, player: Player, actions: Dict[Action, Tree]):
+    def __init__(self, player: Player, actions: Dict[Action, Tree], condition: Union[None, bool] = None):
         self.player = player
         self.actions = actions
+        self.condition = condition
 
     def json(self):
-        return {
-            'player': self.player,
-            'children': [
-                {'action': action, 'child': child}
-                for action, child in self.actions.items()
-            ]
-        }
+        if self.condition == None:
+            return {
+                'player': self.player,
+                'children': [
+                    {'action': action, 'child': child}
+                    for action, child in self.actions.items()
+                ]
+            }
+        else:
+            return {
+                'player': self.player,
+                'children': [
+                    {'action': action, 'child': child}
+                    for action, child in self.actions.items()
+                ],
+                'condition': self.condition
+            }
 
     def graphviz(self):
         print(f'\tn{id(self)} [label="{self.player}"];')
@@ -272,8 +283,8 @@ class Branch(Tree):
             print(f'\tn{id(self)} -> n{id(child)} [label="{action}"];')
 
 
-def branch(player: Player, actions: Dict[Action, Tree]) -> Branch:
-    return Branch(player, actions)
+def branch(player: Player, actions: Dict[Action, Tree], condition: Union[None, bool] = None) -> Branch:
+    return Branch(player, actions, condition)
 
 
 def players(*players: str) -> List[Player]:
@@ -295,7 +306,26 @@ def constants(*constants: str) -> List[Expr]:
 class Constraint:
     def json(self):
         return repr(self)
+    
+# CheckMate does currently not support the & symbol
+class Conjunction(Constraint):
+    args: List[Constraint]
 
+    def __init__(self, args: List[Constraint]): 
+        self.args = args
+
+    def __repr__(self):
+        result = f""
+        for elem in self.args:
+            result = result + f" & {elem}" 
+        result = result[3:]
+        return result
+
+def conjunction(*args) -> Conjunction:
+    arg_list = []
+    for elem in args:
+        arg_list.append(elem)
+    return Conjunction(arg_list)
 
 class DisequationConstraint(Constraint):
     op: str
