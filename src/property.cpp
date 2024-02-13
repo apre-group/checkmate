@@ -979,6 +979,7 @@ void practicality(const Options &options, const Input &input) {
 					int i = 0;
 					bool already_deviated = false;
 					unsigned int dev_player;
+					unsigned int deviation_point;
 					while(!next->is_leaf()) {
 						const Branch &current = next->branch();
 						for(const auto &choice : current.choices) {
@@ -993,6 +994,7 @@ void practicality(const Options &options, const Input &input) {
 								{
 									already_deviated = true;
 									dev_player = current.player;
+									deviation_point = i;
 								}
 								
 							}
@@ -1015,7 +1017,15 @@ void practicality(const Options &options, const Input &input) {
 					auto result = actual_ce_solver.solve();
 					// only a deviation with better utility is an actual counterexample
 					if(result == z3::Result::UNSAT) {
-						std::cout << "\tPlayer " << input.players[dev_player] << " profits from deviating to " << dev_history << std::endl;
+						std::vector<std::string> dev_subhist;
+						for (unsigned int i = deviation_point; i < dev_history.size(); i++){
+							dev_subhist.push_back(dev_history[i]);
+						}
+						std::vector<std::string> hon_subhist;
+						for (unsigned int i = 0; i < deviation_point; i++){
+							hon_subhist.push_back(dev_history[i]);
+						}
+						std::cout << "\tPlayer " << input.players[dev_player] << " profits from deviating to " << dev_subhist << " after " << hon_subhist << std::endl;
 						ce_helper.solver.assert_(!conjunction(conflict));
 						if(!options.all_counterexamples) {
 							stop_gen = true;
