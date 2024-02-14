@@ -95,7 +95,7 @@ no one could ever unlock the contract and therefore it is security-equivalent to
 
 PRINT_HISTORIES = False
 
-ps = PLAYERS = players('A', 'E1', 'I', 'E2', 'E3', 'B')
+ps = PLAYERS = players('A', 'E1', 'I', 'E2', 'B')
 S_H, U, J, I_L, I_U= ACTIONS = actions(
     'S_H', 'U', 'J', 'I_L', 'I_U')
 epsilon, rho = INFINITESIMALS = infinitesimals('epsilon', 'rho')
