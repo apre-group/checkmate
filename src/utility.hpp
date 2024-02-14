@@ -58,12 +58,28 @@ struct Utility {
 		return real > other.real || (real == other.real && infinitesimal > other.infinitesimal);
 	}
 
+	z3::Bool operator<(Utility other) const {
+		if(real.is(other.real))
+			return infinitesimal < other.infinitesimal;
+		if(infinitesimal.is(other.infinitesimal))
+			return real < other.real;
+		return real < other.real || (real == other.real && infinitesimal < other.infinitesimal);
+	}
+
 	z3::Bool operator>=(Utility other) const {
 		if(real.is(other.real))
 			return infinitesimal >= other.infinitesimal;
 		if(infinitesimal.is(other.infinitesimal))
 			return real >= other.real;
 		return real > other.real || (real == other.real && infinitesimal >= other.infinitesimal);
+	}
+
+	z3::Bool operator<=(Utility other) const {
+		if(real.is(other.real))
+			return infinitesimal <= other.infinitesimal;
+		if(infinitesimal.is(other.infinitesimal))
+			return real <= other.real;
+		return real < other.real || (real == other.real && infinitesimal <= other.infinitesimal);
 	}
 };
 

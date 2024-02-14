@@ -41,6 +41,8 @@ struct Lexer {
 		NE,
 		GT,
 		GE,
+		LT,
+		LE,
 		OR
 	};
 
@@ -123,6 +125,16 @@ struct Lexer {
 			unary = true;
 			return Token::GT;
 		}
+		else if(*remaining == '<') {
+			remaining++;
+			if(*remaining == '=') {
+				remaining++;
+				unary = true;
+				return Token::LE;
+			}
+			unary = true;
+			return Token::LT;
+		}
 		else if(*remaining == '|') {
 			remaining++;
 			unary = true;
@@ -147,6 +159,8 @@ struct Parser {
 		NE,
 		GT,
 		GE,
+		LE,
+		LT,
 		OR
 	};
 
@@ -173,6 +187,9 @@ struct Parser {
 		case Operation::NE:
 		case Operation::GT:
 		case Operation::GE:
+			return Precedence::COMPARISON;
+		case Operation::LT:
+		case Operation::LE:
 			return Precedence::COMPARISON;
 		case Operation::OR:
 			return Precedence::OR;
@@ -276,6 +293,18 @@ struct Parser {
 			constraint_stack.push_back(left >= right);
 			break;
 		}
+		case Operation::LT: {
+			auto right = pop_utility();
+			auto left = pop_utility();
+			constraint_stack.push_back(left < right);
+			break;
+		}
+		case Operation::LE: {
+			auto right = pop_utility();
+			auto left = pop_utility();
+			constraint_stack.push_back(left <= right);
+			break;
+		}
 		case Operation::OR:
 			auto right = pop_constraint();
 			auto left = pop_constraint();
@@ -335,6 +364,12 @@ struct Parser {
 				break;
 			case Lexer::Token::GE:
 				operation(Operation::GE);
+				break;
+			case Lexer::Token::LT:
+				operation(Operation::LT);
+				break;
+			case Lexer::Token::LE:
+				operation(Operation::LE);
 				break;
 			case Lexer::Token::OR:
 				operation(Operation::OR);

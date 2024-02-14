@@ -399,8 +399,20 @@ namespace z3 {
 			return result;
 		}
 
+		Bool operator<(Real other) const {
+			Z3_ast result = Z3_mk_lt(CONTEXT, ast, other.ast);
+			check_error();
+			return result;
+		}
+
 		Bool operator>=(Real other) const {
 			Z3_ast result = Z3_mk_ge(CONTEXT, ast, other.ast);
+			check_error();
+			return result;
+		}
+
+		Bool operator<=(Real other) const {
+			Z3_ast result = Z3_mk_le(CONTEXT, ast, other.ast);
 			check_error();
 			return result;
 		}
