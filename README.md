@@ -42,7 +42,7 @@ To acquire the required packages, run `pip install -r requirements.txt` in this 
 
 ### Run
 
-To run the security analysis, execute the following command (where `GAME` is the path to the input file - for example, `examples/closing_game.cif`):
+To run the security analysis, execute the following command (where `GAME` is the path to the input file - for example, `../examples/key_examples/closing_game.cif`):
 
 ```
 ./checkmate GAME
@@ -60,7 +60,7 @@ There are several options, which can combined arbitrarily:
 For instance, to run a security analysis on the Closing Game [1] with counterexample generation, but only considering weak immunity and collusion resilience, execute the following command:
 
 ```
-./checkmate examples/key_examples/closing_game.cif --counterexamples --weak_immunity --collusion_resilience
+./checkmate ../examples/key_examples/closing_game.cif --counterexamples --weak_immunity --collusion_resilience
 ```
 
 ## Examples
