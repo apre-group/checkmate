@@ -979,7 +979,7 @@ void practicality(const Options &options, const Input &input) {
 					int i = 0;
 					bool already_deviated = false;
 					unsigned int dev_player;
-					unsigned int deviation_point;
+					unsigned int deviation_point = 0;
 					while(!next->is_leaf()) {
 						const Branch &current = next->branch();
 						for(const auto &choice : current.choices) {
