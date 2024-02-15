@@ -2,7 +2,7 @@
 #define __checkmate_utility__
 
 #include <climits>
-#include <ostream>
+#include <iostream>
 // NB standard-library <utility>, not this file
 #include <utility>
 
@@ -27,7 +27,11 @@ struct Utility {
 	}
 
 	Utility operator*(Utility other) const {
-		return {real * other.real, infinitesimal * other.infinitesimal};
+		if ( !(infinitesimal.is(z3::Real::ZERO)) &&  !(other.infinitesimal.is(z3::Real::ZERO))) {
+			std::cerr << "mulitplication of two infinitesimals not supported" << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		return {real * other.real, infinitesimal * other.real + real * other.infinitesimal};
 	}
 
 	Utility operator-() const {

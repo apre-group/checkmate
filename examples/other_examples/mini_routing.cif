@@ -1,0 +1,151 @@
+{
+  "players": [
+    "A",
+    "B"
+  ],
+  "actions": [
+    "H",
+    "D",
+    "C_h",
+    "S",
+    "I",
+    "P"
+  ],
+  "infinitesimals": [
+    "alpha",
+    "epsilon"
+  ],
+  "constants": [
+    "a",
+    "b",
+    "c",
+    "f",
+    "d_A"
+  ],
+  "initial_constraints": [
+    "alpha > epsilon",
+    "epsilon > 0",
+    "a > 0",
+    "b > 0",
+    "f > 0",
+    "d_A > 0",
+    "b >= d_A"
+  ],
+  "property_constraints": {
+    "weak_immunity": [
+      "a >= f"
+    ],
+    "weaker_immunity": [
+      "a >= f"
+    ],
+    "collusion_resilience": [
+    ],
+    "practicality": [
+    ]
+  },
+  "honest_histories": [
+    [
+      "H"
+    ],
+    [
+      "C_h",
+      "S"
+    ]
+  ],
+  "tree": {
+    "player": "A",
+    "children": [
+      {
+        "action": "H",
+        "child": {
+          "utility": [
+            {
+              "player": "A",
+              "value": "alpha - epsilon"
+            },
+            {
+              "player": "B",
+              "value": "alpha"
+            }
+          ]
+        }
+      },
+      {
+        "action": "C_h",
+        "child": {
+          "player": "B",
+          "children": [
+            {
+              "action": "I",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "-a"
+                  },
+                  {
+                    "player": "B",
+                    "value": "-b"
+                  }
+                ]
+              }
+            },
+            {
+              "action": "S",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "alpha"
+                  },
+                  {
+                    "player": "B",
+                    "value": "alpha"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "action": "D",
+        "child": {
+          "player": "B",
+          "children": [
+            {
+              "action": "I",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "d_A + alpha - epsilon"
+                  },
+                  {
+                    "player": "B",
+                    "value": "-d_A + alpha"
+                  }
+                ]
+              }
+            },
+            {
+              "action": "P",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "-a"
+                  },
+                  {
+                    "player": "B",
+                    "value": "a - f + alpha"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
