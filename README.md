@@ -34,18 +34,30 @@ Each **leaf node** is encoded as a dictionary with the only key `utility`. As a 
 
 All **arithmetic expressions** throughout the CIF support the following symbols in infix notation: +, -, * (only if not both multiplicators are infinitesimal), =, != (inequality), <, >, <= , >=, | (or). To express the conjunction of two expressions, just list both of them. Additionally, all (real) numbers and all constants and infinitesimals declared in the dictionary are supported.
 
-## Prerequisites
+## Build
 
- **************************@Michael: add the new stuff here (python 3 is still required to generate the bigger example games)******************* 
-In order to run CheckMate, you need Python >= 3.8 with the [`z3-solver` package](https://pypi.org/project/z3-solver/) installed.
-To acquire the required packages, run `pip install -r requirements.txt` in this directory.
+Checkmate is written in C++11. It requires:
+- [CMake](https://cmake.org/) as a build system, although you could probably do without this in a pinch.
+- The [Z3](https://github.com/Z3Prover/z3) SMT solver, via its API. To obtain the Z3 API, follow the directions in Z3's README or use a recent prebuilt package - Debian has `libz3-dev`, Red Hat has `z3-devel`.
 
-### Run
+We also use ["JSON for modern C++"](https://json.nlohmann.me/), but this is already vendored in the source tree as `src/json.hpp`.
+
+Assuming that you have a working compiler, CMake, and both Z3 headers and libraries, you can follow a standard CMake build. On a UNIX-like operating system:
+
+```shell
+$ mkdir build # build CheckMate into this directory
+$ cmake -B build -DCMAKE_BUILD_TYPE=Release # configure CheckMate: you likely want a release build
+$ make -C build # actually compile CheckMate with make(1)
+```
+
+You will then have a CheckMate binary in the `build/` folder.
+
+## Run
 
 To run the security analysis, execute the following command (where `GAME` is the path to the input file - for example, `../examples/key_examples/closing_game.cif`):
 
 ```
-./checkmate GAME
+checkmate GAME
 ```
 
 There are several options, which can combined arbitrarily:
@@ -60,7 +72,7 @@ There are several options, which can combined arbitrarily:
 For instance, to run a security analysis on the Closing Game [1] with counterexample generation, but only considering weak immunity and collusion resilience, execute the following command:
 
 ```
-./checkmate ../examples/key_examples/closing_game.cif --counterexamples --weak_immunity --collusion_resilience
+checkmate examples/key_examples/closing_game.cif --counterexamples --weak_immunity --collusion_resilience
 ```
 
 ## Examples
