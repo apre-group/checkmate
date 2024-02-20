@@ -82,16 +82,16 @@
       "description": "The constraints that must hold for the individual security properties.",
       "type": "object",
       "properties": {
-        "weaker_immunity": {
-          "description": "The constraints that must hold when checking weaker immunity.",
+        "weak_immunity": {
+          "description": "The constraints that must hold when checking weak immunity.",
           "type": "array",
           "items": {
             "type": "string"
           },
           "uniqueItems": true
         },
-        "weak_immunity": {
-          "description": "The constraints that must hold when checking weak immunity.",
+        "weaker_immunity": {
+          "description": "The constraints that must hold when checking weaker immunity.",
           "type": "array",
           "items": {
             "type": "string"
