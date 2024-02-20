@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "input.schema.json",
+  "title": "Game-theoretic input",
+  "description": "An input instance defining an extensive form game (EFG) and initial constraints.",
+  "type": "object",
+  "properties": {
+    "players": {
+      "description": "The list of players in the game.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "actions": {
+      "description": "The list of actions in the game.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "infinitesimals": {
+      "description": "The list of names for infinitesimals (a name can only consist of letters, digits and underscores) occurring in the game.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^\\w+$"
+      },
+      "uniqueItems": true
+    },
+    "constants": {
+      "description": "The list of constant names (a name can only consist of letters, digits and underscores) occurring in the game.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^\\w+$"
+      },
+      "uniqueItems": true
+    },
+    "initial_constraints": {
+      "description": "The list of initial constraints that are assumed to hold (for all security properties).",
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "property_constraints": {
+      "description": "The constraints that must hold when considering the three security properties.",
+      "$ref": "#/$defs/property_constraints"
+    },
+    "honest_histories": {
+      "description": "The list of terminal histories that should be checked. A history is provided as a list of actions.",
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "tree": {
+      "description": "The game tree.",
+      "$ref": "#/$defs/node"
+    }
+  },
+  "required": [
+    "players",
+    "actions",
+    "infinitesimals",
+    "constants",
+    "initial_constraints",
+    "property_constraints",
+    "honest_histories",
+    "tree"
+  ],
+  "$defs": {
+    "property_constraints": {
+      "title": "Property constraints",
+      "description": "The constraints that must hold for the individual security properties.",
+      "type": "object",
+      "properties": {
+        "weaker_immunity": {
+          "description": "The constraints that must hold when checking weaker immunity.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "weak_immunity": {
+          "description": "The constraints that must hold when checking weak immunity.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "collusion_resilience": {
+          "description": "The constraints that must hold when checking collusion resilience.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "practicality": {
+          "description": "The constraints that must hold when checking practicality.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "weaker_immunity",
+        "weak_immunity",
+        "collusion_resilience",
+        "practicality"
+      ]
+    },
+    "node": {
+      "title": "Node in a game tree",
+      "description": "A specification of a node in a game tree.",
+      "type": "object",
+      "properties": {
+        "player": {
+          "description": "The name of the player whose turn it is at this point in the game.",
+          "type": "string"
+        },
+        "children": {
+          "description": "The outgoing edges of a node in a game tree.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/edge"
+          }
+        },
+        "utility": {
+          "description": "The utility for each player of a leaf node in a game tree.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/utility"
+          }
+        }
+      },
+      "minProperties": 1,
+      "dependentSchemas": {
+        "player": {
+          "not": {
+            "required": [
+              "utility"
+            ]
+          },
+          "required": [
+            "children"
+          ]
+        },
+        "children": {
+          "not": {
+            "required": [
+              "utility"
+            ]
+          },
+          "required": [
+            "player"
+          ]
+        },
+        "utility": {
+          "not": {
+            "allOf": [
+              {
+                "required": [
+                  "player"
+                ]
+              },
+              {
+                "required": [
+                  "children"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    "edge": {
+      "title": "Edge in a game tree",
+      "description": "A specification of a child node and an action that leads to that child node in a game tree.",
+      "type": "object",
+      "properties": {
+        "action": {
+          "description": "The action which leads to the child node.",
+          "type": "string"
+        },
+        "child": {
+          "description": "The child node.",
+          "$ref": "#/$defs/node"
+        }
+      },
+      "required": [
+        "action",
+        "child"
+      ]
+    },
+    "utility": {
+      "title": "Utility of a leaf node in a game tree",
+      "description": "A specification of the utility for each player of a leaf node in a game tree.",
+      "type": "object",
+      "properties": {
+        "player": {
+          "description": "The name of the player whose utility is specified.",
+          "type": "string"
+        },
+        "value": {
+          "description": "The concrete value of the utility.",
+          "type": [
+            "number",
+            "string"
+          ]
+        }
+      },
+      "required": [
+        "player",
+        "value"
+      ]
+    }
+  }
+}
