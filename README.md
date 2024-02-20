@@ -11,12 +11,12 @@ The framework analyzes the following properties:
 The modeling of protocols as games and manual analysis of security properties can be found in [1].
 This and other related materials are listed below.
 
-The input for CheckMate is a CIF (=CheckMate Input Format) file representing a game. The CIF is explained in the Input section below.
+The input for CheckMate is a JSON file representing a game. The JSON structure is explained in the Input section below.
 Examples for such instances can be found in the `examples` folder.
 
 ## Input
 
-The CheckMate Input Format CIF is a special instance of the JSON format. It is a dictionary with the following keys:
+The CheckMate input format is a special instance of the JSON format. It is a dictionary with the following keys:
 
 1. `players`: expects the list of all players in the game.
 2. `actions`: expects the list of all possible actions throughout the game.
@@ -32,7 +32,7 @@ Each **leaf node** is encoded as a dictionary with the only key `utility`. As a 
     * `player`: the name of the player whose utility it specified, and
     * `value`: the utility of `player`. This can be any term over `infinitesimals`, `constants`, and reals.
 
-All **arithmetic expressions** throughout the CIF support the following symbols in infix notation: +, -, * (only if not both multiplicators are infinitesimal), =, != (inequality), <, >, <= , >=, | (or). To express the conjunction of two expressions, just list both of them. Additionally, all (real) numbers and all constants and infinitesimals declared in the dictionary are supported.
+All **arithmetic expressions** throughout the JSON support the following symbols in infix notation: +, -, * (only if not both multiplicators are infinitesimal), =, != (inequality), <, >, <= , >=, | (or). To express the conjunction of two expressions, just list both of them. Additionally, all (real) numbers and all constants and infinitesimals declared in the dictionary are supported.
 
 ## Build
 
@@ -54,7 +54,7 @@ You will then have a CheckMate binary in the `build/` folder.
 
 ## Run
 
-To run the security analysis, execute the following command (where `GAME` is the path to the input file - for example, `../examples/key_examples/closing_game.cif`):
+To run the security analysis, execute the following command (where `GAME` is the path to the input file - for example, `../examples/key_examples/closing_game.json`):
 
 ```
 checkmate GAME
@@ -72,19 +72,19 @@ There are several options, which can combined arbitrarily:
 For instance, to run a security analysis on the Closing Game [1] with counterexample generation, but only considering weak immunity and collusion resilience, execute the following command:
 
 ```
-checkmate examples/key_examples/closing_game.cif --counterexamples --weak_immunity --collusion_resilience
+checkmate examples/key_examples/closing_game.json --counterexamples --weak_immunity --collusion_resilience
 ```
 
 ## Examples
 
 All benchmarks can be found in the `examples` folder. The ones used for our LPAR2024 submission are in the `key_examples` folder.
-The smaller ones are provided directly as CIF files, such as `market_entry_game.cif`. Others, such as the auction benchmark, are provided in forms of scripts that -- once executed -- generate the according CIF file. To generate the CIF document for a game `GAME.py` in the folder, run
+The smaller ones are provided directly as JSON files, such as `market_entry_game.json`. Others, such as the auction benchmark, are provided in forms of scripts that -- once executed -- generate the according JSON file. To generate the JSON document for a game `GAME.py` in the folder, run
 
 ```
-python3 GAME.py -> GAME.cif
+python3 GAME.py -> GAME.json
 ```
 
-Important benchmarks include `closing_game.py` that models the Closing Game proposed in [1] for the closing phase of the [Bitcoin Lightning protocol](https://lightning.network/lightning-network-paper.pdf) as well as `routing_three.py`, which models the routing module of the Lightning protocol [1] for three users. There are also `closing_game-simplified.cif` and  `routing_game-simplified.cif`, that are simplified versions of the games mentioned before.
+Important benchmarks include `closing_game.py` that models the Closing Game proposed in [1] for the closing phase of the [Bitcoin Lightning protocol](https://lightning.network/lightning-network-paper.pdf) as well as `routing_three.py`, which models the routing module of the Lightning protocol [1] for three users. There are also `closing_game-simplified.json` and  `routing_game-simplified.json`, that are simplified versions of the games mentioned before.
 
 ## Publications
 
