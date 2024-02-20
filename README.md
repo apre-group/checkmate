@@ -37,17 +37,19 @@ All **arithmetic expressions** throughout the JSON support the following symbols
 ## Build
 
 Checkmate is written in C++11. It requires:
-- [CMake](https://cmake.org/) as a build system, although you could probably do without this in a pinch.
-- The [Z3](https://github.com/Z3Prover/z3) SMT solver, via its API. To obtain the Z3 API, follow the directions in Z3's README or use a recent prebuilt package - Debian has `libz3-dev`, Red Hat has `z3-devel`.
+
+* [CMake](https://cmake.org/) as a build system, although you could probably do without this in a pinch.
+* The [Z3](https://github.com/Z3Prover/z3) SMT solver, via its API. To obtain the Z3 API, follow the directions in Z3's README or use a recent prebuilt package - Debian has `libz3-dev`, Red Hat has `z3-devel`.
+* To generate some of the examples python3 has to be installed as well.
 
 We also use ["JSON for modern C++"](https://json.nlohmann.me/), but this is already vendored in the source tree as `src/json.hpp`.
 
 Assuming that you have a working compiler, CMake, and both Z3 headers and libraries, you can follow a standard CMake build. On a UNIX-like operating system:
 
 ```shell
-$ mkdir build # build CheckMate into this directory
-$ cmake -B build -DCMAKE_BUILD_TYPE=Release # configure CheckMate: you likely want a release build
-$ make -C build # actually compile CheckMate with make(1)
+mkdir build # build CheckMate into this directory
+cmake -B build -DCMAKE_BUILD_TYPE=Release # configure CheckMate: you likely want a release build
+make -C build # actually compile CheckMate with make(1)
 ```
 
 You will then have a CheckMate binary in the `build/` folder.
@@ -56,7 +58,7 @@ You will then have a CheckMate binary in the `build/` folder.
 
 To run the security analysis, execute the following command (where `GAME` is the path to the input file - for example, `../examples/key_examples/closing_game.json`):
 
-```
+```shell
 checkmate GAME
 ```
 
@@ -71,20 +73,22 @@ There are several options, which can combined arbitrarily:
 
 For instance, to run a security analysis on the Closing Game [1] with counterexample generation, but only considering weak immunity and collusion resilience, execute the following command:
 
-```
+```shell
 checkmate examples/key_examples/closing_game.json --counterexamples --weak_immunity --collusion_resilience
 ```
 
 ## Examples
 
-All benchmarks can be found in the `examples` folder. The ones used for our LPAR2024 submission are in the `key_examples` folder.
+All benchmarks can be found in the `examples` folder. The ones used for our LPAR2024 submission are in the `key_examples` folder *(1).
 The smaller ones are provided directly as JSON files, such as `market_entry_game.json`. Others, such as the auction benchmark, are provided in forms of scripts that -- once executed -- generate the according JSON file. To generate the JSON document for a game `GAME.py` in the folder, run
 
-```
+```shell
 python3 GAME.py -> GAME.json
 ```
 
 Important benchmarks include `closing_game.py` that models the Closing Game proposed in [1] for the closing phase of the [Bitcoin Lightning protocol](https://lightning.network/lightning-network-paper.pdf) as well as `routing_three.py`, which models the routing module of the Lightning protocol [1] for three users. There are also `closing_game-simplified.json` and  `routing_game-simplified.json`, that are simplified versions of the games mentioned before.
+
+(1) Note that `splits_cr_python.json` does not run on this version of CheckMate, it contains the same game as `splits_cr_cpp.json`, but in slightly different notation. Providing both versions allows the reviewers and interested readers to verify our experimental evaluation.
 
 ## Publications
 
