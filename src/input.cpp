@@ -82,7 +82,7 @@ struct Lexer {
 		// number
 		else if(std::isdigit(*remaining)) {
 			buffer.push_back(*remaining++);
-			while(std::isdigit(*remaining))
+			while(std::isdigit(*remaining) || *remaining == '.')
 				buffer.push_back(*remaining++);
 			unary = false;
 			return Token::NUMERAL;

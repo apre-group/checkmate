@@ -66,7 +66,7 @@ You will then have a CheckMate binary in the `build` folder.
 To run the security analysis, execute the following command from the `build` folder (where `GAME` is the path to the input file - for example, `../examples/key_examples/closing_game.json`):
 
 ```shell
-checkmate GAME
+./checkmate GAME
 ```
 
 There are several options, which can be combined arbitrarily:
@@ -81,7 +81,7 @@ There are several options, which can be combined arbitrarily:
 For instance, to run a security analysis on the Closing Game [1] with counterexample generation, but only considering weak immunity and collusion resilience, execute the following command from the `build` directory:
 
 ```shell
-checkmate ../examples/key_examples/closing_game.json --counterexamples --weak_immunity --collusion_resilience
+./checkmate ../examples/key_examples/closing_game.json --counterexamples --weak_immunity --collusion_resilience
 ```
 
 ## Examples
