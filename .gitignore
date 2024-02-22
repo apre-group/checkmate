@@ -1,10 +1,7 @@
+.vscode/
+.idea/
+cmake-build-debug/
 build/
 __pycache__/
-auction.json
-centipede_three.json
-closing_game.json
-ebos.json
-routing_three.json
-routing-unlocking.json
-tictactoe.json
-
+venv/
+*.json
