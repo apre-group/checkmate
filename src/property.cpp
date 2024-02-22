@@ -969,7 +969,7 @@ void practicality(const Options &options, const Input &input) {
 					const auto hon_history = input.readable_honest_histories[history];
 					int i = 0;
 					bool already_deviated = false;
-					unsigned int dev_player;
+					unsigned int dev_player = 0;
 					unsigned int deviation_point = 0;
 					while (!next->is_leaf()) {
 						const Branch &current = next->branch();
