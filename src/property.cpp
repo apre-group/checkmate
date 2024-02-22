@@ -18,7 +18,7 @@ public:
 	// produce a fresh (or cached) label for `expr` and return `label => expr`
 	Bool label_comparison(Bool expr) {
 		auto &cached_label = expr2label[expr];
-		if(!cached_label.null())
+		if (!cached_label.null())
 			return cached_label.implies(expr);
 
 		auto label = Bool::fresh();
@@ -37,12 +37,12 @@ public:
 
 	// produce a labelled version of `left >= right`
 	Bool label_geq(Utility left, Utility right) {
-		if(left.real.is(right.real))
+		if (left.real.is(right.real))
 			return label_comparison(left.infinitesimal >= right.infinitesimal);
-		if(left.infinitesimal.is(right.infinitesimal))
+		if (left.infinitesimal.is(right.infinitesimal))
 			return label_comparison(left.real >= right.real);
 		return label_comparison(left.real > right.real) ||
-			(label_comparison(left.real == right.real) && label_comparison(left.infinitesimal >= right.infinitesimal));
+			   (label_comparison(left.real == right.real) && label_comparison(left.infinitesimal >= right.infinitesimal));
 	}
 
 	// make a fresh label, associate it with `info` and return `label => expr`
@@ -90,19 +90,19 @@ public:
 template<typename Property>
 struct SolvingHelper {
 	SolvingHelper(
-		const Options &options,
-		const Input &input,
-		const Labels<Property> &labels,
-		Bool raw_property,
-		Bool property_constraint,
-		Bool honest_history
+			const Options &options,
+			const Input &input,
+			const Labels<Property> &labels,
+			Bool raw_property,
+			Bool property_constraint,
+			Bool honest_history
 	) : options(options), input(input), labels(labels), active_splits(labels.triggers.size()) {
 		// wrap up property:
 		// forall <variables> (triggers && initial constraints) => property
 		property = forall(input.quantify, (
-			conjunction(labels.trigger_implications) &&
-			input.initial_constraint &&
-			property_constraint
+				conjunction(labels.trigger_implications) &&
+				input.initial_constraint &&
+				property_constraint
 		).implies(raw_property));
 
 		// should know about action constraints, the wrapped property, 
@@ -110,7 +110,7 @@ struct SolvingHelper {
 		solver.assert_(input.action_constraint);
 		solver.assert_(property);
 		solver.assert_(honest_history);
-		for(const auto &label : labels.label2expr)
+		for (const auto &label: labels.label2expr)
 			solver.assert_and_track(label.first);
 
 		// should know only about the initial constraints
@@ -124,20 +124,20 @@ struct SolvingHelper {
 		shuffle(core.begin(), core.end(), prng);
 
 		Bool split;
-		for(auto label : core) {
+		for (auto label: core) {
 			// ignore other non-comparison labels
 			auto location = labels.label2expr.find(label);
 			// ignore if it's not a comparison, could be a counterexample label
-			if(location == labels.label2expr.end())
+			if (location == labels.label2expr.end())
 				continue;
 
 			auto expr = location->second;
 			// if either the split or its negation tells us nothing new, it's 
 			// pointless to split on it
-			if(
-				minimize_solver.solve(case_, expr) == z3::Result::UNSAT ||
-				minimize_solver.solve(case_, !expr) == z3::Result::UNSAT
-			)
+			if (
+					minimize_solver.solve(case_, expr) == z3::Result::UNSAT ||
+					minimize_solver.solve(case_, !expr) == z3::Result::UNSAT
+					)
 				continue;
 			// otherwise, it'll do
 			split = expr;
@@ -153,7 +153,7 @@ struct SolvingHelper {
 
 		// assert all the case's triggers
 		// NB must include also those that are *not* active
-		for(size_t i = 0; i < active_splits.size(); i++) {
+		for (size_t i = 0; i < active_splits.size(); i++) {
 			solver.assert_(active_splits[i].first ? labels.triggers[i].first : !labels.triggers[i].first);
 			solver.assert_(active_splits[i].second ? labels.triggers[i].second : !labels.triggers[i].second);
 		}
@@ -162,16 +162,16 @@ struct SolvingHelper {
 		auto result = solver.solve(labels.counterexample_labels);
 
 		// solved the case immediately
-		if(result == z3::Result::SAT) {
+		if (result == z3::Result::SAT) {
 			std::cout << "\tCase " << case_ << " satisfies property." << std::endl;
-			if(options.strategies) {
+			if (options.strategies) {
 				z3::Model model = solver.model();
 
 				case_models.push_back({
-							case_,
-							std::move(model)
-						});
- 			}
+											  case_,
+											  std::move(model)
+									  });
+			}
 			// remove the case triggers
 			solver.pop();
 			return true;
@@ -180,31 +180,30 @@ struct SolvingHelper {
 		// didn't solve it, need to consider case splits
 		auto split = find_split();
 		// didn't find anything worth splitting on
-		if(split.null()) {
-			if (!failed || options.all_cases){
+		if (split.null()) {
+			if (!failed || options.all_cases) {
 				std::cout << "\tCase " << case_ << " violates property." << std::endl;
 
-				if(options.counterexamples) {
+				if (options.counterexamples) {
 					std::vector<typename Property::CounterExamplePart> counterexample;
-					if(Property::EXTERNAL_COUNTEREXAMPLES){
+					if (Property::EXTERNAL_COUNTEREXAMPLES) {
 						counterexamples.push_back({
-							case_,
-							std::move(counterexample)
-						});
-					}
-					else {
+														  case_,
+														  std::move(counterexample)
+												  });
+					} else {
 						z3::MinimalCores cores(solver, labels.counterexample_labels);
-						while(cores.next_core()) {
+						while (cores.next_core()) {
 							std::vector<typename Property::CounterExamplePart> counterexample;
-							for(auto label : cores.core){
+							for (auto label: cores.core) {
 								counterexample.push_back(labels.label2part.at(label));
-								}
+							}
 							counterexamples.push_back({
-								case_,
-								std::move(counterexample)
-							});
+															  case_,
+															  std::move(counterexample)
+													  });
 							// std::cout << "\tFound counterexample." << std::endl;
-							if(!options.all_counterexamples)
+							if (!options.all_counterexamples)
 								break;
 						}
 					}
@@ -212,10 +211,10 @@ struct SolvingHelper {
 			}
 			failed = true;
 
-			if(options.preconditions){
+			if (options.preconditions) {
 				unsat_cases.push_back(case_);
 			}
-			
+
 			// remove the case triggers
 			solver.pop();
 			return options.all_cases || options.preconditions;
@@ -223,8 +222,8 @@ struct SolvingHelper {
 
 		// remove the case triggers
 		solver.pop();
-		if (!failed || options.all_cases){
-		std::cout << "\tRequire case split on " << split << std::endl;
+		if (!failed || options.all_cases) {
+			std::cout << "\tRequire case split on " << split << std::endl;
 		}
 		size_t trigger = labels.expr2trigger.at(split);
 
@@ -234,7 +233,7 @@ struct SolvingHelper {
 		bool positive = solve();
 		active_splits[trigger].first = false;
 		case_.pop_back();
-		if(!positive)
+		if (!positive)
 			return false;
 
 		// negative split
@@ -243,7 +242,7 @@ struct SolvingHelper {
 		bool negative = solve();
 		active_splits[trigger].second = false;
 		case_.pop_back();
-		if(!negative)
+		if (!negative)
 			return false;
 
 		return true;
@@ -252,37 +251,35 @@ struct SolvingHelper {
 	std::vector<std::vector<z3::Bool>> precondition_simplify() const {
 
 		std::vector<std::vector<z3::Bool>> simp;
-		for (const std::vector<z3::Bool> &case_ : unsat_cases){
+		for (const std::vector<z3::Bool> &case_: unsat_cases) {
 			std::vector<z3::Bool> copy;
-			for (const z3::Bool &atom : case_){
+			for (const z3::Bool &atom: case_) {
 				copy.push_back(atom);
 			}
 			simp.push_back(copy);
 		}
 		bool any_rule1 = true;
 		bool any_rule2 = true;
-		while(any_rule1 || any_rule2){
+		while (any_rule1 || any_rule2) {
 			any_rule1 = false;
 			any_rule2 = false;
-			for(long unsigned int j = 0; j < simp.size(); j++){
+			for (long unsigned int j = 0; j < simp.size(); j++) {
 				auto case_ = simp[j];
-				for(long unsigned int k = j +1; k < simp.size(); k++){
+				for (long unsigned int k = j + 1; k < simp.size(); k++) {
 					auto other_case = simp[k];
 					bool rule1 = true;
 					bool rule2 = false;
 					if (case_.size() == other_case.size()) {
 						bool one_inverse = false;
 						long unsigned int inverse;
-						for (long unsigned int i = 0 ; i < case_.size(); i++){
-							if (case_[i].is_equal(other_case[i].invert()) && not one_inverse){
+						for (long unsigned int i = 0; i < case_.size(); i++) {
+							if (case_[i].is_equal(other_case[i].invert()) && not one_inverse) {
 								one_inverse = true;
 								inverse = i;
-							}
-							else if (case_[i].is_equal(other_case[i].invert()) && one_inverse) {
+							} else if (case_[i].is_equal(other_case[i].invert()) && one_inverse) {
 								rule1 = false;
 								break;
-							}
-							else if ( not case_[i].is_equal(other_case[i])) {
+							} else if (not case_[i].is_equal(other_case[i])) {
 								rule1 = false;
 								break;
 							}
@@ -298,52 +295,48 @@ struct SolvingHelper {
 							simp[j] = case_;
 							any_rule1 = true;
 							break;
-						} 
-					}
-					else {
+						}
+					} else {
 						rule1 = false;
 					}
-					if ((case_.size() == 1) | (other_case.size() == 1)){
+					if ((case_.size() == 1) | (other_case.size() == 1)) {
 						// continue
 						std::vector<z3::Bool> singleton;
-						std::vector<z3::Bool> other; 
+						std::vector<z3::Bool> other;
 						int which_singleton;
 						if (case_.size() == 1) {
 							singleton = case_;
 							other = other_case;
 							which_singleton = 0;
-						}
-						else {
+						} else {
 							singleton = other_case;
 							other = case_;
 							which_singleton = 1;
 						}
 						int inverse;
 						for (long unsigned int l = 0; l < other.size(); l++) {
-							if (singleton[0].is_equal(other[l].invert())){
+							if (singleton[0].is_equal(other[l].invert())) {
 								rule2 = true;
 								inverse = l;
 							}
 						}
-						if (rule2){
+						if (rule2) {
 							std::swap(other[inverse], other.back());
 							other.pop_back();
-							if (which_singleton == 0){
+							if (which_singleton == 0) {
 								simp[k] = other;
-							}
-							else {
+							} else {
 								simp[j] = other;
 							}
 							any_rule2 = true;
 						}
 
-					}
-					else {
+					} else {
 						rule2 = false;
 					}
 
 				}
-			} 
+			}
 		}
 
 		return simp;
@@ -353,7 +346,7 @@ struct SolvingHelper {
 	z3::Model solve_for_counterexample() {
 		// assert all the case's triggers
 		// NB must include also those that are *not* active
-		for(size_t i = 0; i < active_splits.size(); i++) {
+		for (size_t i = 0; i < active_splits.size(); i++) {
 			solver.assert_(!labels.triggers[i].first);
 			solver.assert_(!labels.triggers[i].second);
 		}
@@ -388,7 +381,7 @@ struct SolvingHelper {
 
 	struct CaseModel {
 		std::vector<z3::Bool> case_;
-		z3::Model model; 
+		z3::Model model;
 	};
 
 	std::vector<CounterExample> counterexamples;
@@ -406,34 +399,34 @@ struct WeakImmunity {
 	};
 
 	WeakImmunity(
-		const Options &options,
-		Labels<WeakImmunity<weaker>> &labels,
-		size_t player
+			const Options &options,
+			Labels<WeakImmunity<weaker>> &labels,
+			size_t player
 	) : options(options), labels(labels), player(player) {}
 
 	z3::Bool compute(const Node &node) const {
-		if(node.is_leaf()) {
+		if (node.is_leaf()) {
 			const auto &leaf = node.leaf();
 			// known utility for us
 			auto utility = leaf.utilities[player];
 			// so (the real part of) the utility should be greater than zero
 			auto comparison = weaker
-				? labels.label_comparison(utility.real >= z3::Real::ZERO)
-				: labels.label_geq(utility, {z3::Real::ZERO, z3::Real::ZERO});
+							  ? labels.label_comparison(utility.real >= z3::Real::ZERO)
+							  : labels.label_geq(utility, {z3::Real::ZERO, z3::Real::ZERO});
 
-			if(options.counterexamples)
+			if (options.counterexamples)
 				comparison = labels.label_counterexample({leaf, player})
-					.implies(comparison);
+						.implies(comparison);
 			return comparison;
 		}
 
 		std::vector<z3::Bool> conjuncts;
 		const auto &branch = node.branch();
 		bool player_choice = branch.player == player;
-		for(const auto &choice : branch.choices) {
+		for (const auto &choice: branch.choices) {
 			auto choice_property = compute(*choice.node);
 			// we only care about the current player's choices
-			if(player_choice)
+			if (player_choice)
 				choice_property = choice.action.variable.implies(choice_property);
 			conjuncts.push_back(choice_property);
 		}
@@ -449,25 +442,25 @@ struct WeakImmunity {
 
 void print_strategy(Node *next, std::vector<std::reference_wrapper<const std::string>> history, const z3::Model &model) {
 
-	if (next->is_leaf()){
+	if (next->is_leaf()) {
 		return;
 	}
 
 	const Branch &current = next->branch();
-	for(const auto &choice : current.choices) {
+	for (const auto &choice: current.choices) {
 		// TBC
 		std::vector<std::reference_wrapper<const std::string>> new_history = {choice.action.name};
-		for (const auto elem : history){
+		for (const auto elem: history) {
 			new_history.push_back(elem);
 		}
 
 		print_strategy(choice.node.get(), new_history, model);
 
-		if(model.assigns<true>(choice.action.variable)) {
+		if (model.assigns<true>(choice.action.variable)) {
 			std::cout << "\t Choose " << choice.action.name << " after history " << history << std::endl;
 		}
 	}
-	return;			
+	return;
 }
 
 
@@ -480,34 +473,34 @@ void weak_immunity(const Options &options, const Input &input) {
 
 	Labels<WeakImmunity<weaker>> labels;
 	std::vector<Bool> conjuncts;
-	for(size_t player = 0; player < input.players.size(); player++)
+	for (size_t player = 0; player < input.players.size(); player++)
 		conjuncts.push_back(
-			WeakImmunity<weaker>(options, labels, player)
-				.compute(*input.root)
+				WeakImmunity<weaker>(options, labels, player)
+						.compute(*input.root)
 		);
 	auto property = conjunction(conjuncts);
 
 	auto property_constraint = weaker
-		? input.weaker_immunity_constraint
-		: input.weak_immunity_constraint;
+							   ? input.weaker_immunity_constraint
+							   : input.weak_immunity_constraint;
 	// property is the same for all honest histories
-	for(size_t history = 0; history < input.honest_histories.size(); history++) {
+	for (size_t history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << std::endl;
 		std::cout << "Is history " << input.readable_honest_histories[history] << (weaker ? " weaker immune?" : " weak immune?") << std::endl;
 		SolvingHelper<WeakImmunity<weaker>> helper(
-			options,
-			input,
-			labels,
-			property,
-			property_constraint,
-			input.honest_histories[history]
+				options,
+				input,
+				labels,
+				property,
+				property_constraint,
+				input.honest_histories[history]
 		);
 		helper.solve();
-		if(!helper.failed) {
+		if (!helper.failed) {
 			std::cout << "YES, it is" << (weaker ? " weaker immune." : " weak immune.") << std::endl;
-			if(options.strategies){
+			if (options.strategies) {
 				std::cout << std::endl;
-				for (const auto &casemodel : helper.case_models){
+				for (const auto &casemodel: helper.case_models) {
 					std::cout << "Strategy for case: " << casemodel.case_ << std::endl;
 					const z3::Model &model = casemodel.model;
 
@@ -517,66 +510,65 @@ void weak_immunity(const Options &options, const Input &input) {
 					print_strategy(next, history, model);
 				}
 			}
-		}
-		else {
+		} else {
 			std::cout << "NO, it is not" << (weaker ? " weaker immune." : " weak immune.") << std::endl;
 			if (options.counterexamples) {
 				std::cout << std::endl;
 			}
-			for(const auto &counterexample : helper.counterexamples) {
+			for (const auto &counterexample: helper.counterexamples) {
 				std::cout << "Counterexample for " << counterexample.case_ << ":" << std::endl;
 				// the following is just 1 counterexample
 				const auto &part = counterexample.parts[0];
 				std::cout
-					<< "\tPlayer "
-					<< input.players[part.player]
-					<< " can be harmed if:"
-					<< std::endl;
+						<< "\tPlayer "
+						<< input.players[part.player]
+						<< " can be harmed if:"
+						<< std::endl;
 
 				std::vector<std::vector<std::string>> histories_of_counterexample;
-				for(const auto &part : counterexample.parts) {
-					
+				for (const auto &part: counterexample.parts) {
+
 					auto history = part.leaf.compute_history();
 					auto branch = input.root.get();
 					std::vector<std::string> actions_so_far;
-					
-					for(auto choice : part.leaf.compute_history()) {
+
+					for (auto choice: part.leaf.compute_history()) {
 						std::string action = choice.get().action.name;
 						bool already_printed = false;
-						for (auto const &printed_history : histories_of_counterexample){
-							if (printed_history == actions_so_far){
+						for (auto const &printed_history: histories_of_counterexample) {
+							if (printed_history == actions_so_far) {
 								already_printed = true;
 							}
 						}
-						if((branch->player != part.player) and !already_printed){
+						if ((branch->player != part.player) and !already_printed) {
 							std::cout
-								<< "\tPlayer "
-								<< input.players[branch->player]
-								<< " takes action "
-								<< action
-								<< " after history "
-								<< actions_so_far
-								<< std::endl;
+									<< "\tPlayer "
+									<< input.players[branch->player]
+									<< " takes action "
+									<< action
+									<< " after history "
+									<< actions_so_far
+									<< std::endl;
 							histories_of_counterexample.push_back(actions_so_far);
 						}
 						actions_so_far.push_back(action);
 						auto next = choice.get().node.get();
-						if(!next->is_leaf())
+						if (!next->is_leaf())
 							branch = static_cast<Branch *>(next);
 					}
 				}
 			}
 
-			if (options.preconditions){
+			if (options.preconditions) {
 				std::cout << std::endl;
 				std::vector<z3::Bool> conjuncts;
 				// std::vector<z3::Bool> testest;
 				std::vector<std::vector<z3::Bool>> simplified = helper.precondition_simplify();
 
-				for(const auto &unsat_case : simplified) {
+				for (const auto &unsat_case: simplified) {
 					// negate each case (by disjoining the negated elements), then conjunct all - voila weakest prec to be added to the init constr
 					std::vector<z3::Bool> neg_case;
-					for (const auto &elem : unsat_case){
+					for (const auto &elem: unsat_case) {
 						neg_case.push_back(elem.invert());
 					}
 					z3::Bool disj = disjunction(neg_case);
@@ -592,6 +584,7 @@ void weak_immunity(const Options &options, const Input &input) {
 
 // instantiate for true/false, prevents linker errors
 template void weak_immunity<false>(const Options &, const Input &);
+
 template void weak_immunity<true>(const Options &, const Input &);
 
 // helper struct for computing the collusion resilience property
@@ -605,49 +598,48 @@ struct CollusionResilience {
 	};
 
 	CollusionResilience(
-		const Options &options,
-		Labels<CollusionResilience> &labels,
-		size_t players,
-		const Leaf &honest_leaf,
-		uint64_t binary
+			const Options &options,
+			Labels<CollusionResilience> &labels,
+			size_t players,
+			const Leaf &honest_leaf,
+			uint64_t binary
 	) :
-		options(options),
-		labels(labels),
-		players(players),
-		group(binary),
-		honest_total { z3::Real::ZERO, z3::Real::ZERO }
-	{
+			options(options),
+			labels(labels),
+			players(players),
+			group(binary),
+			honest_total{z3::Real::ZERO, z3::Real::ZERO} {
 		// compute the honest total for the current group
-		for(size_t player = 0; player < players; player++)
-			if(group[player])
+		for (size_t player = 0; player < players; player++)
+			if (group[player])
 				honest_total = honest_total + honest_leaf.utilities[player];
 	}
 
 	z3::Bool compute(const Node &node) const {
-		if(node.is_leaf()) {
+		if (node.is_leaf()) {
 			const auto &leaf = node.leaf();
 
 			// compute the total utility for the player group...
-			Utility total {z3::Real::ZERO, z3::Real::ZERO};
-			for(size_t player = 0; player < players; player++)
-				if(group[player])
+			Utility total{z3::Real::ZERO, z3::Real::ZERO};
+			for (size_t player = 0; player < players; player++)
+				if (group[player])
 					total = total + leaf.utilities[player];
 
 			// ..and compare it to the honest total
 			auto comparison = labels.label_geq(honest_total, total);
-			if(options.counterexamples)
+			if (options.counterexamples)
 				comparison = labels.label_counterexample({leaf, group})
-					.implies(comparison);
+						.implies(comparison);
 			return comparison;
 		}
 
 		std::vector<z3::Bool> conjuncts;
 		const auto &branch = node.branch();
 		bool nongroup_decision = !group[branch.player];
-		for(const auto &choice : branch.choices) {
+		for (const auto &choice: branch.choices) {
 			auto choice_property = compute(*choice.node);
 			// we only care about decisions the group _doesn't_ make
-			if(nongroup_decision)
+			if (nongroup_decision)
 				choice_property = choice.action.variable.implies(choice_property);
 			conjuncts.push_back(choice_property);
 		}
@@ -671,7 +663,7 @@ void collusion_resilience(const Options &options, const Input &input) {
 	assert(input.players.size() < Input::MAX_PLAYERS);
 
 	// property is different for each honest history
-	for(size_t history = 0; history < input.honest_histories.size(); history++) {
+	for (size_t history = 0; history < input.honest_histories.size(); history++) {
 		Labels<CollusionResilience> labels;
 		// lookup the leaf for this history
 		const Leaf &honest_leaf = input.honest_history_leaves[history];
@@ -679,32 +671,32 @@ void collusion_resilience(const Options &options, const Input &input) {
 
 		// sneaky hack follows: all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
 		// done this way more for concision than efficiency
-		for(uint64_t binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++)
+		for (uint64_t binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++)
 			conjuncts.push_back(CollusionResilience(
-				options,
-				labels,
-				input.players.size(),
-				honest_leaf,
-				binary_counter
+					options,
+					labels,
+					input.players.size(),
+					honest_leaf,
+					binary_counter
 			).compute(*input.root));
 
 		auto property = conjunction(conjuncts);
 		std::cout << std::endl;
 		std::cout << "Is history " << input.readable_honest_histories[history] << " collusion resilient?" << std::endl;
 		SolvingHelper<CollusionResilience> helper(
-			options,
-			input,
-			labels,
-			property,
-			input.collusion_resilience_constraint,
-			input.honest_histories[history]
+				options,
+				input,
+				labels,
+				property,
+				input.collusion_resilience_constraint,
+				input.honest_histories[history]
 		);
 		helper.solve();
-		if(!helper.failed){
+		if (!helper.failed) {
 			std::cout << "YES, it is collusion resilient." << std::endl;
-			if(options.strategies){
+			if (options.strategies) {
 				std::cout << std::endl;
-				for (const auto &casemodel : helper.case_models){
+				for (const auto &casemodel: helper.case_models) {
 					std::cout << "Strategy for case: " << casemodel.case_ << std::endl;
 					const z3::Model &model = casemodel.model;
 
@@ -714,65 +706,64 @@ void collusion_resilience(const Options &options, const Input &input) {
 					print_strategy(next, history, model);
 				}
 			}
-		}
-		else{
+		} else {
 
 			std::cout << "NO, it is not collusion resilient." << std::endl;
 			if (options.counterexamples) {
 				std::cout << std::endl;
 			}
-			for(const auto &counterexample : helper.counterexamples) {
+			for (const auto &counterexample: helper.counterexamples) {
 				std::cout << "Counterexample for " << counterexample.case_ << ":" << std::endl;
 
 				const auto &part = counterexample.parts[0];
 				std::cout << "\tGroup";
-				for(size_t player = 0; player < input.players.size(); player++)
-					if(part.group[player])
+				for (size_t player = 0; player < input.players.size(); player++)
+					if (part.group[player])
 						std::cout << " " << input.players[player];
 				std::cout << " profits from deviation if:" << std::endl;
 
 
 				std::vector<std::vector<std::string>> histories_of_counterexample;
-				for(const auto &part : counterexample.parts) {
+				for (const auto &part: counterexample.parts) {
 
 					auto history = part.leaf.compute_history();
 					auto branch = input.root.get();
 					std::vector<std::string> actions_so_far;
-					for(auto choice : part.leaf.compute_history()) {
+					for (auto choice: part.leaf.compute_history()) {
 						std::string action = choice.get().action.name;
 						bool already_printed = false;
-						for (auto const &printed_history : histories_of_counterexample){
-							if (printed_history == actions_so_far){
+						for (auto const &printed_history: histories_of_counterexample) {
+							if (printed_history == actions_so_far) {
 								already_printed = true;
 							}
 						}
-						if(part.group[branch->player] and !already_printed){
+						if (part.group[branch->player] and !already_printed) {
 							std::cout
-								<< "\tPlayer "
-								<< input.players[branch->player]
-								<< " takes action "
-								<< action
-								<< " after history "
-								<< actions_so_far
-								<< std::endl;
+									<< "\tPlayer "
+									<< input.players[branch->player]
+									<< " takes action "
+									<< action
+									<< " after history "
+									<< actions_so_far
+									<< std::endl;
 							histories_of_counterexample.push_back(actions_so_far);
 						}
 						actions_so_far.push_back(action);
 						auto next = choice.get().node.get();
-						if(!next->is_leaf())
+						if (!next->is_leaf())
 							branch = static_cast<Branch *>(next);
 					}
 				}
 			}
 
-			if (options.preconditions){
+			if (options.preconditions) {
 				std::cout << std::endl;
 				std::vector<z3::Bool> conjuncts;
 				std::vector<std::vector<z3::Bool>> simplified = helper.precondition_simplify();
-				for(const auto &unsat_case : simplified) {
+				for (const auto &unsat_case: simplified) {
 					// negate each case (by disjoining the negated elements), then conjunct all - voila weakest prec to be added to the init constr
 					std::vector<z3::Bool> neg_case;
-					for (const auto &elem : unsat_case){
+					for (const auto &elem: unsat_case) {
 						neg_case.push_back(elem.invert());
 					}
 					z3::Bool disj = disjunction(neg_case);
@@ -785,14 +776,15 @@ void collusion_resilience(const Options &options, const Input &input) {
 
 		}
 
-		
+
 	}
 }
 
 // helper struct for computing the practicality property
 struct Practicality {
 	static const bool EXTERNAL_COUNTEREXAMPLES = true;
-	struct CounterExamplePart {};
+	struct CounterExamplePart {
+	};
 
 	// routes that yield a certain utility
 	using UtilityMap = std::unordered_map<Utility, Bool>;
@@ -800,9 +792,9 @@ struct Practicality {
 	using PlayerUtilities = std::vector<UtilityMap>;
 
 	Practicality(
-		const Options &options,
-		Labels<Practicality> &labels,
-		size_t players
+			const Options &options,
+			Labels<Practicality> &labels,
+			size_t players
 	) : options(options), labels(labels), players(players) {}
 
 	// build the utility map players->utility->condition
@@ -810,9 +802,9 @@ struct Practicality {
 	// also, add constraints to `conjuncts` as we go
 	PlayerUtilities utilities(const Node &node) {
 		PlayerUtilities result(players);
-		if(node.is_leaf()) {
+		if (node.is_leaf()) {
 			const auto &leaf = node.leaf();
-			for(size_t player = 0; player < players; player++)
+			for (size_t player = 0; player < players; player++)
 				result[player][leaf.utilities[player]] = Bool::TRUE;
 			return result;
 		}
@@ -820,29 +812,29 @@ struct Practicality {
 		// compute player utility maps for each child recursively
 		const auto &branch = node.branch();
 		std::vector<PlayerUtilities> player_utilities_by_choice;
-		for(const auto &choice : branch.choices)
+		for (const auto &choice: branch.choices)
 			player_utilities_by_choice.push_back(utilities(*choice.node));
 
 		// loops exchanged below in order to reduce number of counterexample labels
 		// for other possible actions a' in a branch...
-		for(size_t other = 0; other < branch.choices.size(); other++) {
+		for (size_t other = 0; other < branch.choices.size(); other++) {
 			Bool counterexample_label;
 			const auto &utilities_other = player_utilities_by_choice[other][branch.player];
 
 			// for each possible action a in a branch...
-			for(size_t choice = 0; choice < branch.choices.size(); choice++) {
-				if(choice == other)
+			for (size_t choice = 0; choice < branch.choices.size(); choice++) {
+				if (choice == other)
 					continue;
 
 				auto action_variable = branch.choices[choice].action.variable;
 				const auto &utilities_action = player_utilities_by_choice[choice][branch.player];
 
 				// for each utility u reachable from a under condition c...
-				for(const auto &action_pair : utilities_action) {
+				for (const auto &action_pair: utilities_action) {
 					auto action_utility = action_pair.first;
 					auto action_condition = action_pair.second;
 					// for each utility u' reachable from a' under condition c'...
-					for(const auto &other_pair: utilities_other) {
+					for (const auto &other_pair: utilities_other) {
 						auto other_utility = other_pair.first;
 						auto other_condition = other_pair.second;
 						// if a and c and c'...
@@ -857,19 +849,19 @@ struct Practicality {
 		}
 
 		// combine child maps into a larger map for this node
-		for(size_t choice = 0; choice < branch.choices.size(); choice++) {
+		for (size_t choice = 0; choice < branch.choices.size(); choice++) {
 			auto action = branch.choices[choice].action.variable;
 			const auto &player_utilities = player_utilities_by_choice[choice];
-			for(size_t player = 0; player < players; player++) {
+			for (size_t player = 0; player < players; player++) {
 				auto &player_result = result[player];
 				const auto &utility_map = player_utilities[player];
-				for(const auto &pair : utility_map) {
+				for (const auto &pair: utility_map) {
 					auto utility = pair.first;
 					auto condition = action && pair.second;
 					auto &resulting_condition = player_result[utility];
 					resulting_condition = resulting_condition.null()
-						? condition
-						: (resulting_condition || condition);
+										  ? condition
+										  : (resulting_condition || condition);
 				}
 			}
 		}
@@ -897,23 +889,23 @@ void practicality(const Options &options, const Input &input) {
 	Labels<Practicality> labels;
 	auto property = Practicality(options, labels, input.players.size()).compute(*input.root);
 
-	for(unsigned history = 0; history < input.honest_histories.size(); history++) {
+	for (unsigned history = 0; history < input.honest_histories.size(); history++) {
 		std::cout << std::endl;
 		std::cout << "Is history " << input.readable_honest_histories[history] << " practical?" << std::endl;
 		SolvingHelper<Practicality> helper(
-			options,
-			input,
-			labels,
-			property,
-			input.practicality_constraint,
-			input.honest_histories[history]
+				options,
+				input,
+				labels,
+				property,
+				input.practicality_constraint,
+				input.honest_histories[history]
 		);
 		helper.solve();
-		if(!helper.failed) {
+		if (!helper.failed) {
 			std::cout << "YES, it is practical." << std::endl;
-			if(options.strategies){
+			if (options.strategies) {
 				std::cout << std::endl;
-				for (const auto &casemodel : helper.case_models){
+				for (const auto &casemodel: helper.case_models) {
 					std::cout << "Strategy for case: " << casemodel.case_ << std::endl;
 					const z3::Model &model = casemodel.model;
 
@@ -923,37 +915,36 @@ void practicality(const Options &options, const Input &input) {
 					print_strategy(next, history, model);
 				}
 			}
-			}
-		else{
+		} else {
 			std::cout << "NO, it is not practical." << std::endl;
 			if (options.counterexamples) {
 				std::cout << std::endl;
 			}
 			bool stop_gen = false;
-			for(size_t i = 0; i < helper.counterexamples.size(); i++) {
+			for (size_t i = 0; i < helper.counterexamples.size(); i++) {
 				if (stop_gen) {
 					break;
 				}
 				const auto &counterexample = helper.counterexamples[i];
 				SolvingHelper<Practicality> ce_helper(
-					options,
-					input,
-					labels,
-					property,
-					input.practicality_constraint && conjunction(counterexample.case_),
-					z3::Bool::TRUE
+						options,
+						input,
+						labels,
+						property,
+						input.practicality_constraint && conjunction(counterexample.case_),
+						z3::Bool::TRUE
 				);
 				z3::Model model;
-				Node *next; 
+				Node *next;
 				// if there is no counterexample in the current case, we have to split further
-				if (!(model = ce_helper.solve_for_counterexample())){
+				if (!(model = ce_helper.solve_for_counterexample())) {
 					// case split necessary to get a counterexample
 					auto split = ce_helper.find_split();
 					assert(!split.null());
 					// append positive and negative case splits
 					std::vector<z3::Bool> pos_case;
 					std::vector<z3::Bool> neg_case;
-					for(const z3::Bool exp: counterexample.case_){
+					for (const z3::Bool exp: counterexample.case_) {
 						pos_case.push_back(exp);
 						neg_case.push_back(exp);
 					}
@@ -961,16 +952,16 @@ void practicality(const Options &options, const Input &input) {
 					neg_case.push_back(split.invert());
 					// positive case
 					helper.counterexamples.push_back({
-							pos_case,
-							std::move(counterexample.parts)
-						});
+															 pos_case,
+															 std::move(counterexample.parts)
+													 });
 					// negative case
 					helper.counterexamples.push_back({
-							neg_case,
-							std::move(counterexample.parts)
-						});
+															 neg_case,
+															 std::move(counterexample.parts)
+													 });
 				}
-				while((model = ce_helper.solve_for_counterexample())) {
+				while ((model = ce_helper.solve_for_counterexample())) {
 					std::cout << "Counterexample for " << counterexample.case_ << ":" << std::endl;
 					next = input.root.get();
 					std::vector<std::string> dev_history;
@@ -980,28 +971,26 @@ void practicality(const Options &options, const Input &input) {
 					bool already_deviated = false;
 					unsigned int dev_player;
 					unsigned int deviation_point = 0;
-					while(!next->is_leaf()) {
+					while (!next->is_leaf()) {
 						const Branch &current = next->branch();
-						for(const auto &choice : current.choices) {
-							if(model.assigns<true>(choice.action.variable)) {
+						for (const auto &choice: current.choices) {
+							if (model.assigns<true>(choice.action.variable)) {
 								dev_history.push_back(choice.action.name);
 								conflict.push_back(choice.action.variable);
 								next = choice.node.get();
-								if (hon_history[i] == choice.action.name and !already_deviated){
+								if (hon_history[i] == choice.action.name and !already_deviated) {
 									i++;
-								}
-								else if (hon_history[i] != choice.action.name and !already_deviated)
-								{
+								} else if (hon_history[i] != choice.action.name and !already_deviated) {
 									already_deviated = true;
 									dev_player = current.player;
 									deviation_point = i;
 								}
-								
+
 							}
 						}
 					}
 
-					Utility dev_utility = static_cast<Leaf*>(next)->utilities[dev_player];
+					Utility dev_utility = static_cast<Leaf *>(next)->utilities[dev_player];
 					const Leaf &honest_leaf = input.honest_history_leaves[history];
 					Utility hon_utility = honest_leaf.utilities[dev_player];
 
@@ -1016,18 +1005,18 @@ void practicality(const Options &options, const Input &input) {
 					actual_ce_solver.assert_(impl);
 					auto result = actual_ce_solver.solve();
 					// only a deviation with better utility is an actual counterexample
-					if(result == z3::Result::UNSAT) {
+					if (result == z3::Result::UNSAT) {
 						std::vector<std::string> dev_subhist;
-						for (unsigned int i = deviation_point; i < dev_history.size(); i++){
+						for (unsigned int i = deviation_point; i < dev_history.size(); i++) {
 							dev_subhist.push_back(dev_history[i]);
 						}
 						std::vector<std::string> hon_subhist;
-						for (unsigned int i = 0; i < deviation_point; i++){
+						for (unsigned int i = 0; i < deviation_point; i++) {
 							hon_subhist.push_back(dev_history[i]);
 						}
 						std::cout << "\tPlayer " << input.players[dev_player] << " profits from deviating to " << dev_subhist << " after " << hon_subhist << std::endl;
 						ce_helper.solver.assert_(!conjunction(conflict));
-						if(!options.all_counterexamples) {
+						if (!options.all_counterexamples) {
 							stop_gen = true;
 							break;
 						}
@@ -1035,14 +1024,14 @@ void practicality(const Options &options, const Input &input) {
 				}
 			}
 
-			if (options.preconditions){
+			if (options.preconditions) {
 				std::cout << std::endl;
 				std::vector<z3::Bool> conjuncts;
 				std::vector<std::vector<z3::Bool>> simplified = helper.precondition_simplify();
-				for(const auto &unsat_case : simplified) {
+				for (const auto &unsat_case: simplified) {
 					// negate each case (by disjoining the negated elements), then conjunct all - voila weakest prec to be added to the init constr
 					std::vector<z3::Bool> neg_case;
-					for (const auto &elem : unsat_case){
+					for (const auto &elem: unsat_case) {
 						neg_case.push_back(elem.invert());
 					}
 					z3::Bool disj = disjunction(neg_case);

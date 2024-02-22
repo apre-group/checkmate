@@ -31,10 +31,14 @@ struct Choice;
 struct Node {
 	// can default-construct and move Nodes...
 	Node() = default;
+
 	Node(Node &&) = default;
+
 	Node &operator=(Node &&) = default;
+
 	// ...but not copy them to avoid accidentally copying a whole tree
 	Node(const Node &) = delete;
+
 	Node &operator=(const Node &) = delete;
 
 	virtual ~Node() {};
@@ -44,13 +48,16 @@ struct Node {
 
 	// if is_leaf(), do the downcast
 	const Leaf &leaf() const;
+
 	// if !is_leaf(), do the downcast
 	const Branch &branch() const;
 
 	// parent node, or `nullptr` if the root
 	Branch *parent = nullptr;
+
 	// traverse upwards to compute the history for this node
 	std::vector<std::reference_wrapper<const Choice>> compute_history() const;
+
 	// the length of that history
 	size_t history_length() const;
 };
@@ -70,6 +77,7 @@ struct Choice {
 // leaf node
 struct Leaf final : public Node {
 	virtual bool is_leaf() const { return true; }
+
 	// utilities for each player: NB in lexicographic order of players!
 	std::vector<Utility> utilities;
 };
@@ -77,12 +85,13 @@ struct Leaf final : public Node {
 // branch node
 struct Branch final : public Node {
 	Branch(unsigned player) : player(player), label(z3::Bool::fresh()) {}
+
 	virtual bool is_leaf() const { return false; }
 
 	// do a linear-time lookup of `action` by name in the branch, which must be present
 	const Choice &get_choice(const std::string &action) const {
-		for(const Choice &choice : choices)
-			if(choice.action.name == action)
+		for (const Choice &choice: choices)
+			if (choice.action.name == action)
 				return choice;
 
 		assert(false);
@@ -91,8 +100,8 @@ struct Branch final : public Node {
 
 	// do a linear-time lookup of `action` by child address in the branch, which must be present
 	const Choice &get_choice(const Node *child) const {
-		for(const Choice &choice : choices)
-			if(choice.node.get() == child)
+		for (const Choice &choice: choices)
+			if (choice.node.get() == child)
 				return choice;
 
 		assert(false);

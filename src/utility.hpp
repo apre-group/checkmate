@@ -27,7 +27,7 @@ struct Utility {
 	}
 
 	Utility operator*(Utility other) const {
-		if ( !(infinitesimal.is(z3::Real::ZERO)) &&  !(other.infinitesimal.is(z3::Real::ZERO))) {
+		if (!(infinitesimal.is(z3::Real::ZERO)) && !(other.infinitesimal.is(z3::Real::ZERO))) {
 			std::cerr << "mulitplication of two infinitesimals not supported" << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
@@ -39,49 +39,49 @@ struct Utility {
 	}
 
 	z3::Bool operator==(Utility other) const {
-		if(real.is(other.real))
+		if (real.is(other.real))
 			return infinitesimal == other.infinitesimal;
-		if(infinitesimal.is(other.infinitesimal))
+		if (infinitesimal.is(other.infinitesimal))
 			return real == other.real;
 		return real == other.real && infinitesimal == other.infinitesimal;
 	}
 
 	z3::Bool operator!=(Utility other) const {
-		if(real.is(other.real))
+		if (real.is(other.real))
 			return infinitesimal != other.infinitesimal;
-		if(infinitesimal.is(other.infinitesimal))
+		if (infinitesimal.is(other.infinitesimal))
 			return real != other.real;
 		return real != other.real || infinitesimal != other.infinitesimal;
 	}
 
 	z3::Bool operator>(Utility other) const {
-		if(real.is(other.real))
+		if (real.is(other.real))
 			return infinitesimal > other.infinitesimal;
-		if(infinitesimal.is(other.infinitesimal))
+		if (infinitesimal.is(other.infinitesimal))
 			return real > other.real;
 		return real > other.real || (real == other.real && infinitesimal > other.infinitesimal);
 	}
 
 	z3::Bool operator<(Utility other) const {
-		if(real.is(other.real))
+		if (real.is(other.real))
 			return infinitesimal < other.infinitesimal;
-		if(infinitesimal.is(other.infinitesimal))
+		if (infinitesimal.is(other.infinitesimal))
 			return real < other.real;
 		return real < other.real || (real == other.real && infinitesimal < other.infinitesimal);
 	}
 
 	z3::Bool operator>=(Utility other) const {
-		if(real.is(other.real))
+		if (real.is(other.real))
 			return infinitesimal >= other.infinitesimal;
-		if(infinitesimal.is(other.infinitesimal))
+		if (infinitesimal.is(other.infinitesimal))
 			return real >= other.real;
 		return real > other.real || (real == other.real && infinitesimal >= other.infinitesimal);
 	}
 
 	z3::Bool operator<=(Utility other) const {
-		if(real.is(other.real))
+		if (real.is(other.real))
 			return infinitesimal <= other.infinitesimal;
-		if(infinitesimal.is(other.infinitesimal))
+		if (infinitesimal.is(other.infinitesimal))
 			return real <= other.real;
 		return real < other.real || (real == other.real && infinitesimal <= other.infinitesimal);
 	}
