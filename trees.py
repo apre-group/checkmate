@@ -1,14 +1,14 @@
 from typing import Iterable, Optional, Union
 import z3
 
-from auxfunz3 import Real, not_
+from auxfunz3 import Real, not_, Boolean
 from utility import Utility
 
 class Tree:
     """base class for game trees"""
     honest: bool
     """if this node is along the honest history"""
-    reason: Optional[tuple[Union[Real, Utility], Union[Real, Utility]]]
+    reason: Optional[Boolean]
 
     def __init__(self):
         self.honest = False
@@ -56,7 +56,7 @@ class Leaf(Tree):
     def mark_honest(self, honest_history: list[str]) -> dict[str, Utility]:
         """mark this branch as honest"""
         self.honest = True
-        assert not honest_history
+        assert not honest_history 
         return self.utilities
 
     def weak_immune(self, solver: z3.Solver, player: str, weaker: bool):
@@ -69,7 +69,7 @@ class Leaf(Tree):
         elif solver.check(condition) == z3.unsat:
             return False
 
-        self.reason = utility, 0
+        self.reason = utility >= 0
         return False
 
     def collusion_resilient(self, solver: z3.Solver, group: set[str], honest: Utility) -> bool:
@@ -80,7 +80,7 @@ class Leaf(Tree):
         elif solver.check(condition) == z3.unsat:
             return False
 
-        self.reason = group_utility, honest
+        self.reason = condition
         return False
 
     def practical(self, *_) -> Optional[dict[str, Utility]]:
@@ -149,9 +149,9 @@ class Branch(Tree):
         returns false if a case-split is required and sets `self.reason`
         """
 
-        if player == self.player:
-            if self.honest:
-                # if we are honest, we must take the honest strategy
+        if player == self.player: # player behaves honestly
+            if self.honest: 
+                # if we are along honest history, we must take the honest strategy
                 self.strategy = next(
                     index for index in
                     range(len(self.actions))
@@ -174,7 +174,7 @@ class Branch(Tree):
 
             return False
 
-        # if we are not the player, we could do anything,
+        # if we are not the honest player, we could do anything,
         # so all branches should be weak immune for the player
         for action in self.actions:
             if not action.tree.weak_immune(solver, player, weaker):
@@ -189,9 +189,9 @@ class Branch(Tree):
         returns false if a case-split is required and sets `self.reason`
         """
 
-        if self.player not in group:
+        if self.player not in group: # player follows honest history
             if self.honest:
-                # if we are honest, we must take the honest strategy
+                # if we are along honest history, we must take the honest strategy
                 self.strategy = next(
                     index for index in
                     range(len(self.actions))
@@ -205,7 +205,7 @@ class Branch(Tree):
                 return False
 
             # otherwise, we can take any strategy we please as long as it's collusion resilient
-            # NB we leave `self.strategy` where it is from previous colluding groups
+            # NB we leave `self.strategy` where it is from previous colluding groups --> to be considered in soundness proof
             while self.strategy < len(self.actions):
                 if self.actions[self.strategy].tree.collusion_resilient(solver, group, honest):
                     return True
@@ -243,7 +243,7 @@ class Branch(Tree):
         utilities = []
         for action in self.actions:
             utility = action.tree.practical(solver, players)
-            # child is not practical
+            # there is no practical child (require case split)
             if utility is None:
                 self.reason = action.tree.reason
                 return None
@@ -256,25 +256,28 @@ class Branch(Tree):
                 range(len(self.actions))
                 if self.actions[index].tree.honest
             )
-            # which means the corresponding utility should be maximal
+            # which means the corresponding utility should be maximal (i.e. practical)
             maximum = utilities[self.strategy][self.player]
             for utility in utilities:
                 if solver.check(maximum < utility[self.player]) == z3.sat:
                     if solver.check(maximum >= utility[self.player]) == z3.sat:
                         # might be maximal, just couldn't prove it
-                        self.reason = maximum, utility[self.player]
+                        self.reason = maximum >= utility[self.player]
                     return None
             # and we return the maximal strategy
+            # honest choice is practical for current player
             return utilities[self.strategy]
 
         # otherwise, we must find the maximal utility available to us
         # if there two actions with the same utility:
         # 1. we tie-break by considering the preference of players above us
-        # 2. we *must* do this, otherwise we might miss a practical strategy
+        # 2. we *must* do this, otherwise we might miss a practical strategy, that disproves the honest one practical
         # consider e.g. player A has an honest choice, and a dishonest choice with utility 0
-        # in the honest branch, player B has two choices with utility 0 for B
+        # in the dishonest branch, player B has two choices with utility 0 for B
         # but for player A, they have utilities 0 and -epsilon
-        # B must choose (0, 0) not (0, -epsilon) for a practical strategy
+        # hence both are practical in this subtree, however
+        # the more critical choice (for the practicality of the honest history) is (0, 0) not (-epsilon, 0).
+        # Therefore (0,0) has to be stored as "the" practical one for further reasoning
 
         # current maxima are all utilities
         maxima = utilities
@@ -299,12 +302,16 @@ class Branch(Tree):
                 next_maxima.append(utility)
 
             # all maxima should be equal - otherwise we need to case-split
-            for i in range(0, len(next_maxima) - 1):
-                lhs = next_maxima[i][player]
-                rhs = next_maxima[i + 1][player]
+            for i in range(0, len(next_maxima)):
+                lhs = next_maxima[i-1][player]
+                rhs = next_maxima[i][player]
+                # not convinced!!
                 if solver.check(lhs != rhs) == z3.sat:
-                    self.reason = lhs, rhs
-                    return None
+                    if solver.check(lhs == rhs) == z3.sat:
+                        self.reason = lhs == rhs
+                    else: 
+                        self.reason = lhs >= rhs
+                        return None
 
             maxima = next_maxima
 
