@@ -34,8 +34,6 @@ class Input:
     """the game tree"""
     honest_utilities: Optional[dict[str, Utility]]
     """the current utilities on the honest path"""
-    unsat_cases: List[Boolean]
-    """list of unsat cases for current property"""
 
     def __init__(self, path: str):
         """try to load the file at `path`"""
@@ -73,7 +71,6 @@ class Input:
         self.honest_histories = obj['honest_histories']
         self.tree = self._load_tree(obj['tree'])
         self.honest_utilities = None
-        self.unsat_cases = []
 
     def __repr__(self) -> str:
         return (
@@ -154,8 +151,6 @@ class Input:
         Actual case splitting engine
         determine if the input has some property for the current honest history, splitting recursively"""
 
-        #print("recursive call")
-
         # property holds under current split
         if self.property_under_split(solver, property):
             logging.info(f"property satisfied for current case {current_case}")
@@ -164,28 +159,9 @@ class Input:
         # otherwise consider case split
         split = self.tree.reason
         # there is no case split
-        if split is None: 
+        if split is None:
             logging.info(f"property violated in case {current_case}")
             return False
-
-        #otherwise:
-    
-        # trivial splits should not be possible, hence use only assert in case splitting below
-        # solver.push()
-        # solver.add(split)
-        # print(split)
-        # if solver.check() == z3.unsat:
-        #     print("trivial case split")
-        #     logging.info("property violated")
-        #     return False
-        # solver.pop()
-        # solver.push()
-        # solver.add(z3.Not(split))
-        # if solver.check() == z3.unsat:
-        #     print("trivial case split")
-        #     logging.info("property violated")
-        #     return False
-        # solver.pop()
 
         logging.info(f"splitting on: {split}")
         for comparison in [split, z3.Not(split)]:
@@ -193,12 +169,11 @@ class Input:
             solver.add(comparison)
             assert solver.check() != z3.unsat
             attempt = self.property_rec(solver, property, current_case + [comparison])
+            solver.pop()
             if not attempt:
                 return False
-            solver.pop()
 
         return True
-        
 
     def property(self, property: str):
         """determine if the input has some property for the current honest history"""
@@ -213,7 +188,5 @@ class Input:
         }[property])
         assert solver.check() == z3.sat
 
-        result = self.property_rec(solver, property, [])
-        if result == True:
+        if self.property_rec(solver, property, []):
             logging.info("property holds")
-        return 

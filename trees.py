@@ -1,7 +1,7 @@
-from typing import Iterable, Optional, Union
+from typing import Iterable, Optional
 import z3
 
-from auxfunz3 import Real, not_, Boolean
+from auxfunz3 import not_, Boolean
 from utility import Utility
 
 class Tree:
@@ -56,7 +56,7 @@ class Leaf(Tree):
     def mark_honest(self, honest_history: list[str]) -> dict[str, Utility]:
         """mark this branch as honest"""
         self.honest = True
-        assert not honest_history 
+        assert not honest_history
         return self.utilities
 
     def weak_immune(self, solver: z3.Solver, player: str, weaker: bool):
@@ -150,7 +150,7 @@ class Branch(Tree):
         """
 
         if player == self.player: # player behaves honestly
-            if self.honest: 
+            if self.honest:
                 # if we are along honest history, we must take the honest strategy
                 self.strategy = next(
                     index for index in
@@ -302,16 +302,16 @@ class Branch(Tree):
                 next_maxima.append(utility)
 
             # all maxima should be equal - otherwise we need to case-split
-            for i in range(0, len(next_maxima)):
-                lhs = next_maxima[i-1][player]
+            for i in range(1, len(next_maxima)):
+                lhs = next_maxima[i - 1][player]
                 rhs = next_maxima[i][player]
                 # not convinced!!
                 if solver.check(lhs != rhs) == z3.sat:
                     if solver.check(lhs == rhs) == z3.sat:
                         self.reason = lhs == rhs
-                    else: 
+                    else:
                         self.reason = lhs >= rhs
-                        return None
+                    return None
 
             maxima = next_maxima
 
