@@ -37,6 +37,19 @@ class Utility:
     def __repr__(self) -> str:
         return f"<{self.real}, {self.inf}>"
 
+    def __hash__(self) -> int:
+        return hash((self.real, self.inf))
+
+    def eq(self, other: Utility) -> bool:
+        def equal(x: Real, y: Real) -> bool:
+            if isinstance(x, float) and isinstance(y, float):
+                return x == y
+            elif isinstance(x, z3.ArithRef) and isinstance(y, z3.ArithRef):
+                return x.eq(y)
+            return False
+
+        return equal(self.real, other.real) and equal(self.inf, other.inf)
+
     def __neg__(self) -> Utility:
         return Utility(-self.real, -self.inf)
 

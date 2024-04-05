@@ -9,7 +9,7 @@ from typing import Any, Optional, Union, List, Dict
 import z3
 
 from auxfunz3 import Boolean
-from trees import Tree, Leaf, Branch
+from trees import Utilities, Tree, Leaf, Branch
 from utility import Utility
 
 class Input:
@@ -112,10 +112,10 @@ class Input:
             }
             return Branch(player, children)
         else:
-            utilities = {
+            utilities = Utilities({
                 utility['player']: self._load_utility(utility['value'])
                 for utility in tree['utility']
-            }
+            })
             return Leaf(utilities)
 
     def start_honest_history(self, honest_history: list[str]):
@@ -142,7 +142,7 @@ class Input:
                         return False
             return True
         elif property == 'practicality':
-            return self.tree.practical(solver, []) is not None
+            return bool(self.tree.practical(solver))
 
         assert False
 

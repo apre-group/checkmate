@@ -4,6 +4,35 @@ import z3
 from auxfunz3 import not_, Boolean
 from utility import Utility
 
+class Utilities:
+    """map from players to their utilities"""
+    utilities: dict[str, Utility]
+    """underlying map"""
+
+    def __init__(self, utilities: dict[str, Utility]):
+        self.utilities = utilities
+
+    def __getitem__(self, key: str) -> Utility:
+        return self.utilities[key]
+
+    def __hash__(self) -> int:
+        return hash((
+            utility
+            for utility in self.utilities.values()
+        ))
+
+    def __eq__(self, other: 'Utilities') -> bool:
+        return all(
+            l.eq(r)
+            for l, r in zip(self.utilities.values(), other.utilities.values())
+        )
+
+    def __repr__(self):
+        return repr(self.utilities)
+
+    def items(self):
+        return self.utilities.items()
+
 class Tree:
     """base class for game trees"""
     honest: bool
@@ -29,15 +58,15 @@ class Tree:
     def collusion_resilient(self, *_) -> bool:
         assert False
 
-    def practical(self, *_) -> Optional[dict[str, Utility]]:
+    def practical(self, *_) -> set[Utilities]:
         assert False
 
 class Leaf(Tree):
     """a leaf node"""
-    utilities: dict[str, Utility]
+    utilities: Utilities
     """player utilities"""
 
-    def __init__(self, utilities: dict[str, Utility]):
+    def __init__(self, utilities: Utilities):
         super().__init__()
         self.utilities = utilities
 
@@ -53,7 +82,7 @@ class Leaf(Tree):
     def reset_strategy(self):
         self.reason = None
 
-    def mark_honest(self, honest_history: list[str]) -> dict[str, Utility]:
+    def mark_honest(self, honest_history: list[str]) -> Utilities:
         """mark this branch as honest"""
         self.honest = True
         assert not honest_history
@@ -83,8 +112,8 @@ class Leaf(Tree):
         self.reason = condition
         return False
 
-    def practical(self, *_) -> Optional[dict[str, Utility]]:
-        return self.utilities
+    def practical(self, *_) -> set[Utilities]:
+        return {self.utilities}
 
 
 class Action:
@@ -223,31 +252,23 @@ class Branch(Tree):
 
         return True
 
-    def practical(self, solver: z3.Solver, players: list[str]) -> Optional[dict[str, Utility]]:
+    def practical(self, solver: z3.Solver) -> set[Utilities]:
         """
         check if this tree is practical
 
         returns leaf utilities for the resulting strategy if practical
-        returns None if not practical, setting `self.reason` if a case-split is required
-
-        `players` is a list of players upwards from here, used for tie-breaking equal utilities
+        returns empty set if not practical, setting `self.reason` if a case-split is required
         """
 
-        # maintain a de-duplicated list of players upwards from this node
-        players = [self.player] + [
-            player for player in players
-            if player != self.player
-        ]
-
         # get practical strategies and corresponding utilities recursively
-        utilities = []
+        children = []
         for action in self.actions:
-            utility = action.tree.practical(solver, players)
-            # there is no practical child (require case split)
-            if utility is None:
+            utilities = action.tree.practical(solver)
+            # there is no practical child (propagate reason for case split, if any)
+            if not utilities:
                 self.reason = action.tree.reason
-                return None
-            utilities.append(utility)
+                return set()
+            children.append(utilities)
 
         if self.honest:
             # if we are at an honest node, our strategy must be the honest strategy
@@ -256,69 +277,72 @@ class Branch(Tree):
                 range(len(self.actions))
                 if self.actions[index].tree.honest
             )
-            # which means the corresponding utility should be maximal (i.e. practical)
-            maximum = utilities[self.strategy][self.player]
-            for utility in utilities:
-                if solver.check(maximum < utility[self.player]) == z3.sat:
-                    if solver.check(maximum >= utility[self.player]) == z3.sat:
-                        # might be maximal, just couldn't prove it
-                        self.reason = maximum >= utility[self.player]
-                    return None
+
+            honest_utilities = children.pop(self.strategy)
+            # the utility at the leaf of the honest history
+            honest_utility = honest_utilities.pop()
+            # this should be maximal against other children, so...
+            maximum = honest_utility[self.player]
+
+            # for all the other children:
+            for utilities in children:
+                found = False
+                # does there exist a possible utility such that `maximum` is geq than it?
+                for utility in utilities:
+                    if solver.check(maximum < utility[self.player]) == z3.sat:
+                        if solver.check(maximum >= utility[self.player]) == z3.sat:
+                            # might be maximal, just couldn't prove it
+                            self.reason = maximum >= utility[self.player]
+                    else:
+                        found = True
+                        break
+                if not found:
+                    return set()
+
             # and we return the maximal strategy
             # honest choice is practical for current player
-            return utilities[self.strategy]
+            return {honest_utility}
+        else:
+            # not in the honest history
+            # TODO this could be done more efficiently by working out the set of utilities for `self.player`
+            # but utilities can't be put in a set easily: fix this in the C++ version
 
-        # otherwise, we must find the maximal utility available to us
-        # if there two actions with the same utility:
-        # 1. we tie-break by considering the preference of players above us
-        # 2. we *must* do this, otherwise we might miss a practical strategy, that disproves the honest one practical
-        # consider e.g. player A has an honest choice, and a dishonest choice with utility 0
-        # in the dishonest branch, player B has two choices with utility 0 for B
-        # but for player A, they have utilities 0 and -epsilon
-        # hence both are practical in this subtree, however
-        # the more critical choice (for the practicality of the honest history) is (0, 0) not (-epsilon, 0).
-        # Therefore (0,0) has to be stored as "the" practical one for further reasoning
+            # compute the set of possible utilities by merging children's utilities
+            result = set(
+                utility
+                for utilities in children
+                for utility in utilities
+            )
+            # the set to drop
+            remove = set()
 
-        # current maxima are all utilities
-        maxima = utilities
-        # for each player, starting with us
-        for player in players:
-            # the next set of maximal utilities, which will be a subset of `maxima`
-            next_maxima = []
-            for utility in maxima:
-                # if any other utility is larger, `utility` is not a maximum
-                if any(
-                    solver.check(maximum[player] <= utility[player]) == z3.unsat
-                    for maximum in next_maxima
-                ):
-                    continue
+            # work out whether to drop `candidate`
+            for candidate in result:
+                # this player's utility
+                dominatee = candidate[self.player]
 
-                # retain only candidate maxima not less than `utility`
-                next_maxima = [
-                    maximum
-                    for maximum in next_maxima
-                    if solver.check(utility[player] <= maximum[player]) == z3.sat
-                ]
-                next_maxima.append(utility)
+                # check all the other children
+                # if any child has the property that all its utilitites are bigger than `dominatee`,
+                # it can be dropped
+                for utilities in children:
+                    # skip any where the candidate is already contained
+                    if any(utility is candidate for utility in utilities):
+                        continue
 
-            # all maxima should be equal - otherwise we need to case-split
-            for i in range(1, len(next_maxima)):
-                lhs = next_maxima[i - 1][player]
-                rhs = next_maxima[i][player]
-                # not convinced!!
-                if solver.check(lhs != rhs) == z3.sat:
-                    if solver.check(lhs == rhs) == z3.sat:
-                        self.reason = lhs == rhs
-                    else:
-                        self.reason = lhs >= rhs
-                    return None
+                    # *all* utilities have to be bigger
+                    dominated = True
+                    for utility in utilities:
+                        dominator = utility[self.player]
+                        if solver.check(dominator <= dominatee) == z3.sat:
+                            dominated = False
+                            if solver.check(dominator > dominatee) == z3.sat:
+                                # might be dominanated, but can't prove it
+                                self.reason = dominator > dominatee
+                                return set()
 
-            maxima = next_maxima
+                    if dominated:
+                        remove.add(candidate)
+                        break
 
-        # if *nobody* cares, we can just take the first one
-        result = maxima[0]
-        self.strategy = next(
-            index for index in range(len(utilities))
-            if id(utilities[index]) == id(result)
-        )
-        return result
+            # result is all children's utilities inductively, minus those dropped
+            return result - remove
