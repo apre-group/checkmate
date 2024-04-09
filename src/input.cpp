@@ -3,29 +3,6 @@
 #include "json.hpp"
 
 #include "input.hpp"
-#include "utils.hpp"
-
-std::vector<std::reference_wrapper<const Choice>> Node::compute_history() const {
-	std::vector<std::reference_wrapper<const Choice>> result;
-	auto current = this;
-	while (current->parent) {
-		auto &choice = current->parent->get_choice(current);
-		result.emplace_back(choice);
-		current = current->parent;
-	}
-	std::reverse(result.begin(), result.end());
-	return result;
-}
-
-size_t Node::history_length() const {
-	size_t result = 0;
-	auto current = this;
-	while (current->parent) {
-		result++;
-		current = current->parent;
-	}
-	return result;
-}
 
 // lexical analysis for expressions
 struct Lexer {
@@ -404,7 +381,7 @@ using json = nlohmann::json;
  * TODO does not check all aspects
  * (hoping to have new input format based on s-expressions, which would be much easier to parse)
  */
-static std::unique_ptr<Node> load_tree(const Input &input, std::vector<z3::Bool> &action_constraints, Parser &parser, const json &node) {
+static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const json &node) {
 	// branch
 	if (node.contains("children")) {
 		// do linear-time lookup for the index of the node's player in the input player list
@@ -415,19 +392,11 @@ static std::unique_ptr<Node> load_tree(const Input &input, std::vector<z3::Bool>
 		if (player == input.players.size())
 			throw std::logic_error("undeclared player in the input");
 
-		std::vector<z3::Bool> actions;
 		std::unique_ptr<Branch> branch(new Branch(player));
 		for (const json &child: node["children"]) {
-			// fresh variable for each action
-			auto action = z3::Bool::fresh();
-			auto loaded = load_tree(input, action_constraints, parser, child["child"]);
-			loaded->parent = branch.get();
-			branch->choices.push_back({{child["action"], action}, std::move(loaded)});
-			actions.push_back(action);
+			auto loaded = load_tree(input, parser, child["child"]);
+			branch->choices.push_back({child["action"], std::move(loaded)});
 		}
-
-		// single action constraint for this sub-tree
-		action_constraints.push_back(exactly_one(actions));
 		return branch;
 	}
 
@@ -507,17 +476,18 @@ Input::Input(const char *path) {
 		players.push_back({player});
 	sort(players.begin(), players.end());
 
+	// load honest histories automatically
+	honest = document["honest_histories"];
+
 	// load real/infinitesimal identifiers
 	for (const json &real: document["constants"]) {
 		const std::string &name = real;
 		auto constant = z3::Real::constant(name);
-		quantify.push_back(constant);
 		utilities.insert({name, {constant, z3::Real::ZERO}});
 	}
 	for (const json &infinitesimal: document["infinitesimals"]) {
 		const std::string &name = infinitesimal;
 		auto constant = z3::Real::constant(name);
-		quantify.push_back(constant);
 		utilities.insert({name, {z3::Real::ZERO, constant}});
 	}
 
@@ -563,32 +533,12 @@ Input::Input(const char *path) {
 	}
 	practicality_constraint = conjunction(conjuncts);
 
-	// buffer for per-node action constraints
-	std::vector<z3::Bool> action_constraints;
-
 	// load the game tree and leak it so we can downcast to Branch
-	auto node = load_tree(*this, action_constraints, parser, document["tree"]).release();
+	auto node = load_tree(*this, parser, document["tree"]).release();
 	if (node->is_leaf()) {
 		std::cerr << "checkmate: root node is a leaf (?!) - exiting" << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 	// un-leaked and downcasted here
 	root = std::unique_ptr<Branch>(static_cast<Branch *>(node));
-
-	// load honest histories and work out which leaves they go to
-	for (const json &honest_history: document["honest_histories"]) {
-		const Node *current = root.get();
-		std::vector<z3::Bool> history;
-		for (const json &action: honest_history) {
-			const auto &branch = current->branch();
-			const auto &choice = branch.get_choice(action);
-			history.push_back(choice.action.variable);
-			current = choice.node.get();
-		}
-		const auto &leaf = current->leaf();
-		honest_histories.push_back(conjunction(history));
-		honest_history_leaves.push_back(leaf);
-		readable_honest_histories.push_back(honest_history);
-	}
-	action_constraint = conjunction(action_constraints);
 }

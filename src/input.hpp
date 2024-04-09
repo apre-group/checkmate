@@ -2,7 +2,6 @@
 #define __checkmate_input__
 
 #include <memory>
-#include <stdexcept>
 #include <string>
 #include <unordered_map>
 
@@ -14,8 +13,6 @@
 struct Action {
 	// the name of the action
 	std::string name;
-	// a Z3 variable representing taking this action
-	z3::Bool variable;
 
 	friend std::ostream &operator<<(std::ostream &out, const Action &action) {
 		return out << action.name;
@@ -52,20 +49,14 @@ struct Node {
 	// if !is_leaf(), do the downcast
 	const Branch &branch() const;
 
-	// parent node, or `nullptr` if the root
-	Branch *parent = nullptr;
-
-	// traverse upwards to compute the history for this node
-	std::vector<std::reference_wrapper<const Choice>> compute_history() const;
-
-	// the length of that history
-	size_t history_length() const;
+	// are we (currently) along the honest history?
+	mutable bool honest = false;
 };
 
 // a choice available at a branch
 struct Choice {
 	// take this action
-	Action action;
+	std::string action;
 	// end up in this subtree
 	std::unique_ptr<Node> node;
 
@@ -84,14 +75,14 @@ struct Leaf final : public Node {
 
 // branch node
 struct Branch final : public Node {
-	Branch(unsigned player) : player(player), label(z3::Bool::fresh()) {}
+	Branch(unsigned player) : player(player) {}
 
 	virtual bool is_leaf() const { return false; }
 
 	// do a linear-time lookup of `action` by name in the branch, which must be present
 	const Choice &get_choice(const std::string &action) const {
 		for (const Choice &choice: choices)
-			if (choice.action.name == action)
+			if (choice.action == action)
 				return choice;
 
 		assert(false);
@@ -108,12 +99,57 @@ struct Branch final : public Node {
 		UNREACHABLE;
 	}
 
+	const Choice &get_honest_child() const {
+		for (const Choice &choice: choices)
+			if (choice.node->honest)
+				return choice;
+
+		assert(false);
+		UNREACHABLE;
+	}
+
 	// whose turn is it?
 	unsigned player;
-	// label for this branch
-	z3::Bool label;
 	// available choices, from which actions should be unique
 	std::vector<Choice> choices;
+
+	// the reason that a check for a property failed:
+	// null if didn't fail or no case split would help
+	mutable z3::Bool reason;
+
+	void mark_honest(const std::vector<std::string> &history) const {
+		assert(!honest);
+
+		honest = true;
+		const Node *current = this;
+		unsigned index = 0;
+		do {
+			current = current->branch().get_choice(history[index++]).node.get();
+			current->honest = true;
+		} while(!current->is_leaf());
+	}
+
+	void reset_honest() const {
+		if(!honest)
+			return;
+
+		honest = false;
+		const Node *current = this;
+		do {
+			current = current->branch().get_honest_child().node.get();
+			current->honest = false;
+		} while(!current->is_leaf());
+	}
+
+	void reset_reason() const {
+		if(reason.null())
+			return;
+
+		::new (&reason) z3::Bool();
+		for(auto &choice: choices)
+			if(!choice.node->is_leaf())
+				choice.node->branch().reset_reason();
+	}
 };
 
 inline const Leaf &Node::leaf() const {
@@ -130,13 +166,11 @@ struct Input {
 
 	// list of players in alphabetical order
 	std::vector<std::string> players;
-	// all real or infinitesimal constants
-	std::vector<z3::Real> quantify;
+	// list of honest histories
+	std::vector<std::vector<std::string>> honest;
+
 	// a real or infinitesimal utility for each string
 	std::unordered_map<std::string, Utility> utilities;
-
-	// constraint: at each branch exactly one action must be taken
-	z3::Bool action_constraint;
 
 	// global initial constraints
 	z3::Bool initial_constraint;
@@ -148,14 +182,6 @@ struct Input {
 	z3::Bool collusion_resilience_constraint;
 	// practicality initial constraints
 	z3::Bool practicality_constraint;
-	// honest histories
-	std::vector<z3::Bool> honest_histories;
-
-	// honest histories for output
-	std::vector<std::vector<std::string>> readable_honest_histories;
-
-	// the leaves reached by each honest history, living as long as the containing input
-	std::vector<std::reference_wrapper<const Leaf>> honest_history_leaves;
 
 	// root: NB must be a branch
 	std::unique_ptr<Branch> root;

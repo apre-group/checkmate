@@ -1,14 +1,9 @@
 #ifndef __checkmate_property__
 #define __checkmate_property__
 
-#include "input.hpp"
-#include "options.hpp"
+struct Input;
+struct Options;
 
-template<bool weaker>
 void weak_immunity(const Options &options, const Input &input);
-
-void collusion_resilience(const Options &options, const Input &input);
-
-void practicality(const Options &options, const Input &input);
 
 #endif
