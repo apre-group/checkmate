@@ -279,6 +279,7 @@ class Branch(Tree):
             )
 
             honest_utilities = children.pop(self.strategy)
+            assert len(honest_utilities)==1
             # the utility at the leaf of the honest history
             honest_utility = honest_utilities.pop()
             # this should be maximal against other children, so...
