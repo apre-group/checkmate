@@ -391,7 +391,7 @@ bool property_under_split(z3::Solver *solver, const Options &options, const Inpu
 
 	else if (property == "PRACTICALITY") {
 		solver->push();
-		bool pr = practicality_rec(solver, input.root.get()).size() == 0;
+		bool pr = practicality_rec(solver, input.root.get()).size() != 0;
 		solver->pop();
 		return pr;
 	}
