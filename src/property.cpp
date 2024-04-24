@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <unordered_set>
 #include <bits/stdc++.h> 
+#include <string>
 
 #include "input.hpp"
 #include "options.hpp"
@@ -13,6 +14,8 @@
 using z3::Bool;
 using z3::Solver;
 
+
+
 bool weak_immunity_rec(z3::Solver *solver, Node *node, unsigned player) {
 
 	if (node->is_leaf()) {
@@ -20,8 +23,6 @@ bool weak_immunity_rec(z3::Solver *solver, Node *node, unsigned player) {
 		// known utility for us
 		auto utility = leaf.utilities[player];
 		auto condition = utility.operator>=({z3::Real::ZERO, z3::Real::ZERO});
-
-		// std::cout << "condition " << condition << " for player " << player << std::endl;
 
 		std::vector<Bool> assumptions;
 		assumptions.push_back(!condition);
@@ -35,7 +36,7 @@ bool weak_immunity_rec(z3::Solver *solver, Node *node, unsigned player) {
 			return false;
 		}
 
-		// todo set reason
+		leaf.reason = condition;
 		return false;
 	}
 
@@ -55,14 +56,18 @@ bool weak_immunity_rec(z3::Solver *solver, Node *node, unsigned player) {
 			if (weak_immunity_rec(solver, subtree, player)) {
 				return true;
 			} 
-			
+
+			branch.reason = subtree->reason;
 			return false;
 		}
 		// otherwise we can take any strategy we please as long as it's weak immune
 		for (const Choice &choice: branch.choices) {
 			if (weak_immunity_rec(solver, choice.node.get(), player)) {
 				return true;
-			}			
+			}
+			if (!choice.node.get()->reason.null()) {
+				branch.reason = choice.node.get()->reason;
+			}		
 		}
 		return false;
 	} else {
@@ -70,6 +75,7 @@ bool weak_immunity_rec(z3::Solver *solver, Node *node, unsigned player) {
 		// so all branches should be weak immune for the player
 		for (const Choice &choice: branch.choices) {
 			if (!weak_immunity_rec(solver, choice.node.get(), player)) {
+				branch.reason = choice.node.get()->reason;
 				return false;
 			}
 		}
@@ -77,49 +83,6 @@ bool weak_immunity_rec(z3::Solver *solver, Node *node, unsigned player) {
 	}
 
 } 
-
- void weak_immunity(const Options &options, const Input &input) {
-
-	std::cout << std::endl;
-	std::cout << std::endl;
-	std::cout << "WEAK IMMUNITY" << std::endl;
-
-	// property is the same for all honest histories
-	auto property_constraint = input.weak_immunity_constraint;
-
-	Solver solver;
-	solver.assert_(input.initial_constraint);
-	// std::cout << "initial constraint(s) " << input.initial_constraint << std::endl;
-	solver.assert_(property_constraint);
-	// std::cout << "property constraint(s) " << property_constraint << std::endl;
-
-	for (size_t history = 0; history < input.honest.size(); history++) {
-		std::cout << std::endl;
-		std::cout << "Is history " << input.honest[history] << " weak immune?" << std::endl;
-
-		input.root.get()->reset_honest();
-		input.root.get()->reset_reason();
-		input.root.get()->mark_honest(input.honest[history]);	
-
-		bool wi = true;	
-
-		for (size_t player = 0; player < input.players.size(); player++) {
-			// make a fresh frame for current player
-			solver.push();
-			bool weak_immune_for_player = weak_immunity_rec(&solver, input.root.get(), player);
-			solver.pop();
-			if (!weak_immune_for_player) {
-				std::cout << "NO, it is not weak immune (or case splits needed !)." << std::endl;
-				wi = false;
-				break;
-			}
-		}
-
-		if (wi)
-			std::cout << "YES, it is weak immune." << std::endl;
-
-	}
-}
 
 const Leaf& get_honest_leaf(Node *node, const std::vector<std::string> &history, int index) {
     if (node->is_leaf()) {
@@ -155,7 +118,7 @@ bool collusion_resilience_rec(z3::Solver *solver, Node *node, std::bitset<Input:
 			return false;
 		}
 
-		// todo set reason
+		leaf.reason = condition;
 		return false;
 	}
 
@@ -171,87 +134,35 @@ bool collusion_resilience_rec(z3::Solver *solver, Node *node, std::bitset<Input:
 			// to do: set chosen action i.e. startegy for this note to be honest_choise->action
 			// for this we need to add a property strategy to our nodes
 
-			// the honest choice must be weak immune
+			// the honest choice must be collusion resilient
 			if (collusion_resilience_rec(solver, subtree, group, honest_total, players)) {
 				return true;
 			} 
 			
+			branch.reason = subtree->reason;
 			return false;
 		}
-		// otherwise we can take any strategy we please as long as it's weak immune
+		// otherwise we can take any strategy we please as long as it's collusion resilient
 		for (const Choice &choice: branch.choices) {
 			if (collusion_resilience_rec(solver, choice.node.get(), group, honest_total, players)) {
 				return true;
-			}			
+			}	
+			if (!choice.node.get()->reason.null()) {
+				branch.reason = choice.node.get()->reason;
+			}		
 		}
 		return false;
 	} else {
 		// if we are not the honest player, we could do anything,
-		// so all branches should be weak immune for the player
+		// so all branches should be collusion resilient for the player
 		for (const Choice &choice: branch.choices) {
 			if (!collusion_resilience_rec(solver, choice.node.get(), group, honest_total, players)) {
+				branch.reason = choice.node.get()->reason;
 				return false;
 			}
 		}
 		return true;
 	}
-}
-
-void collusion_resilience(const Options &options, const Input &input) {
-
-	std::cout << std::endl;
-	std::cout << std::endl;
-	std::cout << "COLLUSION RESILIENCE" << std::endl;
-	assert(input.players.size() < Input::MAX_PLAYERS);
-
-	// property is the same for all honest histories
-	auto property_constraint = input.collusion_resilience_constraint;
-
-	Solver solver;
-	solver.assert_(input.initial_constraint);
-	// std::cout << "initial constraint(s) " << input.initial_constraint << std::endl;
-	solver.assert_(property_constraint);
-	// std::cout << "property constraint(s) " << property_constraint << std::endl;
-
-	for (size_t history = 0; history < input.honest.size(); history++) {
-		std::cout << std::endl;
-		std::cout << "Is history " << input.honest[history] << " collusion resilient?" << std::endl;
-		input.root.get()->reset_honest();
-		input.root.get()->reset_reason();
-		input.root.get()->mark_honest(input.honest[history]);	
-
-		// lookup the leaf for this history
-		const Leaf &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
-
-		bool cr = true;
-
-		// sneaky hack follows: all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
-		// done this way more for concision than efficiency
-		for (uint64_t binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++) {
-			std::bitset<Input::MAX_PLAYERS> group = binary_counter;
-			Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
-			// compute the honest total for the current group
-			for (size_t player = 0; player < input.players.size(); player++)
-				if (group[player])
-					honest_total = honest_total + honest_leaf.utilities[player];
-
-			// make a fresh frame for current group
-			solver.push();
-			bool collusion_resilient_for_group = collusion_resilience_rec(&solver, input.root.get(), group, honest_total, input.players.size());
-			solver.pop();
-			if (!collusion_resilient_for_group) {
-				std::cout << "NO, it is not collusion resilient (or case splits needed !)." << std::endl;
-				cr = false;
-				break;
-			}
-		
-		}
-
-		if (cr)
-			std::cout << "YES, it is collusion resilient." << std::endl;
-
-	}
-
 }
 
 bool utility_tuples_eq(std::vector<Utility> tuple1, std::vector<Utility> tuple2) {
@@ -281,9 +192,6 @@ std::unordered_set<std::vector<Utility>, std::hash<std::vector<Utility>>> practi
 		return result;
 	}  
 
-	// return std::unordered_set<std::vector<Utility>, std::hash<std::vector<Utility>>>();
-
-
  	const auto &branch = node->branch();
 	// else we deal with a branch
 
@@ -298,7 +206,7 @@ std::unordered_set<std::vector<Utility>, std::hash<std::vector<Utility>>> practi
 
 		// there is no practical child (propagate reason for case split, if any)
 		if(utilities.empty()) {
-			// TO do: set ´reason´
+			branch.reason = choice.node.get()->reason;
 			// return empty set
 			return std::unordered_set<std::vector<Utility>, std::hash<std::vector<Utility>>>(); 
 		}
@@ -337,7 +245,7 @@ std::unordered_set<std::vector<Utility>, std::hash<std::vector<Utility>>> practi
 					assumptions2.push_back(!condition);
 					if (solver->solve(assumptions2) == z3::Result::SAT) {
 						// might be maximal, just couldn't prove it
-						// to do: set reason
+						branch.reason = !condition;
 					}
 				} else {
 					found = true;
@@ -408,8 +316,7 @@ std::unordered_set<std::vector<Utility>, std::hash<std::vector<Utility>>> practi
 						std::vector<Bool> assumptions2;
 						assumptions2.push_back(!condition);
 						if (solver->solve(assumptions2) == z3::Result::SAT) {
-							// might be dominated, but can't prove it
-							// todo: set reason
+							branch.reason = !condition;
 							// return empty set
 							return std::unordered_set<std::vector<Utility>, std::hash<std::vector<Utility>>>(); 
 						}
@@ -440,36 +347,142 @@ std::unordered_set<std::vector<Utility>, std::hash<std::vector<Utility>>> practi
 
 }
 
-void practicality(const Options &options, const Input &input) {
-	std::cout << std::endl;
-	std::cout << std::endl;
-	std::cout << "PRACTICALITY" << std::endl;
+bool property_under_split(z3::Solver *solver, const Options &options, const Input &input, const std::string property, size_t history) {
+	/* determine if the input has some property for the current honest history under the current split */
+	
+	if (property == "WEAK IMMUNITY") {
+		for (size_t player = 0; player < input.players.size(); player++) {
+			// make a fresh frame for current player
+			solver->push();
+			bool weak_immune_for_player = weak_immunity_rec(solver, input.root.get(), player);
+			solver->pop();
+			if (!weak_immune_for_player) {
+				return false;
+			}
+		}
+		return true;
+	}
 
-	// property is the same for all honest histories
-	auto property_constraint = input.practicality_constraint;
+	else if (property == "COLLUSION RESILIENCE") {
+		// lookup the leaf for this history
+		const Leaf &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
+		// sneaky hack follows: all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
+		// done this way more for concision than efficiency
+		for (uint64_t binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++) {
+			std::bitset<Input::MAX_PLAYERS> group = binary_counter;
+			Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
+			// compute the honest total for the current group
+			for (size_t player = 0; player < input.players.size(); player++)
+				if (group[player]) {
+					honest_total = honest_total + honest_leaf.utilities[player];
+				}
+					
+
+			// make a fresh frame for current group
+			solver->push();
+			bool collusion_resilient_for_group = collusion_resilience_rec(solver, input.root.get(), group, honest_total, input.players.size());
+			solver->pop();
+			if (!collusion_resilient_for_group) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	else if (property == "PRACTICALITY") {
+		solver->push();
+		bool pr = practicality_rec(solver, input.root.get()).size() == 0;
+		solver->pop();
+		return pr;
+	}
+
+	assert(false);
+
+}
+
+bool property_rec(z3::Solver *solver, const Options &options, const Input &input, const std::string property, std::vector<z3::Bool> current_case, size_t history) {
+	/* 
+		actual case splitting engine
+		determine if the input has some property for the current honest history, splitting recursively
+	*/
+	
+	// property holds under current split
+	if (property_under_split(solver, options, input, property, history)) {
+		std::cout << "Property satisfied for current case: " << current_case << std::endl;
+		return true;
+	}
+
+	// otherwise consider case split
+	z3::Bool split = input.root.get()->reason;
+	// there is no case split
+	if (split.null()) {
+		std::cout << "Property violated in case: " << current_case << std::endl;
+		return false;
+	}
+
+	std::cout << "Splitting on: " << split << std::endl;
+
+	solver->push();
+	solver->assert_(split);
+	assert (solver->solve() != z3::Result::UNSAT);
+	std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
+	new_current_case.push_back(split);
+	bool attempt = property_rec(solver, options, input, property, new_current_case, history);
+	solver->pop();
+	if (!attempt) 
+		return false;
+
+	solver->push();
+	solver->assert_(!split);
+	assert (solver->solve() != z3::Result::UNSAT);
+	std::vector<z3::Bool> new_current_case2(current_case.begin(), current_case.end());
+	new_current_case2.push_back(!split);
+	bool attempt2 = property_rec(solver, options, input, property, new_current_case2, history);
+	solver->pop();
+	if (!attempt2) 
+		return false;
+
+	return true;
+}
+
+void property(const Options &options, const Input &input, const std::string property, size_t history) {
+	/* determine if the input has some property for the current honest history */
+	std::cout << std::endl;
+	std::cout << std::endl;
+	std::cout << property << std::endl;
 
 	Solver solver;
 	solver.assert_(input.initial_constraint);
-	// std::cout << "initial constraint(s) " << input.initial_constraint << std::endl;
-	solver.assert_(property_constraint);
-	// std::cout << "property constraint(s) " << property_constraint << std::endl;
 
-	for (size_t history = 0; history < input.honest.size(); history++) {
+	if (property == "WEAK IMMUNITY")
+		solver.assert_(input.weak_immunity_constraint);
+	if (property == "COLLUSION RESILIENCE")
+		solver.assert_(input.collusion_resilience_constraint);
+	if (property == "PRACTICALITY")
+		solver.assert_(input.practicality_constraint);
+
+	assert(solver.solve() == z3::Result::SAT);
+
+	if (property_rec(&solver, options, input, property, std::vector<z3::Bool>(), history))
+		std::cout << "YES, property " << property << " is satisfied" << std::endl;
+
+}
+
+void analyse_properties(const Options &options, const Input &input) {
+	/* iterate over all honest histories and check the properties for each of them */
+	for (size_t history = 0; history < input.honest.size(); history++) { 
 		std::cout << std::endl;
-		std::cout << "Is history " << input.honest[history] << " practical?" << std::endl;
+		std::cout << "Checking history " << input.honest[history] << std::endl;
+
 		input.root.get()->reset_honest();
 		input.root.get()->reset_reason();
-		input.root.get()->mark_honest(input.honest[history]);	
+		input.root.get()->mark_honest(input.honest[history]);
 
-		solver.push();
-		if(practicality_rec(&solver, input.root.get()).size() == 0) {
-			std::cout << "NO, it is not practical (or case splits needed !)." << std::endl;
-		} else {
-			std::cout << "YES, it is practical." << std::endl;
-		}
-		
-		solver.pop();
-
+		if (options.weak_immunity)
+			property(options, input, "WEAK IMMUNITY", history);
+		if (options.collusion_resilience)
+			property(options, input, "COLLUSION RESILIENCE", history);
+		if (options.practicality)
+			property(options, input, "PRACTICALITY", history);
 	}
-
 }

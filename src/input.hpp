@@ -51,6 +51,10 @@ struct Node {
 
 	// are we (currently) along the honest history?
 	mutable bool honest = false;
+
+	// the reason that a check for a property failed:
+	// null if didn't fail or no case split would help
+	mutable z3::Bool reason;
 };
 
 // a choice available at a branch
@@ -112,10 +116,6 @@ struct Branch final : public Node {
 	unsigned player;
 	// available choices, from which actions should be unique
 	std::vector<Choice> choices;
-
-	// the reason that a check for a property failed:
-	// null if didn't fail or no case split would help
-	mutable z3::Bool reason;
 
 	void mark_honest(const std::vector<std::string> &history) const {
 		assert(!honest);
