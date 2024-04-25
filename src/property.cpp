@@ -936,92 +936,137 @@ void practicality(const Options &options, const Input &input) {
 				);
 				z3::Model model;
 				Node *next;
-				// if there is no counterexample in the current case, we have to split further
-				if (!(model = ce_helper.solve_for_counterexample())) {
-					// case split necessary to get a counterexample
-					auto split = ce_helper.find_split();
-					assert(!split.null());
-					// append positive and negative case splits
-					std::vector<z3::Bool> pos_case;
-					std::vector<z3::Bool> neg_case;
-					for (const z3::Bool exp: counterexample.case_) {
-						pos_case.push_back(exp);
-						neg_case.push_back(exp);
-					}
-					pos_case.push_back(split);
-					neg_case.push_back(split.invert());
-					// positive case
-					helper.counterexamples.push_back({
-															 pos_case,
-															 std::move(counterexample.parts)
-													 });
-					// negative case
-					helper.counterexamples.push_back({
-															 neg_case,
-															 std::move(counterexample.parts)
-													 });
-				}
-				while ((model = ce_helper.solve_for_counterexample())) {
-					std::cout << "Counterexample for " << counterexample.case_ << ":" << std::endl;
-					next = input.root.get();
-					std::vector<std::string> dev_history;
-					std::vector<Bool> conflict;
-					const auto hon_history = input.readable_honest_histories[history];
-					int i = 0;
-					bool already_deviated = false;
-					unsigned int dev_player = 0;
-					unsigned int deviation_point = 0;
-					while (!next->is_leaf()) {
-						const Branch &current = next->branch();
-						for (const auto &choice: current.choices) {
-							if (model.assigns<true>(choice.action.variable)) {
-								dev_history.push_back(choice.action.name);
-								conflict.push_back(choice.action.variable);
-								next = choice.node.get();
-								if (hon_history[i] == choice.action.name and !already_deviated) {
-									i++;
-								} else if (hon_history[i] != choice.action.name and !already_deviated) {
-									already_deviated = true;
-									dev_player = current.player;
-									deviation_point = i;
-								}
+				bool found_a_ce = false;
+				// while (!found_a_ce) {
 
+					// before each new case split, the negated histories have to be removed from the constraints again
+					// hence we should collect them in a different way?
+
+
+					// if there is no counterexample in the current case, we have to split further
+					if (!(model = ce_helper.solve_for_counterexample())) {
+						// case split necessary to get a counterexample
+						auto split = ce_helper.find_split();
+						assert(!split.null());
+						// append positive and negative case splits
+						std::vector<z3::Bool> pos_case;
+						std::vector<z3::Bool> neg_case;
+						for (const z3::Bool exp: counterexample.case_) {
+							pos_case.push_back(exp);
+							neg_case.push_back(exp);
+						}
+						pos_case.push_back(split);
+						neg_case.push_back(split.invert());
+						// positive case
+						helper.counterexamples.push_back({
+																pos_case,
+																counterexample.parts
+														});
+						// negative case
+						helper.counterexamples.push_back({
+																neg_case,
+																counterexample.parts
+														});
+						continue;
+					}
+					
+					ce_helper.solver.push();
+					while ((model = ce_helper.solve_for_counterexample())) {
+						next = input.root.get();
+						std::vector<std::string> dev_history;
+						std::vector<Bool> conflict;
+						const auto hon_history = input.readable_honest_histories[history];
+						int i = 0;
+						bool already_deviated = false;
+						unsigned int dev_player = 0;
+						unsigned int deviation_point = 0;
+						while (!next->is_leaf()) {
+							const Branch &current = next->branch();
+							for (const auto &choice: current.choices) {
+								if (model.assigns<true>(choice.action.variable)) {
+									dev_history.push_back(choice.action.name);
+									conflict.push_back(choice.action.variable);
+									next = choice.node.get();
+									if (hon_history[i] == choice.action.name and !already_deviated) {
+										i++;
+									} else if (hon_history[i] != choice.action.name and !already_deviated) {
+										already_deviated = true;
+										dev_player = current.player;
+										deviation_point = i;
+									}
+
+								}
 							}
 						}
+
+						Utility dev_utility = static_cast<Leaf *>(next)->utilities[dev_player];
+						const Leaf &honest_leaf = input.honest_history_leaves[history];
+						Utility hon_utility = honest_leaf.utilities[dev_player];
+
+						// check if deviation actually better
+						Solver actual_ce_solver;
+						z3::Bool conj_case = z3::conjunction(counterexample.case_);
+						z3::Bool conj_pr = input.practicality_constraint;
+						z3::Bool conj_prec = input.initial_constraint;
+						z3::Bool conj = z3::conjunction({conj_case, conj_pr, conj_prec});
+						z3::Bool ineq = dev_utility > hon_utility;
+						z3::Bool impl = z3::conjunction({conj, !ineq});
+						actual_ce_solver.assert_(impl);
+						auto result = actual_ce_solver.solve();
+						// only a deviation with better utility is an actual counterexample
+						if (result == z3::Result::UNSAT) {
+							std::cout << "Counterexample for " << counterexample.case_ << ":" << std::endl;
+							found_a_ce = true;
+							std::vector<std::string> dev_subhist;
+							for (unsigned int i = deviation_point; i < dev_history.size(); i++) {
+								dev_subhist.push_back(dev_history[i]);
+							}
+							std::vector<std::string> hon_subhist;
+							for (unsigned int i = 0; i < deviation_point; i++) {
+								hon_subhist.push_back(dev_history[i]);
+							}
+							std::cout << "\tPlayer " << input.players[dev_player] << " profits from deviating to " << dev_subhist << " after " << hon_subhist << std::endl;
+							ce_helper.solver.assert_(!conjunction(conflict));
+							if (!options.all_counterexamples) {
+								stop_gen = true;
+								break;
+							}
+						}
+						else {
+							ce_helper.solver.assert_(!conjunction(conflict));
+						}
 					}
 
-					Utility dev_utility = static_cast<Leaf *>(next)->utilities[dev_player];
-					const Leaf &honest_leaf = input.honest_history_leaves[history];
-					Utility hon_utility = honest_leaf.utilities[dev_player];
+					ce_helper.solver.pop();
 
-					// check if deviation actually better
-					Solver actual_ce_solver;
-					z3::Bool conj_case = z3::conjunction(counterexample.case_);
-					z3::Bool conj_pr = input.practicality_constraint;
-					z3::Bool conj_prec = input.initial_constraint;
-					z3::Bool conj = z3::conjunction({conj_case, conj_pr, conj_prec});
-					z3::Bool ineq = dev_utility > hon_utility;
-					z3::Bool impl = z3::conjunction({conj, !ineq});
-					actual_ce_solver.assert_(impl);
-					auto result = actual_ce_solver.solve();
-					// only a deviation with better utility is an actual counterexample
-					if (result == z3::Result::UNSAT) {
-						std::vector<std::string> dev_subhist;
-						for (unsigned int i = deviation_point; i < dev_history.size(); i++) {
-							dev_subhist.push_back(dev_history[i]);
+
+					if (!found_a_ce) {
+						// case split necessary to get a counterexample
+						auto split = ce_helper.find_split();
+						if (split.null()) {
+							continue;
 						}
-						std::vector<std::string> hon_subhist;
-						for (unsigned int i = 0; i < deviation_point; i++) {
-							hon_subhist.push_back(dev_history[i]);
+						// append positive and negative case splits
+						std::vector<z3::Bool> pos_case;
+						std::vector<z3::Bool> neg_case;
+						for (const z3::Bool exp: counterexample.case_) {
+							pos_case.push_back(exp);
+							neg_case.push_back(exp);
 						}
-						std::cout << "\tPlayer " << input.players[dev_player] << " profits from deviating to " << dev_subhist << " after " << hon_subhist << std::endl;
-						ce_helper.solver.assert_(!conjunction(conflict));
-						if (!options.all_counterexamples) {
-							stop_gen = true;
-							break;
-						}
+						pos_case.push_back(split);
+						neg_case.push_back(split.invert());
+						// positive case
+						helper.counterexamples.push_back({
+																pos_case,
+																counterexample.parts
+														});
+						// negative case
+						helper.counterexamples.push_back({
+																neg_case,
+																counterexample.parts
+														});
 					}
-				}
+				// }
 			}
 
 			if (options.preconditions) {
