@@ -5,3 +5,4 @@ build/
 __pycache__/
 venv/
 *.json
+examples/other_examples/f_asset_minting.py
