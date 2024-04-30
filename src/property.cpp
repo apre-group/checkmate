@@ -25,6 +25,7 @@ bool weak_immunity_rec(z3::Solver *solver, Node *node, unsigned player) {
 		auto condition = utility.operator>=({z3::Real::ZERO, z3::Real::ZERO});
 
 		std::vector<Bool> assumptions;
+		
 		assumptions.push_back(!condition);
 		if (solver->solve(assumptions) == z3::Result::UNSAT) {
 			return true;
@@ -37,6 +38,7 @@ bool weak_immunity_rec(z3::Solver *solver, Node *node, unsigned player) {
 		}
 
 		leaf.reason = condition;
+
 		return false;
 	}
 
@@ -204,11 +206,11 @@ std::unordered_set<std::vector<Utility>, std::hash<std::vector<Utility>>> practi
 	for (const Choice &choice: branch.choices) {
 		std::unordered_set<std::vector<Utility>, std::hash<std::vector<Utility>>> utilities = practicality_rec(solver, choice.node.get());
 
-		// there is no practical child (propagate reason for case split, if any)
+		// this child has no practical strategy (propagate reason for case split, if any) 
 		if(utilities.empty()) {
 			branch.reason = choice.node.get()->reason;
 			// return empty set
-			return std::unordered_set<std::vector<Utility>, std::hash<std::vector<Utility>>>(); 
+			return std::unordered_set<std::vector<Utility>, std::hash<std::vector<Utility>>>(); /* Q: can we do a case split here? */
 		}
 
 		if(choice.node.get()->honest) {
@@ -247,8 +249,10 @@ std::unordered_set<std::vector<Utility>, std::hash<std::vector<Utility>>> practi
 						// might be maximal, just couldn't prove it
 						branch.reason = !condition;
 					}
-				} else {
+				} 
+				else {
 					found = true;
+					break;
 				}
 			}
 			if (!found) {
@@ -351,7 +355,9 @@ bool property_under_split(z3::Solver *solver, const Options &options, const Inpu
 	/* determine if the input has some property for the current honest history under the current split */
 	
 	if (property == "WEAK IMMUNITY") {
+		
 		for (size_t player = 0; player < input.players.size(); player++) {
+			
 			// make a fresh frame for current player
 			solver->push();
 			bool weak_immune_for_player = weak_immunity_rec(solver, input.root.get(), player);
@@ -405,7 +411,7 @@ bool property_rec(z3::Solver *solver, const Options &options, const Input &input
 		actual case splitting engine
 		determine if the input has some property for the current honest history, splitting recursively
 	*/
-	
+
 	// property holds under current split
 	if (property_under_split(solver, options, input, property, history)) {
 		std::cout << "Property satisfied for current case: " << current_case << std::endl;
@@ -422,9 +428,12 @@ bool property_rec(z3::Solver *solver, const Options &options, const Input &input
 
 	std::cout << "Splitting on: " << split << std::endl;
 
+	input.root.get()->reset_reason();
+
+	//std::cout << "Case: " << split << std::endl;
 	solver->push();
 	solver->assert_(split);
-	assert (solver->solve() != z3::Result::UNSAT);
+	assert (solver->solve() != z3::Result::UNSAT); /* check this! */
 	std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
 	new_current_case.push_back(split);
 	bool attempt = property_rec(solver, options, input, property, new_current_case, history);
@@ -432,6 +441,8 @@ bool property_rec(z3::Solver *solver, const Options &options, const Input &input
 	if (!attempt) 
 		return false;
 
+	input.root.get()->reset_reason();
+	
 	solver->push();
 	solver->assert_(!split);
 	assert (solver->solve() != z3::Result::UNSAT);
@@ -472,7 +483,7 @@ void analyse_properties(const Options &options, const Input &input) {
 	/* iterate over all honest histories and check the properties for each of them */
 	for (size_t history = 0; history < input.honest.size(); history++) { 
 		std::cout << std::endl;
-		std::cout << "Checking history " << input.honest[history] << std::endl;
+		std::cout << "Checking history " << input.honest[history] << std::endl; /* Q: Iterate over histories then props or vice versa?*/
 
 		input.root.get()->reset_honest();
 		input.root.get()->reset_reason();

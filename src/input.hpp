@@ -75,6 +75,13 @@ struct Leaf final : public Node {
 
 	// utilities for each player: NB in lexicographic order of players!
 	std::vector<Utility> utilities;
+
+	void reset_reason() const {
+		if(reason.null())
+			return;
+
+		::new (&reason) z3::Bool();
+	}
 };
 
 // branch node
@@ -149,6 +156,8 @@ struct Branch final : public Node {
 		for(auto &choice: choices)
 			if(!choice.node->is_leaf())
 				choice.node->branch().reset_reason();
+			else
+				choice.node->leaf().reset_reason();
 	}
 };
 
