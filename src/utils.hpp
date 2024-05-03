@@ -12,6 +12,13 @@
 #define UNREACHABLE
 #endif
 
+enum class PropertyType {
+	WeakImmunity,
+	WeakerImmunity,
+	CollusionResilience,
+	Practicality
+};
+
 namespace std {
 	template<typename T>
 	ostream &operator<<(ostream &out, const vector<T> &vector) {
@@ -44,6 +51,28 @@ namespace std {
 	template<typename T>
 	ostream &operator<<(ostream &out, const std::reference_wrapper<T> &wrapper) {
 		return out << wrapper.get();
+	}
+
+	// overloading ostream for PropertyType
+	inline ostream &operator<<(ostream &out, const PropertyType &type) {
+		switch(type) {
+			case PropertyType::WeakImmunity:
+				out << "WEAK IMMUNITY";
+				break;
+			case PropertyType::WeakerImmunity:
+				out << "WEAKER IMMUNITY";
+				break;
+			case PropertyType::CollusionResilience:
+				out << "COLLUSION RESILIENCE";
+				break;
+			case PropertyType::Practicality:
+				out << "PRACTICALITY";
+				break;
+			default:
+				out << "UNKNOWN PROPERTY";
+				break;
+		}
+		return out;
 	}
 
 	template<typename Utility>

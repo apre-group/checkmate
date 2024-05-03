@@ -77,9 +77,6 @@ struct Leaf final : public Node {
 	std::vector<Utility> utilities;
 
 	void reset_reason() const {
-		if(reason.null())
-			return;
-
 		::new (&reason) z3::Bool();
 	}
 };
@@ -149,9 +146,6 @@ struct Branch final : public Node {
 	}
 
 	void reset_reason() const {
-		if(reason.null())
-			return;
-
 		::new (&reason) z3::Bool();
 		for(auto &choice: choices)
 			if(!choice.node->is_leaf())
