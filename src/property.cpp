@@ -17,6 +17,8 @@ using z3::Solver;
 using UtilityTuple = std::vector<Utility>;
 using UtilityTuplesSet = std::unordered_set<UtilityTuple, std::hash<UtilityTuple>>;
 
+std::vector<PotentialCase> practicality_rec(z3::Solver *solver, const Options &options, Node *node, std::vector<z3::Bool> current_case);
+bool practicality_admin(z3::Solver *solver, const Options &options, Node *root, std::vector<z3::Bool> current_case);
 
 bool weak_immunity_rec(z3::Solver *solver, Node *node, unsigned player, bool weaker) {
 
@@ -177,79 +179,78 @@ bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
 
 }
 
-UtilityTuplesSet practicality_rec(z3::Solver *solver, Node *node) {
-	  if (node->is_leaf()) {
-		// return the utility tuple of the leaf as a set (of one element)
-		const Leaf &leaf = node->leaf();
-		return {leaf.utilities};
-	}  
+/*z3::Bool getSplitForPracticality(Utility a, Utility b) {
+	if (a.real == b.real) 
+		return a.infinitesimal >= b.infinitesimal
+	else 
+		return a.real > b.real
+}*/
 
-	// else we deal with a branch
- 	const auto &branch = node->branch();
-
-	// get practical strategies and corresponding utilities recursively
-	std::vector<UtilityTuplesSet> children;
-
-	UtilityTuplesSet honest_utilities;
-
-	for (const Choice &choice: branch.choices) {
-		UtilityTuplesSet utilities = practicality_rec(solver, choice.node.get());
-
-		// this child has no practical strategy (propagate reason for case split, if any) 
-		if(utilities.empty()) {
-			branch.reason = choice.node->reason;
-			// return empty set
-			return {};
-		}
-
-		if(choice.node->honest) {
-			honest_utilities = utilities;
-		} else {
-			children.push_back(utilities);
-		}
-
-	}
-
-
-	if (branch.honest) {
-		// if we are at an honest node, our strategy must be the honest strategy
-
-		// to do: set chosen action i.e. startegy for this note to be honest_choice->action
-		// for this we need to add a property strategy to our nodes
+UtilityTuplesSet practicality_reasoning(z3::Solver *solver, const Options &options, Node *node, std::vector<z3::Bool> current_case, std::vector<UtilityTuplesSet> children, UtilityTuplesSet honest_utilities) {
+		const auto &branch = node->branch();
 		
-		assert(honest_utilities.size() == 1);
-		// the utility at the leaf of the honest history
-		UtilityTuple honest_utility = *honest_utilities.begin();
-		// this should be maximal against other players, so...
-		Utility maximum = honest_utility[branch.player];
+		if (branch.honest) {
+			// if we are at an honest node, our strategy must be the honest strategy
 
-		// for all other children
-		for (const auto& utilities : children) {
-			bool found = false;
-			// does there exist a possible utility such that `maximum` is geq than it?
-			 for (const auto& utility : utilities) {
-				auto condition = maximum < utility[branch.player];
-				if (solver->solve({condition}) == z3::Result::SAT) {
-					if (solver->solve({!condition}) == z3::Result::SAT) {
-						// might be maximal, just couldn't prove it
-						branch.reason = !condition;
+			// to do: set chosen action i.e. startegy for this note to be honest_choice->action
+			// for this we need to add a property strategy to our nodes
+			
+			assert(honest_utilities.size() == 1);
+			// the utility at the leaf of the honest history
+			UtilityTuple honest_utility = *honest_utilities.begin();
+			// this should be maximal against other players, so...
+			Utility maximum = honest_utility[branch.player];
+
+			// for all other children
+			for (const auto& utilities : children) {
+				bool found = false;
+				// does there exist a possible utility such that `maximum` is geq than it?
+				for (const auto& utility : utilities) {
+					auto condition = maximum < utility[branch.player];
+					if (solver->solve({condition}) == z3::Result::SAT) {
+						if (solver->solve({!condition}) == z3::Result::SAT) {
+							// might be maximal, just couldn't prove it
+							branch.reason = !condition;
+						}
+					} 
+					else {
+						found = true;
+						break;
 					}
-				} 
-				else {
-					found = true;
-					break;
 				}
-			}
-			if (!found) {
-				// return empty set
-				return {}; 
+				if (!found) {
+					// return empty set if no reason set
+					if (branch.reason.null()) {
+						return {}; 
+					} else {
+						// call this function for reason and !reason
+						z3::Bool split = branch.reason;
+						std::cout << "Splitting on: " << split << std::endl;
+
+						for (const z3::Bool& condition : {split, !split}) {
+							branch.reset_reason();
+
+							solver->push();
+
+							solver->assert_(condition);
+							assert (solver->solve() != z3::Result::UNSAT);
+							std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
+							new_current_case.push_back(condition);
+							bool attempt = practicality_admin(solver, options, node, new_current_case);
+							
+							solver->pop();
+							if (!attempt) 
+								return {};
+						}
+
+					}
+				}
+
 			}
 
-		}
-
-		// we return the maximal strategy 
-		// honest choice is practical for current player
-		return {honest_utility};
+			// we return the maximal strategy 
+			// honest choice is practical for current player
+			return {honest_utility};
 
 	} else {
 		// not in the honest history
@@ -271,6 +272,7 @@ UtilityTuplesSet practicality_rec(z3::Solver *solver, Node *node) {
 		for (const auto& candidate : result) {
 			// this player's utility
 			auto dominatee = candidate[branch.player];
+			::new (&branch.reason) z3::Bool(); 
 
 			// check all other children
 			// if any child has the property that all its utilities are bigger than `dominatee`
@@ -300,8 +302,11 @@ UtilityTuplesSet practicality_rec(z3::Solver *solver, Node *node) {
 					if (solver->solve({condition}) == z3::Result::SAT) {
 						dominated = false;
 						if (solver->solve({!condition}) == z3::Result::SAT) {
-							branch.reason = !condition;
-							return {}; 
+							if(branch.reason.null()) {
+								branch.reason = !condition;
+							} else {
+								branch.reason = branch.reason || !condition;
+							}
 						}
 					}
 				}  
@@ -309,6 +314,8 @@ UtilityTuplesSet practicality_rec(z3::Solver *solver, Node *node) {
 				if (dominated) {
 					remove.insert(candidate);
 					break;
+				} else if (!dominated && !branch.reason.null()) {
+					z3::Bool split = branch.reason;
 				}
 			}
 
@@ -322,6 +329,59 @@ UtilityTuplesSet practicality_rec(z3::Solver *solver, Node *node) {
 		return result;
 
 	} 
+
+}
+
+
+std::vector<PotentialCase> practicality_rec(z3::Solver *solver, const Options &options, Node *node, std::vector<z3::Bool> current_case) {
+	  if (node->is_leaf()) {
+		// return the utility tuple of the leaf as a set (of one element)
+		const Leaf &leaf = node->leaf();
+		z3::Bool tr = !z3::Bool();
+		PotentialCase ret = {{leaf.utilities}, tr};
+		std::vector<PotentialCase> v = {ret};
+		return v;
+	}  
+
+	// else we deal with a branch
+ 	const auto &branch = node->branch();
+
+	// get practical strategies and corresponding utilities recursively
+	std::vector<std::vector<PotentialCase>> children;
+
+	UtilityTuplesSet honest_utilities;
+	z3::Bool honest_case;
+
+	for (const Choice &choice: branch.choices) {
+		std::vector<PotentialCase> potential_cases = practicality_rec(solver, options, choice.node.get(), current_case);
+
+		// this child has no practical strategy (propagate reason for case split, if any) 
+		if(potential_cases.empty()) {
+			//std::cout << "---->" + choice.action << std::endl; 
+			branch.reason = choice.node->reason;
+			assert(choice.node->honest);
+			assert(choice.node->reason.null());
+			// return empty set
+			return {};
+		}
+
+		if(choice.node->honest) {
+			honest_utilities = potential_cases[0].utilities;
+			honest_case = potential_cases[0]._case;
+		} else {
+			children.push_back(potential_cases);
+		}
+
+	}
+
+	/*for(const <std::vector<PotentialCase> &potential_cases : potential_cases) {
+			
+	}*/
+
+	UtilityTuplesSet result = practicality_reasoning(solver, options, node, current_case, children, honest_utilities);
+	return result;
+
+
 
 }
 
@@ -363,10 +423,12 @@ bool property_under_split(z3::Solver *solver, const Input &input, const Property
 		return true;
 	}
 
+	/*
 	else if (property == PropertyType::Practicality) {
 		bool pr = practicality_rec(solver, input.root.get()).size() != 0;
 		return pr;
 	}
+	*/
  
 	assert(false);
 
@@ -413,6 +475,22 @@ bool property_rec(z3::Solver *solver, const Options &options, const Input &input
 	return true;
 }
 
+bool practicality_admin(z3::Solver *solver, const Options &options, Node *root, std::vector<z3::Bool> current_case) {
+	if (practicality_rec(solver, options, root, current_case).size() != 0) {
+		std::cout << "Property satisfied for current case: " << current_case << std::endl;
+		return true;
+	}
+
+	// otherwise consider case split
+	z3::Bool split = root->reason;
+	// there is no case split
+	assert(split.null());
+	std::cout << "Property violated in case: " << current_case << std::endl;
+	return false;
+
+
+}
+
 void property(const Options &options, const Input &input, PropertyType property, size_t history) {
 	/* determine if the input has some property for the current honest history */
 	std::cout << std::endl;
@@ -443,9 +521,14 @@ void property(const Options &options, const Input &input, PropertyType property,
 
 	assert(solver.solve() == z3::Result::SAT);
 
-	if (property_rec(&solver, options, input, property, std::vector<z3::Bool>(), history))
-		std::cout << "YES, property " << property << " is satisfied" << std::endl;
-
+	if (property == PropertyType::Practicality) {
+		if (practicality_admin(&solver, options, input.root.get(), std::vector<z3::Bool>()))
+			std::cout << "YES, property " << property << " is satisfied" << std::endl;
+	} else {
+		if (property_rec(&solver, options, input, property, std::vector<z3::Bool>(), history))
+			std::cout << "YES, property " << property << " is satisfied" << std::endl;
+	}
+	
 }
 
 void analyse_properties(const Options &options, const Input &input) {

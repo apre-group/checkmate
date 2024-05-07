@@ -9,6 +9,9 @@
 #include "utils.hpp"
 #include "z3++.hpp"
 
+using UtilityTuple = std::vector<Utility>;
+using UtilityTuplesSet = std::unordered_set<UtilityTuple, std::hash<UtilityTuple>>;
+
 // an action available at a branch
 struct Action {
 	// the name of the action
@@ -17,6 +20,11 @@ struct Action {
 	friend std::ostream &operator<<(std::ostream &out, const Action &action) {
 		return out << action.name;
 	}
+};
+
+struct PotentialCase {
+	UtilityTuplesSet utilities;
+	z3::Bool _case;
 };
 
 // forward declarations for Node methods
