@@ -374,11 +374,43 @@ std::vector<PotentialCase> practicality_rec(z3::Solver *solver, const Options &o
 
 	}
 
-	/*for(const <std::vector<PotentialCase> &potential_cases : potential_cases) {
-			
-	}*/
+	// compute all case combinations from the potential_case vector together with the corresponding utilities per child.
+	//then iterate over it and call practicality_reasoning for each
+	std::vector<z3::Bool> combined_cases;
+	std::vector<std::vector<UtilityTuplesSet>> children_per_case;
 
-	UtilityTuplesSet result = practicality_reasoning(solver, options, node, current_case, children, honest_utilities);
+
+	// this loop is wrong
+	for (int j = 0; j < children.size(); j ++) {
+		for (const PotentialCase pot_case: children[j]){
+			z3::Bool partial_case = pot_case._case;
+			UtilityTuplesSet case_utility = pot_case.utilities;
+			z3::Bool new_case = partial_case;
+			for (int k = j+1; k < children.size(); k++ ) {
+				for (const PotentialCase pot_case2: children[k]) {
+					z3::Bool partial_case2 = pot_case2._case;
+					UtilityTuplesSet case_utility2 = pot_case2.utilities;
+					new_case = new_case && partial_case2;
+				}
+			}
+		}
+	}
+
+
+
+	std::vector<PotentialCase> result;
+	for (int i=0; combined_cases.size(); i++){
+		std::vector<z3::Bool> new_case = {};
+		new_case.insert(new_case.begin(), current_case.begin(), current_case.end());
+		new_case.insert(new_case.end(), combined_cases[i]);
+		UtilityTuplesSet utilities = practicality_reasoning(solver, options, node, new_case, children_per_case[i], honest_utilities);
+		if (utilities.empty()){
+			return {};
+		}
+		PotentialCase pot = {utilities, combined_cases[i]};
+		result.push_back(pot);
+	}
+
 	return result;
 
 
