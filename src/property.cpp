@@ -253,6 +253,12 @@ UtilityTuplesSet practicality_reasoning(z3::Solver *solver, const Options &optio
 			return {honest_utility};
 
 	} else {
+
+
+
+		// put inner two loops into magic fct, generate either worst case 2**n or 2n remove sets and splits
+
+
 		// not in the honest history
 		// to do: we could do this more efficiently by working out the set of utilities for the player
 		// but utilities can't be put in a set easily -> fix this here in the C++ version
@@ -333,6 +339,17 @@ UtilityTuplesSet practicality_reasoning(z3::Solver *solver, const Options &optio
 }
 
 
+bool all_end(std::vector<int> it, std::vector<std::vector<PotentialCase>> children) {
+
+	for (int i = 0; i < it.size(); i++){
+		if (it[i] != children[i].size()-1){
+			return false;
+		}
+
+	return true;
+	}
+}
+
 std::vector<PotentialCase> practicality_rec(z3::Solver *solver, const Options &options, Node *node, std::vector<z3::Bool> current_case) {
 	  if (node->is_leaf()) {
 		// return the utility tuple of the leaf as a set (of one element)
@@ -379,23 +396,42 @@ std::vector<PotentialCase> practicality_rec(z3::Solver *solver, const Options &o
 	std::vector<z3::Bool> combined_cases;
 	std::vector<std::vector<UtilityTuplesSet>> children_per_case;
 
-
-	// this loop is wrong
-	for (int j = 0; j < children.size(); j ++) {
-		for (const PotentialCase pot_case: children[j]){
-			z3::Bool partial_case = pot_case._case;
-			UtilityTuplesSet case_utility = pot_case.utilities;
-			z3::Bool new_case = partial_case;
-			for (int k = j+1; k < children.size(); k++ ) {
-				for (const PotentialCase pot_case2: children[k]) {
-					z3::Bool partial_case2 = pot_case2._case;
-					UtilityTuplesSet case_utility2 = pot_case2.utilities;
-					new_case = new_case && partial_case2;
-				}
-			}
+	std::vector<int> it(children.size(), 0);
+	z3::Solver case_solver;
+	while (!all_end(it, children)) {
+		// compute case
+		z3::Bool comb_case = children[0][it[0]]._case;
+		std::vector<UtilityTuplesSet> comb_case_children = {children[0][it[0]].utilities};
+		for (int k = 1; k < children.size(); k++){
+			comb_case = comb_case && children[k][it[k]]._case;
+			comb_case_children.push_back(children[k][it[k]].utilities);
 		}
+		std::vector<z3::Bool> check_case(current_case.begin(), current_case.end());
+		check_case.push_back(comb_case);
+		if (case_solver.solve(check_case)!= z3::Result::UNSAT) {
+			combined_cases.push_back(comb_case);
+			children_per_case.push_back(comb_case_children);
+		}
+		int n = children.size() -1;
+		while (n > 0 && it[n] == children[n].size()-1) {
+			it[n] = 0;
+			n--;
+		}
+		it[n]++;
 	}
-
+	// compute last case
+	z3::Bool comb_case = children[0][it[0]]._case;
+	std::vector<UtilityTuplesSet> comb_case_children = {children[0][it[0]].utilities};
+	for (int k = 1; k < children.size(); k++){
+		comb_case = comb_case && children[k][it[k]]._case;
+		comb_case_children.push_back(children[k][it[k]].utilities);
+	}
+	std::vector<z3::Bool> check_case(current_case.begin(), current_case.end());
+	check_case.push_back(comb_case);
+	if (case_solver.solve(check_case)!= z3::Result::UNSAT) {
+		combined_cases.push_back(comb_case);
+		children_per_case.push_back(comb_case_children);
+	}
 
 
 	std::vector<PotentialCase> result;
@@ -416,6 +452,9 @@ std::vector<PotentialCase> practicality_rec(z3::Solver *solver, const Options &o
 
 
 }
+
+
+
 
 bool property_under_split(z3::Solver *solver, const Input &input, const PropertyType property, size_t history) {
 	/* determine if the input has some property for the current honest history under the current split */
