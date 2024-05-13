@@ -27,6 +27,11 @@ struct PotentialCase {
 	z3::Bool _case;
 };
 
+struct RemoveSetStruct {
+	UtilityTuplesSet remove_tuple;
+	z3::Bool case_split;
+};
+
 // forward declarations for Node methods
 struct Leaf;
 struct Branch;

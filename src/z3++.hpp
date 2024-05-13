@@ -97,6 +97,11 @@ namespace z3 {
 	public:
 		Bool() : Expression() {}
 
+		Bool True() {
+			Z3_ast result = Z3_mk_true(CONTEXT);
+			return result;
+		}
+
 		Bool operator!() const {
 			Z3_ast result = Z3_mk_not(CONTEXT, ast);
 			check_error();
