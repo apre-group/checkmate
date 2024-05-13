@@ -187,21 +187,21 @@ bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
 		return a.real > b.real
 }*/
 
-std::vector<RemoveSetStruct> do_magic_combining(z3::Solver *solver, std::vector<std::vector<RemoveSetStruct>> remove_sets) {
+std::vector<RemoveSetStruct> do_magic_combining(z3::Solver *solver, std::vector<std::vector<RemoveSetStruct>> remove_sets, std::vector<z3::Bool> current_case) {
 	z3::Bool tr = z3::Bool().True();
 	if(remove_sets.size() == 0) 
 		return {{{}, tr}};
 
-
-	for (auto rs : remove_sets){
-		std::cout << "do magic remove set: " << rs.size() << std::endl;
+	std::cout << remove_sets.size() << std::endl; 
+	for (std::vector<RemoveSetStruct> vrs : remove_sets){
+		std::cout << "do magic remove set: " << vrs[0].remove_tuple << std::endl;
 	}
 
 	std::vector<uint> it(remove_sets.size(), 0);
 	std::vector<RemoveSetStruct> remove_sets_combined;
 	while (!all_end_new(it, remove_sets)) {
+		std::cout<< "we will not see this" << std::endl;
 		// compute case
-		solver -> push();
 		z3::Bool comb_case = remove_sets[0][it[0]].case_split;
 		UtilityTuplesSet comb_remove = remove_sets[0][it[0]].remove_tuple;
 		for (uint k = 1; k < remove_sets.size(); k++){
@@ -211,14 +211,13 @@ std::vector<RemoveSetStruct> do_magic_combining(z3::Solver *solver, std::vector<
 			}
 			
 		}
-		// std::vector<z3::Bool> check_case(current_case.begin(), current_case.end());
-		// check_case.push_back(comb_case);
+		std::vector<z3::Bool> check_case(current_case.begin(), current_case.end());
+		check_case.push_back(comb_case);
 
-		if (solver->solve({comb_case})!= z3::Result::UNSAT) {
+		if (solver->solve(check_case)!= z3::Result::UNSAT) {
 			remove_sets_combined.push_back({comb_remove, comb_case});
 			std::cout << "pushed back" << std::endl;
 		}
-		solver -> pop();
 		uint n = remove_sets.size() -1;
 		while (n > 0 && it[n] == remove_sets[n].size()-1) {
 			it[n] = 0;
@@ -236,14 +235,19 @@ std::vector<RemoveSetStruct> do_magic_combining(z3::Solver *solver, std::vector<
 		}
 		
 	}
-	// std::vector<z3::Bool> check_case(current_case.begin(), current_case.end());
-	// check_case.push_back(comb_case);
-	solver -> push();
-	if (solver->solve({comb_case})!= z3::Result::UNSAT) {
+	std::cout << "comb case, supposed to be true " << comb_case << std::endl;
+	std::vector<z3::Bool> check_case(current_case.begin(), current_case.end());
+	check_case.push_back(comb_case);
+
+	if(solver->solve(current_case)== z3::Result::UNSAT){
+		std::cout << "WTF" << std::endl;
+	} 
+	// CONTINUE HERE!!!
+
+	if (solver->solve(check_case)!= z3::Result::UNSAT) {
 		remove_sets_combined.push_back({comb_remove, comb_case});
 		std::cout << "pushed back" << std::endl;
 	}
-	solver -> pop();
 
 	return remove_sets_combined;
 }
@@ -255,7 +259,7 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver *solver, const Opti
 		
 		
 		if (branch.honest) {
-			std::cout << "along honest" << std::endl;
+			// std::cout << "along honest" << std::endl;
 			// if we are at an honest node, our strategy must be the honest strategy
 
 			// to do: set chosen action i.e. startegy for this note to be honest_choice->action
@@ -321,7 +325,7 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver *solver, const Opti
 			return {pot_case};
 
 	} else {
-		std::cout << "not along honest" << std::endl;
+		// std::cout << "not along honest" << std::endl;
 
 		// put inner two loops into magic fct, generate either worst case 2**n or 2n remove sets and splits
 
@@ -418,11 +422,11 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver *solver, const Opti
 		}
 
 		// ABC combine remove sets to obtain O(2**n) remove sets
-		std::vector<RemoveSetStruct> remove_sets_combined = do_magic_combining(solver, remove_sets);
-		std::cout << "remove sets size: " << remove_sets_combined.size() << std::endl;
-		for (auto rs : remove_sets_combined){
-		 std::cout << "elements in remove set: " << rs.remove_tuple.size() << std::endl;
-		} 
+		std::vector<RemoveSetStruct> remove_sets_combined = do_magic_combining(solver, remove_sets, current_case);
+		// std::cout << "remove sets size: " << remove_sets_combined.size() << std::endl;
+		// for (auto rs : remove_sets_combined){
+		//  std::cout << "elements in remove set: " << rs.remove_tuple.size() << std::endl;
+		// } 
 
 		// ABC continue here :)
 		std::vector<PotentialCase> ret_result;
@@ -581,7 +585,7 @@ std::vector<PotentialCase> practicality_rec(z3::Solver *solver, const Options &o
 
 
 	std::vector<PotentialCase> result;
-	std::cout << "number of combined cases " << combined_cases.size() << std::endl;
+	// std::cout << "number of combined cases " << combined_cases.size() << std::endl;
 	for (uint i=0; i < combined_cases.size(); i++){
 		// std::cout << "Orange3" << std::endl;
 		std::vector<z3::Bool> new_case = {};
@@ -589,12 +593,12 @@ std::vector<PotentialCase> practicality_rec(z3::Solver *solver, const Options &o
 		new_case.insert(new_case.end(), combined_cases[i]);
 		// std::cout << "Orange4" << std::endl;
 		std::vector<PotentialCase> res_reasoning = practicality_reasoning(solver, options, node, new_case, children_per_case[i], honest_utilities);
-		std::cout << "number of potential cases per for the current combined case " << res_reasoning.size() << std::endl;
+		// std::cout << "number of potential cases per for the current combined case " << res_reasoning.size() << std::endl;
 		// std::cout << "Orange4,5" << std::endl;
 		for(auto pot_case : res_reasoning) {
 			UtilityTuplesSet utilities = pot_case.utilities;
 			if (utilities.empty()){
-				std::cout << "return size: 0" << std::endl;
+				// std::cout << "return size: 0" << std::endl;
 				return {};
 			}
 			PotentialCase pot = {utilities, combined_cases[i] && pot_case._case};
