@@ -24,12 +24,7 @@ struct Action {
 
 struct PotentialCase {
 	UtilityTuplesSet utilities;
-	z3::Bool _case;
-};
-
-struct RemoveSetStruct {
-	UtilityTuplesSet remove_tuple;
-	z3::Bool case_split;
+	std::vector<z3::Bool> _case;
 };
 
 // forward declarations for Node methods
