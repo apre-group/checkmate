@@ -10,7 +10,7 @@
 #include "z3++.hpp"
 
 using UtilityTuple = std::vector<Utility>;
-using UtilityTuplesSet = std::unordered_set<UtilityTuple, std::hash<UtilityTuple>>;
+using UtilityTuplesSet = std::unordered_set<std::reference_wrapper<const UtilityTuple>>;
 
 // an action available at a branch
 struct Action {

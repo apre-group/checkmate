@@ -14,9 +14,6 @@
 using z3::Bool;
 using z3::Solver;
 
-using UtilityTuple = const std::vector<Utility> &;
-using UtilityTuplesSet = std::unordered_set<UtilityTuple, std::hash<UtilityTuple>>;
-
 std::vector<PotentialCase> practicality_rec(z3::Solver *solver, const Options &options, Node *node, std::vector<z3::Bool> current_case);
 bool practicality_admin(z3::Solver *solver, const Options &options, Node *root, std::vector<z3::Bool> current_case);
 bool all_end_new(std::vector<unsigned> it, std::vector<std::vector<PotentialCase>> children);
@@ -163,7 +160,7 @@ bool collusion_resilience_rec(z3::Solver *solver, Node *node, std::bitset<Input:
 	}
 }
 
-bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
+bool utility_tuples_eq(const UtilityTuple &tuple1, const UtilityTuple &tuple2) {
 	
 	if(tuple1.size() != tuple2.size()) {
 		return false;
@@ -267,7 +264,7 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver *solver, const Opti
 			
 			assert(honest_utilities.size() == 1);
 			// the utility at the leaf of the honest history
-			UtilityTuple honest_utility = *honest_utilities.begin();
+			const UtilityTuple &honest_utility = *honest_utilities.begin();
 			// this should be maximal against other players, so...
 			Utility maximum = honest_utility[branch.player];
 
@@ -276,7 +273,7 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver *solver, const Opti
 				bool found = false;
 				// does there exist a possible utility such that `maximum` is geq than it?
 				for (const auto& utility : utilities) {
-					auto condition = maximum < utility[branch.player];
+					auto condition = maximum < utility.get()[branch.player];
 					if (solver->solve({condition}) == z3::Result::SAT) {
 						if (solver->solve({!condition}) == z3::Result::SAT) {
 							// might be maximal, just couldn't prove it
