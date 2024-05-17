@@ -4,6 +4,11 @@
 #include "utils.hpp"
 #include "z3++.hpp"
 
+unsigned THRESHOLD = 5;
+unsigned GL_Z3_BUG_COUNTER = 0;
+unsigned GL_THRESHOLD = 50;
+
+
 namespace z3 {
 
 	// the only Z3 context - mostly just hangs out here to be passed to the Z3 API
@@ -39,7 +44,9 @@ namespace z3 {
 	// MARCO algorithm for unsat cores
 	// https://sun.iwu.edu/~mliffito/marco-viz/
 	bool MinimalCores::next_core() {
+		unsigned count = 0;
 		while (map.solve() == Result::SAT) {
+			
 			auto model = map.model();
 			std::vector<Bool> seed;
 			for (auto label: labels)
@@ -49,6 +56,7 @@ namespace z3 {
 			std::unordered_set<Bool> relevant(seed.begin(), seed.end());
 			// the seed doesn't say enough to cause unsat
 			if (solver.solve(seed) == Result::SAT) {
+				//std::cout << "stuck in while" << std::endl;
 				// grow it as much as possible...
 				std::vector<Bool> complement;
 				for (auto label: labels) {
@@ -62,8 +70,6 @@ namespace z3 {
 				}
 				// ...then assert that one of the other labels must be true
 				map.assert_(disjunction(complement));
-				// to be removed
-				std::cout << "\t(Found maximal satisfying subset, continuing...)" << std::endl;
 			}
 				// the seed contains an unsat core
 			else {
@@ -76,10 +82,14 @@ namespace z3 {
 				// NB currently buggy, seems to sometimes return an insufficient unsat core
 				if (solver.solve(core) == Result::SAT) {
 					std::cout << "\t(Z3 bug, retrying...)" << std::endl;
-					// try again?
-					continue;
-				}
+					count++;
 
+					// try again?
+					if (count >= THRESHOLD){
+						return false;
+					}	
+					continue;				
+				}
 				// minimising the unsat core does not seem to pay off, most of the time
 				// put behind a command-line option?
 				/*
