@@ -1,7 +1,6 @@
 #include <iostream>
 #include <bitset>
 #include <cassert>
-#include <algorithm>
 #include <unordered_set>
 #include <bits/stdc++.h> 
 #include <string>
@@ -11,10 +10,49 @@
 #include "z3++.hpp"
 #include "utils.hpp"
 
+// reference to a utility tuple in a leaf
+struct UtilityTuple {
+	const std::vector<Utility> &leaf;
+	UtilityTuple(decltype(leaf) leaf) : leaf(leaf) {}
+	size_t size() const { return leaf.size(); }
+	const Utility &operator[](size_t index) const { return leaf[index]; }
+	std::vector<Utility>::const_iterator begin() const { return leaf.cbegin(); }
+	std::vector<Utility>::const_iterator end() const { return leaf.cend(); }
+
+	bool operator==(const UtilityTuple &other) const {
+		// quick return for when you have the same reference
+		if(this == &other)
+			return true;
+		if(size() != other.size())
+			return false;
+		for(size_t i = 0; i < size(); i++)
+			if(!leaf[i].is(other.leaf[i]))
+				return false;
+		return true;
+	}
+};
+
+// when hashing, hash its utilities sequentially
+template<>
+struct std::hash<UtilityTuple> {
+	size_t operator()(UtilityTuple tuple) const {
+		 size_t hash = 0;
+		 for(const Utility &utility : tuple)
+			 hash ^= std::hash<Utility>{}(utility);
+		 return hash;
+	}
+};
+
+using UtilityTuplesSet = std::unordered_set<UtilityTuple>;
+
+struct PotentialCase {
+	UtilityTuplesSet utilities;
+	std::vector<z3::Bool> _case;
+};
+
 using z3::Bool;
 using z3::Solver;
 
-std::vector<PotentialCase> practicality_rec(z3::Solver *solver, const Options &options, Node *node, std::vector<z3::Bool> current_case);
 bool practicality_admin(z3::Solver *solver, const Options &options, Node *root, std::vector<z3::Bool> current_case);
 bool all_end_new(std::vector<unsigned> it, std::vector<std::vector<PotentialCase>> children);
 
@@ -160,8 +198,7 @@ bool collusion_resilience_rec(z3::Solver *solver, Node *node, std::bitset<Input:
 	}
 }
 
-bool utility_tuples_eq(const UtilityTuple &tuple1, const UtilityTuple &tuple2) {
-	
+bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
 	if(tuple1.size() != tuple2.size()) {
 		return false;
 	} else {
@@ -199,6 +236,8 @@ std::vector<PotentialCase> do_magic_combining(z3::Solver *solver, std::vector<st
 		//std::cout<< "we will not see this" << std::endl;
 		// compute case
 		std::vector<z3::Bool> comb_case;
+		// TODO is this the last time remove_sets[0][it[0]].utilities will be used?
+		// If so we can std::move()
 		UtilityTuplesSet comb_remove = remove_sets[0][it[0]].utilities;
 		for (unsigned k = 0; k < remove_sets.size(); k++){
 			comb_case.insert(comb_case.end(), remove_sets[k][it[k]]._case.begin(), remove_sets[k][it[k]]._case.end());
@@ -226,6 +265,8 @@ std::vector<PotentialCase> do_magic_combining(z3::Solver *solver, std::vector<st
 	}
 	// compute last case
 	std::vector<z3::Bool> comb_case;
+	// TODO is this the last time remove_sets[0][it[0]].utilities will be used?
+	// If so we can std::move()
 	UtilityTuplesSet comb_remove = remove_sets[0][it[0]].utilities;
 	for (unsigned k = 0; k < remove_sets.size(); k++){
 		comb_case.insert(comb_case.end(), remove_sets[k][it[k]]._case.begin(), remove_sets[k][it[k]]._case.end());
@@ -250,6 +291,7 @@ std::vector<PotentialCase> do_magic_combining(z3::Solver *solver, std::vector<st
 }
 
 
+// TODO try and avoid the copying here: each std::vector<T> (and UtilityTuplesSet) makes a new copy
 std::vector<PotentialCase> practicality_reasoning(z3::Solver *solver, const Options &options, Node *node, std::vector<z3::Bool> current_case, std::vector<UtilityTuplesSet> children, UtilityTuplesSet honest_utilities) {
 		// std::cout << "Pear0" << std::endl;
 		const auto &branch = node->branch();
@@ -273,7 +315,7 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver *solver, const Opti
 				bool found = false;
 				// does there exist a possible utility such that `maximum` is geq than it?
 				for (const auto& utility : utilities) {
-					auto condition = maximum < utility.get()[branch.player];
+					auto condition = maximum < utility[branch.player];
 					if (solver->solve({condition}) == z3::Result::SAT) {
 						if (solver->solve({!condition}) == z3::Result::SAT) {
 							// might be maximal, just couldn't prove it
@@ -431,8 +473,8 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver *solver, const Opti
 			for (const auto& elem : remove_set.utilities) {
 				rec_result.erase(elem);
 			}
+			// TODO can probably std::move(rec_result) here
 			ret_result.push_back({rec_result, remove_set._case});
-
 		}
 
 		return ret_result;
@@ -665,7 +707,7 @@ bool property_under_split(z3::Solver *solver, const Input &input, const Property
 	*/
  
 	assert(false);
-
+	UNREACHABLE
 }
 
 bool property_rec(z3::Solver *solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, size_t history) {
@@ -719,10 +761,8 @@ bool practicality_admin(z3::Solver *solver, const Options &options, Node *root, 
 
 	// std::cout << "Orange" << std::endl;
 
-	// otherwise consider case split
-	z3::Bool split = root->reason;
 	// there is no case split
-	assert(split.null());
+	assert(root->reason.null());
 	std::cout << "Property violated in case: " << current_case << std::endl;
 	return false;
 
@@ -753,9 +793,11 @@ void property(const Options &options, const Input &input, PropertyType property,
 			solver.assert_(input.practicality_constraint);
 			// std::cout << "Banana" << std::endl;
 			break;
+		/*
 		default:
 			std::cout << "Unknown property" << std::endl;
 			return;
+		*/
 	}
 
 	assert(solver.solve() == z3::Result::SAT);

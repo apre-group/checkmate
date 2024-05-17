@@ -74,31 +74,6 @@ namespace std {
 		}
 		return out;
 	}
-
-	template<typename Utility>
-    struct hash<std::vector<Utility>> {
-        size_t operator()(const std::vector<Utility> &v) const {
-            size_t hashValue = 0;
-			for (const auto& util : v) {
-				// Combine the hash values of individual Utility objects in the vector
-				hashValue ^= hash<Utility>()(util);
-			}
-        	return hashValue; 
-        }
-    };
-
-	template<>
-    struct equal_to<std::vector<Utility>> {
-        size_t operator()(const std::vector<Utility> &left, const std::vector<Utility> &right) const {
-			if (left.size() != right.size()) return false;
-			for (size_t i = 0; i < left.size(); i++) {
-                if(!(equal_to<Utility>()(left[i], right[i])))  
-				    return false;
-            }
-            return true;
-        }
-    };
-
 }
 
 #endif
