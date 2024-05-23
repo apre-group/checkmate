@@ -9,6 +9,42 @@
 #include "utils.hpp"
 #include "z3++.hpp"
 
+// forward declarations for Node methods
+struct Leaf;
+struct Branch;
+struct Choice;
+
+struct Input {
+	// parse an input from `path`, exiting if malformed
+	Input(const char *path);
+
+	// list of players in alphabetical order
+	std::vector<std::string> players;
+	// list of honest histories
+	std::vector<std::vector<std::string>> honest;
+
+	// a real or infinitesimal utility for each string
+	std::unordered_map<std::string, Utility> utilities;
+
+	// global initial constraints
+	z3::Bool initial_constraint;
+	// weak immunity initial constraints
+	z3::Bool weak_immunity_constraint;
+	// weaker immunity initial constraints
+	z3::Bool weaker_immunity_constraint;
+	// collusion resilience initial constraints
+	z3::Bool collusion_resilience_constraint;
+	// practicality initial constraints
+	z3::Bool practicality_constraint;
+
+	// root: NB must be a branch
+	std::unique_ptr<Branch> root;
+
+	// maximum number of players currently supported
+	// no reason there couldn't be more, but convenient for implementation (cf collusion resilience)
+	static const size_t MAX_PLAYERS = 64;
+};
+
 // an action available at a branch
 struct Action {
 	// the name of the action
@@ -18,11 +54,6 @@ struct Action {
 		return out << action.name;
 	}
 };
-
-// forward declarations for Node methods
-struct Leaf;
-struct Branch;
-struct Choice;
 
 // abstract base class for Leaf and Branch
 struct Node {
@@ -120,6 +151,8 @@ struct Branch final : public Node {
 	unsigned player;
 	// available choices, from which actions should be unique
 	std::vector<Choice> choices;
+	// take this action
+	mutable std::string strategy;
 
 	void mark_honest(const std::vector<std::string> &history) const {
 		assert(!honest);
@@ -153,6 +186,31 @@ struct Branch final : public Node {
 			else
 				choice.node->leaf().reset_reason();
 	}
+
+	void reset_strategy() const {
+		strategy.clear();
+		for(auto &choice: choices)
+			if(!choice.node->is_leaf())
+				choice.node->branch().reset_strategy();
+	}
+
+	void print_strategy(const Input &input) const {
+		std::vector<std::string> actions_so_far;
+		std::cout << "Printing strategy..." << std::endl;
+		const Node *current = this;
+		do {
+			std::cout
+					<< "\tPlayer "
+					<< input.players[player]
+					<< " takes action "
+					<< strategy
+					<< " after history "
+					<< actions_so_far
+					<< std::endl;
+			actions_so_far.push_back(strategy);
+			current = current->branch().get_choice(strategy).node.get();
+		} while(!current->is_leaf());
+	}
 };
 
 inline const Leaf &Node::leaf() const {
@@ -162,36 +220,5 @@ inline const Leaf &Node::leaf() const {
 inline const Branch &Node::branch() const {
 	return *static_cast<const Branch *>(this);
 }
-
-struct Input {
-	// parse an input from `path`, exiting if malformed
-	Input(const char *path);
-
-	// list of players in alphabetical order
-	std::vector<std::string> players;
-	// list of honest histories
-	std::vector<std::vector<std::string>> honest;
-
-	// a real or infinitesimal utility for each string
-	std::unordered_map<std::string, Utility> utilities;
-
-	// global initial constraints
-	z3::Bool initial_constraint;
-	// weak immunity initial constraints
-	z3::Bool weak_immunity_constraint;
-	// weaker immunity initial constraints
-	z3::Bool weaker_immunity_constraint;
-	// collusion resilience initial constraints
-	z3::Bool collusion_resilience_constraint;
-	// practicality initial constraints
-	z3::Bool practicality_constraint;
-
-	// root: NB must be a branch
-	std::unique_ptr<Branch> root;
-
-	// maximum number of players currently supported
-	// no reason there couldn't be more, but convenient for implementation (cf collusion resilience)
-	static const size_t MAX_PLAYERS = 64;
-};
 
 #endif
