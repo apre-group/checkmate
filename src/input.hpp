@@ -198,18 +198,18 @@ struct Branch final : public Node {
 		std::vector<std::string> actions_so_far;
 		std::cout << "Printing strategy..." << std::endl;
 		const Node *current = this;
-		do {
+		while(!current->is_leaf()) {
 			std::cout
 					<< "\tPlayer "
-					<< input.players[player]
+					<< input.players[current->branch().player]
 					<< " takes action "
-					<< strategy
+					<< current->branch().strategy
 					<< " after history "
 					<< actions_so_far
 					<< std::endl;
-			actions_so_far.push_back(strategy);
-			current = current->branch().get_choice(strategy).node.get();
-		} while(!current->is_leaf());
+			actions_so_far.push_back(current->branch().strategy);
+			current = current->branch().get_choice(current->branch().strategy).node.get();
+		}
 	}
 };
 
