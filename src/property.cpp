@@ -188,6 +188,172 @@ bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
 
 }
 
+UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
+	  if (node->is_leaf()) {
+		// return the utility tuple of the leaf as a set (of one element)
+		const Leaf &leaf = node->leaf();
+		return {leaf.utilities};
+	}  
+
+	// else we deal with a branch
+ 	const auto &branch = node->branch();
+
+	// get practical strategies and corresponding utilities recursively
+	std::vector<UtilityTuplesSet> children;
+	std::vector<std::string> children_actions;
+
+	UtilityTuplesSet honest_utilities;
+
+	for (const Choice &choice: branch.choices) {
+		UtilityTuplesSet utilities = practicality_rec_old(solver, choice.node.get());
+
+		// this child has no practical strategy (propagate reason for case split, if any) 
+		if(utilities.empty()) {
+			branch.reason = choice.node->reason;
+			// return empty set
+			return {};
+		}
+
+		if(choice.node->honest) {
+			honest_utilities = utilities;
+			branch.strategy = choice.action; // choose the honest action along the honest history
+		} else {
+			children.push_back(utilities);
+			children_actions.push_back(choice.action);
+		}
+
+	}
+
+
+	if (branch.honest) {
+		// if we are at an honest node, our strategy must be the honest strategy
+
+		// to do: set chosen action i.e. startegy for this note to be honest_choice->action
+		// for this we need to add a property strategy to our nodes
+		
+		assert(honest_utilities.size() == 1);
+		// the utility at the leaf of the honest history
+		UtilityTuple honest_utility = *honest_utilities.begin();
+		// this should be maximal against other players, so...
+		Utility maximum = honest_utility[branch.player];
+
+		// for all other children
+		for (const auto& utilities : children) {
+			bool found = false;
+			// does there exist a possible utility such that `maximum` is geq than it?
+			 for (const auto& utility : utilities) {
+				auto condition = maximum < utility[branch.player];
+				if (solver.solve({condition}) == z3::Result::SAT) {
+					if (solver.solve({!condition}) == z3::Result::SAT) {
+						// might be maximal, just couldn't prove it
+						branch.reason = !condition;
+					}
+				} 
+				else {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				// return empty set
+				return {}; 
+			}
+
+		}
+
+		// we return the maximal strategy 
+		// honest choice is practical for current player
+		return {honest_utility};
+
+	} else {
+		// not in the honest history
+		// to do: we could do this more efficiently by working out the set of utilities for the player
+		// but utilities can't be put in a set easily -> fix this here in the C++ version
+
+		// compute the set of possible utilities by merging the set of children's utilities
+		UtilityTuplesSet result;
+		for (const auto& utilities : children) {
+			for (const auto& utility : utilities) {
+				result.insert(utility);
+			}
+		}
+
+		// the set to drop
+		UtilityTuplesSet remove;
+
+		// work out whether to drop `candidate`
+		for (const auto& candidate : result) {
+			// this player's utility
+			auto dominatee = candidate[branch.player];
+
+			// check all other children
+			// if any child has the property that all its utilities are bigger than `dominatee`
+			// it can be dropped
+			for (const auto& utilities : children) {
+				// skip any where the cadidate is already contained
+
+				// this logic can be factored out in an external function
+				bool contained = false;
+				for (const auto& utility : utilities) {
+					if (utility_tuples_eq(utility, candidate)) {
+						contained = true;
+						break;
+					}
+				}
+
+				if (contained) {
+					continue;
+				}
+
+				// *all* utilities have to be bigger
+				bool dominated = true;
+
+				for (const auto& utility : utilities) {
+					auto dominator = utility[branch.player];
+					auto condition = dominator <= dominatee;
+					if (solver.solve({condition}) == z3::Result::SAT) {
+						dominated = false;
+						if (solver.solve({!condition}) == z3::Result::SAT) {
+							branch.reason = !condition;
+							return {}; 
+						}
+					}
+				}  
+
+				if (dominated) {
+					remove.insert(candidate);
+					break;
+				}
+			}
+
+		}
+
+		// result is all children's utilities inductively, minus those dropped
+		for (const auto& elem : remove) {
+			result.erase(elem);
+		}
+
+		// if strategy has not been set, we are not along the honest history
+		// go over all children and pick the one that has a utility tuple which is contained in the returned result
+		if (branch.strategy.empty()) {
+			for (unsigned i=0; i < children.size() && branch.strategy.empty(); i++) {
+				auto& utilities = children[i];
+				for (const auto& utility : utilities) {
+					if(result.find(utility) != result.end()) {
+						branch.strategy = children_actions[i];
+						break;
+					}
+				}
+			}
+		}
+		
+
+		return result;
+
+	} 
+
+}
+
 template<typename Comparison>
 z3::Bool get_split(z3::Solver &solver, Utility a, Utility b, Comparison comp) {
 	// std::cout << solver << std::endl;
@@ -587,12 +753,13 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Property
 		return true;
 	}
 
-	/*
+
+	// Practicality new case splits -> this needs to be removed
 	else if (property == PropertyType::Practicality) {
-		bool pr = practicality_rec(solver, input.root.get()).size() != 0;
+		bool pr = practicality_rec_old(solver, input.root.get()).size() != 0;
 		return pr;
 	}
-	*/
+	
  
 	assert(false);
 	UNREACHABLE
@@ -688,7 +855,8 @@ void property(const Options &options, const Input &input, PropertyType property,
 	assert(solver.solve() == z3::Result::SAT);
 
 	if (property == PropertyType::Practicality) {
-		if (practicality_admin(solver, options, input.root.get(), std::vector<z3::Bool>()))
+		//if (practicality_admin(solver, options, input.root.get(), std::vector<z3::Bool>()))
+		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history))
 			std::cout << "YES, property " << property << " is satisfied" << std::endl;
 	} else {
 		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history))
