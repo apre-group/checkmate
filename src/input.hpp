@@ -86,6 +86,7 @@ struct Node {
 	// the reason that a check for a property failed:
 	// null if didn't fail or no case split would help
 	mutable z3::Bool reason;
+
 };
 
 // a choice available at a branch
@@ -198,7 +199,15 @@ struct Branch final : public Node {
 		std::vector<std::string> actions_so_far;
 		std::cout << "Printing strategy..." << std::endl;
 		const Node *current = this;
-		while(!current->is_leaf()) {
+		print_strategy_rec(current, input, {});	
+		std::cout << "\tPlayers can choose the rest of the actions arbitrarily ..." << std::endl;	
+	}
+
+	void print_strategy_rec(const Node *current, const Input &input, std::vector<std::string> actions_so_far) const {
+		if(current->is_leaf()) 
+			return;
+
+		if(!current->branch().strategy.empty()) {
 			std::cout
 					<< "\tPlayer "
 					<< input.players[current->branch().player]
@@ -207,9 +216,14 @@ struct Branch final : public Node {
 					<< " after history "
 					<< actions_so_far
 					<< std::endl;
-			actions_so_far.push_back(current->branch().strategy);
-			current = current->branch().get_choice(current->branch().strategy).node.get();
 		}
+
+		for (const Choice &choice: current->branch().choices) {
+			std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+			updated_actions.push_back(choice.action);
+			print_strategy_rec(choice.node.get(), input, updated_actions);
+		}
+
 	}
 };
 
