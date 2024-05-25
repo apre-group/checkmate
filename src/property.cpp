@@ -209,75 +209,6 @@ z3::Bool get_split(z3::Solver &solver, Utility a, Utility b, Comparison comp) {
 	} 	
 }
 
-std::vector<PotentialCase> do_magic_combining(z3::Solver &solver, std::vector<std::vector<PotentialCase>> remove_sets, std::vector<z3::Bool> current_case) {
-	if(remove_sets.size() == 0) 
-		return {{{}, {}}};
-
-	/*std::cout << remove_sets.size() << std::endl; 
-	for (std::vector<PotentialCase> vrs : remove_sets){
-		std::cout << "do magic remove set: " << vrs[0].utilities << std::endl;
-	}*/
-
-	std::vector<unsigned> it(remove_sets.size(), 0);
-	std::vector<PotentialCase> remove_sets_combined;
-	while (!all_at_end(it, remove_sets)) {
-		//std::cout<< "we will not see this" << std::endl;
-		// compute case
-		std::vector<z3::Bool> comb_case;
-		// TODO is this the last time remove_sets[0][it[0]].utilities will be used?
-		// If so we can std::move()
-		UtilityTuplesSet comb_remove = remove_sets[0][it[0]].utilities;
-		for (unsigned k = 0; k < remove_sets.size(); k++){
-			comb_case.insert(comb_case.end(), remove_sets[k][it[k]]._case.begin(), remove_sets[k][it[k]]._case.end());
-			
-			if(k != 0) {
-				for (auto element : remove_sets[k][it[k]].utilities) {
-					comb_remove.insert(element);
-				}
-			}
-			
-		}
-		std::vector<z3::Bool> check_case(current_case.begin(), current_case.end());
-		check_case.insert(check_case.end(), comb_case.begin(), comb_case.end());
-
-		if (solver.solve(check_case)!= z3::Result::UNSAT) {
-			remove_sets_combined.push_back({comb_remove, comb_case});
-			//std::cout << "pushed back" << std::endl;
-		}
-		unsigned n = remove_sets.size() -1;
-		while (n > 0 && it[n] == remove_sets[n].size()-1) {
-			it[n] = 0;
-			n--;
-		}
-		it[n]++;
-	}
-	// compute last case
-	std::vector<z3::Bool> comb_case;
-	// TODO is this the last time remove_sets[0][it[0]].utilities will be used?
-	// If so we can std::move()
-	UtilityTuplesSet comb_remove = std::move(remove_sets[0][it[0]].utilities);
-	for (unsigned k = 0; k < remove_sets.size(); k++){
-		comb_case.insert(comb_case.end(), remove_sets[k][it[k]]._case.begin(), remove_sets[k][it[k]]._case.end());
-			
-		if(k != 0) {
-			for (auto element : remove_sets[k][it[k]].utilities) {
-				comb_remove.insert(element);
-			}
-		}
-		
-	}
-	//std::cout << "comb case, supposed to be true " << comb_case << std::endl;
-	std::vector<z3::Bool> check_case(current_case.begin(), current_case.end());
-	check_case.insert(check_case.end(), comb_case.begin(), comb_case.end());
-
-	if (solver.solve(check_case)!= z3::Result::UNSAT) {
-		remove_sets_combined.push_back({comb_remove, comb_case});
-		//std::cout << "pushed back" << std::endl;
-	}
-
-	return remove_sets_combined;
-}
-
 std::vector<PotentialCase> compute_all_combinations(z3::Solver &solver, std::vector<std::vector<PotentialCase>> remove_sets, std::vector<z3::Bool> current_case) {
 	if(remove_sets.size() == 0) 
 		return {{{}, {}}};
@@ -318,6 +249,7 @@ std::vector<PotentialCase> compute_all_combinations(z3::Solver &solver, std::vec
 				n--;
 			}
 			it[n]++;
+			iterators_at_end = all_at_end(it, remove_sets);
 		}
 
 	}
@@ -487,7 +419,7 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Opti
 		}
 
 		// combine remove sets to obtain O(2**n) remove sets
-		std::vector<PotentialCase> remove_sets_combined = do_magic_combining(solver, remove_sets, current_case);
+		std::vector<PotentialCase> remove_sets_combined = compute_all_combinations(solver, remove_sets, current_case);
 		std::vector<PotentialCase> ret_result;
 
 		for(auto remove_set : remove_sets_combined) {
@@ -501,21 +433,14 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Opti
 		return ret_result;
 
 	} 
-
 }
 
 std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &options, Node *node, std::vector<z3::Bool> current_case) {
 	  if (node->is_leaf()) {
 		// return the utility tuple of the leaf as a set (of one element)
 		const Leaf &leaf = node->leaf();
-		PotentialCase ret = {{leaf.utilities}, {}};
-		std::vector<PotentialCase> v = {ret};
-		//std::cout << "Kiwi" << std::endl;
-		return v;
+		return {{{leaf.utilities}, {}}};
 	}  
-	//std::cout << "Kiwi1" << std::endl;
-
-	
 
 	// else we deal with a branch
  	const auto &branch = node->branch();
@@ -526,122 +451,92 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 	UtilityTuplesSet honest_utilities;
 	std::vector<z3::Bool> honest_case;
 
-	//std::cout << "Kiwi2" << std::endl;
-
 	for (const Choice &choice: branch.choices) {
-		//std::cout << "Kiwi3" << std::endl;
 		std::vector<PotentialCase> potential_cases = practicality_rec(solver, options, choice.node.get(), current_case);
 
-		//std::cout << "Kiwi4" << std::endl;
 		// this child has no practical strategy (propagate reason for case split, if any) 
-		// std::cout << potential_cases.size() << std::endl;
 		if(potential_cases.empty()) {
-			//std::cout << "---->" + choice.action << std::endl; 
 			branch.reason = choice.node->reason;
 			assert(choice.node->honest);
 			assert(choice.node->reason.null());
 			// return empty set
-			// std::cout << "Kiwi5" << std::endl;
 			return {};
 		}
-		
 
 		if(choice.node->honest) {
 			honest_utilities = potential_cases[0].utilities;
 			honest_case = potential_cases[0]._case;
-			// std::cout << "Kiwi6" << std::endl;
 		} else {
-			// std::cout << "Kiwi7" << std::endl;
 			children.push_back(potential_cases);
 		}
 
 	}
 
 	// compute all case combinations from the potential_case vector together with the corresponding utilities per child.
-	//then iterate over it and call practicality_reasoning for each
+	// then iterate over it and call practicality_reasoning for each
 	std::vector<std::vector<z3::Bool>> combined_cases;
 	std::vector<std::vector<UtilityTuplesSet>> children_per_case;
 
 	std::vector<unsigned> it(children.size(), 0);
-	// std::cout << "Orange" << std::endl;
-	std::cout << children.size() << std::endl;
+	 std::cout << children.size() << std::endl;
 	
-	unsigned big_product = 1;
+	//TODO for debugging only -> remove afterwards
+	unsigned big_product = 1; 
 	for(auto something: children) {
-		//std::cout<<"Something "<<something.size()<<std::endl;
 		big_product *= something.size();
 	}
-	std::cout<<"------------> "<<big_product<<std::endl;
+	std::cout << "------------> "<< big_product<<std::endl;
+	// until here to be removed
 
+	bool last_case_computed = false;
+	bool iterators_at_end = all_at_end(it, children);
 
-	while (!all_at_end(it, children)) {
+	while (!iterators_at_end || !last_case_computed) {
 		// compute case
-		solver.push();
+		//solver.push(); -> TODO remove this, not needed, as we are not asserting anything
 		std::vector<z3::Bool> comb_case(children[0][it[0]]._case.begin(), children[0][it[0]]._case.end());
 		std::vector<UtilityTuplesSet> comb_case_children = {children[0][it[0]].utilities};
 		for (unsigned k = 1; k < children.size(); k++){
 			comb_case.insert(comb_case.end(), children[k][it[k]]._case.begin(), children[k][it[k]]._case.end());
 			comb_case_children.push_back(children[k][it[k]].utilities);
 		}
-		// std::vector<z3::Bool> check_case(current_case.begin(), current_case.end());
-		// check_case.push_back(comb_case);
+		
 		if (solver.solve({comb_case})!= z3::Result::UNSAT) {
 			combined_cases.push_back(comb_case);
 			children_per_case.push_back(comb_case_children);
 		}
-		solver.pop();
-		unsigned n = children.size() -1;
-		while (n > 0 && it[n] == children[n].size()-1) {
-			it[n] = 0;
-			n--;
+		
+		//solver.pop();
+		if(iterators_at_end) {
+			last_case_computed = true; 
+		} else {
+			unsigned n = children.size() -1;
+			while (n > 0 && it[n] == children[n].size()-1) {
+				it[n] = 0;
+				n--;
+			}
+			it[n]++;
+			iterators_at_end = all_at_end(it, children);
 		}
-		it[n]++;
+		
 	}
-
-
-
-	std::vector<z3::Bool> comb_case(children[0][it[0]]._case.begin(), children[0][it[0]]._case.end());
-	std::vector<UtilityTuplesSet> comb_case_children = {children[0][it[0]].utilities};
-	// std::cout << "Orange1.1" << std::endl;
-	for (unsigned k = 1; k < children.size(); k++){
-		comb_case.insert(comb_case.end(), children[k][it[k]]._case.begin(), children[k][it[k]]._case.end());
-		comb_case_children.push_back(children[k][it[k]].utilities);
-	}
-	// std::cout << "Orange1.2" << std::endl;
-	// std::vector<z3::Bool> check_case(current_case.begin(), current_case.end());
-	// check_case.push_back(comb_case);
-	// std::cout << "Orange1.3" << std::endl;
-	solver.push();
-	if (solver.solve({comb_case})!= z3::Result::UNSAT) {
-		combined_cases.push_back(comb_case);
-		children_per_case.push_back(comb_case_children);
-	}
-	solver.pop();
-	// std::cout << "Orange2" << std::endl;
 
 
 	std::vector<PotentialCase> result;
-	// std::cout << "number of combined cases " << combined_cases.size() << std::endl;
 	for (unsigned i=0; i < combined_cases.size(); i++){
-		// std::cout << "Orange3" << std::endl;
 		std::vector<z3::Bool> new_case = {};
 		new_case.insert(new_case.begin(), current_case.begin(), current_case.end());
 		new_case.insert(new_case.end(), combined_cases[i].begin(), combined_cases[i].end());
-		// std::cout << "Orange4" << std::endl;
 		solver.push();
 		for (auto asssertion : combined_cases[i]) {
 			solver.assert_(asssertion);
 		}
-		// std::cout << "Orange4" << std::endl;
 		std::vector<PotentialCase> res_reasoning = practicality_reasoning(solver, options, node, new_case, children_per_case[i], honest_utilities);
 		solver.pop();
-		// std::cout << "number of potential cases per for the current combined case " << res_reasoning.size() << std::endl;
-		// std::cout << "Orange4,5" << std::endl;
-		std::cout << res_reasoning.size() << std::endl;
+		
 		for(auto pot_case : res_reasoning) {
 			UtilityTuplesSet utilities = pot_case.utilities;
 			if (utilities.empty()){
-				// std::cout << "return size: 0" << std::endl;
 				return {};
 			}
 			std::vector<z3::Bool> new_potential_case(combined_cases[i].begin(), combined_cases[i].end());
@@ -649,15 +544,10 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 			PotentialCase pot = {utilities, new_potential_case};
 			result.push_back(pot);
 		}
-		// std::cout << "Orange5" << std::endl;
-		
 		
 	}
-	//std::cout << "return size: " << result.size() << std::endl;
 	return result;
 }
-
-
 
 bool property_under_split(z3::Solver &solver, const Input &input, const PropertyType property, size_t history) {
 	/* determine if the input has some property for the current honest history under the current split */
