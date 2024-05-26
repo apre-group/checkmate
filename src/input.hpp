@@ -14,6 +14,33 @@ struct Leaf;
 struct Branch;
 struct Choice;
 
+// TODO: make find() work for vector<z3::Bool> instead of using this function
+inline bool case_found (z3::Bool _case_to_find, const std::vector<z3::Bool> _case) {
+	std::equal_to<z3::Bool> eq1;
+	bool found = false;
+
+	for(auto _c : _case) {
+		if (eq1(_case_to_find, _c)) {
+			found = true;
+			break;
+		}
+	}
+	return found;
+}
+
+inline bool are_compatible_cases(const std::vector<z3::Bool> _case1, const std::vector<z3::Bool> _case2) {
+	bool compatible_cases = true;
+
+	for (const auto& _case : _case1) {
+		if(!case_found(_case, _case2)) {
+			compatible_cases = false;
+			break;
+		}
+	}
+
+	return compatible_cases;
+}
+
 struct Input {
 	// parse an input from `path`, exiting if malformed
 	Input(const char *path);
@@ -155,6 +182,9 @@ struct Branch final : public Node {
 	// take this action
 	mutable std::string strategy;
 
+	mutable std::vector<std::vector<z3::Bool>> pr_strategies_cases;
+	mutable std::vector<std::string> pr_strategies_actions;
+
 	void mark_honest(const std::vector<std::string> &history) const {
 		assert(!honest);
 
@@ -195,6 +225,14 @@ struct Branch final : public Node {
 				choice.node->branch().reset_strategy();
 	}
 
+	void reset_strategy_pr() const {
+		pr_strategies_cases = {};
+		pr_strategies_actions = {};
+		for(auto &choice: choices)
+			if(!choice.node->is_leaf())
+				choice.node->branch().reset_strategy();
+	}
+
 	void print_strategy(const Input &input) const {
 		std::vector<std::string> actions_so_far;
 		std::cout << "Printing strategy..." << std::endl;
@@ -223,8 +261,56 @@ struct Branch final : public Node {
 			updated_actions.push_back(choice.action);
 			print_strategy_rec(choice.node.get(), input, updated_actions);
 		}
+	}
+
+	void print_strategy_pr(const Input &input, std::vector<z3::Bool> &current_case) const {
+		std::vector<std::string> actions_so_far;
+		const Node *current = this;
+
+		std::cout << "Printing strategy for case " << current_case << "..." << std::endl;
+		
+		//std::cout << "...................." << std::endl;
+		//std::cout << current->branch().pr_strategies_cases << std::endl;
+		//std::cout << "....Actions................" << std::endl;
+		//std::cout << current->branch().pr_strategies_actions << std::endl;
+		//std::cout << "...................." << std::endl;
+		
+		
+		print_strategy_pr_rec(current, input, {}, current_case);	
+
+		std::cout << std::endl;
+		std::cout << std::endl;
 
 	}
+
+	void print_strategy_pr_rec(const Node *current, const Input &input, std::vector<std::string> actions_so_far, std::vector<z3::Bool> &current_case) const {
+		if(current->is_leaf()) 
+			return;
+
+		if(!current->branch().pr_strategies_cases.empty()) {
+
+			for (unsigned i = 0; i < current->branch().pr_strategies_cases.size(); i++) {
+				if(are_compatible_cases(current->branch().pr_strategies_cases[i], current_case)) {
+					std::cout
+					<< "\tPlayer "
+					<< input.players[current->branch().player]
+					<< " takes action "
+					<< current->branch().pr_strategies_actions[i]
+					<< " after history "
+					<< actions_so_far
+					<< std::endl;
+					break;
+				}
+			}			
+		}
+
+		for (const Choice &choice: current->branch().choices) {
+			std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+			updated_actions.push_back(choice.action);
+			print_strategy_pr_rec(choice.node.get(), input, updated_actions, current_case);
+		}
+	}
+
 };
 
 inline const Leaf &Node::leaf() const {

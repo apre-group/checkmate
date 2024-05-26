@@ -24,7 +24,9 @@ bool all_at_end(std::vector<unsigned> it, std::vector<std::vector<PotentialCase>
 	return true;
 }
 
-bool practicality_admin(z3::Solver &solver, const Options &options, Node *root, std::vector<z3::Bool> current_case);
+std::vector<PotentialCase> practicality_admin(z3::Solver &solver, const Options &options, const Input &input, Node *root, std::vector<z3::Bool> current_case);
+
+bool practicality_entry(z3::Solver &solver, const Options &options, const Input &input, Node *root, std::vector<z3::Bool> current_case);
 
 bool weak_immunity_rec(z3::Solver &solver, Node *node, unsigned player, bool weaker) {
 
@@ -336,7 +338,7 @@ UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
 		// if strategy has not been set, we are not along the honest history
 		// go over all children and pick the one that has a utility tuple which is contained in the returned result
 		if (branch.strategy.empty()) {
-			for (unsigned i=0; i < children.size() && branch.strategy.empty(); i++) {
+			for (unsigned i = 0; i < children.size() && branch.strategy.empty(); i++) {
 				auto& utilities = children[i];
 				for (const auto& utility : utilities) {
 					if(result.find(utility) != result.end()) {
@@ -346,7 +348,6 @@ UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
 				}
 			}
 		}
-		
 
 		return result;
 
@@ -425,7 +426,7 @@ std::vector<PotentialCase> compute_all_combinations(z3::Solver &solver, std::vec
 
 
 // refactoring try and avoid the copying here: each std::vector<T> (and UtilityTuplesSet) makes a new copy
-std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Options &options, Node *node, std::vector<z3::Bool> current_case, std::vector<UtilityTuplesSet> children, UtilityTuplesSet honest_utilities) {
+std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Options &options, const Input &input, Node *node, std::vector<z3::Bool> current_case, std::vector<UtilityTuplesSet> children, UtilityTuplesSet honest_utilities) {
 		const auto &branch = node->branch();
 		
 		if (branch.honest) {
@@ -477,7 +478,8 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Opti
 							assert (solver.solve() != z3::Result::UNSAT);
 							std::vector<z3::Bool> new_current_case = std::move(current_case);
 							new_current_case.push_back(condition);
-							bool attempt = practicality_admin(solver, options, node, new_current_case);
+							auto temp_res = practicality_admin(solver, options, input, node, new_current_case);
+							bool attempt = temp_res.size() != 0;
 							
 							solver.pop();
 							if (!attempt) 
@@ -601,7 +603,22 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Opti
 	} 
 }
 
-std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &options, Node *node, std::vector<z3::Bool> current_case) {
+bool are_compatible(const PotentialCase &pc1, const PotentialCase &pc2) {
+	bool compatible_utilities = true;
+
+	for (const auto& utility : pc1.utilities) {
+		if(pc2.utilities.find(utility) == pc2.utilities.end()) {
+			compatible_utilities = false;
+			break;
+		}
+	}
+
+	bool compatible_cases = are_compatible_cases(pc1._case, pc2._case);
+
+	return compatible_utilities && compatible_cases;
+}
+
+std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &options, const Input &input, Node *node, std::vector<z3::Bool> current_case) {
 	  if (node->is_leaf()) {
 		// return the utility tuple of the leaf as a set (of one element)
 		const Leaf &leaf = node->leaf();
@@ -613,12 +630,13 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 
 	// get practical strategies and corresponding utilities recursively
 	std::vector<std::vector<PotentialCase>> children;
+	std::vector<std::string> children_actions;
 
 	UtilityTuplesSet honest_utilities;
 	std::vector<z3::Bool> honest_case;
 
 	for (const Choice &choice: branch.choices) {
-		std::vector<PotentialCase> potential_cases = practicality_rec(solver, options, choice.node.get(), current_case);
+		std::vector<PotentialCase> potential_cases = practicality_rec(solver, options, input, choice.node.get(), current_case);
 
 		// this child has no practical strategy (propagate reason for case split, if any) 
 		if(potential_cases.empty()) {
@@ -632,8 +650,15 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 		if(choice.node->honest) {
 			honest_utilities = potential_cases[0].utilities;
 			honest_case = potential_cases[0]._case;
+
+			//std::cout << "Before" << branch.pr_strategies_actions << std::endl;
+			//std::cout << "---> add " << choice.action << " for case " << potential_cases[0]._case << std::endl;
+			branch.pr_strategies_cases.push_back(potential_cases[0]._case); 
+			branch.pr_strategies_actions.push_back(choice.action); // choose the honest action along the honest history
+			//std::cout << "After" << branch.pr_strategies_actions << std::endl;
 		} else {
 			children.push_back(potential_cases);
+			children_actions.push_back(choice.action);
 		}
 
 	}
@@ -644,14 +669,14 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 	std::vector<std::vector<UtilityTuplesSet>> children_per_case;
 
 	std::vector<unsigned> it(children.size(), 0);
-	 std::cout << children.size() << std::endl;
+	//std::cout << children.size() << std::endl;
 	
 	//TODO for debugging only -> remove afterwards
-	unsigned big_product = 1; 
+	/*unsigned big_product = 1; 
 	for(auto something: children) {
 		big_product *= something.size();
 	}
-	std::cout << "------------> "<< big_product<<std::endl;
+	std::cout << "------------> "<< big_product<<std::endl;*/
 	// until here to be removed
 
 	bool last_case_computed = false;
@@ -697,7 +722,7 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 		for (auto asssertion : combined_cases[i]) {
 			solver.assert_(asssertion);
 		}
-		std::vector<PotentialCase> res_reasoning = practicality_reasoning(solver, options, node, new_case, children_per_case[i], honest_utilities);
+		std::vector<PotentialCase> res_reasoning = practicality_reasoning(solver, options, input, node, new_case, children_per_case[i], honest_utilities);
 		solver.pop();
 		
 		for(auto pot_case : res_reasoning) {
@@ -712,6 +737,31 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 		}
 		
 	}
+
+	// strategy extraction
+	// for each potential case from result find the first child from children s.t.
+	// child contains a potential case compatible with the potential case from result
+	// a potential case (utilities1, case1) is compatible with potential case (utilities2, case2) iff.
+	// utilities1 \subseteq utilities2 && case1 \subseteq case2
+	if (!branch.honest) { // if strategy has not been set, we are not along the honest history
+		for (unsigned i = 0; i < result.size(); i++) {
+			PotentialCase &potential_case_from_result = result[i];
+			bool found = false;
+			for (unsigned j = 0; j < children.size() && !found; j++) {
+				for (const auto& potential_case : children[j]) {
+					if(are_compatible(potential_case, potential_case_from_result)) {
+						branch.pr_strategies_cases.push_back(potential_case_from_result._case);
+						branch.pr_strategies_actions.push_back(children_actions[j]);
+						//std::cout << "---> add " << children_actions[j] << " for case " << potential_case_from_result._case << std::endl;
+						found = true;
+						break;
+					}
+				}
+			}
+		}
+	} 
+
+
 	return result;
 }
 
@@ -792,6 +842,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	for (const z3::Bool& condition : {split, !split}) {
 		input.root->reset_reason();
 		input.root->reset_strategy();
+		input.root->reset_strategy_pr();
 
 		solver.push();
 
@@ -809,9 +860,30 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	return true;
 }
 
-bool practicality_admin(z3::Solver &solver, const Options &options, Node *root, std::vector<z3::Bool> current_case) {
-	if (practicality_rec(solver, options, root, current_case).size() != 0) {
-		std::cout << "Property satisfied for current case: " << current_case << std::endl;
+std::vector<PotentialCase> practicality_admin(z3::Solver &solver, const Options &options, const Input &input, Node *root, std::vector<z3::Bool> current_case) {
+	std::vector<PotentialCase> result = practicality_rec(solver, options, input, root, current_case);
+	
+	if (result.size() != 0) {		
+		return result;
+	}
+
+	// there is no case split
+	assert(root->reason.null());
+	std::cout << "Property violated in case: " << current_case << std::endl;
+	return {};
+
+}
+
+bool practicality_entry(z3::Solver &solver, const Options &options, const Input &input, Node *root, std::vector<z3::Bool> current_case) {
+	std::vector<PotentialCase> result = practicality_admin(solver, options, input, root, current_case);
+	if (result.size() != 0) {		
+		std::cout << "Property satisfied for current case" << current_case << std::endl;
+		if (options.strategies) {
+			for (auto &pot_case: result) {
+				root->branch().print_strategy_pr(input, pot_case._case);
+			}
+		}
+			
 		return true;
 	}
 
@@ -819,7 +891,6 @@ bool practicality_admin(z3::Solver &solver, const Options &options, Node *root, 
 	assert(root->reason.null());
 	std::cout << "Property violated in case: " << current_case << std::endl;
 	return false;
-
 }
 
 void property(const Options &options, const Input &input, PropertyType property, size_t history) {
@@ -855,8 +926,10 @@ void property(const Options &options, const Input &input, PropertyType property,
 	assert(solver.solve() == z3::Result::SAT);
 
 	if (property == PropertyType::Practicality) {
-		//if (practicality_admin(solver, options, input.root.get(), std::vector<z3::Bool>()))
-		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history))
+		// TODO: choose one of the 2 lines below depending on whether you want to use the new or
+		// the old case splitting algorithm for practicality
+		if (practicality_entry(solver, options, input, input.root.get(), std::vector<z3::Bool>()))
+		//if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history))
 			std::cout << "YES, property " << property << " is satisfied" << std::endl;
 	} else {
 		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history))
@@ -883,6 +956,7 @@ void analyse_properties(const Options &options, const Input &input) {
 			if(property_chosen[i]) {
 				input.root->reset_reason();
 				input.root->reset_strategy();
+				input.root->reset_strategy_pr(); // not necessary, as only one property uses the vars that we reset
 				property(options, input, property_types[i], history);
 			}
 		}
