@@ -631,8 +631,9 @@ namespace z3 {
 	public:
 		MinimalCores(
 				Solver &solver,
-				const std::vector<Bool> &labels
-		) : solver(solver), labels(labels) {}
+				const std::vector<Bool> &labels,
+				unsigned int max_unsat
+		) : solver(solver), labels(labels), max_unsat(max_unsat) {}
 
 		bool next_core();
 
@@ -642,6 +643,7 @@ namespace z3 {
 		Solver &solver;
 		const std::vector<Bool> &labels;
 		Solver map;
+		unsigned int max_unsat;
 	};
 }
 

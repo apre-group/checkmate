@@ -1,5 +1,6 @@
 #include <cstring>
 #include <iostream>
+#include <sstream>
 
 #include "options.hpp"
 
@@ -14,6 +15,7 @@ const char *USAGE = R"(usage: checkmate PATH
 	--all_cases
 	--preconditions
 	--strategies
+	--max_unsat N
 )";
 
 // print a message, the usage information and exit with failure code
@@ -59,6 +61,14 @@ Options::Options(char **argv) {
 			preconditions = true;
 		else if (!strcmp(*argv, "--strategies"))
 			strategies = true;
+		else if (!strcmp(*argv, "--max_unsat")) {
+			argv++; 
+			if(!*argv) bail("max_unsat expects an argument");
+			std::stringstream ss(*argv);
+			if (!(ss >> max_unsat)){
+				bail("max_unsat expects a positive integer");
+			}
+		}
 		else
 			bail("unknown option");
 		argv++;

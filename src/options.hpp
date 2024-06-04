@@ -28,6 +28,8 @@ struct Options {
 	bool preconditions = false;
 	// provide witness strategy in case property satisfied
 	bool strategies = false;
+	// provide maximum interation for all counterexamples generation
+	unsigned int max_unsat = 10;
 };
 
 #endif

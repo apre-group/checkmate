@@ -192,7 +192,7 @@ struct SolvingHelper {
 														  std::move(counterexample)
 												  });
 					} else {
-						z3::MinimalCores cores(solver, labels.counterexample_labels);
+						z3::MinimalCores cores(solver, labels.counterexample_labels, options.max_unsat);
 						while (cores.next_core()) {
 							std::vector<typename Property::CounterExamplePart> counterexample;
 							for (auto label: cores.core) {

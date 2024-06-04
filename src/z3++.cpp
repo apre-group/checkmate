@@ -4,9 +4,7 @@
 #include "utils.hpp"
 #include "z3++.hpp"
 
-unsigned THRESHOLD = 5;
-unsigned GL_Z3_BUG_COUNTER = 0;
-unsigned GL_THRESHOLD = 50;
+static unsigned THRESHOLD = 5;
 
 
 namespace z3 {
@@ -45,18 +43,24 @@ namespace z3 {
 	// https://sun.iwu.edu/~mliffito/marco-viz/
 	bool MinimalCores::next_core() {
 		unsigned count = 0;
+		unsigned seeds_count = 0;
 		while (map.solve() == Result::SAT) {
-			
+			seeds_count++;
+			if (seeds_count > max_unsat ){
+				std::cout<< "\tall counterexamples generation: Maximum unsat core iteration exceeded, pass option --max_unsat N, default N = 10" << std::endl;
+				return false;
+			}
 			auto model = map.model();
 			std::vector<Bool> seed;
+			// std::cout<< labels.size() << std::endl;
+			
 			for (auto label: labels)
 				if (!model.assigns<false>(label))
 					seed.push_back(label);
-
 			std::unordered_set<Bool> relevant(seed.begin(), seed.end());
 			// the seed doesn't say enough to cause unsat
 			if (solver.solve(seed) == Result::SAT) {
-				//std::cout << "stuck in while" << std::endl;
+				// std::cout << "stuck in while" << std::endl;
 				// grow it as much as possible...
 				std::vector<Bool> complement;
 				for (auto label: labels) {
