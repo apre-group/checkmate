@@ -139,6 +139,11 @@ namespace z3 {
 			return result;
 		}
 
+		Bool simplify() {
+			Bool simp_exp = Z3_simplify(CONTEXT, ast);
+			return simp_exp;
+		}
+
 	private:
 		Bool(Z3_ast ast) : Expression(ast) { assert(is_bool()); }
 	};

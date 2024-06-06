@@ -80,6 +80,100 @@ struct Input {
 	void add_unsat_case(std::vector<z3::Bool> _case) const {
 		unsat_cases.push_back(_case);
 	}
+
+	std::vector<std::vector<z3::Bool>> precondition_simplify() const {
+
+		std::vector<std::vector<z3::Bool>> simp;
+		for (const std::vector<z3::Bool> &case_: unsat_cases) {
+			std::vector<z3::Bool> copy;
+			for (const z3::Bool &atom: case_) {
+				copy.push_back(atom);
+			}
+			simp.push_back(copy);
+		}
+		bool any_rule1 = true;
+		bool any_rule2 = true;
+		while (any_rule1 || any_rule2) {
+			any_rule1 = false;
+			any_rule2 = false;
+			for (long unsigned int j = 0; j < simp.size(); j++) {
+				auto case_ = simp[j];
+				for (long unsigned int k = j + 1; k < simp.size(); k++) {
+					auto other_case = simp[k];
+					bool rule1 = true;
+					bool rule2 = false;
+					if (case_.size() == other_case.size()) {
+						bool one_inverse = false;
+						long unsigned int inverse;
+						for (long unsigned int i = 0; i < case_.size(); i++) {
+							if (case_[i].is_equal(other_case[i].invert()) && not one_inverse) {
+								one_inverse = true;
+								inverse = i;
+							} else if (case_[i].is_equal(other_case[i].invert()) && one_inverse) {
+								rule1 = false;
+								break;
+							} else if (not case_[i].is_equal(other_case[i])) {
+								rule1 = false;
+								break;
+							}
+						}
+						rule1 = rule1 && one_inverse;
+						if (rule1) {
+							// remove other_case
+							std::swap(simp[k], simp.back());
+							simp.pop_back();
+							// remove case_[i] from case_
+							std::swap(case_[inverse], case_.back());
+							case_.pop_back();
+							simp[j] = case_;
+							any_rule1 = true;
+							break;
+						}
+					} else {
+						rule1 = false;
+					}
+					if ((case_.size() == 1) | (other_case.size() == 1)) {
+						// continue
+						std::vector<z3::Bool> singleton;
+						std::vector<z3::Bool> other;
+						int which_singleton;
+						if (case_.size() == 1) {
+							singleton = case_;
+							other = other_case;
+							which_singleton = 0;
+						} else {
+							singleton = other_case;
+							other = case_;
+							which_singleton = 1;
+						}
+						int inverse;
+						for (long unsigned int l = 0; l < other.size(); l++) {
+							if (singleton[0].is_equal(other[l].invert())) {
+								rule2 = true;
+								inverse = l;
+							}
+						}
+						if (rule2) {
+							std::swap(other[inverse], other.back());
+							other.pop_back();
+							if (which_singleton == 0) {
+								simp[k] = other;
+							} else {
+								simp[j] = other;
+							}
+							any_rule2 = true;
+						}
+
+					} else {
+						rule2 = false;
+					}
+
+				}
+			}
+		}
+
+		return simp;
+	}
 };
 
 // an action available at a branch

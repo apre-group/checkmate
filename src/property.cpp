@@ -947,9 +947,22 @@ void property(const Options &options, const Input &input, PropertyType property,
 			std::cout << "YES, property " << property << " is satisfied" << std::endl;
 	}
 
-	if (options.preconditions){
-		std::cout << "TODO compute precondition here" << std::endl;
-
+	if (options.preconditions) {
+				std::cout << std::endl;
+				std::vector<z3::Bool> conjuncts;
+				std::vector<std::vector<z3::Bool>> simplified = input.precondition_simplify();
+				for (const auto &unsat_case: simplified) {
+					// negate each case (by disjoining the negated elements), then conjunct all - voila weakest prec to be added to the init constr
+					std::vector<z3::Bool> neg_case;
+					for (const auto &elem: unsat_case) {
+						neg_case.push_back(elem.invert());
+					}
+					z3::Bool disj = disjunction(neg_case);
+					conjuncts.push_back(disj);
+				}
+				z3::Bool raw_prec = conjunction(conjuncts);
+				z3::Bool simpl_prec = raw_prec.simplify();
+				std::cout << "Weakest Precondition: " << std::endl << "\t" << simpl_prec << std::endl;
 	}
 	
 }
