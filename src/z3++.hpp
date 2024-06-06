@@ -126,6 +126,8 @@ namespace z3 {
 			return result;
 		}
 
+		
+
 		Bool operator||(Bool other) const {
 			Z3_ast disjuncts[2]{ast, other.ast};
 			Z3_ast result = Z3_mk_or(CONTEXT, 2, disjuncts);
@@ -144,6 +146,57 @@ namespace z3 {
 			return simp_exp;
 		}
 
+		bool is_equal(const Bool other) const {
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			Z3_ast ast_left = Z3_get_app_arg(CONTEXT, app, 0);
+			Z3_ast ast_right = Z3_get_app_arg(CONTEXT, app, 1);
+			Z3_func_decl func_decl = Z3_get_app_decl(CONTEXT, app);
+			Z3_decl_kind decl_kind = Z3_get_decl_kind(CONTEXT, func_decl);
+
+			Z3_app other_app = Z3_to_app(CONTEXT, other.ast);
+			Z3_ast other_ast_left = Z3_get_app_arg(CONTEXT, other_app, 0);
+			Z3_ast other_ast_right = Z3_get_app_arg(CONTEXT, other_app, 1);
+			Z3_func_decl other_func_decl = Z3_get_app_decl(CONTEXT, other_app);
+			Z3_decl_kind other_decl_kind = Z3_get_decl_kind(CONTEXT, other_func_decl);
+
+			if ((ast_left == other_ast_left) && (ast_right == other_ast_right) && (decl_kind == other_decl_kind)) {
+				return true;
+			} else {
+				return false;
+			}
+		}
+
+		Bool invert() const {
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			Z3_ast ast_left = Z3_get_app_arg(CONTEXT, app, 0);
+			Z3_ast ast_right = Z3_get_app_arg(CONTEXT, app, 1);
+			Z3_ast args[2];
+			args[0] = ast_left;
+			args[1] = ast_right;
+
+			Z3_func_decl func_decl = Z3_get_app_decl(CONTEXT, app);
+			Z3_decl_kind decl_kind = Z3_get_decl_kind(CONTEXT, func_decl);
+
+			Bool new_expr;
+			if (decl_kind == Z3_OP_LT) {
+				new_expr = Z3_mk_ge(CONTEXT, ast_left, ast_right);
+			} else if (decl_kind == Z3_OP_LE) {
+				new_expr = Z3_mk_gt(CONTEXT, ast_left, ast_right);
+			} else if (decl_kind == Z3_OP_GT) {
+				new_expr = Z3_mk_le(CONTEXT, ast_left, ast_right);
+			} else if (decl_kind == Z3_OP_GE) {
+				new_expr = Z3_mk_lt(CONTEXT, ast_left, ast_right);
+			} else if (decl_kind == Z3_OP_EQ) {
+				new_expr = Z3_mk_distinct(CONTEXT, 2, args);
+			} else if (decl_kind == Z3_OP_DISTINCT) {
+				new_expr = Z3_mk_eq(CONTEXT, ast_left, ast_right);
+			} else {
+				assert(false);
+			}
+			check_error();
+			return new_expr;
+		}
+
 	private:
 		Bool(Z3_ast ast) : Expression(ast) { assert(is_bool()); }
 	};
@@ -154,6 +207,9 @@ namespace z3 {
 	);
 
 	inline Bool conjunction(const std::vector<Bool> &conjuncts) { return Bool::conjunction(conjuncts); }
+
+	inline Bool disjunction(const std::vector<Bool> &disjuncts) { return Bool::disjunction(disjuncts); }	
+
 
 	// Expression of real sort by construction
 	class Real : public Expression {
@@ -360,6 +416,9 @@ namespace z3 {
 		friend std::ostream &operator<<(std::ostream &out, const Solver &solver) {
 			return out << Z3_solver_to_string(CONTEXT, solver.solver);
 		}
+
+		
+
 
 	private:
 		// wrapper solver
