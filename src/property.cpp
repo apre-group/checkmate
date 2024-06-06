@@ -834,10 +834,15 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	// there is no case split
 	if (split.null()) {
 		std::cout << "Property violated in case: " << current_case << std::endl;
+		if (options.preconditions){
+			input.add_unsat_case(current_case);
+		}
 		return false;
 	}
 
 	std::cout << "Splitting on: " << split << std::endl;
+
+	bool result = true;
 
 	for (const z3::Bool& condition : {split, !split}) {
 		input.root->reset_reason();
@@ -853,11 +858,17 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		bool attempt = property_rec(solver, options, input, property, new_current_case, history);
 		
 		solver.pop();
-		if (!attempt) 
-			return false;
+		if (!attempt){
+			if (!options.preconditions){
+				return false;
+			}
+			else {
+				result = false;
+			}
+		}
 	}
 
-	return true;
+	return result;
 }
 
 std::vector<PotentialCase> practicality_admin(z3::Solver &solver, const Options &options, const Input &input, Node *root, std::vector<z3::Bool> current_case) {
@@ -935,6 +946,11 @@ void property(const Options &options, const Input &input, PropertyType property,
 		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history))
 			std::cout << "YES, property " << property << " is satisfied" << std::endl;
 	}
+
+	if (options.preconditions){
+		std::cout << "TODO compute precondition here" << std::endl;
+
+	}
 	
 }
 
@@ -946,6 +962,7 @@ void analyse_properties(const Options &options, const Input &input) {
 
 		input.root->reset_honest();
 		input.root->mark_honest(input.honest[history]);
+		
 
 		std::vector<bool> property_chosen = {options.weak_immunity, options.weaker_immunity, options.collusion_resilience, options.practicality};
 		std::vector<PropertyType> property_types = {PropertyType::WeakImmunity, PropertyType::WeakerImmunity, PropertyType::CollusionResilience, PropertyType::Practicality};
@@ -954,6 +971,7 @@ void analyse_properties(const Options &options, const Input &input) {
 
 		for (size_t i=0; i<property_chosen.size(); i++) {
 			if(property_chosen[i]) {
+				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.root->reset_strategy();
 				input.root->reset_strategy_pr(); // not necessary, as only one property uses the vars that we reset

@@ -64,12 +64,22 @@ struct Input {
 	// practicality initial constraints
 	z3::Bool practicality_constraint;
 
+	mutable std::vector<std::vector<z3::Bool>> unsat_cases;
+
 	// root: NB must be a branch
 	std::unique_ptr<Branch> root;
 
 	// maximum number of players currently supported
 	// no reason there couldn't be more, but convenient for implementation (cf collusion resilience)
 	static const size_t MAX_PLAYERS = 64;
+
+	void reset_unsat_cases() const {
+		unsat_cases.clear();
+	}
+
+	void add_unsat_case(std::vector<z3::Bool> _case) const {
+		unsat_cases.push_back(_case);
+	}
 };
 
 // an action available at a branch
