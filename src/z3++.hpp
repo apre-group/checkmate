@@ -9,7 +9,7 @@
  **/
 
 #include <cassert>
-#include <ostream>
+#include <iostream>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -126,7 +126,16 @@ namespace z3 {
 			return result;
 		}
 
-		
+		static Bool disjunction(const std::vector<Bool> &disjuncts) {
+			Z3_ast result = Z3_mk_or(
+					CONTEXT,
+					disjuncts.size(),
+					// safety: Z3_ast should have the same size/alignment as Bool
+					reinterpret_cast<const Z3_ast *>(disjuncts.data())
+			);
+			check_error();
+			return result;
+		}
 
 		Bool operator||(Bool other) const {
 			Z3_ast disjuncts[2]{ast, other.ast};
@@ -152,7 +161,7 @@ namespace z3 {
 			Z3_ast ast_right = Z3_get_app_arg(CONTEXT, app, 1);
 			Z3_func_decl func_decl = Z3_get_app_decl(CONTEXT, app);
 			Z3_decl_kind decl_kind = Z3_get_decl_kind(CONTEXT, func_decl);
-
+			
 			Z3_app other_app = Z3_to_app(CONTEXT, other.ast);
 			Z3_ast other_ast_left = Z3_get_app_arg(CONTEXT, other_app, 0);
 			Z3_ast other_ast_right = Z3_get_app_arg(CONTEXT, other_app, 1);

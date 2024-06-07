@@ -448,7 +448,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 	std::exit(EXIT_FAILURE);
 }
 
-Input::Input(const char *path) {
+Input::Input(const char *path) : unsat_cases() , stop_log(false) {
 	// parse a JSON document from `path`
 	std::ifstream input(path);
 	json document;

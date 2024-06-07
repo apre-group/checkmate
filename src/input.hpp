@@ -66,6 +66,8 @@ struct Input {
 
 	mutable std::vector<std::vector<z3::Bool>> unsat_cases;
 
+	mutable bool stop_log;
+
 	// root: NB must be a branch
 	std::unique_ptr<Branch> root;
 
@@ -75,6 +77,14 @@ struct Input {
 
 	void reset_unsat_cases() const {
 		unsat_cases.clear();
+	}
+
+	void stop_logging() const {
+		stop_log = true;
+	}
+
+	void reset_logging() const {
+		stop_log = false;
 	}
 
 	void add_unsat_case(std::vector<z3::Bool> _case) const {
@@ -148,7 +158,10 @@ struct Input {
 						}
 						int inverse;
 						for (long unsigned int l = 0; l < other.size(); l++) {
-							if (singleton[0].is_equal(other[l].invert())) {
+							z3::Bool other_bool = other[l].invert();
+							z3::Bool this_bool = singleton[0];
+							bool the_hell = this_bool.is_equal(other_bool);
+							if (the_hell) {
 								rule2 = true;
 								inverse = l;
 							}
