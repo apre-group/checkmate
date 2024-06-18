@@ -24,7 +24,8 @@ bool all_at_end(std::vector<unsigned> it, std::vector<std::vector<PotentialCase>
 	return true;
 }
 
-std::vector<PotentialCase> practicality_admin(z3::Solver &solver, const Options &options, const Input &input, Node *root, std::vector<z3::Bool> current_case);
+// SOPHIES EDIT
+//std::vector<PotentialCase> practicality_admin(z3::Solver &solver, const Options &options, const Input &input, Node *root, std::vector<z3::Bool> current_case);
 
 bool practicality_entry(z3::Solver &solver, const Options &options, const Input &input, Node *root, std::vector<z3::Bool> current_case);
 
@@ -355,7 +356,7 @@ UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
 
 }
 
-template<typename Comparison>
+template<typename Comparison> // comparison either > or >=
 z3::Bool get_split(z3::Solver &solver, Utility a, Utility b, Comparison comp) {
 	// std::cout << solver << std::endl;
 	if(solver.solve({a.real != b.real}) == z3::Result::UNSAT) {
@@ -372,9 +373,37 @@ z3::Bool get_split(z3::Solver &solver, Utility a, Utility b, Comparison comp) {
 		//std::cout << "Case C" << std::endl;
 		//return comp(a.real, b.real);
 		//return a.real == b.real;
-		return a.real > b.real || (a.real == b.real && comp(a.infinitesimal, b.infinitesimal));
+		if (solver.solve({!comp(a.infinitesimal, b.infinitesimal)}) == z3::Result::UNSAT) {
+			return comp(a.real, b.real);
+		}
+		else if (solver.solve({comp(a.infinitesimal, b.infinitesimal)}) == z3::Result::UNSAT) {
+			return a.real > b.real;
+		}
+		else {
+			return a.real > b.real || (a.real == b.real && comp(a.infinitesimal, b.infinitesimal));
+		}
 	} 	
 }
+
+template<typename Comparison>
+z3::Bool get_split_approx(z3::Solver &solver, Utility a, Utility b, Comparison comp) {
+	// std::cout << solver << std::endl;
+	if(solver.solve({a.real != b.real}) == z3::Result::UNSAT) {
+		//std::cout << "Case A" << std::endl;
+		//std::cout << "-> " << comp(a.infinitesimal, b.infinitesimal) << std::endl;
+		return comp(a.infinitesimal, b.infinitesimal);
+	}	
+	else if (solver.solve({a.real == b.real}) == z3::Result::UNSAT) {
+		//std::cout << "Case B" << std::endl;
+		//std::cout << "-> " << a.real << ">" << b.real << std::endl;
+		return a.real > b.real;
+	}
+	else {
+		return a.real == b.real;
+	} 	
+}
+
+
 
 std::vector<PotentialCase> compute_all_combinations(z3::Solver &solver, std::vector<std::vector<PotentialCase>> remove_sets, std::vector<z3::Bool> current_case) {
 	if(remove_sets.size() == 0) 
@@ -384,26 +413,44 @@ std::vector<PotentialCase> compute_all_combinations(z3::Solver &solver, std::vec
 	std::vector<PotentialCase> remove_sets_combined;
 	bool last_case_computed = false;
 	bool iterators_at_end = all_at_end(it, remove_sets);
+	
+	// I assume current case is asserted in solver;
+	//solver.assert_(current_case);
 
 	while (!iterators_at_end || !last_case_computed) {
 
 		// compute case
 		std::vector<z3::Bool> comb_case;
 		UtilityTuplesSet comb_remove = remove_sets[0][it[0]].utilities;
+		solver.push();
 		for (unsigned k = 0; k < remove_sets.size(); k++){
-			comb_case.insert(comb_case.end(), remove_sets[k][it[k]]._case.begin(), remove_sets[k][it[k]]._case.end());
+			
+			// comb_case.insert(comb_case.end(), remove_sets[k][it[k]]._case.begin(), remove_sets[k][it[k]]._case.end());
+			for (auto constraint : remove_sets[k][it[k]]._case){
+				// only add non trivial constriants
+				if (solver.solve({!constraint})!= z3::Result::UNSAT){
+					// std::cout << "constraint" << constraint << std::endl;
+					comb_case.push_back(constraint);
+					solver.assert_(constraint);
+				}
+			} 
+			
+			
 			
 			if(k != 0) {
 				for (auto element : remove_sets[k][it[k]].utilities) {
 					comb_remove.insert(element);
 				}
 			}
-			
 		}
+		solver.pop();
+		//std::cout << "comb case in comp_all_comb " << comb_case << std::endl;
+		// might be unnecessary
 		std::vector<z3::Bool> check_case(current_case.begin(), current_case.end());
 		check_case.insert(check_case.end(), comb_case.begin(), comb_case.end());
 
 		if (solver.solve(check_case)!= z3::Result::UNSAT) {
+			// std::cout << "Combined case: " << comb_case << ", current case: " << current_case << std::endl;
 			remove_sets_combined.push_back({comb_remove, comb_case});
 		}
 
@@ -425,9 +472,73 @@ std::vector<PotentialCase> compute_all_combinations(z3::Solver &solver, std::vec
 }
 
 
+bool pr_case_split(z3::Solver &solver, const Options &options, const Input &input, UtilityTuple honest_utility, UtilityTuplesSet utilities, unsigned player, std::vector<z3::Bool> current_case){
+// fake case splitting to find out if honest is geq for at least 1 utility[player] in  utilities for current_case"""
+
+	bool need_to_split = false;
+	z3::Bool split;
+	for (auto utility : utilities){
+		z3::Bool condition_to_check = get_split_approx(solver, utility[player], honest_utility[player], [](z3::Real a, z3::Real b){return a > b;}); 
+		auto z3_result = solver.solve({condition_to_check});
+		if (z3_result == z3::Result::UNSAT) {	
+			if (!input.stop_log){
+			std::cout << "\tProperty satisfied in case "<< current_case << std::endl;
+			}
+			return true;
+			}
+		else {
+			assert(z3_result == z3::Result::SAT);
+			auto z3_result = solver.solve({!condition_to_check});
+			if (z3_result == z3::Result::SAT) {	
+				need_to_split = true;
+				split = condition_to_check;
+			}
+		} 		
+	}
+
+	if (need_to_split){
+		bool result = true;
+		if (!input.stop_log){
+			std::cout << "\tSplitting on: " << split << std::endl;
+		}
+
+		for (const z3::Bool& condition : {split, split.invert()}) {
+			solver.push();
+			solver.assert_(condition);
+			assert (solver.solve() != z3::Result::UNSAT);
+			std::vector<z3::Bool> new_current_case = {};
+			new_current_case.insert(new_current_case.begin(), current_case.begin(), current_case.end());
+			new_current_case.push_back(condition);
+			bool attempt = pr_case_split(solver, options, input, honest_utility, utilities, player, new_current_case);
+			solver.pop();
+			if (!attempt){
+				if (options.preconditions){
+					result = false;
+				} else {
+				return false;
+				}
+			}
+		}
+		return result;
+	} else {
+		if (!input.stop_log){
+		std::cout << "\tProperty violated in case "<< current_case << std::endl;
+		}
+		if (options.preconditions){
+				input.add_unsat_case(current_case);
+				input.stop_logging();
+			}
+		return false;
+	}
+
+
+}
+
+
 // refactoring try and avoid the copying here: each std::vector<T> (and UtilityTuplesSet) makes a new copy
 std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Options &options, const Input &input, Node *node, std::vector<z3::Bool> current_case, std::vector<UtilityTuplesSet> children, UtilityTuplesSet honest_utilities) {
 		const auto &branch = node->branch();
+		bool ret_empty = false;
 		
 		if (branch.honest) {
 			// if we are at an honest node, our strategy must be the honest strategy
@@ -446,7 +557,7 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Opti
 			//	 	we return the maximal strategy 
 			// 		honest choice is practical for current player
 			PotentialCase pot_case = {{honest_utility}, {}};
-			 std::vector<PotentialCase> result = {pot_case};
+			std::vector<PotentialCase> result = {pot_case};
 
 			// for all other children
 			for (const auto& utilities : children) {
@@ -459,21 +570,31 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Opti
 					if (solver.solve({condition}) == z3::Result::SAT) {
 						if (solver.solve({!condition}) == z3::Result::SAT) {
 							// might be maximal, just couldn't prove it
-							std::cout << "1 pre invert" << std::endl;
-							branch.reason = condition.invert();
-
-							std::cout << "1 post invert" << std::endl;
+							branch.reason = get_split_approx(solver, utility[branch.player], maximum, [](z3::Real a, z3::Real b){return a > b;});
 						}
 					} 
 					else {
 						found = true;
+
 						break;
 					}
 				}
+				
 				if (!found) {
+					// current_case_okay = false;
+					
 					// return empty set if no reason set
 					if (branch.reason.null()) {
-						return {}; 
+						if (!input.stop_log){
+						std::cout << "\tProperty violated in case " << current_case << std::endl;
+						}
+						if (options.preconditions){
+							input.add_unsat_case(current_case);
+							input.stop_logging();
+							ret_empty = true;
+						} else {
+							return {}; 
+						}
 					} else {
 
 						// call this function for reason and !reason
@@ -489,26 +610,31 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Opti
 
 							solver.assert_(condition);
 							assert (solver.solve() != z3::Result::UNSAT);
-							std::vector<z3::Bool> new_current_case = std::move(current_case);
+							std::vector<z3::Bool> new_current_case = {};
+							new_current_case.insert(new_current_case.begin(), current_case.begin(), current_case.end());
 							new_current_case.push_back(condition);
-							auto temp_res = practicality_admin(solver, options, input, node, new_current_case);
-							bool attempt = temp_res.size() != 0;
+							bool attempt = pr_case_split(solver, options, input, honest_utility, utilities, branch.player, new_current_case);
 							
 							solver.pop();
 							if (!attempt) {
 								if (options.preconditions){
-									result = {};
+									ret_empty = true;
 								} else {
 								return {};
 								}
-							}
+							} 
 						}
+						// std::cout << "\tSuccessful split on: " << split << "at history XXX" << std::endl;
 
 					}
 				}
-
 			}
-			return result;
+
+			if (ret_empty){
+				assert(options.preconditions);
+			} else {
+				return result;
+			}
 
 
 	} else {
@@ -568,13 +694,9 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Opti
 						dominated = false;
 						if (solver.solve({!condition}) == z3::Result::SAT) {
 							if(split.null()) {
-								std::cout << "2pre invert" << std::endl;
 								split = condition.invert();
-								std::cout << "2post invert" << std::endl;
 							} else {
-								std::cout << "3pre invert " << condition << std::endl;
 								split = split || condition.invert();
-								std::cout << "3post invert" << std::endl;
 							}
 						}
 					}
@@ -591,9 +713,7 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Opti
 			if (!dominated && !split.null()) {
 
 				PotentialCase remove_struct_first = {{candidate}, {split}};
-				std::cout << "4pre invert" << std::endl;
 				PotentialCase remove_struct_second = {{}, {split.invert()}};
-				std::cout << "4post invert" << std::endl;
 
 				for(PotentialCase remove_struct : {remove_struct_first, remove_struct_second}) {
 					remove_sets_of_candate.push_back(std::move(remove_struct));
@@ -609,6 +729,9 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Opti
 
 		// combine remove sets to obtain O(2**n) remove sets
 		std::vector<PotentialCase> remove_sets_combined = compute_all_combinations(solver, remove_sets, current_case);
+		for (auto elem : remove_sets_combined){
+			// std::cout << "remove sets combined cases " << elem._case << std::endl;
+		}
 		std::vector<PotentialCase> ret_result;
 
 		for(auto remove_set : remove_sets_combined) {
@@ -622,7 +745,10 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Opti
 		return ret_result;
 
 	} 
+	assert(false);
+	return {};
 }
+
 
 bool are_compatible(const PotentialCase &pc1, const PotentialCase &pc2) {
 	bool compatible_utilities = true;
@@ -640,11 +766,16 @@ bool are_compatible(const PotentialCase &pc1, const PotentialCase &pc2) {
 }
 
 std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &options, const Input &input, Node *node, std::vector<z3::Bool> current_case) {
-	  if (node->is_leaf()) {
+	std::cout << "in practicality_rec" << std::endl;
+
+	if (node->is_leaf()) {
 		// return the utility tuple of the leaf as a set (of one element)
 		const Leaf &leaf = node->leaf();
+		std::cout << "return 1 practicality_rec" << std::endl;
 		return {{{leaf.utilities}, {}}};
 	}  
+	// keeps track on whether we have to return the empty set
+	bool ret_empty = false;
 
 	// else we deal with a branch
  	const auto &branch = node->branch();
@@ -661,15 +792,27 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 
 		// this child has no practical strategy (propagate reason for case split, if any) 
 		if(potential_cases.empty()) {
+			std::cout << "tada" << std::endl;
 			branch.reason = choice.node->reason;
 			assert(choice.node->honest);
 			assert(choice.node->reason.null());
+			std::cout << "what" << std::endl;
+
+
 			// return empty set
-			return {};
+			if (options.preconditions){
+				ret_empty = true;
+			} else {
+				std::cout << "return 2 practicality_rec" << std::endl;
+				return {};
+			}
 		}
+		std::cout << "hmm" << std::endl;
 
 		if(choice.node->honest) {
+			std::cout << "visible" << std::endl;
 			honest_utilities = potential_cases[0].utilities;
+			std::cout << "invisible" << std::endl;
 			honest_case = potential_cases[0]._case;
 
 			//std::cout << "Before" << branch.pr_strategies_actions << std::endl;
@@ -681,7 +824,6 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 			children.push_back(potential_cases);
 			children_actions.push_back(choice.action);
 		}
-
 	}
 
 	// compute all case combinations from the potential_case vector together with the corresponding utilities per child.
@@ -706,13 +848,27 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 	while (!iterators_at_end || !last_case_computed) {
 		// compute case
 		//solver.push(); -> TODO remove this, not needed, as we are not asserting anything
-		std::vector<z3::Bool> comb_case(children[0][it[0]]._case.begin(), children[0][it[0]]._case.end());
-		std::vector<UtilityTuplesSet> comb_case_children = {children[0][it[0]].utilities};
-		for (unsigned k = 1; k < children.size(); k++){
-			comb_case.insert(comb_case.end(), children[k][it[k]]._case.begin(), children[k][it[k]]._case.end());
+		
+		//std::vector<z3::Bool> comb_case(children[0][it[0]]._case.begin(), children[0][it[0]]._case.end());
+		//std::vector<UtilityTuplesSet> comb_case_children = {children[0][it[0]].utilities};
+		std::vector<z3::Bool> comb_case;
+		std::vector<UtilityTuplesSet> comb_case_children;
+
+		solver.push();
+		for (unsigned k = 0; k < children.size(); k++){
+			//comb_case.insert(comb_case.end(), children[k][it[k]]._case.begin(), children[k][it[k]]._case.end());
+			// add only non trivial constraints
+			
+			for (auto constraint : children[k][it[k]]._case) {
+				if (solver.solve({!constraint}) != z3::Result::UNSAT){
+					comb_case.push_back(constraint);
+					solver.assert_(constraint);
+				}
+			}
+			
 			comb_case_children.push_back(children[k][it[k]].utilities);
 		}
-		
+		solver.pop();
 		if (solver.solve({comb_case})!= z3::Result::UNSAT) {
 			combined_cases.push_back(comb_case);
 			children_per_case.push_back(comb_case_children);
@@ -743,14 +899,35 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 		for (auto asssertion : combined_cases[i]) {
 			solver.assert_(asssertion);
 		}
+		std::cout << "pre practicality_reasoning" << std::endl;
 		std::vector<PotentialCase> res_reasoning = practicality_reasoning(solver, options, input, node, new_case, children_per_case[i], honest_utilities);
+		std::cout << "post practicality_reasoning" << std::endl;
 		solver.pop();
 		
+		if (res_reasoning.size() == 0){
+			// return empty set
+			if (options.preconditions){
+				ret_empty = true;
+			} else {
+			std::cout << "return 3 practicality_rec" << std::endl;
+			return {};
+			}
+		}
+
 		for(auto pot_case : res_reasoning) {
 			UtilityTuplesSet utilities = pot_case.utilities;
 			if (utilities.empty()){
+				// return empty set
+				if (options.preconditions){
+					ret_empty = true;
+				} else {
+				std::cout << "return 4 practicality_rec" << std::endl;
 				return {};
+				}
 			}
+			// std::cout << "end of pr_rec potential case: " << pot_case._case << std::endl;
+			// std::cout << "combined_cases[i]: " << combined_cases[i] << std::endl;
+			// std::cout << "current case: " << current_case << std::endl;
 			std::vector<z3::Bool> new_potential_case(combined_cases[i].begin(), combined_cases[i].end());
 			new_potential_case.insert(new_potential_case.end(), pot_case._case.begin(), pot_case._case.end());
 			PotentialCase pot = {utilities, new_potential_case};
@@ -782,8 +959,15 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 		}
 	} 
 
+	if (ret_empty){
+		assert(options.preconditions);
+		std::cout << "return 5 practicality_rec" << std::endl;
+		return {}; 
+	} else {
 
+		std::cout << "return 6 practicality_rec" << std::endl;
 	return result;
+	}
 }
 
 bool property_under_split(z3::Solver &solver, const Input &input, const PropertyType property, size_t history) {
@@ -900,31 +1084,10 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	return result;
 }
 
-std::vector<PotentialCase> practicality_admin(z3::Solver &solver, const Options &options, const Input &input, Node *root, std::vector<z3::Bool> current_case) {
-	std::vector<PotentialCase> result = practicality_rec(solver, options, input, root, current_case);
-	
-	if (result.size() != 0) {		
-		return result;
-	}
-
-	// there is no case split
-	assert(root->reason.null());
-	// if (options.preconditions){
-	// 	input.add_unsat_case(current_case);
-	// }
-	// if (!input.stop_log){
-	// 	std::cout << "\tProperty violated in case: " << current_case << std::endl;
-	// }
-	return {};
-
-}
-
 bool practicality_entry(z3::Solver &solver, const Options &options, const Input &input, Node *root, std::vector<z3::Bool> current_case) {
-	std::vector<PotentialCase> result = practicality_admin(solver, options, input, root, current_case);
-	if (result.size() != 0) {		
-		if (!input.stop_log){
-			std::cout << "\tProperty satisfied for current case" << current_case << std::endl;
-		}
+	std::vector<PotentialCase> result = practicality_rec(solver, options, input, root, current_case);
+	std::cout << "after practicality_rec" << std::endl;
+	if (result.size() != 0) {	
 		if (options.strategies) {
 			for (auto &pot_case: result) {
 				root->branch().print_strategy_pr(input, pot_case._case);
@@ -936,12 +1099,6 @@ bool practicality_entry(z3::Solver &solver, const Options &options, const Input 
 
 	// there is no case split
 	assert(root->reason.null());
-	if (options.preconditions){
-		input.add_unsat_case(current_case);
-	}
-	if (!input.stop_log){
-		std::cout << "\tProperty violated in case: " << current_case << std::endl;
-	}
 	return false;
 }
 
@@ -981,15 +1138,15 @@ void property(const Options &options, const Input &input, PropertyType property,
 
 	std::cout << std::endl;
 	std::cout << std::endl;
-	std::cout << "Is history " << input.honest[history] << " " << prop_name<< "?" << std::endl;
+	std::cout << "Is history " << input.honest[history] << " " << prop_name << "?" << std::endl;
 
 	assert(solver.solve() == z3::Result::SAT);
 
 	if (property == PropertyType::Practicality) {
 		// TODO: choose one of the 2 lines below depending on whether you want to use the new or
 		// the old case splitting algorithm for practicality
-		if (practicality_entry(solver, options, input, input.root.get(), std::vector<z3::Bool>())){
-		//if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history))
+		//if (practicality_entry(solver, options, input, input.root.get(), std::vector<z3::Bool>())) {
+		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history)) {
 			std::cout << "YES, it is " << prop_name << "." << std::endl;
 			prop_holds = true;
 		} else { 

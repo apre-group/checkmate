@@ -177,31 +177,50 @@ namespace z3 {
 
 		Bool invert() const {
 			Z3_app app = Z3_to_app(CONTEXT, ast);
-			Z3_ast ast_left = Z3_get_app_arg(CONTEXT, app, 0);
-			Z3_ast ast_right = Z3_get_app_arg(CONTEXT, app, 1);
-			Z3_ast args[2];
-			args[0] = ast_left;
-			args[1] = ast_right;
+			const unsigned int num_args =  Z3_get_app_num_args(CONTEXT, app);
+			Z3_ast* args = new Z3_ast[num_args]; 
+			//above line instead of: Z3_ast args[num_args]; cause that's not allowed in c++
+			for (unsigned int i = 0; i < num_args; i++) {
+				Z3_ast current_ast = Z3_get_app_arg(CONTEXT, app, i);
+				args[i] = current_ast;
+			}
 
 			Z3_func_decl func_decl = Z3_get_app_decl(CONTEXT, app);
 			Z3_decl_kind decl_kind = Z3_get_decl_kind(CONTEXT, func_decl);
 
 			Bool new_expr;
 			if (decl_kind == Z3_OP_LT) {
-				new_expr = Z3_mk_ge(CONTEXT, ast_left, ast_right);
+				new_expr = Z3_mk_ge(CONTEXT, args[0], args[1]);
 			} else if (decl_kind == Z3_OP_LE) {
-				new_expr = Z3_mk_gt(CONTEXT, ast_left, ast_right);
+				new_expr = Z3_mk_gt(CONTEXT, args[0], args[1]);
 			} else if (decl_kind == Z3_OP_GT) {
-				new_expr = Z3_mk_le(CONTEXT, ast_left, ast_right);
+				new_expr = Z3_mk_le(CONTEXT, args[0], args[1]);
 			} else if (decl_kind == Z3_OP_GE) {
-				new_expr = Z3_mk_lt(CONTEXT, ast_left, ast_right);
+				new_expr = Z3_mk_lt(CONTEXT, args[0], args[1]);
 			} else if (decl_kind == Z3_OP_EQ) {
-				new_expr = Z3_mk_distinct(CONTEXT, 2, args);
+				new_expr = Z3_mk_distinct(CONTEXT, num_args, args);
 			} else if (decl_kind == Z3_OP_DISTINCT) {
-				new_expr = Z3_mk_eq(CONTEXT, ast_left, ast_right);
+				new_expr = Z3_mk_eq(CONTEXT, args[0], args[1]);
+			} else if (decl_kind == Z3_OP_OR) {
+				std::vector<Bool> neg_args;
+				for (unsigned int i = 0; i < num_args; i++) {
+					Bool to_negate = args[i];
+					neg_args.push_back(to_negate.invert());
+				}
+				new_expr = conjunction(neg_args);
+			} else if (decl_kind == Z3_OP_AND) {
+				std::vector<Bool> neg_args;
+				for (unsigned int i = 0; i < num_args; i++) {
+					Bool to_negate = args[i];
+					neg_args.push_back(to_negate.invert());
+				}
+				new_expr = disjunction(neg_args);
 			} else {
+				std::cout << "unsupported z3 element of type " << decl_kind << std::endl;
+				delete[] args;
 				assert(false);
 			}
+			delete[] args;
 			check_error();
 			return new_expr;
 		}
