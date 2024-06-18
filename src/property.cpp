@@ -24,10 +24,27 @@ bool all_at_end(std::vector<unsigned> it, std::vector<std::vector<PotentialCase>
 	return true;
 }
 
-// SOPHIES EDIT
-//std::vector<PotentialCase> practicality_admin(z3::Solver &solver, const Options &options, const Input &input, Node *root, std::vector<z3::Bool> current_case);
-
 bool practicality_entry(z3::Solver &solver, const Options &options, const Input &input, Node *root, std::vector<z3::Bool> current_case);
+
+template<typename Comparison>
+z3::Bool get_split_approx(z3::Solver &solver, Utility a, Utility b, Comparison comp) {
+	// std::cout << solver << std::endl;
+	if(solver.solve({a.real != b.real}) == z3::Result::UNSAT) {
+		//std::cout << "Case A" << std::endl;
+		//std::cout << "-> " << comp(a.infinitesimal, b.infinitesimal) << std::endl;
+		return comp(a.infinitesimal, b.infinitesimal);
+	}	
+	else if (solver.solve({a.real == b.real}) == z3::Result::UNSAT) {
+		//std::cout << "Case B" << std::endl;
+		//std::cout << "-> " << a.real << ">" << b.real << std::endl;
+		return a.real > b.real;
+	}
+	else {
+		return a.real == b.real;
+	} 	
+}
+
+
 
 bool weak_immunity_rec(z3::Solver &solver, Node *node, unsigned player, bool weaker) {
 
@@ -46,7 +63,7 @@ bool weak_immunity_rec(z3::Solver &solver, Node *node, unsigned player, bool wea
 			return false;
 		}
 
-		leaf.reason = condition;
+		leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, utility, Utility {z3::Real::ZERO, z3::Real::ZERO}, [](z3::Real a, z3::Real b){return a >= b;});
 		return false;
 	}
 
@@ -116,7 +133,7 @@ bool collusion_resilience_rec(z3::Solver &solver, Node *node, std::bitset<Input:
 				group_utility = group_utility + leaf.utilities[player];
 
 		// ..and compare it to the honest total
-		auto condition = group_utility <= honest_total;		
+		auto condition = honest_total >= group_utility;		
 		
 		if (solver.solve({!condition}) == z3::Result::UNSAT) {
 			return true;
@@ -126,7 +143,7 @@ bool collusion_resilience_rec(z3::Solver &solver, Node *node, std::bitset<Input:
 			return false;
 		}
 
-		leaf.reason = condition;
+		leaf.reason = get_split_approx(solver, honest_total, group_utility, [](z3::Real a, z3::Real b){return a >= b;});
 		return false;
 	}
 
@@ -192,7 +209,7 @@ bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
 }
 
 UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
-	  if (node->is_leaf()) {
+	if (node->is_leaf()) {
 		// return the utility tuple of the leaf as a set (of one element)
 		const Leaf &leaf = node->leaf();
 		return {leaf.utilities};
@@ -245,11 +262,11 @@ UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
 			bool found = false;
 			// does there exist a possible utility such that `maximum` is geq than it?
 			 for (const auto& utility : utilities) {
-				auto condition = maximum < utility[branch.player];
+				auto condition =   maximum < utility[branch.player];
 				if (solver.solve({condition}) == z3::Result::SAT) {
 					if (solver.solve({!condition}) == z3::Result::SAT) {
 						// might be maximal, just couldn't prove it
-						branch.reason = condition.invert();
+						branch.reason =  get_split_approx(solver, maximum, utility[branch.player], [](z3::Real a, z3::Real b){return a >= b;}); 
 					}
 				} 
 				else {
@@ -317,7 +334,7 @@ UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
 					if (solver.solve({condition}) == z3::Result::SAT) {
 						dominated = false;
 						if (solver.solve({!condition}) == z3::Result::SAT) {
-							branch.reason = condition.invert();
+							branch.reason = get_split_approx(solver, dominator, dominatee, [](z3::Real a, z3::Real b){return a > b;}); 
 							return {}; 
 						}
 					}
@@ -385,23 +402,6 @@ z3::Bool get_split(z3::Solver &solver, Utility a, Utility b, Comparison comp) {
 	} 	
 }
 
-template<typename Comparison>
-z3::Bool get_split_approx(z3::Solver &solver, Utility a, Utility b, Comparison comp) {
-	// std::cout << solver << std::endl;
-	if(solver.solve({a.real != b.real}) == z3::Result::UNSAT) {
-		//std::cout << "Case A" << std::endl;
-		//std::cout << "-> " << comp(a.infinitesimal, b.infinitesimal) << std::endl;
-		return comp(a.infinitesimal, b.infinitesimal);
-	}	
-	else if (solver.solve({a.real == b.real}) == z3::Result::UNSAT) {
-		//std::cout << "Case B" << std::endl;
-		//std::cout << "-> " << a.real << ">" << b.real << std::endl;
-		return a.real > b.real;
-	}
-	else {
-		return a.real == b.real;
-	} 	
-}
 
 
 
@@ -1030,8 +1030,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		if (!input.stop_log){
 			std::cout << "\tProperty satisfied for case: " << current_case << std::endl; 
 		}
-		if (options.strategies)
-			input.root.get()->print_strategy(input);
+		// if strategies, add a "potential case" to keep track of all strategies
 		return true;
 	}
 
@@ -1162,7 +1161,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 			prop_holds = false;
 		}
 	}
-
+	// generate preconditions
 	if (options.preconditions && !prop_holds) {
 				std::cout << std::endl;
 				std::vector<z3::Bool> conjuncts;
@@ -1180,6 +1179,11 @@ void property(const Options &options, const Input &input, PropertyType property,
 				z3::Bool raw_prec = conjunction(conjuncts);
 				z3::Bool simpl_prec = raw_prec.simplify();
 				std::cout << "Weakest Precondition: " << std::endl << "\t" << simpl_prec << std::endl;
+	}
+	// generate strategies
+	if (options.strategies && prop_holds){
+		// for each case a strategy
+		input.root.get()->print_strategy(input);
 	}
 	
 }

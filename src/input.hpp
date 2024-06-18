@@ -352,10 +352,11 @@ struct Branch final : public Node {
 
 	void print_strategy(const Input &input) const {
 		std::vector<std::string> actions_so_far;
-		std::cout << "Printing strategy..." << std::endl;
+		std::cout << std::endl;
+		std::cout << "Strategy:" << std::endl;
 		const Node *current = this;
 		print_strategy_rec(current, input, {});	
-		std::cout << "\tPlayers can choose the rest of the actions arbitrarily ..." << std::endl;	
+		std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
 	}
 
 	void print_strategy_rec(const Node *current, const Input &input, std::vector<std::string> actions_so_far) const {
