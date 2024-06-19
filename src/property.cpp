@@ -1031,6 +1031,9 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 			std::cout << "\tProperty satisfied for case: " << current_case << std::endl; 
 		}
 		// if strategies, add a "potential case" to keep track of all strategies
+		if (options.strategies){
+			input.compute_strategy_case(current_case);
+		}
 		return true;
 	}
 
@@ -1057,7 +1060,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	for (const z3::Bool& condition : {split, split.invert()}) {
 		input.root->reset_reason();
 		input.root->reset_strategy();
-		input.root->reset_strategy_pr();
+		// input.root->reset_strategy_pr();
 
 		solver.push();
 
@@ -1087,11 +1090,12 @@ bool practicality_entry(z3::Solver &solver, const Options &options, const Input 
 	std::vector<PotentialCase> result = practicality_rec(solver, options, input, root, current_case);
 	std::cout << "after practicality_rec" << std::endl;
 	if (result.size() != 0) {	
-		if (options.strategies) {
-			for (auto &pot_case: result) {
-				root->branch().print_strategy_pr(input, pot_case._case);
-			}
-		}
+		// strategy computation to be adapted 
+		// if (options.strategies) {
+		// 	for (auto &pot_case: result) {
+		// 		root->branch().print_strategy_pr(input, pot_case._case);
+		// 	}
+		// }
 			
 		return true;
 	}
@@ -1161,6 +1165,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 			prop_holds = false;
 		}
 	}
+	
 	// generate preconditions
 	if (options.preconditions && !prop_holds) {
 				std::cout << std::endl;
@@ -1180,10 +1185,11 @@ void property(const Options &options, const Input &input, PropertyType property,
 				z3::Bool simpl_prec = raw_prec.simplify();
 				std::cout << "Weakest Precondition: " << std::endl << "\t" << simpl_prec << std::endl;
 	}
+	
 	// generate strategies
 	if (options.strategies && prop_holds){
 		// for each case a strategy
-		input.root.get()->print_strategy(input);
+		input.print_strategies();
 	}
 	
 }
@@ -1191,6 +1197,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 void analyse_properties(const Options &options, const Input &input) {
 	/* iterate over all honest histories and check the properties for each of them */
 	for (size_t history = 0; history < input.honest.size(); history++) { 
+
 		std::cout << std::endl;
 		std::cout << std::endl;
 		std::cout << "Checking history " << input.honest[history] << std::endl; 
@@ -1211,7 +1218,8 @@ void analyse_properties(const Options &options, const Input &input) {
 				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.root->reset_strategy();
-				input.root->reset_strategy_pr(); // not necessary, as only one property uses the vars that we reset
+				input.reset_strategies(); 
+				// input.root->reset_strategy_pr(); // not necessary, as only one property uses the vars that we reset
 				property(options, input, property_types[i], history);
 			}
 		}

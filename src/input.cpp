@@ -448,7 +448,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 	std::exit(EXIT_FAILURE);
 }
 
-Input::Input(const char *path) : unsat_cases() , stop_log(false) {
+Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 	// parse a JSON document from `path`
 	std::ifstream input(path);
 	json document;
@@ -542,3 +542,29 @@ Input::Input(const char *path) : unsat_cases() , stop_log(false) {
 	// un-leaked and downcasted here
 	root = std::unique_ptr<Branch>(static_cast<Branch *>(node));
 }
+
+std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const {
+		if (this -> is_leaf()){
+			return {};
+		}
+		std::vector<HistoryChoice> strategy;
+
+		if (!this->branch().strategy.empty()){
+			HistoryChoice hist_choice;
+			hist_choice.player = players[this->branch().player];
+			hist_choice.choice = this->branch().strategy;
+			hist_choice.history = actions_so_far;
+
+			strategy.push_back(hist_choice);
+		}
+		
+		for (const Choice &choice: this->branch().choices) {
+	 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+	 		updated_actions.push_back(choice.action);
+	 		std::vector<HistoryChoice> child_strategy = choice.node->compute_strategy(players, updated_actions);
+			strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+	 	}
+		return strategy;
+	}
+
+

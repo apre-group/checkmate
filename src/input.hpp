@@ -13,6 +13,18 @@
 struct Leaf;
 struct Branch;
 struct Choice;
+struct Node;
+
+struct HistoryChoice{
+	std::string player;
+	std::string choice;
+	std::vector<std::string> history;
+};
+
+struct StrategyCase {
+	std::vector<z3::Bool> _case;
+	std::vector<HistoryChoice> strategy; 
+};
 
 // TODO: make find() work for vector<z3::Bool> instead of using this function
 inline bool case_found (z3::Bool _case_to_find, const std::vector<z3::Bool> _case) {
@@ -40,164 +52,6 @@ inline bool are_compatible_cases(const std::vector<z3::Bool> _case1, const std::
 
 	return compatible_cases;
 }
-
-struct Input {
-	// parse an input from `path`, exiting if malformed
-	Input(const char *path);
-
-	// list of players in alphabetical order
-	std::vector<std::string> players;
-	// list of honest histories
-	std::vector<std::vector<std::string>> honest;
-
-	// a real or infinitesimal utility for each string
-	std::unordered_map<std::string, Utility> utilities;
-
-	// global initial constraints
-	z3::Bool initial_constraint;
-	// weak immunity initial constraints
-	z3::Bool weak_immunity_constraint;
-	// weaker immunity initial constraints
-	z3::Bool weaker_immunity_constraint;
-	// collusion resilience initial constraints
-	z3::Bool collusion_resilience_constraint;
-	// practicality initial constraints
-	z3::Bool practicality_constraint;
-
-	mutable std::vector<std::vector<z3::Bool>> unsat_cases;
-
-	mutable bool stop_log;
-
-	// root: NB must be a branch
-	std::unique_ptr<Branch> root;
-
-	// maximum number of players currently supported
-	// no reason there couldn't be more, but convenient for implementation (cf collusion resilience)
-	static const size_t MAX_PLAYERS = 64;
-
-	void reset_unsat_cases() const {
-		unsat_cases.clear();
-	}
-
-	void stop_logging() const {
-		stop_log = true;
-	}
-
-	void reset_logging() const {
-		stop_log = false;
-	}
-
-	void add_unsat_case(std::vector<z3::Bool> _case) const {
-		unsat_cases.push_back(_case);
-	}
-
-	std::vector<std::vector<z3::Bool>> precondition_simplify() const {
-
-		std::vector<std::vector<z3::Bool>> simp;
-		for (const std::vector<z3::Bool> &case_: unsat_cases) {
-			std::vector<z3::Bool> copy;
-			for (const z3::Bool &atom: case_) {
-				copy.push_back(atom);
-			}
-			simp.push_back(copy);
-		}
-		bool any_rule1 = true;
-		bool any_rule2 = true;
-		while (any_rule1 || any_rule2) {
-			any_rule1 = false;
-			any_rule2 = false;
-			for (long unsigned int j = 0; j < simp.size(); j++) {
-				auto case_ = simp[j];
-				for (long unsigned int k = j + 1; k < simp.size(); k++) {
-					auto other_case = simp[k];
-					bool rule1 = true;
-					bool rule2 = false;
-					if (case_.size() == other_case.size()) {
-						bool one_inverse = false;
-						long unsigned int inverse;
-						for (long unsigned int i = 0; i < case_.size(); i++) {
-							if (case_[i].is_equal(other_case[i].invert()) && not one_inverse) {
-								one_inverse = true;
-								inverse = i;
-							} else if (case_[i].is_equal(other_case[i].invert()) && one_inverse) {
-								rule1 = false;
-								break;
-							} else if (not case_[i].is_equal(other_case[i])) {
-								rule1 = false;
-								break;
-							}
-						}
-						rule1 = rule1 && one_inverse;
-						if (rule1) {
-							// remove other_case
-							std::swap(simp[k], simp.back());
-							simp.pop_back();
-							// remove case_[i] from case_
-							std::swap(case_[inverse], case_.back());
-							case_.pop_back();
-							simp[j] = case_;
-							any_rule1 = true;
-							break;
-						}
-					} else {
-						rule1 = false;
-					}
-					if ((case_.size() == 1) | (other_case.size() == 1)) {
-						// continue
-						std::vector<z3::Bool> singleton;
-						std::vector<z3::Bool> other;
-						int which_singleton;
-						if (case_.size() == 1) {
-							singleton = case_;
-							other = other_case;
-							which_singleton = 0;
-						} else {
-							singleton = other_case;
-							other = case_;
-							which_singleton = 1;
-						}
-						int inverse;
-						for (long unsigned int l = 0; l < other.size(); l++) {
-							z3::Bool other_bool = other[l].invert();
-							z3::Bool this_bool = singleton[0];
-							bool the_hell = this_bool.is_equal(other_bool);
-							if (the_hell) {
-								rule2 = true;
-								inverse = l;
-							}
-						}
-						if (rule2) {
-							std::swap(other[inverse], other.back());
-							other.pop_back();
-							if (which_singleton == 0) {
-								simp[k] = other;
-							} else {
-								simp[j] = other;
-							}
-							any_rule2 = true;
-						}
-
-					} else {
-						rule2 = false;
-					}
-
-				}
-			}
-		}
-
-		return simp;
-	}
-};
-
-// an action available at a branch
-struct Action {
-	// the name of the action
-	std::string name;
-
-	friend std::ostream &operator<<(std::ostream &out, const Action &action) {
-		return out << action.name;
-	}
-};
 
 // abstract base class for Leaf and Branch
 struct Node {
@@ -230,6 +84,8 @@ struct Node {
 	// the reason that a check for a property failed:
 	// null if didn't fail or no case split would help
 	mutable z3::Bool reason;
+
+	std::vector<HistoryChoice> compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
 
 };
 
@@ -342,94 +198,298 @@ struct Branch final : public Node {
 				choice.node->branch().reset_strategy();
 	}
 
-	void reset_strategy_pr() const {
-		pr_strategies_cases = {};
-		pr_strategies_actions = {};
-		for(auto &choice: choices)
-			if(!choice.node->is_leaf())
-				choice.node->branch().reset_strategy();
-	}
 
-	void print_strategy(const Input &input) const {
-		std::vector<std::string> actions_so_far;
-		std::cout << std::endl;
-		std::cout << "Strategy:" << std::endl;
-		const Node *current = this;
-		print_strategy_rec(current, input, {});	
-		std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
-	}
 
-	void print_strategy_rec(const Node *current, const Input &input, std::vector<std::string> actions_so_far) const {
-		if(current->is_leaf()) 
-			return;
+	// void reset_strategy_pr() const {
+	// 	pr_strategies_cases = {};
+	// 	pr_strategies_actions = {};
+	// 	for(auto &choice: choices)
+	// 		if(!choice.node->is_leaf())
+	// 			choice.node->branch().reset_strategy();
+	// }
 
-		if(!current->branch().strategy.empty()) {
-			std::cout
-					<< "\tPlayer "
-					<< input.players[current->branch().player]
-					<< " takes action "
-					<< current->branch().strategy
-					<< " after history "
-					<< actions_so_far
-					<< std::endl;
-		}
 
-		for (const Choice &choice: current->branch().choices) {
-			std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-			updated_actions.push_back(choice.action);
-			print_strategy_rec(choice.node.get(), input, updated_actions);
-		}
-	}
 
-	void print_strategy_pr(const Input &input, std::vector<z3::Bool> &current_case) const {
-		std::vector<std::string> actions_so_far;
-		const Node *current = this;
+	// void print_strategy(const Input &input) const {
+	// 	std::vector<std::string> actions_so_far;
+	// 	std::cout << std::endl;
+	// 	std::cout << "Strategy:" << std::endl;
+	// 	const Node *current = this;
+	// 	print_strategy_rec(current, input, {});	
+	// 	std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
+	// }
 
-		std::cout << "Printing strategy for case " << current_case << "..." << std::endl;
+	// void print_strategy_rec(const Node *current, const Input &input, std::vector<std::string> actions_so_far) const {
+	// 	if(current->is_leaf()) 
+	// 		return;
+
+	// 	if(!current->branch().strategy.empty()) {
+	// 		std::cout
+	// 				<< "\tPlayer "
+	// 				<< input.players[current->branch().player]
+	// 				<< " takes action "
+	// 				<< current->branch().strategy
+	// 				<< " after history "
+	// 				<< actions_so_far
+	// 				<< std::endl;
+	// 	}
+
+	// 	for (const Choice &choice: current->branch().choices) {
+	// 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+	// 		updated_actions.push_back(choice.action);
+	// 		print_strategy_rec(choice.node.get(), input, updated_actions);
+	// 	}
+	// }
+
+	// void print_strategy_pr(const Input &input, std::vector<z3::Bool> &current_case) const {
+	// 	std::vector<std::string> actions_so_far;
+	// 	const Node *current = this;
+
+	// 	std::cout << "Printing strategy for case " << current_case << "..." << std::endl;
 		
-		//std::cout << "...................." << std::endl;
-		//std::cout << current->branch().pr_strategies_cases << std::endl;
-		//std::cout << "....Actions................" << std::endl;
-		//std::cout << current->branch().pr_strategies_actions << std::endl;
-		//std::cout << "...................." << std::endl;
+	// 	//std::cout << "...................." << std::endl;
+	// 	//std::cout << current->branch().pr_strategies_cases << std::endl;
+	// 	//std::cout << "....Actions................" << std::endl;
+	// 	//std::cout << current->branch().pr_strategies_actions << std::endl;
+	// 	//std::cout << "...................." << std::endl;
 		
 		
-		print_strategy_pr_rec(current, input, {}, current_case);	
+	// 	print_strategy_pr_rec(current, input, {}, current_case);	
 
-		std::cout << std::endl;
-		std::cout << std::endl;
+	// 	std::cout << std::endl;
+	// 	std::cout << std::endl;
 
-	}
+	// }
 
-	void print_strategy_pr_rec(const Node *current, const Input &input, std::vector<std::string> actions_so_far, std::vector<z3::Bool> &current_case) const {
-		if(current->is_leaf()) 
-			return;
+	// void print_strategy_pr_rec(const Node *current, const Input &input, std::vector<std::string> actions_so_far, std::vector<z3::Bool> &current_case) const {
+	// 	if(current->is_leaf()) 
+	// 		return;
 
-		if(!current->branch().pr_strategies_cases.empty()) {
+	// 	if(!current->branch().pr_strategies_cases.empty()) {
 
-			for (unsigned i = 0; i < current->branch().pr_strategies_cases.size(); i++) {
-				if(are_compatible_cases(current->branch().pr_strategies_cases[i], current_case)) {
-					std::cout
-					<< "\tPlayer "
-					<< input.players[current->branch().player]
-					<< " takes action "
-					<< current->branch().pr_strategies_actions[i]
-					<< " after history "
-					<< actions_so_far
-					<< std::endl;
-					break;
-				}
-			}			
-		}
+	// 		for (unsigned i = 0; i < current->branch().pr_strategies_cases.size(); i++) {
+	// 			if(are_compatible_cases(current->branch().pr_strategies_cases[i], current_case)) {
+	// 				std::cout
+	// 				<< "\tPlayer "
+	// 				<< input.players[current->branch().player]
+	// 				<< " takes action "
+	// 				<< current->branch().pr_strategies_actions[i]
+	// 				<< " after history "
+	// 				<< actions_so_far
+	// 				<< std::endl;
+	// 				break;
+	// 			}
+	// 		}			
+	// 	}
 
-		for (const Choice &choice: current->branch().choices) {
-			std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-			updated_actions.push_back(choice.action);
-			print_strategy_pr_rec(choice.node.get(), input, updated_actions, current_case);
-		}
-	}
+	// 	for (const Choice &choice: current->branch().choices) {
+	// 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+	// 		updated_actions.push_back(choice.action);
+	// 		print_strategy_pr_rec(choice.node.get(), input, updated_actions, current_case);
+	// 	}
+	// }
 
 };
+
+
+
+
+// an action available at a branch
+struct Action {
+	// the name of the action
+	std::string name;
+
+	friend std::ostream &operator<<(std::ostream &out, const Action &action) {
+		return out << action.name;
+	}
+};
+
+struct Input {
+	// parse an input from `path`, exiting if malformed
+	Input(const char *path);
+
+	// list of players in alphabetical order
+	std::vector<std::string> players;
+	// list of honest histories
+	std::vector<std::vector<std::string>> honest;
+
+	// a real or infinitesimal utility for each string
+	std::unordered_map<std::string, Utility> utilities;
+
+	// global initial constraints
+	z3::Bool initial_constraint;
+	// weak immunity initial constraints
+	z3::Bool weak_immunity_constraint;
+	// weaker immunity initial constraints
+	z3::Bool weaker_immunity_constraint;
+	// collusion resilience initial constraints
+	z3::Bool collusion_resilience_constraint;
+	// practicality initial constraints
+	z3::Bool practicality_constraint;
+
+	mutable std::vector<std::vector<z3::Bool>> unsat_cases;
+
+	mutable std::vector<StrategyCase> strategies;
+
+	mutable bool stop_log;
+
+	// root: NB must be a branch
+	std::unique_ptr<Branch> root;
+
+	// maximum number of players currently supported
+	// no reason there couldn't be more, but convenient for implementation (cf collusion resilience)
+	static const size_t MAX_PLAYERS = 64;
+
+	void reset_unsat_cases() const {
+		unsat_cases.clear();
+	}
+
+	void stop_logging() const {
+		stop_log = true;
+	}
+
+	void reset_logging() const {
+		stop_log = false;
+	}
+
+	void reset_strategies() const {
+		strategies = {};
+	}
+
+	void compute_strategy_case(std::vector<z3::Bool> _case) const {
+		StrategyCase new_strat_case;
+
+		new_strat_case._case = _case;
+		new_strat_case.strategy = root.get()->compute_strategy(players, {});
+
+		strategies.push_back(new_strat_case);
+	}
+
+	void print_strategies() const {
+		std::cout << std::endl;
+		for (StrategyCase strategy_case : strategies){
+			std::cout << "Strategy for case: " <<  strategy_case._case << std::endl;
+			for (HistoryChoice hist_choice : strategy_case.strategy){
+				std::cout
+					<< "\tPlayer "
+					<< hist_choice.player
+					<< " takes action "
+					<< hist_choice.choice
+					<< " after history "
+					<< hist_choice.history
+					<< std::endl;
+			}
+
+			std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
+		}
+	}
+
+	void add_unsat_case(std::vector<z3::Bool> _case) const {
+		unsat_cases.push_back(_case);
+	}
+
+	std::vector<std::vector<z3::Bool>> precondition_simplify() const {
+
+		std::vector<std::vector<z3::Bool>> simp;
+		for (const std::vector<z3::Bool> &case_: unsat_cases) {
+			std::vector<z3::Bool> copy;
+			for (const z3::Bool &atom: case_) {
+				copy.push_back(atom);
+			}
+			simp.push_back(copy);
+		}
+		bool any_rule1 = true;
+		bool any_rule2 = true;
+		while (any_rule1 || any_rule2) {
+			any_rule1 = false;
+			any_rule2 = false;
+			for (long unsigned int j = 0; j < simp.size(); j++) {
+				auto case_ = simp[j];
+				for (long unsigned int k = j + 1; k < simp.size(); k++) {
+					auto other_case = simp[k];
+					bool rule1 = true;
+					bool rule2 = false;
+					if (case_.size() == other_case.size()) {
+						bool one_inverse = false;
+						long unsigned int inverse;
+						for (long unsigned int i = 0; i < case_.size(); i++) {
+							if (case_[i].is_equal(other_case[i].invert()) && not one_inverse) {
+								one_inverse = true;
+								inverse = i;
+							} else if (case_[i].is_equal(other_case[i].invert()) && one_inverse) {
+								rule1 = false;
+								break;
+							} else if (not case_[i].is_equal(other_case[i])) {
+								rule1 = false;
+								break;
+							}
+						}
+						rule1 = rule1 && one_inverse;
+						if (rule1) {
+							// remove other_case
+							std::swap(simp[k], simp.back());
+							simp.pop_back();
+							// remove case_[i] from case_
+							std::swap(case_[inverse], case_.back());
+							case_.pop_back();
+							simp[j] = case_;
+							any_rule1 = true;
+							break;
+						}
+					} else {
+						rule1 = false;
+					}
+					if ((case_.size() == 1) | (other_case.size() == 1)) {
+						// continue
+						std::vector<z3::Bool> singleton;
+						std::vector<z3::Bool> other;
+						int which_singleton;
+						if (case_.size() == 1) {
+							singleton = case_;
+							other = other_case;
+							which_singleton = 0;
+						} else {
+							singleton = other_case;
+							other = case_;
+							which_singleton = 1;
+						}
+						int inverse;
+						for (long unsigned int l = 0; l < other.size(); l++) {
+							z3::Bool other_bool = other[l].invert();
+							z3::Bool this_bool = singleton[0];
+							bool the_hell = this_bool.is_equal(other_bool);
+							if (the_hell) {
+								rule2 = true;
+								inverse = l;
+							}
+						}
+						if (rule2) {
+							std::swap(other[inverse], other.back());
+							other.pop_back();
+							if (which_singleton == 0) {
+								simp[k] = other;
+							} else {
+								simp[j] = other;
+							}
+							any_rule2 = true;
+						}
+
+					} else {
+						rule2 = false;
+					}
+
+				}
+			}
+		}
+
+		return simp;
+	}
+};
+
+
+
+
+
 
 inline const Leaf &Node::leaf() const {
 	return *static_cast<const Leaf *>(this);
