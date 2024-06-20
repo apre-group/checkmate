@@ -190,6 +190,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, Node *node
 	if (!group[branch.player]) { 
 
 		if  (!branch.strategy.empty()){
+			std::cout << "not empty" << std::endl;
 			return true;
 		}
 
@@ -255,7 +256,7 @@ bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
 
 }
 
-UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
+UtilityTuplesSet practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 	if (node->is_leaf()) {
 		// return the utility tuple of the leaf as a set (of one element)
 		const Leaf &leaf = node->leaf();
@@ -265,6 +266,11 @@ UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
 	// else we deal with a branch
  	const auto &branch = node->branch();
 
+	// what is the correct return value?
+	// if  (!branch.strategy.empty()){
+	// 	return true;
+	// }	
+
 	// get practical strategies and corresponding utilities recursively
 	std::vector<UtilityTuplesSet> children;
 	std::vector<std::string> children_actions;
@@ -272,11 +278,12 @@ UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
 	UtilityTuplesSet honest_utilities;
 
 	for (const Choice &choice: branch.choices) {
-		UtilityTuplesSet utilities = practicality_rec_old(solver, choice.node.get());
+		UtilityTuplesSet utilities = practicality_rec_old(input, solver, choice.node.get());
 
 		// this child has no practical strategy (propagate reason for case split, if any) 
 		if(utilities.empty()) {
 			branch.reason = choice.node->reason;
+			input.set_reset_point(branch);
 			// return empty set
 			return {};
 		}
@@ -314,6 +321,7 @@ UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
 					if (solver.solve({!condition}) == z3::Result::SAT) {
 						// might be maximal, just couldn't prove it
 						branch.reason =  get_split_approx(solver, maximum, utility[branch.player], [](z3::Real a, z3::Real b){return a >= b;}); 
+						input.set_reset_point(branch);
 					}
 				} 
 				else {
@@ -381,6 +389,7 @@ UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
 						dominated = false;
 						if (solver.solve({!condition}) == z3::Result::SAT) {
 							branch.reason = get_split_approx(solver, dominatee, dominator, [](z3::Real a, z3::Real b){return a >= b;}); 
+							input.set_reset_point(branch);
 							return {}; 
 						}
 					}
@@ -1053,10 +1062,8 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Property
 		return true;
 	}
 
-
-	// Practicality new case splits -> this needs to be removed
 	else if (property == PropertyType::Practicality) {
-		bool pr = practicality_rec_old(solver, input.root.get()).size() != 0;
+		bool pr = practicality_rec_old(input, solver, input.root.get()).size() != 0;
 		return pr;
 	}
 	
