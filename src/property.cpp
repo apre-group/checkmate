@@ -28,12 +28,37 @@ bool practicality_entry(z3::Solver &solver, const Options &options, const Input 
 
 template<typename Comparison>
 z3::Bool get_split_approx(z3::Solver &solver, Utility a, Utility b, Comparison comp) {
-	// std::cout << solver << std::endl;
+	
+	// if they have to be equal, consider infinitesimals
 	if(solver.solve({a.real != b.real}) == z3::Result::UNSAT) {
-		//std::cout << "Case A" << std::endl;
-		//std::cout << "-> " << comp(a.infinitesimal, b.infinitesimal) << std::endl;
 		return comp(a.infinitesimal, b.infinitesimal);
 	}	
+	// if they cannot be equal, consider strict inequality
+	else if (solver.solve({a.real == b.real}) == z3::Result::UNSAT) {
+		//std::cout << "Case B" << std::endl;
+		//std::cout << "-> " << a.real << ">" << b.real << std::endl;
+		return a.real > b.real;
+	}
+	else {
+		// if a.real has to be >= b.real, split on whether equal
+		if (solver.solve({!comp(a.real, b.real)}) == z3::Result::UNSAT) {
+			return a.real == b.real;
+		}
+		// we don't know whether their real parts are >=, assert it
+		else {
+			return comp(a.real, b.real);
+		}
+	} 	
+}
+
+template<typename Comparison>
+z3::Bool get_split_approx_old(z3::Solver &solver, Utility a, Utility b, Comparison comp) {
+	
+	// if they have to be equal, consider infinitesimals
+	if(solver.solve({a.real != b.real}) == z3::Result::UNSAT) {
+		return comp(a.infinitesimal, b.infinitesimal);
+	}	
+	// if they cannot be equal, consider strict inequality
 	else if (solver.solve({a.real == b.real}) == z3::Result::UNSAT) {
 		//std::cout << "Case B" << std::endl;
 		//std::cout << "-> " << a.real << ">" << b.real << std::endl;
@@ -43,8 +68,6 @@ z3::Bool get_split_approx(z3::Solver &solver, Utility a, Utility b, Comparison c
 		return a.real == b.real;
 	} 	
 }
-
-
 
 bool weak_immunity_rec(const Input &input, z3::Solver &solver, Node *node, unsigned player, bool weaker) {
 
@@ -347,7 +370,7 @@ UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
 					if (solver.solve({condition}) == z3::Result::SAT) {
 						dominated = false;
 						if (solver.solve({!condition}) == z3::Result::SAT) {
-							branch.reason = get_split_approx(solver, dominator, dominatee, [](z3::Real a, z3::Real b){return a > b;}); 
+							branch.reason = get_split_approx(solver, dominatee, dominator, [](z3::Real a, z3::Real b){return a >= b;}); 
 							return {}; 
 						}
 					}
@@ -491,7 +514,7 @@ bool pr_case_split(z3::Solver &solver, const Options &options, const Input &inpu
 	bool need_to_split = false;
 	z3::Bool split;
 	for (auto utility : utilities){
-		z3::Bool condition_to_check = get_split_approx(solver, utility[player], honest_utility[player], [](z3::Real a, z3::Real b){return a > b;}); 
+		z3::Bool condition_to_check = get_split_approx_old(solver, utility[player], honest_utility[player], [](z3::Real a, z3::Real b){return a > b;}); 
 		auto z3_result = solver.solve({condition_to_check});
 		if (z3_result == z3::Result::UNSAT) {	
 			if (!input.stop_log){
@@ -583,7 +606,7 @@ std::vector<PotentialCase> practicality_reasoning(z3::Solver &solver, const Opti
 					if (solver.solve({condition}) == z3::Result::SAT) {
 						if (solver.solve({!condition}) == z3::Result::SAT) {
 							// might be maximal, just couldn't prove it
-							branch.reason = get_split_approx(solver, utility[branch.player], maximum, [](z3::Real a, z3::Real b){return a > b;});
+							branch.reason = get_split_approx_old(solver, utility[branch.player], maximum, [](z3::Real a, z3::Real b){return a > b;});
 						}
 					} 
 					else {
