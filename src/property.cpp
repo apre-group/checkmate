@@ -158,7 +158,7 @@ const Leaf& get_honest_leaf(Node *node, const std::vector<std::string> &history,
 	return get_honest_leaf(node->branch().get_choice(history[index]).node.get(), history, next_index);
 }
 
-bool collusion_resilience_rec(z3::Solver &solver, Node *node, std::bitset<Input::MAX_PLAYERS> group, Utility honest_total, unsigned players) {
+bool collusion_resilience_rec(const Input &input, z3::Solver &solver, Node *node, std::bitset<Input::MAX_PLAYERS> group, Utility honest_total, unsigned players) {
 	
 	if (node->is_leaf()) {
 
@@ -181,12 +181,19 @@ bool collusion_resilience_rec(z3::Solver &solver, Node *node, std::bitset<Input:
 		}
 
 		leaf.reason = get_split_approx(solver, honest_total, group_utility, [](z3::Real a, z3::Real b){return a >= b;});
+		input.set_reset_point(leaf);
 		return false;
 	}
 
 	const auto &branch = node->branch();
 	// else we deal with a branch
 	if (!group[branch.player]) { 
+
+		if  (!branch.strategy.empty()){
+			return true;
+		}
+
+
 		// player behaves honestly
 		if (branch.honest) {
 			// if we are along the honest history, we want to take an honest strategy
@@ -197,22 +204,24 @@ bool collusion_resilience_rec(z3::Solver &solver, Node *node, std::bitset<Input:
 			branch.strategy = honest_choice.action;
 
 			// the honest choice must be collusion resilient
-			if (collusion_resilience_rec(solver, subtree, group, honest_total, players)) {
+			if (collusion_resilience_rec(input, solver, subtree, group, honest_total, players)) {
 				return true;
 			} 
 			
 			branch.reason = subtree->reason;
+			input.set_reset_point(branch);
 			return false;
 		}
 		// otherwise we can take any strategy we please as long as it's collusion resilient
 		for (const Choice &choice: branch.choices) {
-			if (collusion_resilience_rec(solver, choice.node.get(), group, honest_total, players)) {
+			if (collusion_resilience_rec(input, solver, choice.node.get(), group, honest_total, players)) {
 				// set chosen action, needed for printing strategy
 				branch.strategy = choice.action;
 				return true;
 			}	
 			if (!choice.node->reason.null()) {
 				branch.reason = choice.node->reason;
+				input.set_reset_point(branch);
 			}		
 		}
 		return false;
@@ -220,8 +229,9 @@ bool collusion_resilience_rec(z3::Solver &solver, Node *node, std::bitset<Input:
 		// if we are not the honest player, we could do anything,
 		// so all branches should be collusion resilient for the player
 		for (const Choice &choice: branch.choices) {
-			if (!collusion_resilience_rec(solver, choice.node.get(), group, honest_total, players)) {
+			if (!collusion_resilience_rec(input, solver, choice.node.get(), group, honest_total, players)) {
 				branch.reason = choice.node->reason;
+				input.set_reset_point(branch);
 				return false;
 			}
 		}
@@ -1035,7 +1045,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Property
 				}
 			}
 					
-			bool collusion_resilient_for_group = collusion_resilience_rec(solver, input.root.get(), group, honest_total, input.players.size());
+			bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, input.root.get(), group, honest_total, input.players.size());
 			if (!collusion_resilient_for_group) {
 				return false;
 			}
