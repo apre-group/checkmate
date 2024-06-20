@@ -72,12 +72,15 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, Node *node, unsig
 
 	const auto &branch = node->branch();
 
-	if  (!branch.strategy.empty()){
-		return true;
-	}
+	
 
 	// else we deal with a branch
 	if (player == branch.player) { 
+
+		if  (!branch.strategy.empty()){
+		return true;
+		}	
+
 		// player behaves honestly
 		if (branch.honest) {
 			// if we are along the honest history, we want to take an honest strategy
@@ -1070,7 +1073,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	for (const z3::Bool& condition : {split, split.invert()}) {
 		input.root->reset_reason();
 		// strategy reset to be done in prev function
-		input.root->reset_strategy();
+		input.reset_point->branch().reset_strategy();
 
 		solver.push();
 
