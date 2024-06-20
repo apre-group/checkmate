@@ -46,7 +46,7 @@ z3::Bool get_split_approx(z3::Solver &solver, Utility a, Utility b, Comparison c
 
 
 
-bool weak_immunity_rec(z3::Solver &solver, Node *node, unsigned player, bool weaker) {
+bool weak_immunity_rec(const Input &input, z3::Solver &solver, Node *node, unsigned player, bool weaker) {
 
 	if (node->is_leaf()) {
 		const auto &leaf = node->leaf();
@@ -64,10 +64,18 @@ bool weak_immunity_rec(z3::Solver &solver, Node *node, unsigned player, bool wea
 		}
 
 		leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, utility, Utility {z3::Real::ZERO, z3::Real::ZERO}, [](z3::Real a, z3::Real b){return a >= b;});
+		input.set_reset_point(leaf);
 		return false;
 	}
 
+	
+
 	const auto &branch = node->branch();
+
+	if  (!branch.strategy.empty()){
+		return true;
+	}
+
 	// else we deal with a branch
 	if (player == branch.player) { 
 		// player behaves honestly
@@ -80,22 +88,24 @@ bool weak_immunity_rec(z3::Solver &solver, Node *node, unsigned player, bool wea
 			branch.strategy = honest_choice.action;
 
 			// the honest choice must be weak immune
-			if (weak_immunity_rec(solver, subtree, player, weaker)) {
+			if (weak_immunity_rec(input, solver, subtree, player, weaker)) {
 				return true;
 			} 
 
 			branch.reason = subtree->reason;
+			input.set_reset_point(branch);
 			return false;
 		}
 		// otherwise we can take any strategy we please as long as it's weak immune
 		for (const Choice &choice: branch.choices) {
-			if (weak_immunity_rec(solver, choice.node.get(), player, weaker)) {
+			if (weak_immunity_rec(input, solver, choice.node.get(), player, weaker)) {
 				// set chosen action, needed for printing strategy
 				branch.strategy = choice.action;
 				return true;
 			}
 			if (!choice.node->reason.null()) {
 				branch.reason = choice.node->reason;
+				input.set_reset_point(branch);
 			}		
 		}
 		return false;
@@ -103,8 +113,9 @@ bool weak_immunity_rec(z3::Solver &solver, Node *node, unsigned player, bool wea
 		// if we are not the honest player, we could do anything,
 		// so all branches should be weak immune for the player
 		for (const Choice &choice: branch.choices) {
-			if (!weak_immunity_rec(solver, choice.node.get(), player, weaker)) {
+			if (!weak_immunity_rec(input, solver, choice.node.get(), player, weaker)) {
 				branch.reason = choice.node->reason;
+				input.set_reset_point(branch);
 				return false;
 			}
 		}
@@ -305,11 +316,10 @@ UtilityTuplesSet practicality_rec_old(z3::Solver &solver, Node *node) {
 		for (const auto& candidate : result) {
 			// this player's utility
 			auto dominatee = candidate[branch.player];
-
 			// check all other children
-			// if any child has the property that all its utilities are bigger than `dominatee`
-			// it can be dropped
-			for (const auto& utilities : children) {
+            // if any child has the property that all its utilities are bigger than `dominatee`
+            // it can be dropped
+            for (const auto& utilities : children) {
 				// skip any where the cadidate is already contained
 
 				// this logic can be factored out in an external function
@@ -976,7 +986,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Property
 	if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
 		for (size_t player = 0; player < input.players.size(); player++) {
 			
-			bool weak_immune_for_player = weak_immunity_rec(solver, input.root.get(), player, property == PropertyType::WeakerImmunity);
+			bool weak_immune_for_player = weak_immunity_rec(input, solver, input.root.get(), player, property == PropertyType::WeakerImmunity);
 			if (!weak_immune_for_player) {
 				return false;
 			}
@@ -1059,8 +1069,8 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 	for (const z3::Bool& condition : {split, split.invert()}) {
 		input.root->reset_reason();
+		// strategy reset to be done in prev function
 		input.root->reset_strategy();
-		// input.root->reset_strategy_pr();
 
 		solver.push();
 
@@ -1219,7 +1229,7 @@ void analyse_properties(const Options &options, const Input &input) {
 				input.root->reset_reason();
 				input.root->reset_strategy();
 				input.reset_strategies(); 
-				// input.root->reset_strategy_pr(); // not necessary, as only one property uses the vars that we reset
+				input.reset_reset_point();
 				property(options, input, property_types[i], history);
 			}
 		}

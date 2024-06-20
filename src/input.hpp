@@ -333,12 +333,23 @@ struct Input {
 
 	mutable bool stop_log;
 
+	mutable Node *reset_point;
+
 	// root: NB must be a branch
 	std::unique_ptr<Branch> root;
 
 	// maximum number of players currently supported
 	// no reason there couldn't be more, but convenient for implementation (cf collusion resilience)
 	static const size_t MAX_PLAYERS = 64;
+
+	void set_reset_point(const Node &node) const {
+		Node* tmp = const_cast<Node *>(&node);
+		reset_point = tmp;
+	}
+
+	void reset_reset_point() const {
+		reset_point = root.get();
+	}
 
 	void reset_unsat_cases() const {
 		unsat_cases.clear();
