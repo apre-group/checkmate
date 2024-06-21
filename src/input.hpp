@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <bitset>
 #include <unordered_map>
 
 #include "utility.hpp"
@@ -158,6 +159,8 @@ struct Branch final : public Node {
 	mutable std::vector<std::vector<z3::Bool>> pr_strategies_cases;
 	mutable std::vector<std::string> pr_strategies_actions;
 
+	mutable uint64_t last_solved_group; 
+
 	void mark_honest(const std::vector<std::string> &history) const {
 		assert(!honest);
 
@@ -198,6 +201,12 @@ struct Branch final : public Node {
 				choice.node->branch().reset_strategy();
 	}
 
+	void reset_last_solved_group() const {
+		last_solved_group = 0;
+		for(auto &choice: choices)
+			if(!choice.node->is_leaf())
+				choice.node->branch().reset_last_solved_group();
+	}
 
 
 	// void reset_strategy_pr() const {
@@ -496,9 +505,6 @@ struct Input {
 		return simp;
 	}
 };
-
-
-
 
 
 
