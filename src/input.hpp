@@ -109,8 +109,35 @@ struct Leaf final : public Node {
 	// utilities for each player: NB in lexicographic order of players!
 	std::vector<Utility> utilities;
 
+	mutable uint64_t problematic_group;
+
 	void reset_reason() const {
 		::new (&reason) z3::Bool();
+	}
+
+	void restore_problematic_group(uint64_t problematic_group, Node &reset_node, bool below_problematic) const {
+		/*after the first case of a case split, reset the problematic group and reset point (reset node) in the tree to pre-case splitting settings
+		to ensure correct computation
+		after reset_node every node has to be set to problematic group, also all the parent nodes of reset_node
+		all the others have to be set to problematic group + 1*/
+		
+		bool new_below_problematic = below_problematic;
+		if (reset_node.is_leaf()){
+			if (this == &reset_node.leaf()){
+				new_below_problematic = true;
+			}
+		}
+		
+		if (new_below_problematic){
+			this->problematic_group = problematic_group;
+		} else {
+			this->problematic_group = problematic_group + 1;
+		}
+
+	}
+
+	void reset_problematic_group() const {
+		problematic_group = 0;
 	}
 };
 
@@ -159,7 +186,7 @@ struct Branch final : public Node {
 	mutable std::vector<std::vector<z3::Bool>> pr_strategies_cases;
 	mutable std::vector<std::string> pr_strategies_actions;
 
-	mutable uint64_t last_solved_group; 
+	mutable uint64_t problematic_group; 
 
 	void mark_honest(const std::vector<std::string> &history) const {
 		assert(!honest);
@@ -201,13 +228,57 @@ struct Branch final : public Node {
 				choice.node->branch().reset_strategy();
 	}
 
-	void reset_last_solved_group() const {
-		last_solved_group = 0;
+	void reset_problematic_group() const {
+		problematic_group = 0;
 		for(auto &choice: choices)
-			if(!choice.node->is_leaf())
-				choice.node->branch().reset_last_solved_group();
+			if(!choice.node->is_leaf()) {
+				choice.node->branch().reset_problematic_group();
+			} else {
+				choice.node->leaf().reset_problematic_group();
+			}
 	}
 
+
+	void restore_problematic_group(uint64_t problematic_group, Node &reset_node, bool below_problematic) const {
+		/*after the first case of a case split, reset the problematic group and reset point (reset node) in the tree to pre-case splitting settings
+		to ensure correct computation
+		after reset_node every node has to be set to problematic group, also all the parent nodes of reset_node
+		all the others have to be set to problematic group + 1*/
+		
+
+
+		// above problematic is considered
+		// below problematic to be implemented CONTINUE HERE
+		bool new_below_problematic = below_problematic;
+		if (!reset_node.is_leaf()){
+			if (this == &reset_node.branch()){
+				new_below_problematic = true;
+			}
+		}
+
+		bool above_prob = false;
+		for (auto &choice : choices){
+			auto &child_node = choice.node;
+			if (child_node->is_leaf()){
+				child_node->leaf().restore_problematic_group(problematic_group, reset_node, new_below_problematic);
+				if (child_node->branch().problematic_group == problematic_group) {
+					above_prob = true;
+				}
+
+			} else {
+				child_node->branch().restore_problematic_group(problematic_group, reset_node, new_below_problematic);
+				if (child_node->branch().problematic_group == problematic_group) {
+					above_prob = true;
+				}
+			}
+		}
+		if (above_prob || new_below_problematic){
+			this->problematic_group = problematic_group;
+		} else {
+			this->problematic_group = problematic_group + 1;
+		}
+
+		}
 
 	// void reset_strategy_pr() const {
 	// 	pr_strategies_cases = {};
