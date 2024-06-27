@@ -284,20 +284,24 @@ bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
 
 }
 
-UtilityTuplesSet practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
+bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
+	// if (node->is_leaf()) {
+	// 	// return the utility tuple of the leaf as a set (of one element)
+	// 	const Leaf &leaf = node->leaf();
+
+	// 	return {leaf.utilities};
+	// } 
+
 	if (node->is_leaf()) {
-		// return the utility tuple of the leaf as a set (of one element)
-		const Leaf &leaf = node->leaf();
-		return {leaf.utilities};
-	}  
+		return true;
+	} 
 
 	// else we deal with a branch
  	const auto &branch = node->branch();
 
-	// what is the correct return value?
-	// if  (!branch.strategy.empty()){
-	// 	return true;
-	// }	
+	if  (branch.problematic_group == 1){
+		return true;
+	}	
 
 	// get practical strategies and corresponding utilities recursively
 	std::vector<UtilityTuplesSet> children;
@@ -306,21 +310,22 @@ UtilityTuplesSet practicality_rec_old(const Input &input, z3::Solver &solver, No
 	UtilityTuplesSet honest_utilities;
 
 	for (const Choice &choice: branch.choices) {
-		UtilityTuplesSet utilities = practicality_rec_old(input, solver, choice.node.get());
+		 
+		//UtilityTuplesSet utilities = practicality_rec_old(input, solver, choice.node.get());
 
 		// this child has no practical strategy (propagate reason for case split, if any) 
-		if(utilities.empty()) {
+		if(!practicality_rec_old(input, solver, choice.node.get())) {
 			branch.reason = choice.node->reason;
 			input.set_reset_point(branch);
 			// return empty set
-			return {};
+			return false;
 		}
 
 		if(choice.node->honest) {
-			honest_utilities = utilities;
+			honest_utilities = choice.node->get_utilities();
 			branch.strategy = choice.action; // choose the honest action along the honest history
 		} else {
-			children.push_back(utilities);
+			children.push_back(choice.node->get_utilities());
 			children_actions.push_back(choice.action);
 		}
 
@@ -359,14 +364,15 @@ UtilityTuplesSet practicality_rec_old(const Input &input, z3::Solver &solver, No
 			}
 			if (!found) {
 				// return empty set
-				return {}; 
+				return false; 
 			}
 
 		}
 
+		branch.practical_utilities = {honest_utility};
 		// we return the maximal strategy 
 		// honest choice is practical for current player
-		return {honest_utility};
+		return true;
 
 	} else {
 		// not in the honest history
@@ -418,7 +424,7 @@ UtilityTuplesSet practicality_rec_old(const Input &input, z3::Solver &solver, No
 						if (solver.solve({!condition}) == z3::Result::SAT) {
 							branch.reason = get_split_approx(solver, dominatee, dominator); 
 							input.set_reset_point(branch);
-							return {}; 
+							return false; 
 						}
 					}
 				}  
@@ -450,7 +456,9 @@ UtilityTuplesSet practicality_rec_old(const Input &input, z3::Solver &solver, No
 			}
 		}
 
-		return result;
+		branch.practical_utilities = result;
+		assert(result.size()>0);
+		return true;
 
 	} 
 
@@ -1093,8 +1101,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Property
 	}
 
 	else if (property == PropertyType::Practicality) {
-		bool pr = practicality_rec_old(input, solver, input.root.get()).size() != 0;
-		return pr;
+		return practicality_rec_old(input, solver, input.root.get());
 	}
 	
  
@@ -1142,15 +1149,16 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	uint64_t current_next_group = input.root->branch().problematic_group; // why not just unsigned?
 	// std::cout << "problematic group: " << current_next_group << std::endl;
 	auto &current_reset_point = input.reset_point;
-	if(!input.reset_point->is_leaf()) {
-			auto &current_reset_branch = current_reset_point->branch();
-			current_reset_branch.reset_strategy();
-	}
+
 
 	bool result = true;
 
 	for (const z3::Bool& condition : {split, split.invert()}) {
 		input.root->reset_reason();
+		if(!input.reset_point->is_leaf()) {
+			auto &current_reset_branch = current_reset_point->branch();
+			current_reset_branch.reset_strategy();
+		}
 		// strategy reset to be done in prev function
 		//input.reset_point->branch().reset_strategy();
 

@@ -16,6 +16,41 @@ struct Branch;
 struct Choice;
 struct Node;
 
+// reference to a utility tuple in a leaf
+struct UtilityTuple {
+	const std::vector<Utility> &leaf;
+	UtilityTuple(decltype(leaf) leaf) : leaf(leaf) {}
+	size_t size() const { return leaf.size(); }
+	const Utility &operator[](size_t index) const { return leaf[index]; }
+	std::vector<Utility>::const_iterator begin() const { return leaf.cbegin(); }
+	std::vector<Utility>::const_iterator end() const { return leaf.cend(); }
+
+	bool operator==(const UtilityTuple &other) const {
+		// quick return for when you have the same reference
+		if(this == &other)
+			return true;
+		if(size() != other.size())
+			return false;
+		for(size_t i = 0; i < size(); i++)
+			if(!leaf[i].is(other.leaf[i]))
+				return false;
+		return true;
+	}
+};
+
+// when hashing, hash its utilities sequentially
+template<>
+struct std::hash<UtilityTuple> {
+	size_t operator()(UtilityTuple tuple) const {
+		 size_t hash = 0;
+		 for(const Utility &utility : tuple)
+			 hash ^= std::hash<Utility>{}(utility);
+		 return hash;
+	}
+};
+
+using UtilityTuplesSet = std::unordered_set<UtilityTuple>;
+
 struct HistoryChoice{
 	std::string player;
 	std::string choice;
@@ -86,6 +121,8 @@ struct Node {
 	// null if didn't fail or no case split would help
 	mutable z3::Bool reason;
 
+	virtual UtilityTuplesSet get_utilities() const = 0;
+
 	std::vector<HistoryChoice> compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
 
 };
@@ -105,6 +142,8 @@ struct Choice {
 // leaf node
 struct Leaf final : public Node {
 	virtual bool is_leaf() const { return true; }
+
+	virtual UtilityTuplesSet get_utilities() const {return {utilities}; }
 
 	// utilities for each player: NB in lexicographic order of players!
 	std::vector<Utility> utilities;
@@ -147,6 +186,8 @@ struct Branch final : public Node {
 
 	virtual bool is_leaf() const { return false; }
 
+	virtual UtilityTuplesSet get_utilities() const {return practical_utilities; }
+
 	// do a linear-time lookup of `action` by name in the branch, which must be present
 	const Choice &get_choice(const std::string &action) const {
 		for (const Choice &choice: choices)
@@ -186,7 +227,8 @@ struct Branch final : public Node {
 	mutable std::vector<std::vector<z3::Bool>> pr_strategies_cases;
 	mutable std::vector<std::string> pr_strategies_actions;
 
-	mutable uint64_t problematic_group; 
+	mutable uint64_t problematic_group;
+	mutable UtilityTuplesSet practical_utilities;
 
 	void mark_honest(const std::vector<std::string> &history) const {
 		assert(!honest);
@@ -248,7 +290,7 @@ struct Branch final : public Node {
 
 
 		// above problematic is considered
-		// below problematic to be implemented CONTINUE HERE
+		// below problematic is considered
 		bool new_below_problematic = below_problematic;
 		if (!reset_node.is_leaf()){
 			if (this == &reset_node.branch()){
@@ -273,9 +315,9 @@ struct Branch final : public Node {
 			}
 		}
 		if (above_prob || new_below_problematic){
-			this->problematic_group = problematic_group;
+			problematic_group = problematic_group;
 		} else {
-			this->problematic_group = problematic_group + 1;
+			problematic_group = problematic_group + 1;
 		}
 
 		}
