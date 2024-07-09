@@ -105,11 +105,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, Node *node, unsig
 
 
 	// else we deal with a branch
-	if (player == branch.player) { 
-
-		// if  (!branch.strategy.empty()){
-		// return true;
-		// }	
+	if (player == branch.player) { 	
 
 		// player behaves honestly
 		if (branch.honest) {
@@ -300,6 +296,7 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
  	const auto &branch = node->branch();
 
 	if  (branch.problematic_group == 1){
+		std::cout << "already solved" << std::endl;
 		return true;
 	}	
 
@@ -308,6 +305,9 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 	std::vector<std::string> children_actions;
 
 	UtilityTuplesSet honest_utilities;
+	unsigned int i = 0;
+	unsigned honest_index = 0;
+	std::string honest_choice;
 
 	for (const Choice &choice: branch.choices) {
 		 
@@ -323,12 +323,14 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 
 		if(choice.node->honest) {
 			honest_utilities = choice.node->get_utilities();
+			honest_choice = choice.action;
 			branch.strategy = choice.action; // choose the honest action along the honest history
+			honest_index = i;
 		} else {
 			children.push_back(choice.node->get_utilities());
 			children_actions.push_back(choice.action);
 		}
-
+		i++;
 	}
 
 
@@ -340,11 +342,30 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 		
 		assert(honest_utilities.size() == 1);
 		// the utility at the leaf of the honest history
-		UtilityTuple honest_utility = *honest_utilities.begin();
+		std::vector<std::string> honest_strategy;
+		std::vector<Utility> leaf;
+		UtilityTuplesSet to_clear_strategy;
+		for (const auto& hon_utility: honest_utilities){
+		 	honest_strategy.insert(honest_strategy.end(), hon_utility.strategy_vector.begin(), hon_utility.strategy_vector.end());
+			UtilityTuple cleared_strategy(hon_utility.leaf);
+			to_clear_strategy.insert(cleared_strategy);
+		}
+
+		UtilityTuple honest_utility = *to_clear_strategy.begin();
+		
+		honest_utility.strategy_vector = {};
+
+
+		
+		bool wtf =  honest_utility.strategy_vector.size() == 0;
+		assert(wtf);
+		honest_utility.strategy_vector.push_back(honest_choice);
+		
 		// this should be maximal against other players, so...
 		Utility maximum = honest_utility[branch.player];
 
 		// for all other children
+		unsigned int j = 0;
 		for (const auto& utilities : children) {
 			bool found = false;
 			// does there exist a possible utility such that `maximum` is geq than it?
@@ -359,6 +380,11 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 				} 
 				else {
 					found = true;
+					// need to insert strategy after honest at right point in vector
+					if (j == honest_index){
+						honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
+					} 
+					honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
 					break;
 				}
 			}
@@ -366,9 +392,8 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 				// return empty set
 				return false; 
 			}
-
+			j++;
 		}
-
 		branch.practical_utilities = {honest_utility};
 		// we return the maximal strategy 
 		// honest choice is practical for current player
@@ -381,22 +406,30 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 
 		// compute the set of possible utilities by merging the set of children's utilities
 		UtilityTuplesSet result;
+		//std::vector<unsigned int> index_vector;
+		unsigned int k = 0;
 		for (const auto& utilities : children) {
 			for (const auto& utility : utilities) {
-				result.insert(utility);
+				UtilityTuple to_insert(utility.leaf); 
+				to_insert.strategy_vector.push_back(children_actions[k]);
+				result.insert(to_insert);
+				// index_vector.push_back(k);
 			}
+			k++;
 		}
 
 		// the set to drop
 		UtilityTuplesSet remove;
 
 		// work out whether to drop `candidate`
+		unsigned int l = 0;
 		for (const auto& candidate : result) {
 			// this player's utility
 			auto dominatee = candidate[branch.player];
 			// check all other children
             // if any child has the property that all its utilities are bigger than `dominatee`
             // it can be dropped
+			// unsigned int child_index = 0;
             for (const auto& utilities : children) {
 				// skip any where the cadidate is already contained
 
@@ -405,6 +438,7 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 				for (const auto& utility : utilities) {
 					if (utility_tuples_eq(utility, candidate)) {
 						contained = true;
+						candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
 						break;
 					}
 				}
@@ -420,7 +454,11 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 					auto dominator = utility[branch.player];
 					auto condition = dominator <= dominatee;
 					if (solver.solve({condition}) == z3::Result::SAT) {
+						if (dominated){
+							candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+						}
 						dominated = false;
+
 						if (solver.solve({!condition}) == z3::Result::SAT) {
 							branch.reason = get_split_approx(solver, dominatee, dominator); 
 							input.set_reset_point(branch);
@@ -434,7 +472,7 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 					break;
 				}
 			}
-
+			l++;
 		}
 
 		// result is all children's utilities inductively, minus those dropped
@@ -444,17 +482,17 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 
 		// if strategy has not been set, we are not along the honest history
 		// go over all children and pick the one that has a utility tuple which is contained in the returned result
-		if (branch.strategy.empty()) {
-			for (unsigned i = 0; i < children.size() && branch.strategy.empty(); i++) {
-				auto& utilities = children[i];
-				for (const auto& utility : utilities) {
-					if(result.find(utility) != result.end()) {
-						branch.strategy = children_actions[i];
-						break;
-					}
-				}
-			}
-		}
+		// if (branch.strategy.empty()) {
+		// 	for (unsigned i = 0; i < children.size() && branch.strategy.empty(); i++) {
+		// 		auto& utilities = children[i];
+		// 		for (const auto& utility : utilities) {
+		// 			if(result.find(utility) != result.end()) {
+		// 				branch.strategy = children_actions[i];
+		// 				break;
+		// 			}
+		// 		}
+		// 	}
+		// }
 
 		branch.practical_utilities = result;
 		assert(result.size()>0);
@@ -1123,7 +1161,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		}
 		// if strategies, add a "potential case" to keep track of all strategies
 		if (options.strategies){
-			input.compute_strategy_case(current_case);
+			input.compute_strategy_case(current_case, property);
 		}
 		return true;
 	}
@@ -1154,13 +1192,13 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	bool result = true;
 
 	for (const z3::Bool& condition : {split, split.invert()}) {
+		// reset reason and strategy
+		// ? should be the same point of reset
 		input.root->reset_reason();
 		if(!input.reset_point->is_leaf()) {
 			auto &current_reset_branch = current_reset_point->branch();
 			current_reset_branch.reset_strategy();
 		}
-		// strategy reset to be done in prev function
-		//input.reset_point->branch().reset_strategy();
 
 		solver.push();
 
@@ -1252,6 +1290,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 		// TODO: choose one of the 2 lines below depending on whether you want to use the new or
 		// the old case splitting algorithm for practicality
 		//if (practicality_entry(solver, options, input, input.root.get(), std::vector<z3::Bool>())) {
+		input.reset_practical_utilities();
 		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, 0)) {
 			std::cout << "YES, it is " << prop_name << "." << std::endl;
 			prop_holds = true;

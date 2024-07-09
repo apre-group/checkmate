@@ -544,6 +544,7 @@ Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 }
 
 std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const {
+
 		if (this -> is_leaf()){
 			return {};
 		}
@@ -568,3 +569,29 @@ std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> playe
 	}
 
 
+std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector) const {
+
+		if (this -> is_leaf()){
+			return {};
+		}
+
+		assert(strategy_vector.size()>0);
+		std::vector<HistoryChoice> strategy;
+
+		HistoryChoice hist_choice;
+		hist_choice.player = players[this->branch().player];
+		hist_choice.choice = strategy_vector[0];
+		strategy_vector.erase(strategy_vector.begin());
+		hist_choice.history = actions_so_far;
+
+		strategy.push_back(hist_choice);
+
+		
+		for (const Choice &choice: this->branch().choices) {
+	 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+	 		updated_actions.push_back(choice.action);
+	 		std::vector<HistoryChoice> child_strategy = choice.node->compute_pr_strategy(players, updated_actions, strategy_vector);
+			strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+	 	}
+		return strategy;
+	}

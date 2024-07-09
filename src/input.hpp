@@ -19,7 +19,11 @@ struct Node;
 // reference to a utility tuple in a leaf
 struct UtilityTuple {
 	const std::vector<Utility> &leaf;
-	UtilityTuple(decltype(leaf) leaf) : leaf(leaf) {}
+	mutable std::vector<std::string> strategy_vector;
+
+
+
+	UtilityTuple(decltype(leaf) leaf) : leaf(leaf), strategy_vector() {}
 	size_t size() const { return leaf.size(); }
 	const Utility &operator[](size_t index) const { return leaf[index]; }
 	std::vector<Utility>::const_iterator begin() const { return leaf.cbegin(); }
@@ -124,6 +128,8 @@ struct Node {
 	virtual UtilityTuplesSet get_utilities() const = 0;
 
 	std::vector<HistoryChoice> compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
+
+	std::vector<HistoryChoice> compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector) const;
 
 };
 
@@ -278,6 +284,15 @@ struct Branch final : public Node {
 			} else {
 				choice.node->leaf().reset_problematic_group();
 			}
+	}
+
+	void reset_practical_utilities() const {
+		practical_utilities = {};
+		for (auto& choice: choices){
+			if (!choice.node->is_leaf()){
+				choice.node->branch().reset_practical_utilities();
+			}
+		}
 	}
 
 
@@ -489,11 +504,24 @@ struct Input {
 		strategies = {};
 	}
 
-	void compute_strategy_case(std::vector<z3::Bool> _case) const {
+	void reset_practical_utilities() const {
+		root.get()->reset_practical_utilities();
+	}
+
+	void compute_strategy_case(std::vector<z3::Bool> _case, PropertyType property) const {
 		StrategyCase new_strat_case;
 
 		new_strat_case._case = _case;
-		new_strat_case.strategy = root.get()->compute_strategy(players, {});
+		if (property == PropertyType::Practicality){
+			std::vector<std::string> strategy_vector;
+			assert(root.get()->practical_utilities.size()==1);
+			for (const auto& pr_utility: root.get()->practical_utilities){
+				strategy_vector = pr_utility.strategy_vector;
+			}
+			new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector);
+		} else {
+			new_strat_case.strategy = root.get()->compute_strategy(players, {});
+		}
 
 		strategies.push_back(new_strat_case);
 	}
