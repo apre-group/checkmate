@@ -569,6 +569,54 @@ std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> playe
 	}
 
 
+std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const {
+
+		if (this -> is_leaf()){
+			return {};
+		}
+		std::vector<HistoryChoice> strategy;
+
+		if (honest) {
+			for (const Choice &choice: this->branch().choices) {
+
+				if (choice.node->honest) {
+					assert(!choice.node->violates_cr);
+					HistoryChoice hist_choice;
+					hist_choice.player = players[this->branch().player];
+					hist_choice.choice = choice.action;
+					hist_choice.history = actions_so_far;
+
+					strategy.push_back(hist_choice);
+					break;
+				}
+			}
+		} else {
+			bool have_found_cr = false;
+			for (const Choice &choice: this->branch().choices) {
+
+				if (!choice.node->violates_cr){
+					have_found_cr = true;
+					HistoryChoice hist_choice;
+					hist_choice.player = players[this->branch().player];
+					hist_choice.choice = choice.action;
+					hist_choice.history = actions_so_far;
+
+					strategy.push_back(hist_choice);
+					break;
+				}
+			}
+			assert(have_found_cr);
+		}
+		
+		for (const Choice &choice: this->branch().choices) {
+	 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+	 		updated_actions.push_back(choice.action);
+	 		std::vector<HistoryChoice> child_strategy = choice.node->compute_cr_strategy(players, updated_actions);
+			strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+	 	}
+		return strategy;
+	}
+
 std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector) const {
 
 		if (this -> is_leaf()){
@@ -595,3 +643,46 @@ std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> pl
 	 	}
 		return strategy;
 	}
+
+
+void Node::reset_violation_cr() const {
+		violates_cr = false;
+
+		if (!this->is_leaf()){
+
+			for (const auto& child: this->branch().choices){
+				child.node->reset_violation_cr();
+			}
+		}
+		return;
+}
+
+std::vector<bool> Node::store_violation_cr() const {
+
+	std::vector<bool> violation = {violates_cr};
+
+	if (!this->is_leaf()){
+
+		for (const auto& child: this->branch().choices){
+			std::vector<bool> child_violation = child.node->store_violation_cr();
+			violation.insert(violation.end(), child_violation.begin(), child_violation.end());
+		}
+	}
+	return violation;
+}
+
+void Node::restore_violation_cr(std::vector<bool> &violation) const {
+
+	assert(violation.size()>0);
+	violates_cr = violation[0];
+	violation.erase(violation.begin());
+
+	if (!this->is_leaf()){
+
+		for (const auto& child: this->branch().choices){
+			child.node->restore_violation_cr(violation);
+		}
+	}
+
+	return;
+}

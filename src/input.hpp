@@ -125,11 +125,21 @@ struct Node {
 	// null if didn't fail or no case split would help
 	mutable z3::Bool reason;
 
+	mutable bool violates_cr = false; // set to true as soon as its not cr for one deviating group
+
 	virtual UtilityTuplesSet get_utilities() const = 0;
 
 	std::vector<HistoryChoice> compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
 
+	std::vector<HistoryChoice> compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
+
 	std::vector<HistoryChoice> compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector) const;
+
+	void reset_violation_cr() const;
+
+	std::vector<bool> store_violation_cr() const;
+
+	void restore_violation_cr(std::vector<bool> &violation) const;
 
 };
 
@@ -519,6 +529,8 @@ struct Input {
 				strategy_vector = pr_utility.strategy_vector;
 			}
 			new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector);
+		} else if (property == PropertyType::CollusionResilience) {
+			new_strat_case.strategy = root.get()->compute_cr_strategy(players, {});
 		} else {
 			new_strat_case.strategy = root.get()->compute_strategy(players, {});
 		}
@@ -526,7 +538,7 @@ struct Input {
 		strategies.push_back(new_strat_case);
 	}
 
-	void print_strategies() const {
+	void print_strategies(bool is_wi) const {
 		std::cout << std::endl;
 		for (StrategyCase strategy_case : strategies){
 			std::cout << "Strategy for case: " <<  strategy_case._case << std::endl;
@@ -540,8 +552,9 @@ struct Input {
 					<< hist_choice.history
 					<< std::endl;
 			}
-
-			std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
+			if (is_wi){
+				std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
+			}
 		}
 	}
 
