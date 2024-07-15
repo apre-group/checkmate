@@ -644,6 +644,107 @@ std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> pl
 		return strategy;
 	}
 
+std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
+
+		if (this->is_leaf()){
+			return {};
+		}
+		std::vector<CeChoice> counterexample;
+
+		assert(player_group.size() == 1);
+
+		if (player_group[0] == this->branch().player) {
+			if (honest){
+				for (auto& child: this->branch().choices){
+					if (child.node->honest) {
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+	 					updated_actions.push_back(child.action);
+						counterexample = child.node->compute_wi_ce(players, updated_actions, player_group);
+						break;
+					}
+				}
+			} else {
+				for (auto& child: this->branch().choices){
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+	 					updated_actions.push_back(child.action);
+						std::vector<CeChoice> child_counterexample = child.node->compute_wi_ce(players, updated_actions, player_group);
+						counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
+				}
+			}
+		} else {
+			assert(!this->branch().counterexample_choices.empty());
+			CeChoice ce_choice;
+			ce_choice.player = players[this->branch().player];
+			ce_choice.choices = this->branch().counterexample_choices;
+			ce_choice.history = actions_so_far;
+
+			counterexample.push_back(ce_choice);
+
+			for (const Choice &choice: this->branch().choices) {
+
+				int cnt = std::count(this->branch().counterexample_choices.begin(), this->branch().counterexample_choices.end(), choice.action);
+				if (cnt > 0) {
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(choice.action);
+					std::vector<CeChoice> child_ce = choice.node->compute_wi_ce(players, updated_actions, player_group);
+					counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+				}
+			}
+		}
+		return counterexample;
+	}
+
+std::vector<CeChoice> Node::compute_cr_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
+
+		if (this->is_leaf()){
+			return {};
+		}
+		std::vector<CeChoice> counterexample;
+
+		assert(player_group.size() >= 1);
+
+
+		int cnt = std::count(player_group.begin(), player_group.end(), this->branch().player);
+		if (cnt == 0) {
+			if (honest){
+				for (auto& child: this->branch().choices){
+					if (child.node->honest) {
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+	 					updated_actions.push_back(child.action);
+						counterexample = child.node->compute_cr_ce(players, updated_actions, player_group);
+						break;
+					}
+				}
+			} else {
+				for (auto& child: this->branch().choices){
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+	 					updated_actions.push_back(child.action);
+						std::vector<CeChoice> child_counterexample = child.node->compute_cr_ce(players, updated_actions, player_group);
+						counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
+				}
+			}
+		} else {
+			assert(!this->branch().counterexample_choices.empty());
+			CeChoice ce_choice;
+			ce_choice.player = players[this->branch().player];
+			ce_choice.choices = this->branch().counterexample_choices;
+			ce_choice.history = actions_so_far;
+
+			counterexample.push_back(ce_choice);
+
+			for (const Choice &choice: this->branch().choices) {
+
+				int cnt = std::count(this->branch().counterexample_choices.begin(), this->branch().counterexample_choices.end(), choice.action);
+				if (cnt > 0) {
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(choice.action);
+					std::vector<CeChoice> child_ce = choice.node->compute_cr_ce(players, updated_actions, player_group);
+					counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+				}
+			}
+		}
+		return counterexample;
+	}
 
 void Node::reset_violation_cr() const {
 		violates_cr = false;

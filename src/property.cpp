@@ -62,7 +62,7 @@ z3::Bool get_split_approx_old(z3::Solver &solver, Utility a, Utility b, Comparis
 	} 	
 }
 
-bool weak_immunity_rec(const Input &input, z3::Solver &solver, Node *node, unsigned player, bool weaker) {
+bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, unsigned player, bool weaker) {
 
 	if (node->is_leaf()) {
 		const auto &leaf = node->leaf();
@@ -117,7 +117,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, Node *node, unsig
 			branch.strategy = honest_choice.action;
 
 			// the honest choice must be weak immune
-			if (weak_immunity_rec(input, solver, subtree, player, weaker)) {
+			if (weak_immunity_rec(input, solver, options, subtree, player, weaker)) {
 				branch.problematic_group = player + 1;
 				return true;
 			} 
@@ -128,7 +128,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, Node *node, unsig
 		}
 		// otherwise we can take any strategy we please as long as it's weak immune
 		for (const Choice &choice: branch.choices) {
-			if (weak_immunity_rec(input, solver, choice.node.get(), player, weaker)) {
+			if (weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker)) {
 				// set chosen action, needed for printing strategy
 				branch.strategy = choice.action;
 				branch.problematic_group = player + 1;
@@ -144,9 +144,12 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, Node *node, unsig
 		// if we are not the honest player, we could do anything,
 		// so all branches should be weak immune for the player
 		for (const Choice &choice: branch.choices) {
-			if (!weak_immunity_rec(input, solver, choice.node.get(), player, weaker)) {
+			if (!weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker)) {
 				branch.reason = choice.node->reason;
 				input.set_reset_point(branch);
+				if (options.counterexamples) {
+					branch.counterexample_choices.push_back(choice.action);
+				}
 				return false;
 			}
 		}
@@ -171,9 +174,6 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 
 		if  (group_nr < leaf.problematic_group){
-			std::cout << "group nr: " << group_nr << std::endl;
-			std::cout << "leaf.problematic_group: " << leaf.problematic_group << std::endl;
-			std::cout << "already solved" << std::endl;
 			return true;
 		}
 
@@ -208,9 +208,6 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 
 	if  (group_nr < branch.problematic_group){
-		std::cout << "group nr: " << group_nr << std::endl;
-		std::cout << "branch.problematic_group: " << branch.problematic_group << std::endl;
-		std::cout << "already solved" << std::endl;
 		return true;
 	}
 	
@@ -278,6 +275,9 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 			if (!collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr)) {
 				branch.reason = choice.node->reason;
 				input.set_reset_point(*choice.node);
+				if (options.counterexamples) {
+					branch.counterexample_choices.push_back(choice.action);
+				}
 				return false;
 			}
 		}
@@ -1128,10 +1128,17 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 	if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
 		for (size_t player = next_group ; player < input.players.size(); player++) {
 			
-			bool weak_immune_for_player = weak_immunity_rec(input, solver, input.root.get(), player, property == PropertyType::WeakerImmunity);
+			bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity);
 			if (!weak_immune_for_player) {
+				if (options.counterexamples && input.root->reason.null()){
+					std::vector<size_t> pl = {player};
+					input.compute_cecase(pl, property);
+				}
 				return false;
 			}
+			// add all counterexamples option, were we keep checking the other players too
+			// Q: How do we store the multiple CEs for this case? 
+			// A have a datastructure in input with fields CE, player/group, case (similar to the strategies datastruct, but with the extra field player/group)
 		}
 		return true;
 	}
@@ -1154,6 +1161,15 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			// std::cout << "binary counter: " << binary_counter << std::endl;
 			bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), binary_counter);
 			if (!collusion_resilient_for_group) {
+				if (options.counterexamples && input.root->reason.null()){
+					std::vector<size_t> pl;
+					for (size_t player = 0; player < input.players.size(); player++) {
+						if (group[player]) {
+							pl.push_back(player);
+						}
+					}
+					input.compute_cecase(pl, property);
+				}
 				return false;
 			}
 		}
@@ -1177,6 +1193,8 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	*/
 
 	// property holds under current split
+
+
 	if (property_under_split(solver, input, options, property, history, next_group)) {
 		if (!input.stop_log){
 			std::cout << "\tProperty satisfied for case: " << current_case << std::endl; 
@@ -1199,6 +1217,9 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 			input.add_unsat_case(current_case);
 			input.stop_logging();
 		}
+		if (options.counterexamples){
+			input.add_case2ce(current_case);
+		}
 
 		return false;
 	}
@@ -1209,6 +1230,11 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	std::vector<bool> violation;
 	if (property == PropertyType::CollusionResilience && options.strategies){
 		violation = input.root->store_violation_cr();
+	}
+
+	std::vector<std::vector<std::string>> ce_storage;
+	if (options.counterexamples){
+		ce_storage = input.root->store_counterexample_choices();
 	}
 
 	uint64_t current_next_group = input.root->branch().problematic_group; // why not just unsigned?
@@ -1242,8 +1268,12 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		// reset the branch.problematic_group for all branches to presplit state, such that the other case split starts at the same point
 		input.root->restore_problematic_group(current_next_group, *current_reset_point, false);
 
+
 		if (property == PropertyType::CollusionResilience && options.strategies){
 			input.root->restore_violation_cr(violation);
+		}
+		if (options.counterexamples){
+			input.root->restore_counterexample_choices(ce_storage);
 		}
 
 		if (!attempt){
@@ -1364,6 +1394,11 @@ void property(const Options &options, const Input &input, PropertyType property,
 		bool is_wi = (property == PropertyType::WeakerImmunity) || (property == PropertyType::WeakImmunity);
 		input.print_strategies(is_wi);
 	}
+	if (options.counterexamples && !prop_holds){
+		bool is_wi = (property == PropertyType::WeakerImmunity) || (property == PropertyType::WeakImmunity);
+		bool is_cr = (property == PropertyType::CollusionResilience);
+		input.print_counterexamples(is_wi, is_cr);
+	}
 	
 }
 
@@ -1386,6 +1421,7 @@ void analyse_properties(const Options &options, const Input &input) {
 
 		for (size_t i=0; i<property_chosen.size(); i++) {
 			if(property_chosen[i]) {
+				input.reset_counterexamples();
 				input.reset_logging();
 				input.reset_unsat_cases();
 				input.root->reset_reason();

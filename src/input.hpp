@@ -61,9 +61,21 @@ struct HistoryChoice{
 	std::vector<std::string> history;
 };
 
+struct CeChoice{
+	std::string player;
+	std::vector<std::string> choices;
+	std::vector<std::string> history;
+};
+
 struct StrategyCase {
 	std::vector<z3::Bool> _case;
 	std::vector<HistoryChoice> strategy; 
+};
+
+struct CeCase {
+	std::vector<z3::Bool> _case;
+	std::vector<std::string> player_group;
+	std::vector<CeChoice> counterexample; 
 };
 
 // TODO: make find() work for vector<z3::Bool> instead of using this function
@@ -135,6 +147,10 @@ struct Node {
 
 	std::vector<HistoryChoice> compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector) const;
 
+	std::vector<CeChoice> compute_wi_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
+
+	std::vector<CeChoice> compute_cr_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
+
 	void reset_violation_cr() const;
 
 	std::vector<bool> store_violation_cr() const;
@@ -198,7 +214,7 @@ struct Leaf final : public Node {
 
 // branch node
 struct Branch final : public Node {
-	Branch(unsigned player) : player(player) {}
+	Branch(unsigned player) : player(player), counterexample_choices({}) {}
 
 	virtual bool is_leaf() const { return false; }
 
@@ -245,6 +261,48 @@ struct Branch final : public Node {
 
 	mutable uint64_t problematic_group;
 	mutable UtilityTuplesSet practical_utilities;
+	mutable std::vector<std::string> counterexample_choices;
+
+	void reset_counterexample_choices() const {
+		counterexample_choices = {};
+		for (auto& choice: choices) {
+			if (!choice.node->is_leaf()) {
+				choice.node->branch().reset_counterexample_choices();
+			}
+		}
+	}
+
+	std::vector<std::vector<std::string>> store_counterexample_choices() const {
+
+		std::vector<std::vector<std::string>> counterexample_choices_vector = {counterexample_choices};
+
+		for (const auto& child: choices){
+			if (!child.node->is_leaf()){
+				std::vector<std::vector<std::string>> child_ces = child.node->branch().store_counterexample_choices();
+				counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
+			}
+		}
+
+		return counterexample_choices_vector;
+	}
+
+	void restore_counterexample_choices(std::vector<std::vector<std::string>> &ces) const {
+
+		if (ces.size() == 0) {
+			return;
+		}
+		counterexample_choices = ces[0];
+		ces.erase(ces.begin());
+
+		for (const auto& child: this->branch().choices){
+			if (!child.node->is_leaf()){
+			child.node->branch().restore_counterexample_choices(ces);
+			}
+		}
+
+		return;
+	}
+
 
 	void mark_honest(const std::vector<std::string> &history) const {
 		assert(!honest);
@@ -478,6 +536,8 @@ struct Input {
 
 	mutable std::vector<StrategyCase> strategies;
 
+	mutable std::vector<CeCase> counterexamples;
+
 	mutable bool stop_log;
 
 	mutable Node *reset_point;
@@ -512,6 +572,10 @@ struct Input {
 
 	void reset_strategies() const {
 		strategies = {};
+	}
+
+	void reset_counterexamples() const {
+		counterexamples = {};
 	}
 
 	void reset_practical_utilities() const {
@@ -557,6 +621,65 @@ struct Input {
 			}
 		}
 	}
+
+	// continue here:
+	// add compute_ce_case and print_counterexamples
+	void compute_cecase(std::vector<size_t> player_group, PropertyType property) const {
+		CeCase new_ce_case;
+
+		new_ce_case._case = {};
+		for (auto player : player_group) {
+			new_ce_case.player_group.push_back(players[player]);
+		}
+		if (property == PropertyType::Practicality){
+			// std::vector<std::string> strategy_vector;
+			// assert(root.get()->practical_utilities.size()==1);
+			// for (const auto& pr_utility: root.get()->practical_utilities){
+			// 	strategy_vector = pr_utility.strategy_vector;
+			// }
+			// new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector);
+		} else if (property != PropertyType::CollusionResilience) {
+			new_ce_case.counterexample = root.get()->compute_wi_ce(players, {}, player_group);
+		} else {
+			new_ce_case.counterexample = root.get()->compute_cr_ce(players, {}, player_group);
+		}
+
+		counterexamples.push_back(new_ce_case);
+	}
+
+	void add_case2ce(std::vector<z3::Bool> _case) const {
+		// the empty case has a counterexample -> no case splitting
+		// case splitting -> the empty case has no counterexample
+		for (CeCase ce: counterexamples){
+			if (ce._case.size() == 0){
+				ce._case = _case;
+			}
+		}
+	}
+
+	void print_counterexamples(bool is_wi, bool is_cr) const {
+		std::cout << std::endl;
+		for (CeCase ce_case : counterexamples){
+			std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+			if(is_wi){
+				std::cout << "Player " << ce_case.player_group[0] << " can be harmed, if" << std::endl;
+			}
+			else if(is_cr){
+				std::cout << "Group " << ce_case.player_group << " can deviate profitably, if" << std::endl;
+			}
+			for (CeChoice ce_choice : ce_case.counterexample){
+				std::cout
+					<< "\tPlayer "
+					<< ce_choice.player
+					<< " takes one of the actions "
+					<< ce_choice.choices
+					<< " after history "
+					<< ce_choice.history
+					<< std::endl;
+			}
+		}
+	}
+
 
 	void add_unsat_case(std::vector<z3::Bool> _case) const {
 		unsat_cases.push_back(_case);
