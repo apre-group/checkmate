@@ -650,7 +650,7 @@ struct Input {
 	void add_case2ce(std::vector<z3::Bool> _case) const {
 		// the empty case has a counterexample -> no case splitting
 		// case splitting -> the empty case has no counterexample
-		for (CeCase ce: counterexamples){
+		for (CeCase& ce: counterexamples){
 			if (ce._case.size() == 0){
 				ce._case = _case;
 			}

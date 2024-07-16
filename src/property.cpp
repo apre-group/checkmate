@@ -68,9 +68,6 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		const auto &leaf = node->leaf();
 
 		if (player < leaf.problematic_group){
-			std::cout << "player nr: " << player << std::endl;
-			std::cout << "leaf.problematic_group: " << leaf.problematic_group << std::endl;
-			std::cout << "already solved" << std::endl;
 			return true;
 		}
 		// known utility for us
@@ -97,9 +94,6 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 	const auto &branch = node->branch();
 
 	if (player < branch.problematic_group){
-		std::cout << "player nr: " << player << std::endl;
-		std::cout << "branch.problematic_group: " << branch.problematic_group << std::endl;
-		std::cout << "already solved" << std::endl;
 		return true;
 	}
 
@@ -143,18 +137,28 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 	} else {
 		// if we are not the honest player, we could do anything,
 		// so all branches should be weak immune for the player
+		bool result = true;
 		for (const Choice &choice: branch.choices) {
 			if (!weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker)) {
-				branch.reason = choice.node->reason;
-				input.set_reset_point(branch);
+				if (result) {
+					branch.reason = choice.node->reason;
+					input.set_reset_point(branch);
+				}
 				if (options.counterexamples) {
 					branch.counterexample_choices.push_back(choice.action);
 				}
-				return false;
+				if (!options.all_counterexamples){
+					return false;
+				} else {
+					result = false;
+				}
+				
 			}
 		}
-		branch.problematic_group = player + 1;
-		return true;
+		if (result){
+			branch.problematic_group = player + 1;
+		}
+		return result;
 	}
 
 } 
@@ -271,18 +275,28 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 	} else {
 		// if we are not the honest player, we could do anything,
 		// so all branches should be collusion resilient for the player
+		bool result = true;
 		for (const Choice &choice: branch.choices) {
 			if (!collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr)) {
-				branch.reason = choice.node->reason;
-				input.set_reset_point(*choice.node);
+				if (result){
+					branch.reason = choice.node->reason;
+					input.set_reset_point(*choice.node);
+				}
 				if (options.counterexamples) {
 					branch.counterexample_choices.push_back(choice.action);
 				}
-				return false;
+				if (!options.all_counterexamples){
+					return false;
+				} else {
+					result = false;
+				}
+				
 			}
 		}
-		branch.problematic_group = group_nr + 1;
-		return true;
+		if (result) {
+			branch.problematic_group = group_nr + 1;
+		}
+		return result;
 	}
 }
 
@@ -1126,6 +1140,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 	
 
 	if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
+		bool result = true;
 		for (size_t player = next_group ; player < input.players.size(); player++) {
 			
 			bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity);
@@ -1133,14 +1148,21 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 				if (options.counterexamples && input.root->reason.null()){
 					std::vector<size_t> pl = {player};
 					input.compute_cecase(pl, property);
+					input.root.get()->reset_counterexample_choices();
 				}
-				return false;
+				if (!options.all_counterexamples){
+					return false;
+				} else {
+					// if reason is not null, need case split
+					if (!input.root->reason.null()){
+						return false;
+					}
+					result = false;
+				}
 			}
-			// add all counterexamples option, were we keep checking the other players too
-			// Q: How do we store the multiple CEs for this case? 
-			// A have a datastructure in input with fields CE, player/group, case (similar to the strategies datastruct, but with the extra field player/group)
+			input.root.get()->reset_counterexample_choices();
 		}
-		return true;
+		return result;
 	}
 
 	else if (property == PropertyType::CollusionResilience) {
@@ -1149,6 +1171,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		// sneaky hack follows: all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
 		// done this way more for concision than efficiency
 		// std::cout << "next_group: " << next_group << std::endl;
+		bool result = true;
 		for (uint64_t binary_counter = next_group; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++) {
 			std::bitset<Input::MAX_PLAYERS> group = binary_counter;
 			Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
@@ -1169,11 +1192,23 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 						}
 					}
 					input.compute_cecase(pl, property);
+					input.root.get()->reset_counterexample_choices();
 				}
-				return false;
+				
+				if (!options.all_counterexamples){
+					return false;
+				} else {
+					// need case split if reason not null
+					if (!input.root->reason.null()) { 
+						return false;
+					}
+					result = false;
+					
+				}
 			}
+			input.root.get()->reset_counterexample_choices();
 		}
-		return true;
+		return result;
 	}
 
 	else if (property == PropertyType::Practicality) {
@@ -1277,12 +1312,14 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		}
 
 		if (!attempt){
-			if (!options.preconditions){
+			if ((!options.preconditions) && (!options.all_cases)){
 				return false;
 			}
 			else {
 				result = false;
-				input.stop_logging();
+				if (options.preconditions){
+					input.stop_logging();
+				}
 			}
 		}
 	}
@@ -1422,6 +1459,7 @@ void analyse_properties(const Options &options, const Input &input) {
 		for (size_t i=0; i<property_chosen.size(); i++) {
 			if(property_chosen[i]) {
 				input.reset_counterexamples();
+				input.root.get()->reset_counterexample_choices();
 				input.reset_logging();
 				input.reset_unsat_cases();
 				input.root->reset_reason();
