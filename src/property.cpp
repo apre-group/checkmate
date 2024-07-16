@@ -241,23 +241,36 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		// if options.strategies is set, we have to consider all branches, otherwise we can stop after the first cr one
 		if (options.strategies){
 			bool result = false;
+			z3::Bool reason;
+			unsigned reset_index;
+			unsigned i = 0;
 			for (const Choice &choice: branch.choices) {
 				if (collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr)) {
 					// set chosen action, needed for printing strategy
 					//branch.strategy = choice.action;
 					branch.problematic_group = group_nr + 1;
 					result = true;
-				} else {
+				// if not cr and reason is null, then violated
+				} else if (choice.node->reason.null()) {
 					choice.node->violates_cr = true;
 				}
 					
-				if (!choice.node->reason.null()) {
-					branch.reason = choice.node->reason;
-					input.set_reset_point(*choice.node);
-				}		
+				if ((!choice.node->reason.null()) && (reason.null())) {
+					reason = choice.node->reason;
+					reset_index = i;
+				}
+				i++;		
+			}
+			// only set reason if there is one
+			if (!reason.null()) {
+					branch.reason = reason;
+					input.set_reset_point(*branch.choices[reset_index].node);
 			}
 			return result;
 		} else {
+			z3::Bool reason;
+			unsigned reset_index;
+			unsigned i = 0;
 			for (const Choice &choice: branch.choices) {
 				if (collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr)) {
 					// set chosen action, needed for printing strategy
@@ -265,10 +278,15 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					branch.problematic_group = group_nr + 1;
 					return true;
 				}	
-				if (!choice.node->reason.null()) {
-					branch.reason = choice.node->reason;
-					input.set_reset_point(*choice.node);
-				}		
+				if ((!choice.node->reason.null()) && (reason.null())) {
+					reason = choice.node->reason;
+					reset_index = i;
+				}
+				i++;
+			}
+			if (!reason.null()) {
+					branch.reason = reason;
+					input.set_reset_point(*branch.choices[reset_index].node);
 			}
 		}
 		return false;
@@ -276,22 +294,33 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		// if we are not the honest player, we could do anything,
 		// so all branches should be collusion resilient for the player
 		bool result = true;
+		z3::Bool reason;
+		unsigned reset_index;
+		unsigned i = 0;
 		for (const Choice &choice: branch.choices) {
 			if (!collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr)) {
-				if (result){
-					branch.reason = choice.node->reason;
-					input.set_reset_point(*choice.node);
-				}
-				if (options.counterexamples) {
-					branch.counterexample_choices.push_back(choice.action);
-				}
-				if (!options.all_counterexamples){
-					return false;
+				if (choice.node->reason.null()) {
+					if (options.counterexamples) {
+						branch.counterexample_choices.push_back(choice.action);
+					}
+					if (!options.all_counterexamples){
+						return false;
+					} else {
+						result = false;
+					}
 				} else {
+					if (result && reason.null()){
+						reason = choice.node->reason;
+						reset_index = i;
+					}
 					result = false;
-				}
-				
+				}	
 			}
+			i++;
+		}
+		if (!reason.null()) {
+			branch.reason = reason;
+			input.set_reset_point(*branch.choices[reset_index].node);
 		}
 		if (result) {
 			branch.problematic_group = group_nr + 1;
