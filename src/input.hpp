@@ -272,6 +272,76 @@ struct Branch final : public Node {
 		}
 	}
 
+	std::vector<z3::Bool> store_reason() const {
+
+		std::vector<z3::Bool> reason_vector = {reason};
+
+		for (const auto& child: choices){
+			if (!child.node->is_leaf()){
+				std::vector<z3::Bool> child_reason = child.node->branch().store_reason();
+				reason_vector.insert(reason_vector.end(), child_reason.begin(), child_reason.end());
+			} else {
+				reason_vector.push_back(child.node->leaf().reason);
+			}
+		}
+
+		return reason_vector;
+	}
+
+	void restore_reason(std::vector<z3::Bool> &reasons) const {
+
+		if (reasons.size() == 0) {
+			return;
+		}
+		reason = reasons[0];
+		reasons.erase(reasons.begin());
+
+		for (const auto& child: this->branch().choices){
+			if (!child.node->is_leaf()){
+			child.node->branch().restore_reason(reasons);
+			} else {
+				if (reasons.size() == 0) {
+					return;
+				}
+				child.node->leaf().reason = reasons[0];
+				reasons.erase(reasons.begin());
+			}
+		}
+
+		return;
+	}
+
+	std::vector<uint64_t> store_problematic_groups() const {
+
+		std::vector<uint64_t> problematic_groups_vector = {problematic_group};
+
+		for (const auto& child: choices){
+			if (!child.node->is_leaf()){
+				std::vector<uint64_t> child_pg = child.node->branch().store_problematic_groups();
+				problematic_groups_vector.insert(problematic_groups_vector.end(), child_pg.begin(), child_pg.end());
+			}
+		}
+
+		return problematic_groups_vector;
+	}
+
+	void restore_problematic_groups(std::vector<uint64_t> &pg) const {
+
+		if (pg.size() == 0) {
+			return;
+		}
+		problematic_group = pg[0];
+		pg.erase(pg.begin());
+
+		for (const auto& child: this->branch().choices){
+			if (!child.node->is_leaf()){
+			child.node->branch().restore_problematic_groups(pg);
+			}
+		}
+
+		return;
+	}
+
 	std::vector<std::vector<std::string>> store_counterexample_choices() const {
 
 		std::vector<std::vector<std::string>> counterexample_choices_vector = {counterexample_choices};

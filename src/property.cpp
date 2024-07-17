@@ -121,6 +121,9 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			return false;
 		}
 		// otherwise we can take any strategy we please as long as it's weak immune
+		z3::Bool reason;
+		unsigned reset_index;
+		unsigned i = 0;
 		for (const Choice &choice: branch.choices) {
 			if (weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker)) {
 				// set chosen action, needed for printing strategy
@@ -128,34 +131,51 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				branch.problematic_group = player + 1;
 				return true;
 			}
-			if (!choice.node->reason.null()) {
-				branch.reason = choice.node->reason;
-				input.set_reset_point(branch);
-			}		
+			if ((!choice.node->reason.null()) && (reason.null())) {
+					reason = choice.node->reason;
+					reset_index = i;
+			}
+			i++;
 		}
+		if (!reason.null()) {
+				branch.reason = reason;
+				input.set_reset_point(*branch.choices[reset_index].node);
+		}	
 		return false;
+
 	} else {
 		// if we are not the honest player, we could do anything,
 		// so all branches should be weak immune for the player
 		bool result = true;
+		z3::Bool reason;
+		unsigned reset_index;
+		unsigned i = 0;
 		for (const Choice &choice: branch.choices) {
 			if (!weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker)) {
-				if (result) {
-					branch.reason = choice.node->reason;
-					input.set_reset_point(branch);
-				}
-				if (options.counterexamples) {
-					branch.counterexample_choices.push_back(choice.action);
-				}
-				if (!options.all_counterexamples){
-					return false;
+				if (choice.node->reason.null()){
+					if (options.counterexamples) {
+						branch.counterexample_choices.push_back(choice.action);
+					}
+					if (!options.all_counterexamples){
+						return false;
+					} else {
+						result = false;
+					}
 				} else {
+					if (result && reason.null()){
+						reason = choice.node->reason;
+						reset_index = i;
+					}
 					result = false;
-				}
-				
+				}	
 			}
+			i++;
 		}
-		if (result){
+		if (!reason.null()) {
+			branch.reason = reason;
+			input.set_reset_point(*branch.choices[reset_index].node);
+		}
+		if (result) {
 			branch.problematic_group = player + 1;
 		}
 		return result;
@@ -1170,26 +1190,39 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 
 	if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
 		bool result = true;
+
+		z3::Bool reason;
+		Node *current_reset_point;
+		std::vector<uint64_t> problematic_group_storage;
+		std::vector<z3::Bool> reason_storage;
+		bool is_unsat = false;
 		for (size_t player = next_group ; player < input.players.size(); player++) {
 			
 			bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity);
 			if (!weak_immune_for_player) {
 				if (options.counterexamples && input.root->reason.null()){
+					is_unsat = true;
 					std::vector<size_t> pl = {player};
 					input.compute_cecase(pl, property);
 					input.root.get()->reset_counterexample_choices();
 				}
-				if (!options.all_counterexamples){
+				if (!options.all_counterexamples && input.root->reason.null()){
 					return false;
-				} else {
-					// if reason is not null, need case split
-					if (!input.root->reason.null()){
-						return false;
-					}
-					result = false;
+				} else if ((!options.all_counterexamples || !is_unsat) && !input.root->reason.null() && reason.null()) {
+					reason = input.root->reason;
+					current_reset_point = input.reset_point;
+					problematic_group_storage = input.root->store_problematic_groups();
+					reason_storage = input.root->store_reason();
 				}
+				result = false;
 			}
 			input.root.get()->reset_counterexample_choices();
+			input.root->reset_reason();
+		}
+		if (!reason.null()){
+			input.root->restore_problematic_groups(problematic_group_storage);
+			input.root->restore_reason(reason_storage);
+			input.reset_point = current_reset_point;
 		}
 		return result;
 	}
@@ -1201,6 +1234,12 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		// done this way more for concision than efficiency
 		// std::cout << "next_group: " << next_group << std::endl;
 		bool result = true;
+
+		z3::Bool reason;
+		Node *current_reset_point;
+		std::vector<uint64_t> problematic_group_storage;
+		std::vector<z3::Bool> reason_storage;
+		bool is_unsat = false;
 		for (uint64_t binary_counter = next_group; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++) {
 			std::bitset<Input::MAX_PLAYERS> group = binary_counter;
 			Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
@@ -1214,6 +1253,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), binary_counter);
 			if (!collusion_resilient_for_group) {
 				if (options.counterexamples && input.root->reason.null()){
+					is_unsat = true;
 					std::vector<size_t> pl;
 					for (size_t player = 0; player < input.players.size(); player++) {
 						if (group[player]) {
@@ -1224,18 +1264,30 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 					input.root.get()->reset_counterexample_choices();
 				}
 				
-				if (!options.all_counterexamples){
+				if (!options.all_counterexamples && input.root->reason.null()){
 					return false;
-				} else {
-					// need case split if reason not null
-					if (!input.root->reason.null()) { 
-						return false;
-					}
-					result = false;
+				} else if ((!options.all_counterexamples || !is_unsat ) && !input.root->reason.null() && reason.null()) {
+					reason = input.root->reason;
+					current_reset_point = input.reset_point;
+					problematic_group_storage = input.root->store_problematic_groups();
+					reason_storage = input.root->store_reason();
+				// } else {
+				// 	// need case split if reason not null
+				// 	if (!input.root->reason.null()) { 
+				// 		return false;
+				// 	}
+				// 	result = false;
 					
 				}
+				result = false;
 			}
 			input.root.get()->reset_counterexample_choices();
+			input.root->reset_reason();
+		}
+		if (!reason.null()){
+			input.root->restore_problematic_groups(problematic_group_storage);
+			input.root->restore_reason(reason_storage);
+			input.reset_point = current_reset_point;
 		}
 		return result;
 	}
