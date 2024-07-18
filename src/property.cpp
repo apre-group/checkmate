@@ -1217,7 +1217,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			//std::cout << "current player " << player << std::endl;
 			
 			// problematic groups are only considered when we haven't found a case split point yet
-			bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity, reason.null());
+			bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity, false);
 			if (!weak_immune_for_player) {
 
 
@@ -1296,7 +1296,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			}
  
 			// problematic groups are only considered when we haven't found a case split point yet
-			bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), binary_counter, reason.null());
+			bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), binary_counter, false);
 			if (!collusion_resilient_for_group) {
 				std::cout << "not CR" << std::endl;
 				if (input.root->reason.null()){
