@@ -317,7 +317,10 @@ struct Branch final : public Node {
 		std::vector<uint64_t> problematic_groups_vector = {problematic_group};
 
 		for (const auto& child: choices){
-			if (!child.node->is_leaf()){
+			if(child.node->is_leaf()) {
+				problematic_groups_vector.push_back(child.node->leaf().problematic_group);
+			}
+			else {
 				std::vector<uint64_t> child_pg = child.node->branch().store_problematic_groups();
 				problematic_groups_vector.insert(problematic_groups_vector.end(), child_pg.begin(), child_pg.end());
 			}
@@ -335,9 +338,12 @@ struct Branch final : public Node {
 		pg.erase(pg.begin());
 
 		for (const auto& child: this->branch().choices){
-			if (!child.node->is_leaf()){
-			child.node->branch().restore_problematic_groups(pg);
+			if(child.node->is_leaf()){
+				child.node->leaf().problematic_group = pg[0];
+				pg.erase(pg.begin());
 			}
+			else
+				child.node->branch().restore_problematic_groups(pg);
 		}
 
 		return;
