@@ -1284,7 +1284,9 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		for (uint64_t binary_counter = next_group; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++) {
 
 			std::cout << "current group " << binary_counter << std::endl;
-
+			if (binary_counter == 5){
+				std::cout << input.root->store_problematic_groups()<< std::endl;
+			}
 
 			std::bitset<Input::MAX_PLAYERS> group = binary_counter;
 			Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
@@ -1296,8 +1298,12 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			}
  
 			// problematic groups are only considered when we haven't found a case split point yet
-			bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), binary_counter, false);
+			bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), binary_counter, true);
 			if (!collusion_resilient_for_group) {
+
+				if (binary_counter == 5){
+					std::cout << input.root->store_problematic_groups()<< std::endl;
+				}
 				std::cout << "not CR" << std::endl;
 				if (input.root->reason.null()){
 					std::cout << "for sure" << std::endl;
@@ -1329,6 +1335,9 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 				result = false;
 			//}
 			} else {
+				if (binary_counter == 5){
+					std::cout << input.root->store_problematic_groups()<< std::endl;
+				}
 				std::cout << "is cr" << std::endl;
 			}
 
@@ -1413,6 +1422,9 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	}
 
 	uint64_t current_next_group = input.root->branch().problematic_group; // why not just unsigned?
+	std::vector<uint64_t> problematic_groups = input.root->store_problematic_groups();
+	std::cout << problematic_groups << std::endl;
+
 	// std::cout << "problematic group: " << current_next_group << std::endl;
 	auto &current_reset_point = input.reset_point;
 
@@ -1441,7 +1453,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		solver.pop();
 
 		// reset the branch.problematic_group for all branches to presplit state, such that the other case split starts at the same point
-		input.root->restore_problematic_group(current_next_group, *current_reset_point, false);
+		input.root->restore_problematic_groups(problematic_groups);
 
 
 		if (property == PropertyType::CollusionResilience && options.strategies){
@@ -1536,7 +1548,10 @@ void property(const Options &options, const Input &input, PropertyType property,
 			prop_holds = false;
 		}
 	} else {
-		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, 0)) {
+
+		uint64_t next_group = property == PropertyType::CollusionResilience ? 1 : 0;
+
+		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, next_group)) {
 			std::cout << "YES, it is " << prop_name << "." << std::endl;
 			prop_holds = true;
 		} else { 
@@ -1605,7 +1620,7 @@ void analyse_properties(const Options &options, const Input &input) {
 				input.root->reset_reason();
 				input.root->reset_strategy();
 				input.reset_strategies(); 
-				input.root->reset_problematic_group(); 
+				input.root->reset_problematic_group(i==2); 
 				input.reset_reset_point();
 				property(options, input, property_types[i], history);
 			}
