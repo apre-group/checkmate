@@ -1217,9 +1217,8 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			//std::cout << "current player " << player << std::endl;
 			
 			// problematic groups are only considered when we haven't found a case split point yet
-			bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity, false);
+			bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity, true);
 			if (!weak_immune_for_player) {
-
 
 				// std::cout << "not CR" << std::endl;
 				// if (input.root->reason.null()){
@@ -1283,10 +1282,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		bool is_unsat = false;
 		for (uint64_t binary_counter = next_group; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++) {
 
-			std::cout << "current group " << binary_counter << std::endl;
-			if (binary_counter == 5){
-				std::cout << input.root->store_problematic_groups()<< std::endl;
-			}
+			//std::cout << "current group " << binary_counter << std::endl;
 
 			std::bitset<Input::MAX_PLAYERS> group = binary_counter;
 			Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
@@ -1301,15 +1297,12 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), binary_counter, true);
 			if (!collusion_resilient_for_group) {
 
-				if (binary_counter == 5){
-					std::cout << input.root->store_problematic_groups()<< std::endl;
-				}
-				std::cout << "not CR" << std::endl;
+				/*std::cout << "not CR" << std::endl;
 				if (input.root->reason.null()){
 					std::cout << "for sure" << std::endl;
 				} else {
 					std::cout << "need case split" << std::endl;
-				}
+				}*/
 
 
 				if (options.counterexamples && input.root->reason.null()){
@@ -1333,13 +1326,10 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 					reason_storage = input.root->store_reason();	
 				}
 				result = false;
+			} 
+			// else {
+			//	std::cout << "is cr" << std::endl;
 			//}
-			} else {
-				if (binary_counter == 5){
-					std::cout << input.root->store_problematic_groups()<< std::endl;
-				}
-				std::cout << "is cr" << std::endl;
-			}
 
 			input.root.get()->reset_counterexample_choices();
 			input.root->reset_reason();
@@ -1386,6 +1376,10 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		// if strategies, add a "potential case" to keep track of all strategies
 		if (options.strategies){
 			input.compute_strategy_case(current_case, property);
+
+			if(options.all_cases && property == PropertyType::CollusionResilience) {
+				input.root->reset_violation_cr();
+			}
 		}
 		return true;
 	}
@@ -1403,6 +1397,10 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		}
 		if (options.counterexamples){
 			input.add_case2ce(current_case);
+		}
+
+		if(options.all_cases && options.strategies && property == PropertyType::CollusionResilience) {
+			input.root->reset_violation_cr();
 		}
 
 		return false;
@@ -1423,7 +1421,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 	uint64_t current_next_group = input.root->branch().problematic_group; // why not just unsigned?
 	std::vector<uint64_t> problematic_groups = input.root->store_problematic_groups();
-	std::cout << problematic_groups << std::endl;
+	//std::cout << problematic_groups << std::endl;
 
 	// std::cout << "problematic group: " << current_next_group << std::endl;
 	auto &current_reset_point = input.reset_point;
@@ -1457,7 +1455,9 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 
 		if (property == PropertyType::CollusionResilience && options.strategies){
-			input.root->restore_violation_cr(violation);
+			std::vector<bool> violation_copy;
+			violation_copy.insert(violation_copy.end(), violation.begin(), violation.end());
+			input.root->restore_violation_cr(violation_copy);
 		}
 		if (options.counterexamples){
 			input.root->restore_counterexample_choices(ce_storage);

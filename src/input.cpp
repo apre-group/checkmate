@@ -586,6 +586,7 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> pl
 					hist_choice.choice = choice.action;
 					hist_choice.history = actions_so_far;
 
+					//std::cout << "player " << hist_choice.player << " takes action " << choice.action << " after history " << actions_so_far << std::endl;
 					strategy.push_back(hist_choice);
 					break;
 				}
@@ -601,10 +602,12 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> pl
 					hist_choice.choice = choice.action;
 					hist_choice.history = actions_so_far;
 
+					//std::cout << "player " << hist_choice.player << " takes action " << choice.action << " after history " << actions_so_far << std::endl;
 					strategy.push_back(hist_choice);
 					break;
 				}
 			}
+			std::cout << actions_so_far << std::endl;
 			assert(have_found_cr);
 		}
 		
