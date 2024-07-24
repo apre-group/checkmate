@@ -228,7 +228,11 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		}
 
 		if (solver.solve({condition}) == z3::Result::UNSAT) {
-			node->violates_cr = true;
+
+			if(options.strategies) {
+				node->violates_cr[group_nr - 1] = true;
+			}
+			
 			return false;
 		}
 
@@ -287,7 +291,8 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					result = true;
 				// if not cr and reason is null, then violated
 				} else if (choice.node->reason.null()) {
-					choice.node->violates_cr = true;
+
+					choice.node->violates_cr[group_nr - 1] = true;
 				}
 					
 				if ((!choice.node->reason.null()) && (reason.null())) {
@@ -1284,6 +1289,10 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 
 			//std::cout << "current group " << binary_counter << std::endl;
 
+			if(options.strategies) {
+				input.root->add_violation_cr();
+			}
+
 			std::bitset<Input::MAX_PLAYERS> group = binary_counter;
 			Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
 			// compute the honest total for the current group
@@ -1409,7 +1418,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		std::cout << "\tSplitting on: " << split << std::endl;
 	}
 
-	std::vector<bool> violation;
+	std::vector<std::vector<bool>> violation;
 	if (property == PropertyType::CollusionResilience && options.strategies){
 		violation = input.root->store_violation_cr();
 	}
@@ -1455,7 +1464,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 
 		if (property == PropertyType::CollusionResilience && options.strategies){
-			std::vector<bool> violation_copy;
+			std::vector<std::vector<bool>> violation_copy;
 			violation_copy.insert(violation_copy.end(), violation.begin(), violation.end());
 			input.root->restore_violation_cr(violation_copy);
 		}
@@ -1604,7 +1613,10 @@ void analyse_properties(const Options &options, const Input &input) {
 
 		input.root->reset_honest();
 		input.root->mark_honest(input.honest[history]);
-		input.root->reset_violation_cr();
+
+		if(options.strategies) {
+			input.root->reset_violation_cr();
+		}
 
 		std::vector<bool> property_chosen = {options.weak_immunity, options.weaker_immunity, options.collusion_resilience, options.practicality};
 		std::vector<PropertyType> property_types = {PropertyType::WeakImmunity, PropertyType::WeakerImmunity, PropertyType::CollusionResilience, PropertyType::Practicality};

@@ -137,13 +137,13 @@ struct Node {
 	// null if didn't fail or no case split would help
 	mutable z3::Bool reason;
 
-	mutable bool violates_cr = false; // set to true as soon as its not cr for one deviating group
+	mutable std::vector<bool> violates_cr; // set to true as soon as its not cr for one deviating group
 
 	virtual UtilityTuplesSet get_utilities() const = 0;
 
 	std::vector<HistoryChoice> compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
 
-	std::vector<HistoryChoice> compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
+	std::vector<HistoryChoice> compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players) const;
 
 	std::vector<HistoryChoice> compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector) const;
 
@@ -153,9 +153,15 @@ struct Node {
 
 	void reset_violation_cr() const;
 
-	std::vector<bool> store_violation_cr() const;
+	std::vector<std::vector<bool>> store_violation_cr() const;
 
-	void restore_violation_cr(std::vector<bool> &violation) const;
+	bool cr_against_all() const;
+
+	bool cr_against_supergroups_of(std::vector<uint> deviating_players) const;
+
+	void restore_violation_cr(std::vector<std::vector<bool>> &violation) const;
+
+	void add_violation_cr() const;
 
 };
 
@@ -342,8 +348,9 @@ struct Branch final : public Node {
 				child.node->leaf().problematic_group = pg[0];
 				pg.erase(pg.begin());
 			}
-			else
+			else {
 				child.node->branch().restore_problematic_groups(pg);
+			}
 		}
 
 		return;
@@ -671,7 +678,7 @@ struct Input {
 			}
 			new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector);
 		} else if (property == PropertyType::CollusionResilience) {
-			new_strat_case.strategy = root.get()->compute_cr_strategy(players, {});
+			new_strat_case.strategy = root.get()->compute_cr_strategy(players, {}, {});
 		} else {
 			new_strat_case.strategy = root.get()->compute_strategy(players, {});
 		}
