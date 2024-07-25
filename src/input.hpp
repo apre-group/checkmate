@@ -626,12 +626,38 @@ struct Input {
 
 	mutable Node *reset_point;
 
+	mutable std::vector<bool> solved_for_group;
+
 	// root: NB must be a branch
 	std::unique_ptr<Branch> root;
 
 	// maximum number of players currently supported
 	// no reason there couldn't be more, but convenient for implementation (cf collusion resilience)
 	static const size_t MAX_PLAYERS = 64;
+
+	void reset_solved_for() const {
+		solved_for_group = {};
+	}
+
+	void init_solved_for_group(size_t number_groups) const {
+		solved_for_group = {};
+		for ( uint i = 0; i< number_groups; i++) {
+			solved_for_group.push_back(false);
+		}
+		
+	}
+
+	std::vector<bool> store_solved_for() const {
+
+		std::vector<bool> result;
+		result.insert(result.begin(), solved_for_group.begin(), solved_for_group.end());
+
+		return result;
+	}
+
+	void restore_solved_for(std::vector<bool> storage) const {
+		solved_for_group = storage;
+	}
 
 	void set_reset_point(const Node &node) const {
 		Node* tmp = const_cast<Node *>(&node);

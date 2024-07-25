@@ -4,12 +4,14 @@
 #include <unordered_set>
 #include <bits/stdc++.h> 
 #include <string>
+#include <cmath>
 
 #include "input.hpp"
 #include "options.hpp"
 #include "z3++.hpp"
 #include "utils.hpp"
 #include "property.hpp"
+
 
 using z3::Bool;
 using z3::Solver;
@@ -1206,7 +1208,7 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 	}
 }
 
-bool property_under_split(z3::Solver &solver, const Input &input, const Options &options, const PropertyType property, size_t history, uint64_t next_group) {
+bool property_under_split(z3::Solver &solver, const Input &input, const Options &options, const PropertyType property, size_t history) {
 	/* determine if the input has some property for the current honest history under the current split */
 	
 
@@ -1218,43 +1220,45 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		std::vector<uint64_t> problematic_group_storage;
 		std::vector<z3::Bool> reason_storage;
 		bool is_unsat = false;
-		for (size_t player = next_group ; player < input.players.size(); player++) {
+		for (size_t player = 0 ; player < input.players.size(); player++) {
 			//std::cout << "current player " << player << std::endl;
 			
-			// problematic groups are only considered when we haven't found a case split point yet
-			bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity, true);
-			if (!weak_immune_for_player) {
+			if (!input.solved_for_group[player]) {
+				// problematic groups are only considered when we haven't found a case split point yet
+				bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity, true);
+				if (!weak_immune_for_player) {
 
-				// std::cout << "not CR" << std::endl;
-				// if (input.root->reason.null()){
-				// 	std::cout << "for sure" << std::endl;
+					// std::cout << "not CR" << std::endl;
+					// if (input.root->reason.null()){
+					// 	std::cout << "for sure" << std::endl;
+					// } else {
+					// 	std::cout << "need case split" << std::endl;
+					// }
+
+
+					if (options.counterexamples && input.root->reason.null()){
+						is_unsat = true;
+						std::vector<size_t> pl = {player};
+						input.compute_cecase(pl, property);
+						input.root.get()->reset_counterexample_choices();
+					}
+					if (!options.all_counterexamples && input.root->reason.null()){
+						return false;
+					} else if ((!options.all_counterexamples || !is_unsat) && !input.root->reason.null() && reason.null()) {
+						reason = input.root->reason;
+						current_reset_point = input.reset_point;
+						problematic_group_storage = input.root->store_problematic_groups();
+						reason_storage = input.root->store_reason();
+					}
+					result = false;
+				}
 				// } else {
-				// 	std::cout << "need case split" << std::endl;
+				// 	std::cout << "is cr" << std::endl;
 				// }
 
-
-				if (options.counterexamples && input.root->reason.null()){
-					is_unsat = true;
-					std::vector<size_t> pl = {player};
-					input.compute_cecase(pl, property);
-					input.root.get()->reset_counterexample_choices();
-				}
-				if (!options.all_counterexamples && input.root->reason.null()){
-					return false;
-				} else if ((!options.all_counterexamples || !is_unsat) && !input.root->reason.null() && reason.null()) {
-					reason = input.root->reason;
-					current_reset_point = input.reset_point;
-					problematic_group_storage = input.root->store_problematic_groups();
-					reason_storage = input.root->store_reason();
-				}
-				result = false;
+				input.root.get()->reset_counterexample_choices();
+				input.root->reset_reason();
 			}
-			// } else {
-			// 	std::cout << "is cr" << std::endl;
-			// }
-
-			input.root.get()->reset_counterexample_choices();
-			input.root->reset_reason();
 		}
 		if (!options.all_counterexamples) {
 			if (!reason.null()){
@@ -1285,63 +1289,64 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		std::vector<uint64_t> problematic_group_storage;
 		std::vector<z3::Bool> reason_storage;
 		bool is_unsat = false;
-		for (uint64_t binary_counter = next_group; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++) {
+		for (uint64_t binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++) {
 
 			//std::cout << "current group " << binary_counter << std::endl;
-
-			if(options.strategies) {
-				input.root->add_violation_cr();
-			}
-
-			std::bitset<Input::MAX_PLAYERS> group = binary_counter;
-			Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
-			// compute the honest total for the current group
-			for (size_t player = 0; player < input.players.size(); player++) {
-				if (group[player]) {
-					honest_total = honest_total + honest_leaf.utilities[player];
+			if (!input.solved_for_group[binary_counter]){
+				if(options.strategies) {
+					input.root->add_violation_cr();
 				}
-			}
- 
-			// problematic groups are only considered when we haven't found a case split point yet
-			bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), binary_counter, true);
-			if (!collusion_resilient_for_group) {
 
-				/*std::cout << "not CR" << std::endl;
-				if (input.root->reason.null()){
-					std::cout << "for sure" << std::endl;
-				} else {
-					std::cout << "need case split" << std::endl;
-				}*/
-
-
-				if (options.counterexamples && input.root->reason.null()){
-					is_unsat = true;
-					std::vector<size_t> pl;
-					for (size_t player = 0; player < input.players.size(); player++) {
-						if (group[player]) {
-							pl.push_back(player);
-						}
+				std::bitset<Input::MAX_PLAYERS> group = binary_counter;
+				Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
+				// compute the honest total for the current group
+				for (size_t player = 0; player < input.players.size(); player++) {
+					if (group[player]) {
+						honest_total = honest_total + honest_leaf.utilities[player];
 					}
-					input.compute_cecase(pl, property);
-					input.root.get()->reset_counterexample_choices();
 				}
-				
-				if (!options.all_counterexamples && input.root->reason.null()){
-					return false;
-				} else if ((!options.all_counterexamples || !is_unsat ) && !input.root->reason.null() && reason.null()) {
-					reason = input.root->reason;
-					current_reset_point = input.reset_point;
-					problematic_group_storage = input.root->store_problematic_groups();
-					reason_storage = input.root->store_reason();	
-				}
-				result = false;
-			} 
-			// else {
-			//	std::cout << "is cr" << std::endl;
-			//}
+	
+				// problematic groups are only considered when we haven't found a case split point yet
+				bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), binary_counter, true);
+				if (!collusion_resilient_for_group) {
 
-			input.root.get()->reset_counterexample_choices();
-			input.root->reset_reason();
+					/*std::cout << "not CR" << std::endl;
+					if (input.root->reason.null()){
+						std::cout << "for sure" << std::endl;
+					} else {
+						std::cout << "need case split" << std::endl;
+					}*/
+
+
+					if (options.counterexamples && input.root->reason.null()){
+						is_unsat = true;
+						std::vector<size_t> pl;
+						for (size_t player = 0; player < input.players.size(); player++) {
+							if (group[player]) {
+								pl.push_back(player);
+							}
+						}
+						input.compute_cecase(pl, property);
+						input.root.get()->reset_counterexample_choices();
+					}
+					
+					if (!options.all_counterexamples && input.root->reason.null()){
+						return false;
+					} else if ((!options.all_counterexamples || !is_unsat ) && !input.root->reason.null() && reason.null()) {
+						reason = input.root->reason;
+						current_reset_point = input.reset_point;
+						problematic_group_storage = input.root->store_problematic_groups();
+						reason_storage = input.root->store_reason();	
+					}
+					result = false;
+				} else {
+					//std::cout << "is cr" << std::endl;
+					input.solved_for_group[binary_counter] = true;
+				}
+
+				input.root.get()->reset_counterexample_choices();
+				input.root->reset_reason();
+			}
 		}
 		if (!options.all_counterexamples) {
 			if (!reason.null()){
@@ -1368,8 +1373,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 	UNREACHABLE
 }
 
-bool property_rec(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, size_t history,
-				  uint64_t next_group) {
+bool property_rec(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, size_t history) {
 	/* 
 		actual case splitting engine
 		determine if the input has some property for the current honest history, splitting recursively
@@ -1378,7 +1382,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	// property holds under current split
 
 
-	if (property_under_split(solver, input, options, property, history, next_group)) {
+	if (property_under_split(solver, input, options, property, history)) {
 		if (!input.stop_log){
 			std::cout << "\tProperty satisfied for case: " << current_case << std::endl; 
 		}
@@ -1428,7 +1432,8 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		ce_storage = input.root->store_counterexample_choices();
 	}
 
-	uint64_t current_next_group = input.root->branch().problematic_group; // why not just unsigned?
+	std::vector<bool> solved_for_storage = input.store_solved_for();
+	// uint64_t current_next_group = input.root->branch().problematic_group; // why not just unsigned?
 	std::vector<uint64_t> problematic_groups = input.root->store_problematic_groups();
 	//std::cout << problematic_groups << std::endl;
 
@@ -1455,12 +1460,13 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		new_current_case.push_back(condition);
 
 
-		bool attempt = property_rec(solver, options, input, property, new_current_case, history, current_next_group);
+		bool attempt = property_rec(solver, options, input, property, new_current_case, history);
 
 		solver.pop();
 
 		// reset the branch.problematic_group for all branches to presplit state, such that the other case split starts at the same point
 		input.root->restore_problematic_groups(problematic_groups);
+		input.restore_solved_for(solved_for_storage);
 
 
 		if (property == PropertyType::CollusionResilience && options.strategies){
@@ -1549,7 +1555,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 		// the old case splitting algorithm for practicality
 		//if (practicality_entry(solver, options, input, input.root.get(), std::vector<z3::Bool>())) {
 		input.reset_practical_utilities();
-		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, 0)) {
+		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history)) {
 			std::cout << "YES, it is " << prop_name << "." << std::endl;
 			prop_holds = true;
 		} else { 
@@ -1558,9 +1564,12 @@ void property(const Options &options, const Input &input, PropertyType property,
 		}
 	} else {
 
-		uint64_t next_group = property == PropertyType::CollusionResilience ? 1 : 0;
+		//uint64_t next_group = property == PropertyType::CollusionResilience ? 1 : 0;
+		size_t number_groups = property == PropertyType::CollusionResilience ? pow(2,input.players.size())-1 : input.players.size();
+		input.init_solved_for_group(number_groups);
 
-		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, next_group)) {
+
+		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history)) {
 			std::cout << "YES, it is " << prop_name << "." << std::endl;
 			prop_holds = true;
 		} else { 
