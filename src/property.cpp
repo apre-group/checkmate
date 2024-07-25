@@ -498,7 +498,20 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 				}
 			}
 			if (!found) {
+				// CONTINUE HERE!!
 				// return empty set
+				// counterexample: current child (deviating choice) is the counterexample together with all its practical histories/strategies, 
+				//                  additional information needed: current history (to be able to document deviation point)
+				//                                                 current player
+				// NOTE format of ce different from wi and cr, since all practical histories of child are needed to be a CE 
+
+				// store (push back) it in input.counterexamples; case will be added in property rec
+
+
+				// all counterexamples: do not return here (store return value in variable), but check all other children for further violations --> counterexamples
+				// 						then also do not return yet, but continue the reasoning up to the root to collect further CEs
+
+				// NOTE: for not along honest history, nothing to do
 				return false; 
 			}
 			j++;
