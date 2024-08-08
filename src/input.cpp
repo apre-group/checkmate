@@ -843,6 +843,119 @@ std::vector<CeChoice> Node::compute_cr_ce(std::vector<std::string> players, std:
 		return counterexample;
 	}
 
+
+CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::string current_action, UtilityTuplesSet practical_utilities) const {
+	
+	CeCase cecase;
+	cecase.player_group = {players[current_player]};
+	CeChoice deviation;
+	deviation.history = actions_so_far;
+	deviation.choices = {current_action};
+	deviation.player = players[current_player];
+	//cecase.counterexample = {deviation};
+
+	const Node* deviation_node = nullptr;
+
+	// TODO: REVIEW CHANGE
+	std::vector<std::string> actions_to_deviation;
+	actions_to_deviation.insert(actions_to_deviation.end(), actions_so_far.begin(), actions_so_far.end());
+	actions_to_deviation.push_back(current_action); // BE AWARE current_action = action leading to subtree where pr histories are ce
+
+	deviation_node = compute_deviation_node(actions_to_deviation);
+
+	std::vector<CeChoice> rec_choices = deviation_node->compute_pr_ce(current_action, actions_so_far, practical_utilities);
+	cecase.counterexample.insert(cecase.counterexample.end(), rec_choices.begin(), rec_choices.end());
+	return cecase;
+}
+
+const Node* Node::compute_deviation_node(std::vector<std::string> actions_so_far) const {
+	
+	if(actions_so_far.size() > 0) {
+		assert(!this->is_leaf());
+		for (const auto &child: this->branch().choices){
+			if(child.action == actions_so_far[0]) {
+				actions_so_far.erase(actions_so_far.begin());
+				return child.node.get()->compute_deviation_node(actions_so_far);
+			}
+		}
+	}
+
+	return this;
+
+}
+
+// Be aware that return value represents a set of histories, rather than one partial strategy
+// This has to be taken into account when printing the counterexamples
+std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, std::vector<std::string> actions_so_far, UtilityTuplesSet practical_utilities) const {
+	std::vector<CeChoice> cechoices;
+
+	for(auto &utility : practical_utilities) {
+
+		CeChoice cechoice;
+		cechoice.player = "";
+
+		//cechoice.choices = {current_action};
+		// TODO REVIEW CHANGE
+		cechoice.choices = {};
+		std::vector<std::string> result_hist = strat2hist(utility.strategy_vector);
+		cechoice.choices.insert(cechoice.choices.end(), result_hist.begin(), result_hist.end());
+		
+		std::vector<std::string> updated_history;
+		updated_history.insert(updated_history.end(), actions_so_far.begin(), actions_so_far.end());
+		updated_history.push_back(current_action);
+		cechoice.history = updated_history;
+		cechoices.push_back(cechoice);		
+
+	}
+
+	return cechoices;
+}
+
+std::vector<std::string> Node::strat2hist(std::vector<std::string> &strategy) const {
+	
+	if(this->is_leaf()) {
+		return {};
+	} 
+
+	assert(strategy.size() > 0);
+	
+	std::vector<std::string> hist_player_pairs;
+	std::string first_action = strategy[0];
+	strategy.erase(strategy.begin());
+	hist_player_pairs.push_back(first_action);
+
+	bool found = false;
+	for(auto &child: this->branch().choices) {
+
+		if(child.action == first_action) {
+			std::vector<std::string> child_result = child.node->strat2hist(strategy);
+			hist_player_pairs.insert(hist_player_pairs.end(), child_result.begin(), child_result.end());
+			found = true;
+		} else {
+			child.node->prune_actions_from_strategy(strategy);
+		}
+	}
+
+	// TODO: REVIEW CHANGE
+	assert(found);
+ 	
+	return hist_player_pairs;
+
+}
+
+void Node::prune_actions_from_strategy(std::vector<std::string> &strategy) const {
+
+	if(this->is_leaf()) {
+		return;
+	} 
+
+	assert(strategy.size() > 0);
+	strategy.erase(strategy.begin());
+	for(auto &child: this->branch().choices) {
+		child.node->prune_actions_from_strategy(strategy);
+	}
+}
+
 void Node::reset_violation_cr() const {
 		violates_cr = {};
 

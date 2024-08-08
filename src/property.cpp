@@ -389,7 +389,7 @@ bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
 
 }
 
-bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
+bool practicality_rec_old(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far) {
 	// if (node->is_leaf()) {
 	// 	// return the utility tuple of the leaf as a set (of one element)
 	// 	const Leaf &leaf = node->leaf();
@@ -423,7 +423,10 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 		//UtilityTuplesSet utilities = practicality_rec_old(input, solver, choice.node.get());
 
 		// this child has no practical strategy (propagate reason for case split, if any) 
-		if(!practicality_rec_old(input, solver, choice.node.get())) {
+		std::vector<std::string> updated_actions;
+		updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
+		updated_actions.push_back(choice.action);
+		if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions)) {
 			branch.reason = choice.node->reason;
 			input.set_reset_point(branch);
 			// return empty set
@@ -477,8 +480,10 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 		unsigned int j = 0;
 		for (const auto& utilities : children) {
 			bool found = false;
-			// does there exist a possible utility such that `maximum` is geq than it?
+			// does there exist a possible utility such that `maximum` is geq than it?				
+
 			 for (const auto& utility : utilities) {
+				//std::cout << "Strategy vector" << utility.strategy_vector << std::endl;
 				auto condition =   maximum < utility[branch.player];
 				if (solver.solve({condition}) == z3::Result::SAT) {
 					if (solver.solve({!condition}) == z3::Result::SAT) {
@@ -498,8 +503,8 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 				}
 			}
 			if (!found) {
+				
 				// CONTINUE HERE!!
-				// return empty set
 				// counterexample: current child (deviating choice) is the counterexample together with all its practical histories/strategies, 
 				//                  additional information needed: current history (to be able to document deviation point)
 				//                                                 current player
@@ -512,6 +517,32 @@ bool practicality_rec_old(const Input &input, z3::Solver &solver, Node *node) {
 				// 						then also do not return yet, but continue the reasoning up to the root to collect further CEs
 
 				// NOTE: for not along honest history, nothing to do
+
+
+				// TODO: REVIEW CHANGE
+				std::string deviating_action = children_actions[j];
+
+				if(options.counterexamples) {
+					//input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, branch.choices[j].action, utilities));
+					input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, deviating_action, utilities));
+				}
+
+				/*
+				Initial problem: at the root we were looking for action S, when in fact there are only actions C_h, H, D
+				-> we need to go one level deeper i.e. follow the first deviating action 
+				-> this was causing to much prunning 
+				*/
+
+				// TODO: DISCUSS THIS ! :)
+				// e.g. from pirate game
+				/*
+				Counterexample for case: [(>= c_D b_D), (>= b_D c_D), (>= b_C c_C), (>= b_D a_D), (>= b_C a_C), (< b_B a_B)]
+				For player B all practical histories after [y, y] yield a better utility than the honest one.
+				Practical histories: 
+				[]
+				-> practical histories is empty because [y,y] is terminal. Should we leave it like this or do we change sth to avoid confusion? 
+				*/
+
 				return false; 
 			}
 			j++;
@@ -1378,7 +1409,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 	}
 
 	else if (property == PropertyType::Practicality) {
-		return practicality_rec_old(input, solver, input.root.get());
+		return practicality_rec_old(input, options, solver, input.root.get(), {});
 	}
 	
  
@@ -1441,14 +1472,16 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	}
 
 	std::vector<std::vector<std::string>> ce_storage;
-	if (options.counterexamples){
+	if (options.counterexamples && property != PropertyType::Practicality) {
 		ce_storage = input.root->store_counterexample_choices();
 	}
 
-	std::vector<bool> solved_for_storage = input.store_solved_for();
-	// uint64_t current_next_group = input.root->branch().problematic_group; // why not just unsigned?
-	std::vector<uint64_t> problematic_groups = input.root->store_problematic_groups();
-	//std::cout << problematic_groups << std::endl;
+	std::vector<bool> solved_for_storage;
+	std::vector<uint64_t> problematic_groups;
+	if (property != PropertyType::Practicality) {
+		solved_for_storage = input.store_solved_for();
+		problematic_groups = input.root->store_problematic_groups();
+	}
 
 	// std::cout << "problematic group: " << current_next_group << std::endl;
 	auto &current_reset_point = input.reset_point;
@@ -1477,18 +1510,20 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 		solver.pop();
 
-		// reset the branch.problematic_group for all branches to presplit state, such that the other case split starts at the same point
-		input.root->restore_problematic_groups(problematic_groups);
-		input.restore_solved_for(solved_for_storage);
+		if (property != PropertyType::Practicality) {
+			// reset the branch.problematic_group for all branches to presplit state, such that the other case split starts at the same point
+			input.root->restore_problematic_groups(problematic_groups);
+			input.restore_solved_for(solved_for_storage);
 
+			if (options.counterexamples){
+				input.root->restore_counterexample_choices(ce_storage);
+			}
+		}
 
 		if (property == PropertyType::CollusionResilience && options.strategies){
 			std::vector<std::vector<bool>> violation_copy;
 			violation_copy.insert(violation_copy.end(), violation.begin(), violation.end());
 			input.root->restore_violation_cr(violation_copy);
-		}
-		if (options.counterexamples){
-			input.root->restore_counterexample_choices(ce_storage);
 		}
 
 		if (!attempt){

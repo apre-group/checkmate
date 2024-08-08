@@ -151,6 +151,16 @@ struct Node {
 
 	std::vector<CeChoice> compute_cr_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
 
+	CeCase compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::string current_action, UtilityTuplesSet practical_utilities) const;
+
+	std::vector<CeChoice> compute_pr_ce(std::string current_action, std::vector<std::string> actions_so_far, UtilityTuplesSet practical_utilities) const;
+
+	const Node* compute_deviation_node(std::vector<std::string> actions_so_far) const;
+
+	std::vector<std::string> strat2hist(std::vector<std::string> &strategy) const;
+
+	void prune_actions_from_strategy(std::vector<std::string> &strategy) const;
+	
 	void reset_violation_cr() const;
 
 	std::vector<std::vector<bool>> store_violation_cr() const;
@@ -768,26 +778,39 @@ struct Input {
 	}
 
 	void print_counterexamples(bool is_wi, bool is_cr) const {
-		std::cout << std::endl;
-		for (CeCase ce_case : counterexamples){
-			std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-			if(is_wi){
-				std::cout << "Player " << ce_case.player_group[0] << " can be harmed, if" << std::endl;
+		if(is_wi || is_cr) {
+			std::cout << std::endl;
+			for (CeCase ce_case : counterexamples){
+				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+				if(is_wi){
+					std::cout << "Player " << ce_case.player_group[0] << " can be harmed, if" << std::endl;
+				}
+				else if(is_cr){
+					std::cout << "Group " << ce_case.player_group << " can deviate profitably, if" << std::endl;
+				}
+				for (CeChoice ce_choice : ce_case.counterexample){
+					std::cout
+						<< "\tPlayer "
+						<< ce_choice.player
+						<< " takes one of the actions "
+						<< ce_choice.choices
+						<< " after history "
+						<< ce_choice.history
+						<< std::endl;
+				}
 			}
-			else if(is_cr){
-				std::cout << "Group " << ce_case.player_group << " can deviate profitably, if" << std::endl;
-			}
-			for (CeChoice ce_choice : ce_case.counterexample){
-				std::cout
-					<< "\tPlayer "
-					<< ce_choice.player
-					<< " takes one of the actions "
-					<< ce_choice.choices
-					<< " after history "
-					<< ce_choice.history
-					<< std::endl;
+		} else {
+			for (CeCase ce_case : counterexamples){
+				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+				std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
+				std::cout << "Practical histories: (after " << ce_case.counterexample[0].history << ")" << std::endl;
+				for(auto history : ce_case.counterexample) {
+					std::cout << history.choices << std::endl;	
+				}
+
 			}
 		}
+		
 	}
 
 
