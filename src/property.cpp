@@ -474,7 +474,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		honest_utility.strategy_vector.push_back(honest_choice);
 		
 		// this should be maximal against other players, so...
-		Utility maximum = honest_utility[branch.player];
+		Utility maximum = honest_utility[branch.player]; 
 
 		// for all other children
 		unsigned int j = 0;
@@ -504,7 +504,6 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			}
 			if (!found) {
 				
-				// CONTINUE HERE!!
 				// counterexample: current child (deviating choice) is the counterexample together with all its practical histories/strategies, 
 				//                  additional information needed: current history (to be able to document deviation point)
 				//                                                 current player
@@ -518,30 +517,13 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 				// NOTE: for not along honest history, nothing to do
 
-
-				// TODO: REVIEW CHANGE
 				std::string deviating_action = children_actions[j];
 
-				if(options.counterexamples) {
-					//input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, branch.choices[j].action, utilities));
+				if(options.counterexamples && branch.reason.null()) {
+					std::cout << "PUSHBACK COUNTEREXAMPLE" << std::endl;
+					std::cout << actions_so_far << std::endl;
 					input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, deviating_action, utilities));
 				}
-
-				/*
-				Initial problem: at the root we were looking for action S, when in fact there are only actions C_h, H, D
-				-> we need to go one level deeper i.e. follow the first deviating action 
-				-> this was causing to much prunning 
-				*/
-
-				// TODO: DISCUSS THIS ! :)
-				// e.g. from pirate game
-				/*
-				Counterexample for case: [(>= c_D b_D), (>= b_D c_D), (>= b_C c_C), (>= b_D a_D), (>= b_C a_C), (< b_B a_B)]
-				For player B all practical histories after [y, y] yield a better utility than the honest one.
-				Practical histories: 
-				[]
-				-> practical histories is empty because [y,y] is terminal. Should we leave it like this or do we change sth to avoid confusion? 
-				*/
 
 				return false; 
 			}

@@ -856,7 +856,6 @@ CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned curren
 
 	const Node* deviation_node = nullptr;
 
-	// TODO: REVIEW CHANGE
 	std::vector<std::string> actions_to_deviation;
 	actions_to_deviation.insert(actions_to_deviation.end(), actions_so_far.begin(), actions_so_far.end());
 	actions_to_deviation.push_back(current_action); // BE AWARE current_action = action leading to subtree where pr histories are ce
@@ -895,7 +894,6 @@ std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, std::vecto
 		cechoice.player = "";
 
 		//cechoice.choices = {current_action};
-		// TODO REVIEW CHANGE
 		cechoice.choices = {};
 		std::vector<std::string> result_hist = strat2hist(utility.strategy_vector);
 		cechoice.choices.insert(cechoice.choices.end(), result_hist.begin(), result_hist.end());
@@ -936,7 +934,6 @@ std::vector<std::string> Node::strat2hist(std::vector<std::string> &strategy) co
 		}
 	}
 
-	// TODO: REVIEW CHANGE
 	assert(found);
  	
 	return hist_player_pairs;

@@ -803,9 +803,12 @@ struct Input {
 			for (CeCase ce_case : counterexamples){
 				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
 				std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
-				std::cout << "Practical histories: (after " << ce_case.counterexample[0].history << ")" << std::endl;
+				std::cout << "Practical histories:" << std::endl;
 				for(auto history : ce_case.counterexample) {
-					std::cout << history.choices << std::endl;	
+					std::vector<std::string> history_to_print;
+					history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
+					history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
+					std::cout << history_to_print << std::endl;	
 				}
 
 			}
