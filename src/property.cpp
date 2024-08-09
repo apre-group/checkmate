@@ -418,6 +418,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 	unsigned honest_index = 0;
 	std::string honest_choice;
 
+	bool result = true;
+
 	for (const Choice &choice: branch.choices) {
 		 
 		//UtilityTuplesSet utilities = practicality_rec_old(input, solver, choice.node.get());
@@ -430,7 +432,12 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			branch.reason = choice.node->reason;
 			input.set_reset_point(branch);
 			// return empty set
-			return false;
+
+			result = false;
+
+			if(!options.all_counterexamples || !branch.reason.null()) {
+				return result;
+			}
 		}
 
 		if(choice.node->honest) {
@@ -466,8 +473,6 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		UtilityTuple honest_utility = *to_clear_strategy.begin();
 		
 		honest_utility.strategy_vector = {};
-
-
 		
 		bool wtf =  honest_utility.strategy_vector.size() == 0;
 		assert(wtf);
@@ -482,7 +487,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			bool found = false;
 			// does there exist a possible utility such that `maximum` is geq than it?				
 
-			 for (const auto& utility : utilities) {
+			for (const auto& utility : utilities) {
 				//std::cout << "Strategy vector" << utility.strategy_vector << std::endl;
 				auto condition =   maximum < utility[branch.player];
 				if (solver.solve({condition}) == z3::Result::SAT) {
@@ -520,19 +525,29 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				std::string deviating_action = children_actions[j];
 
 				if(options.counterexamples && branch.reason.null()) {
-					std::cout << "PUSHBACK COUNTEREXAMPLE" << std::endl;
-					std::cout << actions_so_far << std::endl;
+					//std::cout << "PUSHBACK COUNTEREXAMPLE" << std::endl;
 					input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, deviating_action, utilities));
 				}
 
-				return false; 
+				//return false; 
+				result = false;
+
+				if(!options.all_counterexamples || !branch.reason.null()) {
+					return result; //false
+				}
 			}
 			j++;
 		}
+		/*if (result != false) {
+			branch.practical_utilities = {honest_utility};
+		}*/
 		branch.practical_utilities = {honest_utility};
+		
 		// we return the maximal strategy 
 		// honest choice is practical for current player
-		return true;
+		// return true;
+
+		return result;
 
 	} else {
 		// not in the honest history
@@ -540,25 +555,27 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		// but utilities can't be put in a set easily -> fix this here in the C++ version
 
 		// compute the set of possible utilities by merging the set of children's utilities
-		UtilityTuplesSet result;
+		UtilityTuplesSet utility_result;
 		//std::vector<unsigned int> index_vector;
 		unsigned int k = 0;
 		for (const auto& utilities : children) {
 			for (const auto& utility : utilities) {
 				UtilityTuple to_insert(utility.leaf); 
 				to_insert.strategy_vector.push_back(children_actions[k]);
-				result.insert(to_insert);
+				utility_result.insert(to_insert);
 				// index_vector.push_back(k);
 			}
 			k++;
 		}
+
+		//std::cout << "UTIL Res size " << utility_result.size() << std::endl;
 
 		// the set to drop
 		UtilityTuplesSet remove;
 
 		// work out whether to drop `candidate`
 		unsigned int l = 0;
-		for (const auto& candidate : result) {
+		for (const auto& candidate : utility_result) {
 			// this player's utility
 			auto dominatee = candidate[branch.player];
 			// check all other children
@@ -612,8 +629,10 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 		// result is all children's utilities inductively, minus those dropped
 		for (const auto& elem : remove) {
-			result.erase(elem);
+			utility_result.erase(elem);
 		}
+
+		//std::cout << "UTIL Res size after removal " << utility_result.size() << std::endl;
 
 		// if strategy has not been set, we are not along the honest history
 		// go over all children and pick the one that has a utility tuple which is contained in the returned result
@@ -629,8 +648,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		// 	}
 		// }
 
-		branch.practical_utilities = result;
-		assert(result.size()>0);
+		branch.practical_utilities = utility_result;
+		assert(utility_result.size()>0);
 		return true;
 
 	} 
