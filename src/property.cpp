@@ -405,7 +405,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
  	const auto &branch = node->branch();
 
 	if  (branch.problematic_group == 1){
-		std::cout << "already solved" << std::endl;
+		// std::cout << "already solved" << std::endl;
 		return true;
 	}	
 
@@ -429,8 +429,10 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
 		updated_actions.push_back(choice.action);
 		if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions)) {
-			branch.reason = choice.node->reason;
-			input.set_reset_point(branch);
+			if (result) {
+				branch.reason = choice.node->reason;
+				input.set_reset_point(branch);
+			}
 			// return empty set
 
 			result = false;
@@ -446,6 +448,16 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			branch.strategy = choice.action; // choose the honest action along the honest history
 			honest_index = i;
 		} else {
+			// make sure we only have 0 practical utilities in case we are computing all counterexamples
+			// and we already have a counterexample, and hence result must be false
+			if (choice.node->get_utilities().size()==0){
+				assert(!result);
+				assert(options.all_counterexamples);
+				assert(input.counterexamples.size()>0);
+			}
+			// std::cout << "current child has " << choice.node->get_utilities().size() << " many practical histories" << std::endl;
+			// std::cout << actions_so_far << std::endl;
+			// std::cout << choice.action << std::endl;
 			children.push_back(choice.node->get_utilities());
 			children_actions.push_back(choice.action);
 		}
@@ -493,8 +505,10 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				if (solver.solve({condition}) == z3::Result::SAT) {
 					if (solver.solve({!condition}) == z3::Result::SAT) {
 						// might be maximal, just couldn't prove it
-						branch.reason =  get_split_approx(solver, maximum, utility[branch.player]); 
-						input.set_reset_point(branch);
+						if (result){
+							branch.reason =  get_split_approx(solver, maximum, utility[branch.player]); 
+							input.set_reset_point(branch);
+						}
 					}
 				} 
 				else {
@@ -507,7 +521,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					break;
 				}
 			}
-			if (!found) {
+			if (!found && utilities.size()>0) {
 				
 				// counterexample: current child (deviating choice) is the counterexample together with all its practical histories/strategies, 
 				//                  additional information needed: current history (to be able to document deviation point)
@@ -525,7 +539,12 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				std::string deviating_action = children_actions[j];
 
 				if(options.counterexamples && branch.reason.null()) {
-					//std::cout << "PUSHBACK COUNTEREXAMPLE" << std::endl;
+					// std::cout << "PUSHBACK COUNTEREXAMPLE with strategy: " << std::endl;
+					// for (const auto &ut : utilities){
+					// 	std::cout << ut.strategy_vector << std::endl;
+					// }
+					
+					
 					input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, deviating_action, utilities));
 				}
 
@@ -649,6 +668,11 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		// }
 
 		branch.practical_utilities = utility_result;
+		// std::cout<< "Utility result set: " << std::endl;
+		// for (const auto &elem : utility_result){
+		// 	std::cout << "Utility " << elem.leaf << ", Strategy " << elem.strategy_vector << std::endl;
+		// }
+
 		assert(utility_result.size()>0);
 		return true;
 
