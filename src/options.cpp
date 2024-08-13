@@ -59,6 +59,10 @@ Options::Options(char **argv) {
 			preconditions = true;
 		else if (!strcmp(*argv, "--strategies"))
 			strategies = true;
+		else if (!strcmp(*argv, "--subtree"))
+			subtree = true;
+		else if (!strcmp(*argv, "--supertree"))
+			supertree = true;
 		else
 			bail("unknown option");
 		argv++;

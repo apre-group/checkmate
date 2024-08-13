@@ -28,6 +28,12 @@ struct Options {
 	bool preconditions = false;
 	// provide witness strategy in case property satisfied
 	bool strategies = false;
+
+	// options for "compositionality feature"
+	// reason over a subtree, to be plugged into a supertree later
+	bool subtree = false;
+	// reason over a supertree, contains leaves that are property results of a subtree
+	bool supertree = false;
 };
 
 #endif

@@ -479,6 +479,55 @@ Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 	// load honest histories automatically
 	honest = document["honest_histories"];
 
+	// load honest utilities
+	for (auto utility_dict : document["honest_utilities"]) {
+
+		// terrible code for now, @Ivana: please clean up
+
+		// (player, utility) pairs
+		using PlayerUtility = std::pair<std::string, Utility>;
+		std::vector<PlayerUtility> player_utilities;
+		for (const json &utility: utility_dict["utility"]) {
+			const json &value = utility["value"];
+			// parse a utility expression
+			if (value.is_string()) {
+				const std::string &string = value;
+				player_utilities.push_back({
+												   utility["player"],
+												   parser.parse_utility(string.c_str())
+										   });
+			}
+				// numeric utility, assumed real
+			else if (value.is_number_unsigned()) {
+				unsigned number = value;
+				player_utilities.push_back({
+												   utility["player"],
+												   {z3::Real::value(number), z3::Real::ZERO}
+										   });
+			}
+				// foreign object, bail
+			else {
+				std::cerr << "checkmate: unsupported utility value " << value << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+		}
+
+		// sort (player, utility) pairs alphabetically by player
+		sort(
+				player_utilities.begin(),
+				player_utilities.end(),
+				[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
+		);
+
+		std::vector<Utility> leaf;
+		for (auto &player_utility: player_utilities) {
+			leaf.push_back(player_utility.second);
+		}
+
+		honest_utilities.push_back(UtilityTuple(leaf));
+	}
+
+
 	// load real/infinitesimal identifiers
 	for (const json &real: document["constants"]) {
 		const std::string &name = real;

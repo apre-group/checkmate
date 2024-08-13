@@ -1801,7 +1801,199 @@ void property(const Options &options, const Input &input, PropertyType property,
 	
 }
 
+
+// CONTINUE HERE
+void property_subtree(const Options &options, const Input &input, PropertyType property, size_t history) {
+	std::cout << "just a dummy fct so far, work in progress" << std::endl;
+	return;
+}
+
+void property_subtree_utility(const Options &options, const Input &input, PropertyType property, std::vector<Utility> honest_utility) {
+	std::cout << "just a dummy fct so far, work in progress" << std::endl;
+	return;
+}
+
+void property_subtree_nohistory(const Options &options, const Input &input, PropertyType property) {
+	std::cout << "just a dummy fct so far, work in progress" << std::endl;
+	return;
+}
+
 void analyse_properties(const Options &options, const Input &input) {
+
+
+	assert(input.honest_utilities.size()==0);
+
+	/* iterate over all honest histories and check the properties for each of them */
+	for (size_t history = 0; history < input.honest.size(); history++) { 
+
+		std::cout << std::endl;
+		std::cout << std::endl;
+		std::cout << "Checking history " << input.honest[history] << std::endl; 
+
+		input.root->reset_honest();
+		input.root->mark_honest(input.honest[history]);
+
+		if(options.strategies) {
+			input.root->reset_violation_cr();
+		}
+
+		std::vector<bool> property_chosen = {options.weak_immunity, options.weaker_immunity, options.collusion_resilience, options.practicality};
+		std::vector<PropertyType> property_types = {PropertyType::WeakImmunity, PropertyType::WeakerImmunity, PropertyType::CollusionResilience, PropertyType::Practicality};
+
+		assert(property_chosen.size() == property_types.size());
+
+		for (size_t i=0; i<property_chosen.size(); i++) {
+			if(property_chosen[i]) {
+				input.reset_counterexamples();
+				input.root.get()->reset_counterexample_choices();
+				input.reset_logging();
+				input.reset_unsat_cases();
+				input.root->reset_reason();
+				input.root->reset_strategy();
+				input.reset_strategies(); 
+				input.root->reset_problematic_group(i==2); 
+				input.reset_reset_point();
+				property(options, input, property_types[i], history);
+			}
+		}
+	}
+}
+
+
+void analyse_properties_subtree(const Options &options, const Input &input) {
+	// analysis for a subtree:
+	// i.e. we might be along the honest history or not
+	// if we are not along honest, we need the honest utility as comparison value (for collusion resilience)--> probably an input parameter
+
+	// in any case we want to return...
+	//     ...for w(er)i: for which players the subtree is w(er)i
+	//     ...for cr: against which groups of players the subtree is cr
+	//     ...for pr: all practical utilities
+
+
+	// input needs: honest utility vector (std::vector<UtilityTuple>)
+
+	/* iterate over all honest histories and check the properties for each of them */
+	for (size_t history = 0; history < input.honest.size(); history++) { 
+
+		std::cout << std::endl;
+		std::cout << std::endl;
+		std::cout << "Checking history " << input.honest[history] << std::endl; 
+
+		input.root->reset_honest();
+		input.root->mark_honest(input.honest[history]);
+
+		if(options.strategies) {
+			input.root->reset_violation_cr();
+		}
+
+		std::vector<bool> property_chosen = {options.weak_immunity, options.weaker_immunity, options.collusion_resilience, options.practicality};
+		std::vector<PropertyType> property_types = {PropertyType::WeakImmunity, PropertyType::WeakerImmunity, PropertyType::CollusionResilience, PropertyType::Practicality};
+
+		assert(property_chosen.size() == property_types.size());
+
+		for (size_t i=0; i<property_chosen.size(); i++) {
+			if(property_chosen[i]) {
+				input.reset_counterexamples();
+				input.root.get()->reset_counterexample_choices();
+				input.reset_logging();
+				input.reset_unsat_cases();
+				input.root->reset_reason();
+				input.root->reset_strategy();
+				input.reset_strategies(); 
+				input.root->reset_problematic_group(i==2); 
+				input.reset_reset_point();
+				property_subtree(options, input, property_types[i], history);
+			}
+		}
+	}
+
+	// iterate over all honest utilities (only for cr) and check the properties for each of them 
+	// compute w(er)i and pr results
+	if (input.honest_utilities.size()>0) {
+		
+		std::cout << std::endl;
+		std::cout << std::endl;
+		std::cout << "Checking no honest history " << std::endl; 
+
+		input.root->reset_honest();
+
+		// possibly comment out
+		if(options.strategies) {
+			input.root->reset_violation_cr();
+		}
+
+		// cr handled below
+		std::vector<bool> property_chosen = {options.weak_immunity, options.weaker_immunity, options.practicality};
+		std::vector<PropertyType> property_types = {PropertyType::WeakImmunity, PropertyType::WeakerImmunity, PropertyType::Practicality};
+
+		assert(property_chosen.size() == property_types.size());
+
+		for (size_t i=0; i<property_chosen.size(); i++) {
+			if(property_chosen[i]) {
+				input.reset_counterexamples();
+				input.root.get()->reset_counterexample_choices();
+				input.reset_logging();
+				input.reset_unsat_cases();
+				input.root->reset_reason();
+				input.root->reset_strategy();
+				input.reset_strategies(); 
+				input.reset_reset_point();
+				property_subtree_nohistory(options, input, property_types[i]);
+			}
+		}
+
+
+
+
+		// for cr iterate over all honest utilities
+		for (size_t utility = 0; utility < input.honest_utilities.size(); utility++) { 
+
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Checking utility " << input.honest_utilities[utility].leaf << std::endl; 
+
+			input.root->reset_honest();
+
+			// possible comment out?
+			if(options.strategies) {
+				input.root->reset_violation_cr();
+			}
+
+
+			if(options.collusion_resilience) {
+				input.reset_counterexamples();
+				input.root.get()->reset_counterexample_choices();
+				input.reset_logging();
+				input.reset_unsat_cases();
+				input.root->reset_reason();
+				input.root->reset_strategy();
+				input.reset_strategies(); 
+				input.root->reset_problematic_group(true); 
+				input.reset_reset_point();
+				property_subtree_utility(options, input, PropertyType::CollusionResilience, input.honest_utilities[utility].leaf);
+			}
+			
+		}
+		
+	}
+
+
+	
+
+
+
+}
+
+
+
+// ATTENTION NOT YET IMPLEMENTED, SO FAR SAME AS analyse_properties
+void analyse_properties_supertree(const Options &options, const Input &input) {
+	
+	std::cout << "just a dummy fct so far, work in progress" << std::endl;
+	assert(input.honest_utilities.size()==0);
+
+
 	/* iterate over all honest histories and check the properties for each of them */
 	for (size_t history = 0; history < input.honest.size(); history++) { 
 

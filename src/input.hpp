@@ -611,6 +611,8 @@ struct Input {
 	std::vector<std::string> players;
 	// list of honest histories
 	std::vector<std::vector<std::string>> honest;
+	// list of honest utilities - for the subtree option
+	std::vector<UtilityTuple> honest_utilities;
 
 	// a real or infinitesimal utility for each string
 	std::unordered_map<std::string, Utility> utilities;
