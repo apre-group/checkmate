@@ -420,49 +420,167 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 	bool result = true;
 
-	for (const Choice &choice: branch.choices) {
+	// tried to optimize but failed
+	// z3::Bool reason;
+	// bool is_unsat = false;
+
+
+	// for (const Choice &choice: branch.choices) {
 		 
-		//UtilityTuplesSet utilities = practicality_rec_old(input, solver, choice.node.get());
+	// 	// this child has no practical strategy (propagate reason for case split, if any) 
+	// 	std::vector<std::string> updated_actions;
+	// 	updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
+	// 	updated_actions.push_back(choice.action);
 
-		// this child has no practical strategy (propagate reason for case split, if any) 
-		std::vector<std::string> updated_actions;
-		updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
-		updated_actions.push_back(choice.action);
-		if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions)) {
-			if (result) {
-				branch.reason = choice.node->reason;
-				input.set_reset_point(branch);
+	// 	if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions)) {
+	// 		if (result) {
+	// 			// branch.reason = choice.node->reason;
+	// 			reason = choice.node->reason;
+	// 			//input.set_reset_point(branch);
+	// 		}
+
+	// 		result = false;
+		
+	// 		if (choice.node->reason.null()){
+	// 			is_unsat = true;
+	// 			if (!options.all_counterexamples){
+	// 				return result;
+	// 			}
+	// 		}
+
+	// 		// had to be moved out of loop 
+	// 		// if(!options.all_counterexamples || !branch.reason.null()) {
+	// 		// 	return result;
+	// 		// }
+	// 	}
+
+	// 	// the part below can stay
+	// 	if(choice.node->honest) {
+	// 		honest_utilities = choice.node->get_utilities();
+	// 		honest_choice = choice.action;
+	// 		branch.strategy = choice.action; // choose the honest action along the honest history
+	// 		honest_index = i;
+	// 	} else {
+	// 		// make sure we only have 0 practical utilities in case we are computing all counterexamples
+	// 		// and we already have a counterexample, and hence result must be false
+	// 		if (choice.node->get_utilities().size()==0){
+	// 			assert(!result);
+	// 			assert(options.all_counterexamples);
+	// 			assert(input.counterexamples.size()>0);
+	// 		}
+	// 		// std::cout << "current child has " << choice.node->get_utilities().size() << " many practical histories" << std::endl;
+	// 		// std::cout << actions_so_far << std::endl;
+	// 		// std::cout << choice.action << std::endl;
+	// 		children.push_back(choice.node->get_utilities());
+	// 		children_actions.push_back(choice.action);
+	// 	}
+	// 	i++;
+	// }
+
+	// // we could not find an immediate unsat child, hence we need to case split if result is false;
+	// // hence set reason and reset point accordingly
+	// // we are in this case if we either need a case split, or  are sat or compute all counterexamples
+	// if (!result && !is_unsat) {
+	// 	branch.reason = reason;
+	// 	assert(!branch.reason.null());
+	// 	input.set_reset_point(branch);
+	// }
+	// if (!result){
+	// 	if(!options.all_counterexamples || !branch.reason.null()) {
+	// 		return result;
+	// 	}
+	// }
+
+
+
+	// check honest branch first
+	for (const Choice &choice: branch.choices) {
+		if (choice.node->honest) {
+			std::vector<std::string> updated_actions;
+			updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
+			updated_actions.push_back(choice.action);
+			if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions)) {
+				if (result) {
+					branch.reason = choice.node->reason;
+					input.set_reset_point(branch);
+				}
+
+				result = false;
+
+				if(!options.all_counterexamples || !branch.reason.null()) {
+					return result;
+				}
 			}
-			// return empty set
 
-			result = false;
-
-			if(!options.all_counterexamples || !branch.reason.null()) {
-				return result;
-			}
-		}
-
-		if(choice.node->honest) {
-			honest_utilities = choice.node->get_utilities();
-			honest_choice = choice.action;
-			branch.strategy = choice.action; // choose the honest action along the honest history
-			honest_index = i;
-		} else {
-			// make sure we only have 0 practical utilities in case we are computing all counterexamples
-			// and we already have a counterexample, and hence result must be false
-			if (choice.node->get_utilities().size()==0){
-				assert(!result);
-				assert(options.all_counterexamples);
-				assert(input.counterexamples.size()>0);
-			}
-			// std::cout << "current child has " << choice.node->get_utilities().size() << " many practical histories" << std::endl;
-			// std::cout << actions_so_far << std::endl;
-			// std::cout << choice.action << std::endl;
-			children.push_back(choice.node->get_utilities());
-			children_actions.push_back(choice.action);
+			// if(choice.node->honest) {
+				honest_utilities = choice.node->get_utilities();
+				honest_choice = choice.action;
+				branch.strategy = choice.action; // choose the honest action along the honest history
+				honest_index = i;
+			//} else {
+			// 	// make sure we only have 0 practical utilities in case we are computing all counterexamples
+			// 	// and we already have a counterexample, and hence result must be false
+			// 	if (choice.node->get_utilities().size()==0){
+			// 		assert(!result);
+			// 		assert(options.all_counterexamples);
+			// 		assert(input.counterexamples.size()>0);
+			// 	}
+			// 	// std::cout << "current child has " << choice.node->get_utilities().size() << " many practical histories" << std::endl;
+			// 	// std::cout << actions_so_far << std::endl;
+			// 	// std::cout << choice.action << std::endl;
+			// 	children.push_back(choice.node->get_utilities());
+			// 	children_actions.push_back(choice.action);
+			// }
+			break;
 		}
 		i++;
 	}
+
+	for (const Choice &choice: branch.choices) {
+		if (!choice.node->honest) {
+			//UtilityTuplesSet utilities = practicality_rec_old(input, solver, choice.node.get());
+
+			// this child has no practical strategy (propagate reason for case split, if any) 
+			std::vector<std::string> updated_actions;
+			updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
+			updated_actions.push_back(choice.action);
+			if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions)) {
+				if (result) {
+					branch.reason = choice.node->reason;
+					input.set_reset_point(branch);
+				}
+
+				result = false;
+
+				if(!options.all_counterexamples || !branch.reason.null()) {
+					return result;
+				}
+			}
+
+			// if(choice.node->honest) {
+			// 	honest_utilities = choice.node->get_utilities();
+			// 	honest_choice = choice.action;
+			// 	branch.strategy = choice.action; // choose the honest action along the honest history
+			// 	honest_index = i;
+			// } else {
+				// make sure we only have 0 practical utilities in case we are computing all counterexamples
+				// and we already have a counterexample, and hence result must be false
+				if (choice.node->get_utilities().size()==0){
+					assert(!result);
+					assert(options.all_counterexamples);
+					assert(input.counterexamples.size()>0);
+				}
+				// std::cout << "current child has " << choice.node->get_utilities().size() << " many practical histories" << std::endl;
+				// std::cout << actions_so_far << std::endl;
+				// std::cout << choice.action << std::endl;
+				children.push_back(choice.node->get_utilities());
+				children_actions.push_back(choice.action);
+			// }
+		}
+		// i++;
+	}
+
+
 
 
 	if (branch.honest) {
@@ -543,8 +661,6 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					// for (const auto &ut : utilities){
 					// 	std::cout << ut.strategy_vector << std::endl;
 					// }
-					
-					
 					input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, deviating_action, utilities));
 				}
 
