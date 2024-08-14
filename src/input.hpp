@@ -16,6 +16,18 @@ struct Branch;
 struct Choice;
 struct Node;
 
+// struct SubtreeResult {
+// 	std::vector<std::string> players;
+// 	bool property_sat;
+// 	std::vector<std::vector<Utility>> pr_utilities;
+
+// 	SubtreeResult(std::vector<std::string> _players, bool _property_sat, std::vector<std::vector<Utility>> _pr_utilities = {}) {
+// 		players = _players;
+// 		property_sat = property_sat;
+// 		pr_utilities = _pr_utilities;
+// 	}
+// };
+
 // reference to a utility tuple in a leaf
 struct UtilityTuple {
 	const std::vector<Utility> &leaf;
