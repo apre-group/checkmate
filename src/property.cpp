@@ -1971,11 +1971,141 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 	return result;
 }
 
-
+// TODO Discuss implementation
 bool property_rec_nohistory(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, unsigned player_nr) {
 	
-	std::cout << "this is a dummy function, about to be implemented" << std::endl;
-	return true;
+	/* 
+		only called for w(er)i and practicality
+		actual case splitting engine
+		determine if the input has some property for the current honest history, splitting recursively
+	*/
+
+	assert(property != PropertyType::CollusionResilience);
+
+	// property holds under current split
+	
+	bool property_result;
+	if(property == PropertyType::WeakImmunity) {
+		property_result = weak_immunity_rec(input, solver, options, input.root.get(), player_nr, false, false);
+	} else if (property == PropertyType::WeakerImmunity) {
+		property_result = weak_immunity_rec(input, solver, options, input.root.get(), player_nr, true, false);	
+	} else if (property == PropertyType::Practicality) {
+		property_result = practicality_rec_old(input, options, solver, input.root.get(),{});
+	}
+
+	if (property_result) {
+		if (!input.stop_log){
+			std::cout << "\tProperty satisfied for case: " << current_case << std::endl; 
+		}
+		// if strategies, add a "potential case" to keep track of all strategies
+		// if (options.strategies){
+		// 	input.compute_strategy_case(current_case, property);
+
+		// 	if(options.all_cases && property == PropertyType::CollusionResilience) {
+		// 		input.root->reset_violation_cr();
+		// 	}
+		// }
+		return true;
+	}
+
+	// otherwise consider case split
+	z3::Bool split = input.root->reason;
+	// there is no case split
+	if (split.null()) {
+		if (!input.stop_log){
+			std::cout << "\tProperty violated in case: " << current_case << std::endl;
+		}
+		// if (options.preconditions){
+		// 	input.add_unsat_case(current_case);
+		// 	input.stop_logging();
+		// }
+		// if (options.counterexamples){
+		// 	input.add_case2ce(current_case);
+		// }
+
+		// if(options.all_cases && options.strategies && property == PropertyType::CollusionResilience) {
+		// 	input.root->reset_violation_cr();
+		// }
+
+		return false;
+	}
+	if (!input.stop_log){
+		std::cout << "\tSplitting on: " << split << std::endl;
+	}
+
+	// std::vector<std::vector<bool>> violation;
+	// if (property == PropertyType::CollusionResilience && options.strategies){
+	// 	violation = input.root->store_violation_cr();
+	// }
+
+	// std::vector<std::vector<std::string>> ce_storage;
+	// if (options.counterexamples && property != PropertyType::Practicality) {
+	// 	ce_storage = input.root->store_counterexample_choices();
+	// }
+
+	// std::vector<bool> solved_for_storage;
+	// std::vector<uint64_t> problematic_groups;
+	// if (property != PropertyType::Practicality) {
+	// 	solved_for_storage = input.store_solved_for();
+	// 	problematic_groups = input.root->store_problematic_groups();
+	// }
+
+	// std::cout << "problematic group: " << current_next_group << std::endl;
+	auto &current_reset_point = input.reset_point;	
+	
+	bool result = true;
+
+	for (const z3::Bool& condition : {split, split.invert()}) {
+		// reset reason and strategy
+		// ? should be the same point of reset
+		input.root->reset_reason();
+		if(!input.reset_point->is_leaf()) {
+			auto &current_reset_branch = current_reset_point->branch();
+			current_reset_branch.reset_strategy();
+		}
+
+		solver.push();
+
+		solver.assert_(condition);
+		assert (solver.solve() != z3::Result::UNSAT);
+		std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
+		new_current_case.push_back(condition);
+
+
+		bool attempt = property_rec_nohistory(solver, options, input, property, new_current_case, player_nr);
+
+		solver.pop();
+
+		// if (property != PropertyType::Practicality) {
+		// 	// reset the branch.problematic_group for all branches to presplit state, such that the other case split starts at the same point
+		// 	input.root->restore_problematic_groups(problematic_groups);
+		// 	input.restore_solved_for(solved_for_storage);
+
+		// 	if (options.counterexamples){
+		// 		input.root->restore_counterexample_choices(ce_storage);
+		// 	}
+		// }
+
+		// if (property == PropertyType::CollusionResilience && options.strategies){
+		// 	std::vector<std::vector<bool>> violation_copy;
+		// 	violation_copy.insert(violation_copy.end(), violation.begin(), violation.end());
+		// 	input.root->restore_violation_cr(violation_copy);
+		// }
+
+		if (!attempt){
+			// if ((!options.preconditions) && (!options.all_cases)){
+			// 	return false;
+			// }
+			// else {
+			// 	result = false;
+			// 	if (options.preconditions){
+			// 		input.stop_logging();
+			// 	}
+			// }
+			return false;
+		}
+	}
+	return result;
 }
 
 
