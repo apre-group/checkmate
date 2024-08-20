@@ -302,6 +302,7 @@ struct Parser {
 					Utility utility;
 					try {
 						utility = identifiers.at(lexer.buffer);
+
 					}
 					catch (const std::out_of_range &) {
 						std::cerr << "checkmate: undeclared constant " << lexer.buffer << std::endl;
@@ -479,6 +480,19 @@ Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 	// load honest histories automatically
 	honest = document["honest_histories"];
 
+
+	// load real/infinitesimal identifiers
+	for (const json &real: document["constants"]) {
+		const std::string &name = real;
+		auto constant = z3::Real::constant(name);
+		utilities.insert({name, {constant, z3::Real::ZERO}});
+	}
+	for (const json &infinitesimal: document["infinitesimals"]) {
+		const std::string &name = infinitesimal;
+		auto constant = z3::Real::constant(name);
+		utilities.insert({name, {z3::Real::ZERO, constant}});
+	}
+
 	// load honest utilities
 	for (auto utility_dict : document["honest_utilities"]) {
 
@@ -519,26 +533,17 @@ Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 				[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
 		);
 
-		std::vector<Utility> leaf;
+		// leaked on purpose (honest_utilities utilities are also references but do not refer to a leaf in the tree)
+		std::vector<Utility> *leaf = new std::vector<Utility>;
 		for (auto &player_utility: player_utilities) {
-			leaf.push_back(player_utility.second);
+			leaf->push_back(player_utility.second);
 		}
 
-		honest_utilities.push_back(UtilityTuple(leaf));
+		UtilityTuple utilityTuple(*leaf);
+		
+		honest_utilities.push_back(utilityTuple);
 	}
 
-
-	// load real/infinitesimal identifiers
-	for (const json &real: document["constants"]) {
-		const std::string &name = real;
-		auto constant = z3::Real::constant(name);
-		utilities.insert({name, {constant, z3::Real::ZERO}});
-	}
-	for (const json &infinitesimal: document["infinitesimals"]) {
-		const std::string &name = infinitesimal;
-		auto constant = z3::Real::constant(name);
-		utilities.insert({name, {z3::Real::ZERO, constant}});
-	}
 
 	// reusable buffer for constraint conjuncts
 	std::vector<z3::Bool> conjuncts;
@@ -582,6 +587,7 @@ Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 	}
 	practicality_constraint = conjunction(conjuncts);
 
+
 	// load the game tree and leak it so we can downcast to Branch
 	auto node = load_tree(*this, parser, document["tree"]).release();
 	if (node->is_leaf()) {
@@ -590,6 +596,7 @@ Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 	}
 	// un-leaked and downcasted here
 	root = std::unique_ptr<Branch>(static_cast<Branch *>(node));
+
 }
 
 std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const {

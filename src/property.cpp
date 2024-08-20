@@ -1710,7 +1710,8 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 		property_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), group_nr, false);
 	} else {
 		assert(property != PropertyType::Practicality);
-		property_result = weak_immunity_rec(input, solver, options, input.root.get(), group_nr, property == PropertyType::WeakerImmunity, false);
+		assert(group_nr > 0); // set to i+1 in previous fct
+		property_result = weak_immunity_rec(input, solver, options, input.root.get(), group_nr-1, property == PropertyType::WeakerImmunity, false);
 	}
 
 
@@ -2005,7 +2006,8 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 		// 	}
 		// }
 
-		if(property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
+		//if(property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
+		if(property == PropertyType::Practicality) {	
 			UtilityCase utilityCase;
 			utilityCase._case = current_case;
 			for(auto practical_utility : input.root.get()->practical_utilities) {
@@ -2303,7 +2305,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 	} else {
 
 		//uint64_t next_group = property == PropertyType::CollusionResilience ? 1 : 0;
-		size_t number_groups = property == PropertyType::CollusionResilience ? pow(2,input.players.size())-1 : input.players.size();
+		size_t number_groups = property == PropertyType::CollusionResilience ? pow(2,input.players.size())-2 : input.players.size();
 
 		std::string output_text = property == PropertyType::CollusionResilience ? " against group " : " for player ";
 
@@ -2311,8 +2313,8 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 		for (unsigned i = 0; i < number_groups; i++){
 			input.reset_reset_point();
 			input.root.get()->reset_reason();
-			std::vector<std::string> players = index2player(input, i); 
-			if (property_rec_subtree(solver, options, input, property, std::vector<z3::Bool>(), history, i)){
+			std::vector<std::string> players = index2player(input, i+1); 
+			if (property_rec_subtree(solver, options, input, property, std::vector<z3::Bool>(), history, i+1)){
 				std::cout << "YES, it is " << prop_name << output_text << players << "."  << std::endl;
 			} else { 
 				std::cout << "NO, it is not " << prop_name << output_text << players << "." << std::endl;
@@ -2377,14 +2379,14 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 
 	assert(solver.solve() == z3::Result::SAT);
 
-	size_t number_groups = pow(2,input.players.size())-1;
+	size_t number_groups = pow(2,input.players.size())-2;
 
 
 	for (unsigned i = 0; i < number_groups; i++){
 		input.reset_reset_point();
 		input.root.get()->reset_reason();
-		std::vector<std::string> players = index2player(input, i);
-		if (property_rec_utility(solver, options, input, property, std::vector<z3::Bool>(), honest_utility, i)){
+		std::vector<std::string> players = index2player(input, i+1);
+		if (property_rec_utility(solver, options, input, property, std::vector<z3::Bool>(), honest_utility, i+1)){
 			std::cout << "YES, it is collusion resilient against group " <<  players << "."  << std::endl;
 		} else { 
 			std::cout << "NO, it is not  collusion resilient against group " << players << "." << std::endl;
@@ -2488,12 +2490,14 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 	} else {
 		size_t number_groups = input.players.size();
 
+		std::cout << "Is this subtree " << prop_name << "?" << std::endl;
 		for (unsigned i = 0; i < number_groups; i++){
 			input.reset_reset_point();
 			input.root.get()->reset_reason();
-			std::vector<std::string> players = index2player(input, i);
+			std::vector<std::string> players = index2player(input, i+1);
+			// i+1 in index2player while i in property_rec_nohistory is on purpose
 			if (property_rec_nohistory(solver, options, input, property, std::vector<z3::Bool>(), i)){
-				std::cout << "YES, it is" << prop_name << " for player " <<  players << "."  << std::endl;
+				std::cout << "YES, it is " << prop_name << " for player " <<  players << "."  << std::endl;
 			} else { 
 				std::cout << "NO, it is not " << prop_name << " for player " << players << "." << std::endl;
 			}
@@ -2603,6 +2607,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 		input.root->reset_honest();
 		input.root->mark_honest(input.honest[history]);
+		input.root->reset_practical_utilities();
 
 		if(options.strategies) {
 			input.root->reset_violation_cr();
@@ -2638,6 +2643,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		std::cout << "Checking no honest history " << std::endl; 
 
 		input.root->reset_honest();
+		input.root->reset_practical_utilities();
 
 		// possibly comment out
 		if(options.strategies) {
@@ -2668,7 +2674,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 
 		// for cr iterate over all honest utilities
-		for (size_t utility = 0; utility < input.honest_utilities.size(); utility++) { 
+		for (unsigned utility = 0; utility < input.honest_utilities.size(); utility++) { 
 
 			std::cout << std::endl;
 			std::cout << std::endl;
