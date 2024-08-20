@@ -90,6 +90,11 @@ struct CeCase {
 	std::vector<CeChoice> counterexample; 
 };
 
+struct UtilityCase {
+	std::vector<z3::Bool> _case;
+	std::vector<std::vector<Utility>> utilities; 
+};
+
 // TODO: make find() work for vector<z3::Bool> instead of using this function
 inline bool case_found (z3::Bool _case_to_find, const std::vector<z3::Bool> _case) {
 	std::equal_to<z3::Bool> eq1;
@@ -651,6 +656,8 @@ struct Input {
 	mutable Node *reset_point;
 
 	mutable std::vector<bool> solved_for_group;
+
+	mutable std::vector<UtilityCase> utilities_pr_nohistory;
 
 	// root: NB must be a branch
 	std::unique_ptr<Branch> root;

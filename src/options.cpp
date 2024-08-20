@@ -14,6 +14,8 @@ const char *USAGE = R"(usage: checkmate PATH
 	--all_cases
 	--preconditions
 	--strategies
+	--subtree
+	--supertree
 )";
 
 // print a message, the usage information and exit with failure code

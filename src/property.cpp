@@ -389,7 +389,7 @@ bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
 
 }
 
-bool practicality_rec_old(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far) {
+bool practicality_rec_old(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far, bool consider_prob_groups) {
 	// if (node->is_leaf()) {
 	// 	// return the utility tuple of the leaf as a set (of one element)
 	// 	const Leaf &leaf = node->leaf();
@@ -404,7 +404,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 	// else we deal with a branch
  	const auto &branch = node->branch();
 
-	if  (branch.problematic_group == 1){
+	if  (branch.problematic_group == 1 && consider_prob_groups){
 		// std::cout << "already solved" << std::endl;
 		return true;
 	}	
@@ -432,7 +432,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 	// 	updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
 	// 	updated_actions.push_back(choice.action);
 
-	// 	if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions)) {
+	// 	if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions, consider_prob_groups)) {
 	// 		if (result) {
 	// 			// branch.reason = choice.node->reason;
 	// 			reason = choice.node->reason;
@@ -499,7 +499,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			std::vector<std::string> updated_actions;
 			updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
 			updated_actions.push_back(choice.action);
-			if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions)) {
+			if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions, consider_prob_groups)) {
 				if (result) {
 					branch.reason = choice.node->reason;
 					input.set_reset_point(branch);
@@ -544,7 +544,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			std::vector<std::string> updated_actions;
 			updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
 			updated_actions.push_back(choice.action);
-			if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions)) {
+			if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions, consider_prob_groups)) {
 				if (result) {
 					branch.reason = choice.node->reason;
 					input.set_reset_point(branch);
@@ -1550,7 +1550,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 	}
 
 	else if (property == PropertyType::Practicality) {
-		return practicality_rec_old(input, options, solver, input.root.get(), {});
+		return practicality_rec_old(input, options, solver, input.root.get(), {}, true);
 	}
 	
  
@@ -1971,7 +1971,6 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 	return result;
 }
 
-// TODO Discuss implementation
 bool property_rec_nohistory(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, unsigned player_nr) {
 	
 	/* 
@@ -1990,7 +1989,7 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 	} else if (property == PropertyType::WeakerImmunity) {
 		property_result = weak_immunity_rec(input, solver, options, input.root.get(), player_nr, true, false);	
 	} else if (property == PropertyType::Practicality) {
-		property_result = practicality_rec_old(input, options, solver, input.root.get(),{});
+		property_result = practicality_rec_old(input, options, solver, input.root.get(),{}, false);
 	}
 
 	if (property_result) {
@@ -2005,6 +2004,17 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 		// 		input.root->reset_violation_cr();
 		// 	}
 		// }
+
+		if(property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
+			UtilityCase utilityCase;
+			utilityCase._case = current_case;
+			for(auto practical_utility : input.root.get()->practical_utilities) {
+				utilityCase.utilities.push_back(practical_utility.leaf);
+			}
+			
+			input.utilities_pr_nohistory.push_back(utilityCase);
+		}
+
 		return true;
 	}
 
@@ -2420,7 +2430,6 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 	return;
 }
 
-// CONTINUE HERE
 void property_subtree_nohistory(const Options &options, const Input &input, PropertyType property) {
 	
 	assert(property != PropertyType::CollusionResilience);
@@ -2454,14 +2463,28 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 	assert(solver.solve() == z3::Result::SAT);
 
 
-	// CONTINUE HERE
 	if (property == PropertyType::Practicality){
 		std::cout << "What are the subtree's practical utilities?" << std::endl;
 		bool pr_result = property_rec_nohistory(solver, options, input, property, std::vector<z3::Bool>(), 0);
 
+		assert(pr_result);
+
 		assert(input.root.get()->practical_utilities.size()>0);
 		// ATTENTION THINK ABOUT HOW LATER (IN SUPERTREE) CASE SPLITS MAY IMPACT THE RESULT
-		std::cout << "print utilities" << std::endl;
+		// we need to print the corresponding utilities for each case
+		// kind of "all cases" for practicality_subtree
+		// since in property_rec_nohistory we are not along honest, we consider all cases implicitely
+		// it suffices to have a new data structure where we store <case, utulities> information and print them below
+		//std::cout << "print utilities" << std::endl;
+
+		for(auto &utilityCase : input.utilities_pr_nohistory) {
+			std::cout << "Case: " << utilityCase._case << std::endl;
+			for(auto utility : utilityCase.utilities) {
+				std::cout << "\t" << utility << std::endl;
+			}
+		}
+
+
 	} else {
 		size_t number_groups = input.players.size();
 
@@ -2675,10 +2698,6 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		}
 		
 	}
-
-
-	
-
 
 
 }

@@ -21,5 +21,6 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 
 bool practicality_admin(z3::Solver *solver, const Options &options, Node *root, std::vector<z3::Bool> current_case);
 
+std::vector<std::string> index2player(const Input &input, unsigned index);
 
 #endif
