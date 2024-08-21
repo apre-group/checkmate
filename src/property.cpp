@@ -1778,6 +1778,7 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 
 	bool result = true;
 
+	// both cr and w(er)i need all cases for soundness
 	for (const z3::Bool& condition : {split, split.invert()}) {
 		// reset reason and strategy
 		// ? should be the same point of reset
@@ -1825,7 +1826,7 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 			// 		input.stop_logging();
 			// 	}
 			// }
-			return false;
+			result = false;
 		}
 	}
 	return result;
@@ -1966,7 +1967,7 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 			// 		input.stop_logging();
 			// 	}
 			// }
-			return false;
+			result = false;
 		}
 	}
 	return result;
@@ -2114,7 +2115,7 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 			// 		input.stop_logging();
 			// 	}
 			// }
-			return false;
+			result = false;
 		}
 	}
 	return result;
