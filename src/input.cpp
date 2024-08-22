@@ -74,7 +74,7 @@ struct Lexer {
 		// a variable name
 		if (std::isalpha(*remaining)) {
 			buffer.push_back(*remaining++);
-			while (std::isalnum(*remaining) || *remaining == '_')
+			while (std::isalnum(*remaining) || *remaining == '_' || *remaining == '@' || *remaining == '[' || *remaining == ']' || *remaining == ':' || *remaining == ';')
 				buffer.push_back(*remaining++);
 			unary = false;
 			return Token::IDENTIFIER;

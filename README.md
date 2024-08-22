@@ -110,3 +110,6 @@ Automating Proofs of Game-Theoretic Security Properties of Off-Chain Protocols (
 
 [[4]](https://dl.acm.org/doi/10.1145/3576915.3623183) Lea Salome Brugger, Laura Kovács, Anja Petković Komel, Sophie Rain, Michael Rawson.
 CheckMate: Automated Game-Theoretic Security Reasoning (CCS 2023).
+
+[[5]](https://easychair.org/publications/paper/6ZDH) Sophie Rain, Lea Salome Brugger, Anja Petković Komel, Laura Kovács and Michael Rawson
+Scaling CheckMate for Game-Theoretic Security (LPAR 2024).
