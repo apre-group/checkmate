@@ -33,6 +33,12 @@ struct UtilityTuple {
 	const std::vector<Utility> &leaf;
 	mutable std::vector<std::string> strategy_vector;
 
+	// Anja's compiler doesn't want to generate this because leaf is a reference
+	// Therefore: delegate to copy constructor via placement-new
+	UtilityTuple &operator=(const UtilityTuple &other) {
+		::new (this) UtilityTuple(other);
+		return *this;
+	}
 
 
 	UtilityTuple(decltype(leaf) leaf) : leaf(leaf), strategy_vector() {}

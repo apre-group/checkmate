@@ -474,7 +474,7 @@ Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 
 	// load list of players and sort alphabetically
 	for (const json &player: document["players"])
-		players.push_back({player});
+		players.push_back(std::string(player));
 	sort(players.begin(), players.end());
 
 	// load honest histories automatically
