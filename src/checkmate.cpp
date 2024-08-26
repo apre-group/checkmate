@@ -4,7 +4,7 @@
 
 int main(int, char **argv) {
 	Options options(argv);
-	Input input(options.input_path);
+	Input input(options.input_path, options.supertree);
 
 	if (options.subtree){
 		analyse_properties_subtree(options, input);

@@ -382,7 +382,7 @@ using json = nlohmann::json;
  * TODO does not check all aspects
  * (hoping to have new input format based on s-expressions, which would be much easier to parse)
  */
-static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const json &node) {
+static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const json &node, bool supertree) {
 	// branch
 	if (node.contains("children")) {
 		// do linear-time lookup for the index of the node's player in the input player list
@@ -395,13 +395,13 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 
 		std::unique_ptr<Branch> branch(new Branch(player));
 		for (const json &child: node["children"]) {
-			auto loaded = load_tree(input, parser, child["child"]);
+			auto loaded = load_tree(input, parser, child["child"], supertree);
 			branch->choices.push_back({child["action"], std::move(loaded)});
 		}
 		return branch;
 	}
 
-	// leaf
+	// leaf - usual
 	if (node.contains("utility")) {
 		// (player, utility) pairs
 		using PlayerUtility = std::pair<std::string, Utility>;
@@ -444,12 +444,164 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 		return leaf;
 	}
 
+	// leaf - subtree summary
+	if (node.contains("subtree")) {
+
+		if (!supertree) {
+			// subtree nodes can only occur in supertree mode!
+			std::cerr << "checkmate: unexpected subtree node; call in --supertree mode " << node << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		std::vector<SubtreeResult> weak_immunity = {};
+		std::vector<SubtreeResult> weaker_immunity = {};
+		std::vector<SubtreeResult> collusion_resilience = {};
+		std::vector<PracticalitySubtreeResult> practicality = {};
+
+
+		if (node["subtree"].contains("weak_immunity")){
+			for (const json &wi: node["subtree"]["weak_immunity"]) {
+				const json &players_json = wi["player_group"];
+				std::vector<std::string> player_group = {};
+				for (const auto player : players_json){
+					if (player.is_string()){
+						player_group.push_back(player);
+					} else {
+						std::cerr << "checkmate: unsupported player value " << player << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
+				}
+				std::vector<z3::Bool> satisfied_in_case = {};
+
+				const json &cases = wi["satisfied_in_case"];
+				for (const json &json_case: cases) {
+					const std::string &_case = json_case;
+					satisfied_in_case.push_back(parser.parse_constraint(_case.c_str()));
+				}
+
+				SubtreeResult wi_result(player_group, satisfied_in_case);
+				weak_immunity.push_back(wi_result);
+			}
+		}
+
+		if (node["subtree"].contains("weaker_immunity")){
+			for (const json &weri: node["subtree"]["weaker_immunity"]) {
+				const json &players_json = weri["player_group"];
+				std::vector<std::string> player_group = {};
+				for (const auto player : players_json){
+					if (player.is_string()){
+						player_group.push_back(player);
+					} else {
+						std::cerr << "checkmate: unsupported player value " << player << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
+				}
+				std::vector<z3::Bool> satisfied_in_case = {};
+
+				const json &cases = weri["satisfied_in_case"];
+				for (const json &json_case: cases) {
+					const std::string &_case = json_case;
+					satisfied_in_case.push_back(parser.parse_constraint(_case.c_str()));
+				}
+
+				SubtreeResult weri_result(player_group, satisfied_in_case);
+				weaker_immunity.push_back(weri_result);
+			}
+		}
+
+		if (node["subtree"].contains("collusion_resilience")){
+			for (const json &cr: node["subtree"]["collusion_resilience"]) {
+				const json &players_json = cr["player_group"];
+				std::vector<std::string> player_group = {};
+				for (const auto player : players_json){
+					if (player.is_string()){
+						player_group.push_back(player);
+					} else {
+						std::cerr << "checkmate: unsupported player value " << player << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
+				}
+				std::vector<z3::Bool> satisfied_in_case = {};
+
+				const json &cases = cr["satisfied_in_case"];
+				for (const json &json_case: cases) {
+					const std::string &_case = json_case;
+					satisfied_in_case.push_back(parser.parse_constraint(_case.c_str()));
+				}
+
+				SubtreeResult cr_result(player_group, satisfied_in_case);
+				collusion_resilience.push_back(cr_result);
+			}
+		}
+
+		if (node["subtree"].contains("practicality")) {
+			for (const json &pr: node["subtree"]["practicality"]) {
+				const std::string &_case = pr["case"];
+				z3::Bool pr_case = parser.parse_constraint(_case.c_str());
+				std::vector<std::vector<Utility>> utilities = {};
+
+				for (const json& utility_tuple: pr["utilities"]) {
+
+					using PlayerUtility = std::pair<std::string, Utility>;
+					std::vector<PlayerUtility> player_utilities;
+					for (const json &utility: utility_tuple) {
+						const json &value = utility["value"];
+						// parse a utility expression
+						if (value.is_string()) {
+							const std::string &string = value;
+							player_utilities.push_back({
+															utility["player"],
+															parser.parse_utility(string.c_str())
+													});
+						}
+							// numeric utility, assumed real
+						else if (value.is_number_unsigned()) {
+							unsigned number = value;
+							player_utilities.push_back({
+															utility["player"],
+															{z3::Real::value(number), z3::Real::ZERO}
+													});
+						}
+							// foreign object, bail
+						else {
+							std::cerr << "checkmate: unsupported utility value " << value << std::endl;
+							std::exit(EXIT_FAILURE);
+						}
+					}
+
+					// sort (player, utility) pairs alphabetically by player
+					sort(
+							player_utilities.begin(),
+							player_utilities.end(),
+							[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
+					);
+
+					std::vector<Utility> pr_utility = {};
+					for (auto &player_utility: player_utilities)
+						pr_utility.push_back(player_utility.second);
+
+					utilities.push_back(pr_utility);
+				}
+
+				PracticalitySubtreeResult pr_sub_result(pr_case, utilities);
+
+				practicality.push_back(pr_sub_result);
+			}
+		}
+
+		std::unique_ptr<Subtree> subtree(new Subtree(weak_immunity, weaker_immunity, collusion_resilience, practicality));
+
+		return subtree;
+	}
+
 	// foreign object, bail
 	std::cerr << "checkmate: unexpected object in tree position " << node << std::endl;
 	std::exit(EXIT_FAILURE);
 }
 
-Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
+
+
+Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , stop_log(false) {
 	// parse a JSON document from `path`
 	std::ifstream input(path);
 	json document;
@@ -589,7 +741,7 @@ Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 
 
 	// load the game tree and leak it so we can downcast to Branch
-	auto node = load_tree(*this, parser, document["tree"]).release();
+	auto node = load_tree(*this, parser, document["tree"], supertree).release();
 	if (node->is_leaf()) {
 		std::cerr << "checkmate: root node is a leaf (?!) - exiting" << std::endl;
 		std::exit(EXIT_FAILURE);

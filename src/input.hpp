@@ -12,6 +12,7 @@
 
 // forward declarations for Node methods
 struct Leaf;
+struct Subtree;
 struct Branch;
 struct Choice;
 struct Node;
@@ -147,8 +148,11 @@ struct Node {
 	// is this a leaf?
 	virtual bool is_leaf() const = 0;
 
-	// if is_leaf(), do the downcast
+	// if is_leaf() and !is_subtree(), do the downcast
 	const Leaf &leaf() const;
+
+	// if is_leaf() and is_subtree(), do the downcast
+	const Subtree &subtree() const;
 
 	// if !is_leaf(), do the downcast
 	const Branch &branch() const;
@@ -210,9 +214,65 @@ struct Choice {
 	}
 };
 
+struct SubtreeResult {
+	const std::vector<std::string> player_group;
+	const std::vector<z3::Bool> satisfied_in_case;
+
+	SubtreeResult(std::vector<std::string> player_group, std::vector<z3::Bool> satisfied_in_case) :
+		player_group(player_group), satisfied_in_case(satisfied_in_case) {}
+};
+
+struct PracticalitySubtreeResult {
+	const z3::Bool _case;
+	const std::vector<std::vector<Utility>> utilities;
+
+	PracticalitySubtreeResult(z3::Bool _case, std::vector<std::vector<Utility>> utilities) {
+		_case = _case;
+		utilities = utilities;
+	}
+};
+
+
+// subtree node
+struct Subtree final : public Node {
+	std::vector<SubtreeResult> weak_immunity;
+	std::vector<SubtreeResult> weaker_immunity;
+	std::vector<SubtreeResult> collusion_resilience;
+	std::vector<PracticalitySubtreeResult> practicality;
+
+	Subtree(std::vector<SubtreeResult> weak_immunity, std::vector<SubtreeResult> weaker_immunity,
+		 std::vector<SubtreeResult> collusion_resilience, std::vector<PracticalitySubtreeResult> practicality) {
+
+		weak_immunity = weak_immunity;
+		weaker_immunity = weaker_immunity;
+		collusion_resilience = collusion_resilience;
+		practicality = practicality;
+	}
+
+	virtual bool is_leaf() const { return true; }
+
+	virtual bool is_subtree() const { return true; }
+
+	mutable uint64_t problematic_group;
+
+	void reset_reason() const {
+		::new (&reason) z3::Bool();
+	}
+
+	void reset_problematic_group(bool is_cr) const {
+		problematic_group = is_cr ? 1 : 0;
+	}
+
+	virtual UtilityTuplesSet get_utilities() const {return {}; }
+};
+
+
+
 // leaf node
 struct Leaf final : public Node {
 	virtual bool is_leaf() const { return true; }
+
+	virtual bool is_subtree() const { return false; }
 
 	virtual UtilityTuplesSet get_utilities() const {return {utilities}; }
 
@@ -257,6 +317,8 @@ struct Branch final : public Node {
 	Branch(unsigned player) : player(player), counterexample_choices({}) {}
 
 	virtual bool is_leaf() const { return false; }
+
+	virtual bool is_subtree() const { return false; }
 
 	virtual UtilityTuplesSet get_utilities() const {return practical_utilities; }
 
@@ -628,7 +690,7 @@ struct Action {
 
 struct Input {
 	// parse an input from `path`, exiting if malformed
-	Input(const char *path);
+	Input(const char *path, bool supertree);
 
 	// list of players in alphabetical order
 	std::vector<std::string> players;
@@ -950,6 +1012,10 @@ struct Input {
 
 inline const Leaf &Node::leaf() const {
 	return *static_cast<const Leaf *>(this);
+}
+
+inline const Subtree &Node::subtree() const {
+	return *static_cast<const Subtree *>(this);
 }
 
 inline const Branch &Node::branch() const {

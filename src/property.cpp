@@ -66,6 +66,19 @@ z3::Bool get_split_approx_old(z3::Solver &solver, Utility a, Utility b, Comparis
 bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, unsigned player, bool weaker, bool consider_prob_groups) {
 
 	if (node->is_leaf()) {
+		// continue here
+		// add second if: to distinguish between leaf and subtree
+		// if subtree:
+		// look up current player:
+		// 		if we find a case (in satisfied_for_case) that is equivalent to current case or stronger we return true 
+		//			e.g. satisfied for case [a>b, b>a], current_case is a+1>b;
+		//				 since a>b => a+1>b, we conclude satisfied for a+1>b (i.e. return true)
+		// 		else if we find any case not disjoint from current case --> need case split (set the first of these not disjoint ones to be reason)
+		//			e.g. satisfied for case [a>b], current_case is a>0;
+		//  			hence whether satisfied or not depends on b, so we add a>b as the reason 
+		// 		else return false
+		//			e.g. satisfied for case [a>b], current case a < b, then for sure not satisfied, make sure reason is empty and return false
+
 		const auto &leaf = node->leaf();
 
 		if ((player < leaf.problematic_group) && consider_prob_groups){
@@ -2712,8 +2725,12 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 // ATTENTION NOT YET IMPLEMENTED, SO FAR SAME AS analyse_properties
 void analyse_properties_supertree(const Options &options, const Input &input) {
+
+	// we expect to be able to reuse most if not all of analyse_properties. 
+	// we need additional extensions of wi_rec, cr_rec and pr_rec to take the subtree node type into account
+	// we hope to just extend the if(node.is_leaf()) brnach the resp. function
 	
-	std::cout << "just a dummy fct so far, work in progress" << std::endl;
+	// continue here
 	assert(input.honest_utilities.size()==0);
 
 
