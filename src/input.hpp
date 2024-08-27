@@ -148,6 +148,9 @@ struct Node {
 	// is this a leaf?
 	virtual bool is_leaf() const = 0;
 
+	// is this a subtree?
+	virtual bool is_subtree() const = 0;
+
 	// if is_leaf() and !is_subtree(), do the downcast
 	const Leaf &leaf() const;
 
@@ -235,7 +238,7 @@ struct PracticalitySubtreeResult {
 
 // subtree node
 struct Subtree final : public Node {
-	std::vector<SubtreeResult> weak_immunity;
+	std::vector<SubtreeResult> weak_immunity; // each player occurs exactly once in vector
 	std::vector<SubtreeResult> weaker_immunity;
 	std::vector<SubtreeResult> collusion_resilience;
 	std::vector<PracticalitySubtreeResult> practicality;
@@ -263,7 +266,18 @@ struct Subtree final : public Node {
 		problematic_group = is_cr ? 1 : 0;
 	}
 
-	virtual UtilityTuplesSet get_utilities() const {return {}; }
+	mutable std::vector<std::vector<Utility>> utilities;
+
+	virtual UtilityTuplesSet get_utilities() const {
+		
+		UtilityTuplesSet result;
+
+		for (const auto utility_tuple: utilities){
+			result.insert(result.end(), utility_tuple);
+		}
+
+		return result; 
+	}
 };
 
 

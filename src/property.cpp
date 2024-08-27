@@ -66,46 +66,89 @@ z3::Bool get_split_approx_old(z3::Solver &solver, Utility a, Utility b, Comparis
 bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, unsigned player, bool weaker, bool consider_prob_groups) {
 
 	if (node->is_leaf()) {
-		// continue here
-		// add second if: to distinguish between leaf and subtree
-		// if subtree:
-		// look up current player:
-		// 		if we find a case (in satisfied_for_case) that is equivalent to current case or stronger we return true 
-		//			e.g. satisfied for case [a>b, b>a], current_case is a+1>b;
-		//				 since a>b => a+1>b, we conclude satisfied for a+1>b (i.e. return true)
-		// 		else if we find any case not disjoint from current case --> need case split (set the first of these not disjoint ones to be reason)
-		//			e.g. satisfied for case [a>b], current_case is a>0;
-		//  			hence whether satisfied or not depends on b, so we add a>b as the reason 
-		// 		else return false
-		//			e.g. satisfied for case [a>b], current case a < b, then for sure not satisfied, make sure reason is empty and return false
 
-		const auto &leaf = node->leaf();
+		if (node->is_subtree()){
 
-		if ((player < leaf.problematic_group) && consider_prob_groups){
-			return true;
-		}
-		// known utility for us
-		auto utility = leaf.utilities[player];
+			const auto &subtree = node->subtree();
 
-		z3::Bool condition = weaker ? utility.real >= z3::Real::ZERO : utility >= Utility {z3::Real::ZERO, z3::Real::ZERO};
+			// look up current player:
+			// 		if disj_of_cases (in satisfied_for_case) is equivalent to current case or weaker we return true 
+			//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
+			//				 since a>b => a+1>b, we conclude satisfied for a>b (i.e. return true)
+			// 		else if disj_of_cases not disjoint from current case --> need case split (set the first of these not disjoint ones to be reason)
+			//			e.g. satisfied for case [a>b], current_case is a>0;
+			//  			hence whether satisfied or not depends on b, so we add a>b as the reason 
+			// 		else return false
+			//			e.g. satisfied for case [a>b], current case a < b, then for sure not satisfied, make sure reason is empty and return false
 
-		if (solver.solve({!condition}) == z3::Result::UNSAT) {
-			if (consider_prob_groups) {
-				leaf.problematic_group = player + 1;
+			// search for SubtreeResult in weak(er)_immunity that corresponds to the current player
+
+			const std::vector<SubtreeResult> &subtree_results = weaker ? subtree.weaker_immunity : subtree.weak_immunity;
+
+			std::string player_name = input.players[player]; 
+
+			for (const SubtreeResult &subtree_result : subtree_results) {
+				assert(subtree_result.player_group.size() == 1);
+				if (subtree_result.player_group[0] == player_name) {
+
+					// (init_cons && wi_cons && curent_case) => disj_of_cases VALID
+					// ! (init_cons && wi_cons && current_case) || disj_of_cases VALID
+					// (init_cons && wi_cons && current_case) && !disj_of_cases UNSAT
+					// init_cons && wi_cons && current_case    && !disj_of_cased UNSAT
+
+					z3::Bool disj_of_cases = z3::disjunction(subtree_result.satisfied_in_case);
+					z3::Result z3_result_implied = solver.solve({!disj_of_cases});
+
+					if (z3_result_implied == z3::Result::UNSAT) {
+						return true;
+					} else {
+
+						// compute if current_case and case are disjoint:
+						// is it sat that init && wi && case && current_case?
+						// if no, then disjoint
+
+						z3::Result z3_result_disjoint = solver.solve({disj_of_cases});
+						
+						if (z3_result_disjoint == z3::Result::SAT) {
+							// set reason
+							subtree.reason = disj_of_cases;
+						}
+						return false;
+					}
+				}
 			}
-			return true;
-		}
-		
-		if (solver.solve({condition}) == z3::Result::UNSAT) {
+
+
+		} else {
+
+			const auto &leaf = node->leaf();
+
+			if ((player < leaf.problematic_group) && consider_prob_groups){
+				return true;
+			}
+			// known utility for us
+			auto utility = leaf.utilities[player];
+
+			z3::Bool condition = weaker ? utility.real >= z3::Real::ZERO : utility >= Utility {z3::Real::ZERO, z3::Real::ZERO};
+
+			if (solver.solve({!condition}) == z3::Result::UNSAT) {
+				if (consider_prob_groups) {
+					leaf.problematic_group = player + 1;
+				}
+				return true;
+			}
+			
+			if (solver.solve({condition}) == z3::Result::UNSAT) {
+				return false;
+			}
+
+			if (consider_prob_groups) {
+				leaf.problematic_group = player;
+			}
+			leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, utility, Utility {z3::Real::ZERO, z3::Real::ZERO});
+			input.set_reset_point(leaf);
 			return false;
 		}
-
-		if (consider_prob_groups) {
-			leaf.problematic_group = player;
-		}
-		leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, utility, Utility {z3::Real::ZERO, z3::Real::ZERO});
-		input.set_reset_point(leaf);
-		return false;
 	}
 
 	
@@ -217,45 +260,116 @@ const Leaf& get_honest_leaf(Node *node, const std::vector<std::string> &history,
 bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, std::bitset<Input::MAX_PLAYERS> group, Utility honest_total, unsigned players, uint64_t group_nr, bool consider_prob_groups) {
 	
 	if (node->is_leaf()) {
-		const auto &leaf = node->leaf();
+
+		if (node->is_subtree()){
+
+			const auto &subtree = node->subtree();
+
+			// look up current player_group:
+			// 		if disj_of_cases (in satisfied_for_case) that is equivalent to current case or weaker we return true 
+			//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
+			//				 since a>b => a+1>b, we conclude satisfied for a>b (i.e. return true)
+			// 		else if disj_of_cases not disjoint from current case --> need case split (set the first of these not disjoint ones to be reason)
+			//			e.g. satisfied for case [a>b], current_case is a>0;
+			//  			hence whether satisfied or not depends on b, so we add a>b as the reason 
+			// 		else return false
+			//			e.g. satisfied for case [a>b], current case a < b, then for sure not satisfied, make sure reason is empty and return false
+
+			// search for SubtreeResult in weak(er)_immunity that corresponds to the current player
+
+			const std::vector<SubtreeResult> &subtree_results = subtree.collusion_resilience;
+			std::vector<std::string> player_names = index2player(input, group_nr); 
 
 
-		if  ((group_nr < leaf.problematic_group) && consider_prob_groups){
-			return true;
-		}
+			for (const SubtreeResult &subtree_result : subtree_results) {
+				// find the correct subtree_result
+				bool correct_subtree = true;
+				if (subtree_result.player_group.size() != player_names.size()){
+					correct_subtree = false;
+				} else {
+					for (const std::string &subtree_player : subtree_result.player_group){
+						if (std::count(player_names.begin(), player_names.end(), subtree_player) == 0 ) {
+							correct_subtree = false;
+							break;
+						}
+					}
+					if (correct_subtree){
 
-		// compute the total utility for the player group...
-		Utility group_utility{z3::Real::ZERO, z3::Real::ZERO};
-		
-		for (size_t player = 0; player < players; player++)
-			if (group[player])
-				group_utility = group_utility + leaf.utilities[player];
+						// (init_cons && wi_cons && curent_case) => disj_of_cases VALID
+						// ! (init_cons && wi_cons && current_case) || disj_of_cases VALID
+						// (init_cons && wi_cons && current_case) && !disj_of_cases UNSAT
+						// init_cons && wi_cons && current_case    && !disj_of_cased UNSAT
 
-		// ..and compare it to the honest total
-		auto condition = honest_total >= group_utility;		
-		
-		if (solver.solve({!condition}) == z3::Result::UNSAT) {
-			if (consider_prob_groups) {
-				leaf.problematic_group = group_nr + 1;
+						z3::Bool disj_of_cases = z3::disjunction(subtree_result.satisfied_in_case);
+						z3::Result z3_result_implied = solver.solve({!disj_of_cases});
+
+						if (z3_result_implied == z3::Result::UNSAT) {
+							return true;
+						} else {
+
+							// compute if current_case and case are disjoint:
+							// is it sat that init && wi && case && current_case?
+							// if no, then disjoint
+
+							z3::Result z3_result_disjoint = solver.solve({disj_of_cases});
+							
+							if (z3_result_disjoint == z3::Result::SAT) {
+								// set reason
+								subtree.reason = disj_of_cases;
+							}
+							return false;
+						}
+
+
+					}
+				}
+
+				
+
+
+				
 			}
-			return true;
-		}
+		} else {
+			const auto &leaf = node->leaf();
 
-		if (solver.solve({condition}) == z3::Result::UNSAT) {
 
-			if(options.strategies) {
-				node->violates_cr[group_nr - 1] = true;
+			if  ((group_nr < leaf.problematic_group) && consider_prob_groups){
+				return true;
 			}
+
+			// compute the total utility for the player group...
+			Utility group_utility{z3::Real::ZERO, z3::Real::ZERO};
 			
+			for (size_t player = 0; player < players; player++)
+				if (group[player])
+					group_utility = group_utility + leaf.utilities[player];
+
+			// ..and compare it to the honest total
+			auto condition = honest_total >= group_utility;		
+			
+			if (solver.solve({!condition}) == z3::Result::UNSAT) {
+				if (consider_prob_groups) {
+					leaf.problematic_group = group_nr + 1;
+				}
+				return true;
+			}
+
+			if (solver.solve({condition}) == z3::Result::UNSAT) {
+
+				if(options.strategies) {
+					node->violates_cr[group_nr - 1] = true;
+				}
+				
+				return false;
+			}
+
+			if (consider_prob_groups) {
+				leaf.problematic_group = group_nr;
+			}
+			leaf.reason = get_split_approx(solver, honest_total, group_utility);
+			input.set_reset_point(leaf);
 			return false;
 		}
-
-		if (consider_prob_groups) {
-			leaf.problematic_group = group_nr;
-		}
-		leaf.reason = get_split_approx(solver, honest_total, group_utility);
-		input.set_reset_point(leaf);
-		return false;
 	}
 
 	const auto &branch = node->branch();
@@ -410,7 +524,44 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 	// } 
 
 	if (node->is_leaf()) {
-		return true;
+
+		
+		if (node->is_subtree()) {
+			// we again have to consider how the current case relates to the PracticalitySubtreeResult cases
+			// note that those cases are disjoint and span the whole universe
+
+			// iterate over all PracticalitySubtreeResult
+			// 		ask whether case and current_case is satisfiable
+			//			if yes: ask whether current_case and not case is satisfiable
+			//				if yes: case split on case (i.e. set reason to case, return false)
+			//				if no: set practical_utilities for this node to the set of utilities in PracticalitySubtreeResult
+			//			if no: proceed to next PracticalitySubtreeResult
+
+			const auto &subtree = node->subtree();
+
+			for (const PracticalitySubtreeResult &subtree_result: subtree.practicality) {
+				z3::Result overlapping = solver.solve({subtree_result._case});
+
+				if (overlapping == z3::Result::SAT){
+					z3::Result implied = solver.solve({!subtree_result._case});
+
+					if (implied == z3::Result::SAT){
+						subtree.reason = subtree_result._case;
+						return false;
+					} else {
+						if (subtree_result.utilities.size() == 0) {
+							return false;
+						}
+						subtree.utilities.insert(subtree.utilities.end(), subtree_result.utilities.begin(), subtree_result.utilities.end());
+						return true;
+					}
+				} 
+			}
+
+
+		} else {
+			return true;
+		}
 	} 
 
 	// else we deal with a branch
@@ -2719,55 +2870,6 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 	}
 
 
-}
-
-
-
-// ATTENTION NOT YET IMPLEMENTED, SO FAR SAME AS analyse_properties
-void analyse_properties_supertree(const Options &options, const Input &input) {
-
-	// we expect to be able to reuse most if not all of analyse_properties. 
-	// we need additional extensions of wi_rec, cr_rec and pr_rec to take the subtree node type into account
-	// we hope to just extend the if(node.is_leaf()) brnach the resp. function
-	
-	// continue here
-	assert(input.honest_utilities.size()==0);
-
-
-	/* iterate over all honest histories and check the properties for each of them */
-	for (size_t history = 0; history < input.honest.size(); history++) { 
-
-		std::cout << std::endl;
-		std::cout << std::endl;
-		std::cout << "Checking history " << input.honest[history] << std::endl; 
-
-		input.root->reset_honest();
-		input.root->mark_honest(input.honest[history]);
-
-		if(options.strategies) {
-			input.root->reset_violation_cr();
-		}
-
-		std::vector<bool> property_chosen = {options.weak_immunity, options.weaker_immunity, options.collusion_resilience, options.practicality};
-		std::vector<PropertyType> property_types = {PropertyType::WeakImmunity, PropertyType::WeakerImmunity, PropertyType::CollusionResilience, PropertyType::Practicality};
-
-		assert(property_chosen.size() == property_types.size());
-
-		for (size_t i=0; i<property_chosen.size(); i++) {
-			if(property_chosen[i]) {
-				input.reset_counterexamples();
-				input.root.get()->reset_counterexample_choices();
-				input.reset_logging();
-				input.reset_unsat_cases();
-				input.root->reset_reason();
-				input.root->reset_strategy();
-				input.reset_strategies(); 
-				input.root->reset_problematic_group(i==2); 
-				input.reset_reset_point();
-				property(options, input, property_types[i], history);
-			}
-		}
-	}
 }
 
 
