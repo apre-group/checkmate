@@ -396,7 +396,24 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 		std::unique_ptr<Branch> branch(new Branch(player));
 		for (const json &child: node["children"]) {
 			auto loaded = load_tree(input, parser, child["child"], supertree);
+			if (loaded->is_subtree()) {
+				auto &subtree = loaded->subtree();
+				std::cout << subtree.weaker_immunity.size() << std::endl;
+				std::cout << subtree.weaker_immunity[0].player_group << std::endl;
+				std::cout << subtree.weaker_immunity[1].player_group << std::endl;
+				std::cout << subtree.weaker_immunity[0].satisfied_in_case << std::endl;
+				std::cout << subtree.weaker_immunity[1].satisfied_in_case << std::endl;
+				}
+
 			branch->choices.push_back({child["action"], std::move(loaded)});
+			if (branch->choices[branch->choices.size()-1].node->is_subtree()) {
+				auto &test = branch->choices[branch->choices.size()-1].node->subtree();
+				std::cout << test.weaker_immunity.size() << std::endl;
+				std::cout << test.weaker_immunity[0].player_group << std::endl;
+				std::cout << test.weaker_immunity[1].player_group << std::endl;
+				std::cout << test.weaker_immunity[0].satisfied_in_case << std::endl;
+				std::cout << test.weaker_immunity[1].satisfied_in_case << std::endl;
+			}
 		}
 		return branch;
 	}
@@ -463,7 +480,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 			for (const json &wi: node["subtree"]["weak_immunity"]) {
 				const json &players_json = wi["player_group"];
 				std::vector<std::string> player_group = {};
-				for (const auto player : players_json){
+				for (const auto &player : players_json){
 					if (player.is_string()){
 						player_group.push_back(player);
 					} else {
@@ -486,9 +503,10 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 
 		if (node["subtree"].contains("weaker_immunity")){
 			for (const json &weri: node["subtree"]["weaker_immunity"]) {
+				std::cout << "xx" << std::endl;
 				const json &players_json = weri["player_group"];
 				std::vector<std::string> player_group = {};
-				for (const auto player : players_json){
+				for (const auto &player : players_json){
 					if (player.is_string()){
 						player_group.push_back(player);
 					} else {
@@ -513,7 +531,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 			for (const json &cr: node["subtree"]["collusion_resilience"]) {
 				const json &players_json = cr["player_group"];
 				std::vector<std::string> player_group = {};
-				for (const auto player : players_json){
+				for (const auto &player : players_json){
 					if (player.is_string()){
 						player_group.push_back(player);
 					} else {
@@ -588,9 +606,19 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 				practicality.push_back(pr_sub_result);
 			}
 		}
-
+		std::cout << weaker_immunity.size() << std::endl;
+		std::cout << weaker_immunity[0].player_group << std::endl;
+		std::cout << weaker_immunity[1].player_group << std::endl;
+		std::cout << weaker_immunity[0].satisfied_in_case << std::endl;
+		std::cout << weaker_immunity[1].satisfied_in_case << std::endl;
 		std::unique_ptr<Subtree> subtree(new Subtree(weak_immunity, weaker_immunity, collusion_resilience, practicality));
 
+		// control subtree.weaker_immunity 
+		std::cout << subtree->weaker_immunity.size() << std::endl;
+		std::cout << subtree->weaker_immunity[0].player_group << std::endl;
+		std::cout << subtree->weaker_immunity[1].player_group << std::endl;
+		std::cout << subtree->weaker_immunity[0].satisfied_in_case << std::endl;
+		std::cout << subtree->weaker_immunity[1].satisfied_in_case << std::endl;
 		return subtree;
 	}
 

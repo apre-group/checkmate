@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include <string>
 #include <cmath>
+#include <fstream>
 
 #include "input.hpp"
 #include "options.hpp"
@@ -65,9 +66,13 @@ z3::Bool get_split_approx_old(z3::Solver &solver, Utility a, Utility b, Comparis
 
 bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, unsigned player, bool weaker, bool consider_prob_groups) {
 
+	std::cout << "in weak_immunity_rec" << std::endl;
+
 	if (node->is_leaf()) {
 
 		if (node->is_subtree()){
+
+			std::cout << "at subtree" << std::endl;
 
 			const auto &subtree = node->subtree();
 
@@ -87,9 +92,14 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 			std::string player_name = input.players[player]; 
 
+
+			std::cout << "at subtree before for loop" << subtree_results.size() << std::endl;
 			for (const SubtreeResult &subtree_result : subtree_results) {
 				assert(subtree_result.player_group.size() == 1);
+				std::cout << "at subtree in for loop with" << std::endl;
 				if (subtree_result.player_group[0] == player_name) {
+					
+					std::cout << "at subtree in loop found correct player" << std::endl;
 
 					// (init_cons && wi_cons && curent_case) => disj_of_cases VALID
 					// ! (init_cons && wi_cons && current_case) || disj_of_cases VALID
@@ -100,6 +110,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
 					if (z3_result_implied == z3::Result::UNSAT) {
+						std::cout << "at subtree before return true" << std::endl;
 						return true;
 					} else {
 
@@ -113,14 +124,17 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 							// set reason
 							subtree.reason = disj_of_cases;
 						}
+						std::cout << "at subtree before return false" << std::endl;
 						return false;
 					}
 				}
 			}
+			std::cout << "WTF we should not be here" << std::endl;
 
 
 		} else {
 
+			std::cout << "at leaf" << std::endl;
 			const auto &leaf = node->leaf();
 
 			if ((player < leaf.problematic_group) && consider_prob_groups){
@@ -154,6 +168,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 	
 
 	const auto &branch = node->branch();
+	std::cout << "at branch" << std::endl;
 
 	if ((player < branch.problematic_group) && consider_prob_groups){
 		return true;
@@ -288,7 +303,13 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					correct_subtree = false;
 				} else {
 					for (const std::string &subtree_player : subtree_result.player_group){
-						if (std::count(player_names.begin(), player_names.end(), subtree_player) == 0 ) {
+						int counted = 0;
+						for (const auto &name : player_names){
+							if(name == subtree_player){
+								counted++;
+							}
+						}
+						if (counted == 0 ) {
 							correct_subtree = false;
 							break;
 						}
@@ -1559,7 +1580,7 @@ std::vector<PotentialCase> practicality_rec(z3::Solver &solver, const Options &o
 bool property_under_split(z3::Solver &solver, const Input &input, const Options &options, const PropertyType property, size_t history) {
 	/* determine if the input has some property for the current honest history under the current split */
 	
-
+	std::cout << "in property_under_split" << std::endl;
 	if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
 		bool result = true;
 
@@ -1573,7 +1594,11 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			
 			if (!input.solved_for_group[player]) {
 				// problematic groups are only considered when we haven't found a case split point yet
+				std::cout << "in property_under_split before calling weak_immunity_rec" << std::endl;
+			
 				bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity, true);
+				std::cout << "in property_under_split after calling weak_immunity_rec" << std::endl;
+
 				if (!weak_immune_for_player) {
 
 					// std::cout << "not CR" << std::endl;
@@ -1729,8 +1754,10 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 	// property holds under current split
 
+	std::cout << "beginning of property_rec" << std::endl;
 
 	if (property_under_split(solver, input, options, property, history)) {
+		std::cout << "in property_rec in if" << std::endl;
 		if (!input.stop_log){
 			std::cout << "\tProperty satisfied for case: " << current_case << std::endl; 
 		}
@@ -1744,6 +1771,8 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		}
 		return true;
 	}
+
+	std::cout << "in property_rec after if" << std::endl;
 
 	// otherwise consider case split
 	z3::Bool split = input.root->reason;
@@ -2361,7 +2390,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 		size_t number_groups = property == PropertyType::CollusionResilience ? pow(2,input.players.size())-1 : input.players.size();
 		input.init_solved_for_group(number_groups);
 
-
+		std::cout << "before calling property_rec from property" << std::endl;
 		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history)) {
 			std::cout << "YES, it is " << prop_name << "." << std::endl;
 			prop_holds = true;
@@ -2403,6 +2432,8 @@ void property(const Options &options, const Input &input, PropertyType property,
 		input.print_counterexamples(is_wi, is_cr);
 	}
 	
+
+	std::cout<< "end of property fct" << std::endl;
 }
 
 
@@ -2743,9 +2774,11 @@ void analyse_properties(const Options &options, const Input &input) {
 				input.root->reset_problematic_group(i==2); 
 				input.reset_reset_point();
 				property(options, input, property_types[i], history);
+				std::cout << "after calling property from analyse_properties" << std::endl;
 			}
 		}
 	}
+	std::cout << "end of analyse_properties" << std::endl;
 }
 
 

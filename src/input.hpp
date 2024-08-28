@@ -221,13 +221,34 @@ struct SubtreeResult {
 	const std::vector<std::string> player_group;
 	const std::vector<z3::Bool> satisfied_in_case;
 
+	// have to define copy constructor;
+	SubtreeResult operator=(const SubtreeResult& other) {
+		std::vector<std::string> new_player_group = other.player_group;
+		std::vector<z3::Bool> new_satisfied_in_case = other.satisfied_in_case;
+
+		SubtreeResult temp(new_player_group, new_satisfied_in_case);
+		return temp;
+	}
+
 	SubtreeResult(std::vector<std::string> player_group, std::vector<z3::Bool> satisfied_in_case) :
 		player_group(player_group), satisfied_in_case(satisfied_in_case) {}
+
+
 };
 
 struct PracticalitySubtreeResult {
 	const z3::Bool _case;
 	const std::vector<std::vector<Utility>> utilities;
+
+	// have to define copy constructor;
+	PracticalitySubtreeResult operator=(const PracticalitySubtreeResult& other) {
+	z3::Bool new_case = other._case;
+	std::vector<std::vector<Utility>> new_utilities = other.utilities;
+
+	PracticalitySubtreeResult temp(new_case, new_utilities);
+	return temp;
+	}
+
 
 	PracticalitySubtreeResult(z3::Bool _case, std::vector<std::vector<Utility>> utilities) {
 		_case = _case;
@@ -243,13 +264,13 @@ struct Subtree final : public Node {
 	std::vector<SubtreeResult> collusion_resilience;
 	std::vector<PracticalitySubtreeResult> practicality;
 
-	Subtree(std::vector<SubtreeResult> weak_immunity, std::vector<SubtreeResult> weaker_immunity,
-		 std::vector<SubtreeResult> collusion_resilience, std::vector<PracticalitySubtreeResult> practicality) {
+	Subtree(std::vector<SubtreeResult> _weak_immunity, std::vector<SubtreeResult> _weaker_immunity,
+		 std::vector<SubtreeResult> _collusion_resilience, std::vector<PracticalitySubtreeResult> _practicality) {
 
-		weak_immunity = weak_immunity;
-		weaker_immunity = weaker_immunity;
-		collusion_resilience = collusion_resilience;
-		practicality = practicality;
+		weak_immunity.insert(weak_immunity.end(),_weak_immunity.begin(),_weak_immunity.end());
+		weaker_immunity.insert(weaker_immunity.end(),_weaker_immunity.begin(),_weaker_immunity.end());
+		collusion_resilience.insert(collusion_resilience.end(),_collusion_resilience.begin(),_collusion_resilience.end());
+		practicality.insert(practicality.end(),_practicality.begin(),_practicality.end());
 	}
 
 	virtual bool is_leaf() const { return true; }
@@ -272,7 +293,7 @@ struct Subtree final : public Node {
 		
 		UtilityTuplesSet result;
 
-		for (const auto utility_tuple: utilities){
+		for (const auto &utility_tuple: utilities){
 			result.insert(result.end(), utility_tuple);
 		}
 
