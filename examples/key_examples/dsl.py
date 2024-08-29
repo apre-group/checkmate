@@ -57,6 +57,12 @@ class Expr:
 
     def __ge__(self, other: LExpr) -> Constraint:
         return DisequationConstraint('>=', self, other)
+    
+    def __lt__(self, other: LExpr) -> Constraint:
+        return DisequationConstraint('<', self, other)
+
+    def __le__(self, other: LExpr) -> Constraint:
+        return DisequationConstraint('<=', self, other)
 
     def json(self):
         return repr(self)
@@ -222,6 +228,61 @@ def mul_expr(left: LExpr, right: LExpr) -> LExpr:
 
     return MultiplicationExpr(left, right)
 
+class Constraint:
+    def json(self):
+        return repr(self)
+    
+class Truth(Constraint):
+
+    def __init__(self) -> None:
+        pass
+
+    def __repr__(self) -> str:
+        return "True"
+
+class Falsehood(Constraint):
+
+    def __init__(self) -> None:
+        pass
+
+    def __repr__(self) -> str:
+        return "False"
+
+
+class DisequationConstraint(Constraint):
+    op: str
+    left: LExpr
+    right: LExpr
+
+    def __init__(self, op: str, left: LExpr, right: LExpr):
+        self.op = op
+        self.left = left
+        self.right = right
+
+    def __repr__(self):
+        return f"{self.left} {self.op} {self.right}"
+
+
+# CheckMate does currently not support the & symbol
+class Conjunction(Constraint):
+    args: List[Constraint]
+
+    def __init__(self, args: List[Constraint]): 
+        self.args = args
+
+    def __repr__(self):
+        result = f""
+        for elem in self.args:
+            result = result + f" & {elem}" 
+        result = result[3:]
+        return result
+
+def conjunction(*args) -> Conjunction:
+    arg_list = []
+    for elem in args:
+        arg_list.append(elem)
+    return Conjunction(arg_list)
+
 
 class HistoryTree:
 
@@ -244,7 +305,7 @@ class Tree:
 
 
 class Leaf(Tree):
-    def __init__(self, utilities: Dict[Player, LExpr], condition=None):
+    def __init__(self, utilities: Dict[Player, LExpr], condition:Constraint=Truth()):
         self.condition = condition
         self.utilities = utilities
 
@@ -272,12 +333,12 @@ class Leaf(Tree):
             print(f'\tn{id(self)} -> n{id(self)}_{player} [label="{player}"];')
 
 
-def leaf(utilities: Dict[Player, LExpr], condition=None) -> Leaf:
+def leaf(utilities: Dict[Player, LExpr], condition:Constraint=Truth()) -> Leaf:
     return Leaf(utilities, condition)
 
 # CheckMate currently does not support conditions
 class Branch(Tree):
-    def __init__(self, player: Player, actions: Dict[Action, Tree], condition=None):
+    def __init__(self, player: Player, actions: Dict[Action, Tree], condition: Constraint=Truth()):
         self.player = player
         self.condition = condition
         self.actions = actions
@@ -309,7 +370,7 @@ class Branch(Tree):
             print(f'\tn{id(self)} -> n{id(child)} [label="{action}"];')
 
 
-def branch(player: Player, actions: Dict[Action, Tree], condition=None) -> Branch:
+def branch(player: Player, actions: Dict[Action, Tree], condition:Constraint=Truth()) -> Branch:
     return Branch(player, actions, condition)
 
 
@@ -353,18 +414,6 @@ def conjunction(*args) -> Conjunction:
         arg_list.append(elem)
     return Conjunction(arg_list)
 
-class DisequationConstraint(Constraint):
-    op: str
-    left: LExpr
-    right: LExpr
-
-    def __init__(self, op: str, left: LExpr, right: LExpr):
-        self.op = op
-        self.left = left
-        self.right = right
-
-    def __repr__(self):
-        return f"{self.left} {self.op} {self.right}"
 
 
 def finish(
