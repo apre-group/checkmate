@@ -825,7 +825,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 	// load the game tree and leak it so we can downcast to Branch
 	auto node = load_tree(*this, parser, document["tree"], supertree).release();
 	// printing test
-	const Subtree &subtree = node->branch().choices[1].node->subtree();
+	const Subtree &subtree = node->branch().choices[1].node->branch().choices[0].node->subtree();
 	std::cout << "size of wi: " << subtree.weak_immunity.size() << std::endl;
 	// std::cout << "wi[0]: " << subtree.weak_immunity[0].player_group << " sat in " <<  subtree.weak_immunity[0].satisfied_in_case << std::endl;
 	// std::cout << "wi[1]: " << subtree.weak_immunity[1].player_group << " sat in " <<  subtree.weak_immunity[1].satisfied_in_case << std::endl;

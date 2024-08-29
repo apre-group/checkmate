@@ -3,7 +3,6 @@
 
 #include <memory>
 #include <string>
-#include <bitset>
 #include <unordered_map>
 
 #include "utility.hpp"
@@ -1078,17 +1077,18 @@ struct Input {
 	}
 };
 
-
-
 inline const Leaf &Node::leaf() const {
+	assert(is_leaf());
 	return *static_cast<const Leaf *>(this);
 }
 
 inline const Subtree &Node::subtree() const {
+	assert(is_subtree());
 	return *static_cast<const Subtree *>(this);
 }
 
 inline const Branch &Node::branch() const {
+	assert(!is_leaf() && !is_subtree());
 	return *static_cast<const Branch *>(this);
 }
 
