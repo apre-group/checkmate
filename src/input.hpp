@@ -34,6 +34,9 @@ struct UtilityTuple {
 	const std::vector<Utility> &leaf;
 	mutable std::vector<std::string> strategy_vector;
 
+	// GCC doesn't like copy-assign without explicit copy constructor
+	UtilityTuple(const UtilityTuple &other) = default;
+
 	// Anja's compiler doesn't want to generate this because leaf is a reference
 	// Therefore: delegate to copy constructor via placement-new
 	UtilityTuple &operator=(const UtilityTuple &other) {
@@ -218,42 +221,13 @@ struct Choice {
 };
 
 struct SubtreeResult {
-	const std::vector<std::string> player_group;
-	const std::vector<z3::Bool> satisfied_in_case;
-
-	// have to define copy constructor;
-	SubtreeResult operator=(const SubtreeResult& other) {
-		std::vector<std::string> new_player_group = other.player_group;
-		std::vector<z3::Bool> new_satisfied_in_case = other.satisfied_in_case;
-
-		SubtreeResult temp(new_player_group, new_satisfied_in_case);
-		return temp;
-	}
-
-	SubtreeResult(std::vector<std::string> player_group, std::vector<z3::Bool> satisfied_in_case) :
-		player_group(player_group), satisfied_in_case(satisfied_in_case) {}
-
-
+	std::vector<std::string> player_group;
+	std::vector<z3::Bool> satisfied_in_case;
 };
 
 struct PracticalitySubtreeResult {
-	const z3::Bool _case;
-	const std::vector<std::vector<Utility>> utilities;
-
-	// have to define copy constructor;
-	PracticalitySubtreeResult operator=(const PracticalitySubtreeResult& other) {
-	z3::Bool new_case = other._case;
-	std::vector<std::vector<Utility>> new_utilities = other.utilities;
-
-	PracticalitySubtreeResult temp(new_case, new_utilities);
-	return temp;
-	}
-
-
-	PracticalitySubtreeResult(z3::Bool _case, std::vector<std::vector<Utility>> utilities) {
-		_case = _case;
-		utilities = utilities;
-	}
+	z3::Bool _case;
+	std::vector<std::vector<Utility>> utilities;
 };
 
 

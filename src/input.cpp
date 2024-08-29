@@ -403,7 +403,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 				std::cout << subtree.weaker_immunity[1].player_group << std::endl;
 				std::cout << subtree.weaker_immunity[0].satisfied_in_case << std::endl;
 				std::cout << subtree.weaker_immunity[1].satisfied_in_case << std::endl;
-				}
+			}
 
 			branch->choices.push_back({child["action"], std::move(loaded)});
 			if (branch->choices[branch->choices.size()-1].node->is_subtree()) {
@@ -479,7 +479,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 		if (node["subtree"].contains("weak_immunity")){
 			for (const json &wi: node["subtree"]["weak_immunity"]) {
 				const json &players_json = wi["player_group"];
-				std::vector<std::string> player_group = {};
+				std::vector<std::string> player_group;
 				for (const auto &player : players_json){
 					if (player.is_string()){
 						player_group.push_back(player);
@@ -488,7 +488,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 						std::exit(EXIT_FAILURE);
 					}
 				}
-				std::vector<z3::Bool> satisfied_in_case = {};
+				std::vector<z3::Bool> satisfied_in_case;
 
 				const json &cases = wi["satisfied_in_case"];
 				for (const json &json_case: cases) {
@@ -496,7 +496,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 					satisfied_in_case.push_back(parser.parse_constraint(_case.c_str()));
 				}
 
-				SubtreeResult wi_result(player_group, satisfied_in_case);
+				SubtreeResult wi_result { player_group, satisfied_in_case };
 				weak_immunity.push_back(wi_result);
 			}
 		}
@@ -522,7 +522,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 					satisfied_in_case.push_back(parser.parse_constraint(_case.c_str()));
 				}
 
-				SubtreeResult weri_result(player_group, satisfied_in_case);
+				SubtreeResult weri_result { player_group, satisfied_in_case };
 				weaker_immunity.push_back(weri_result);
 			}
 		}
@@ -547,7 +547,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 					satisfied_in_case.push_back(parser.parse_constraint(_case.c_str()));
 				}
 
-				SubtreeResult cr_result(player_group, satisfied_in_case);
+				SubtreeResult cr_result { player_group, satisfied_in_case };
 				collusion_resilience.push_back(cr_result);
 			}
 		}
@@ -601,7 +601,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 					utilities.push_back(pr_utility);
 				}
 
-				PracticalitySubtreeResult pr_sub_result(pr_case, utilities);
+				PracticalitySubtreeResult pr_sub_result { pr_case, utilities };
 
 				practicality.push_back(pr_sub_result);
 			}
