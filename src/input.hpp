@@ -17,6 +17,13 @@ struct Branch;
 struct Choice;
 struct Node;
 
+enum class NodeType {
+    LEAF,
+    BRANCH,
+    SUBTREE
+};
+
+
 // struct SubtreeResult {
 // 	std::vector<std::string> players;
 // 	bool property_sat;
@@ -134,6 +141,18 @@ inline bool are_compatible_cases(const std::vector<z3::Bool> _case1, const std::
 
 // abstract base class for Leaf and Branch
 struct Node {
+
+	// public:
+	// 	virtual NodeType type() = 0;
+
+	// 	// convenience functions
+	// 	bool is_leaf() const { return type() == NodeType::LEAF; }
+	// 	bool is_branch() const { return type() == NodeType::BRANCH; }
+	// 	bool is_subtree() const { return type() == NodeType::SUBTREE; }
+
+
+
+
 	// can default-construct and move Nodes...
 	Node() = default;
 
@@ -154,13 +173,13 @@ struct Node {
 	// is this a subtree?
 	virtual bool is_subtree() const = 0;
 
-	// if is_leaf() and !is_subtree(), do the downcast
+	// if is_leaf(), do the downcast
 	const Leaf &leaf() const;
 
-	// if is_leaf() and is_subtree(), do the downcast
+	// if is_subtree(), do the downcast
 	const Subtree &subtree() const;
 
-	// if !is_leaf(), do the downcast
+	// if !is_leaf() and !is_subtree(), do the downcast
 	const Branch &branch() const;
 
 	// are we (currently) along the honest history?
@@ -233,21 +252,30 @@ struct PracticalitySubtreeResult {
 
 // subtree node
 struct Subtree final : public Node {
+
+	// NodeType type() override { return NodeType::SUBTREE; }
+
 	std::vector<SubtreeResult> weak_immunity; // each player occurs exactly once in vector
 	std::vector<SubtreeResult> weaker_immunity;
 	std::vector<SubtreeResult> collusion_resilience;
 	std::vector<PracticalitySubtreeResult> practicality;
+	// honest utility needed in case the honest history ends in this subtree
+	std::vector<Utility> honest_utility;
 
 	Subtree(std::vector<SubtreeResult> _weak_immunity, std::vector<SubtreeResult> _weaker_immunity,
-		 std::vector<SubtreeResult> _collusion_resilience, std::vector<PracticalitySubtreeResult> _practicality) {
+		 std::vector<SubtreeResult> _collusion_resilience, std::vector<PracticalitySubtreeResult> _practicality, std::vector<Utility> _honest_utility) {
 
 		weak_immunity.insert(weak_immunity.end(),_weak_immunity.begin(),_weak_immunity.end());
 		weaker_immunity.insert(weaker_immunity.end(),_weaker_immunity.begin(),_weaker_immunity.end());
 		collusion_resilience.insert(collusion_resilience.end(),_collusion_resilience.begin(),_collusion_resilience.end());
 		practicality.insert(practicality.end(),_practicality.begin(),_practicality.end());
+
+		honest_utility = _honest_utility;
+
+		problematic_group = 0;
 	}
 
-	virtual bool is_leaf() const { return true; }
+	virtual bool is_leaf() const { return false; }
 
 	virtual bool is_subtree() const { return true; }
 
@@ -273,12 +301,19 @@ struct Subtree final : public Node {
 
 		return result; 
 	}
+
+	void reset_practical_utilities() const {
+		utilities = {};
+	}
 };
 
 
 
 // leaf node
 struct Leaf final : public Node {
+
+	//  NodeType type() override { return NodeType::LEAF; }
+
 	virtual bool is_leaf() const { return true; }
 
 	virtual bool is_subtree() const { return false; }
@@ -323,6 +358,9 @@ struct Leaf final : public Node {
 
 // branch node
 struct Branch final : public Node {
+
+	//NodeType type() override { return NodeType::BRANCH; }
+
 	Branch(unsigned player) : player(player), counterexample_choices({}) {}
 
 	virtual bool is_leaf() const { return false; }
@@ -377,7 +415,7 @@ struct Branch final : public Node {
 	void reset_counterexample_choices() const {
 		counterexample_choices = {};
 		for (auto& choice: choices) {
-			if (!choice.node->is_leaf()) {
+			if (!choice.node->is_leaf() && !choice.node->is_subtree()) {
 				choice.node->branch().reset_counterexample_choices();
 			}
 		}
@@ -388,11 +426,13 @@ struct Branch final : public Node {
 		std::vector<z3::Bool> reason_vector = {reason};
 
 		for (const auto& child: choices){
-			if (!child.node->is_leaf()){
+			if (!child.node->is_leaf() && !child.node->is_subtree()){
 				std::vector<z3::Bool> child_reason = child.node->branch().store_reason();
 				reason_vector.insert(reason_vector.end(), child_reason.begin(), child_reason.end());
-			} else {
+			} else if (child.node->is_leaf()){
 				reason_vector.push_back(child.node->leaf().reason);
+			} else {
+				reason_vector.push_back(child.node->subtree().reason);
 			}
 		}
 
@@ -408,13 +448,19 @@ struct Branch final : public Node {
 		reasons.erase(reasons.begin());
 
 		for (const auto& child: this->branch().choices){
-			if (!child.node->is_leaf()){
+			if (!child.node->is_leaf() && !child.node->is_subtree()){
 			child.node->branch().restore_reason(reasons);
-			} else {
+			} else if (child.node->is_leaf()) {
 				if (reasons.size() == 0) {
 					return;
 				}
 				child.node->leaf().reason = reasons[0];
+				reasons.erase(reasons.begin());
+			} else {
+				if (reasons.size() == 0) {
+					return;
+				}
+				child.node->subtree().reason = reasons[0];
 				reasons.erase(reasons.begin());
 			}
 		}
@@ -429,6 +475,9 @@ struct Branch final : public Node {
 		for (const auto& child: choices){
 			if(child.node->is_leaf()) {
 				problematic_groups_vector.push_back(child.node->leaf().problematic_group);
+			}
+			else if (child.node->is_subtree()){
+				problematic_groups_vector.push_back(child.node->subtree().problematic_group);
 			}
 			else {
 				std::vector<uint64_t> child_pg = child.node->branch().store_problematic_groups();
@@ -452,6 +501,10 @@ struct Branch final : public Node {
 				child.node->leaf().problematic_group = pg[0];
 				pg.erase(pg.begin());
 			}
+			else if (child.node->is_subtree()) {
+				child.node->subtree().problematic_group = pg[0];
+				pg.erase(pg.begin());
+			}
 			else {
 				child.node->branch().restore_problematic_groups(pg);
 			}
@@ -465,7 +518,7 @@ struct Branch final : public Node {
 		std::vector<std::vector<std::string>> counterexample_choices_vector = {counterexample_choices};
 
 		for (const auto& child: choices){
-			if (!child.node->is_leaf()){
+			if (!child.node->is_leaf() && !child.node->is_subtree()){
 				std::vector<std::vector<std::string>> child_ces = child.node->branch().store_counterexample_choices();
 				counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
 			}
@@ -483,7 +536,7 @@ struct Branch final : public Node {
 		ces.erase(ces.begin());
 
 		for (const auto& child: this->branch().choices){
-			if (!child.node->is_leaf()){
+			if (!child.node->is_leaf() && !child.node->is_subtree()){
 			child.node->branch().restore_counterexample_choices(ces);
 			}
 		}
@@ -501,7 +554,7 @@ struct Branch final : public Node {
 		do {
 			current = current->branch().get_choice(history[index++]).node.get();
 			current->honest = true;
-		} while(!current->is_leaf());
+		} while(!current->is_leaf() && !current->is_subtree());
 	}
 
 	void reset_honest() const {
@@ -513,32 +566,38 @@ struct Branch final : public Node {
 		do {
 			current = current->branch().get_honest_child().node.get();
 			current->honest = false;
-		} while(!current->is_leaf());
+		} while(!current->is_leaf() && !current->is_subtree());
 	}
 
 	void reset_reason() const {
 		::new (&reason) z3::Bool();
 		for(auto &choice: choices)
-			if(!choice.node->is_leaf())
+			if(!choice.node->is_leaf() && !choice.node->is_subtree()){
 				choice.node->branch().reset_reason();
-			else
+			}
+			else if (choice.node->is_leaf()) {
 				choice.node->leaf().reset_reason();
+			} else {
+				choice.node->subtree().reset_reason();
+			}
 	}
 
 	void reset_strategy() const {
 		strategy.clear();
 		for(auto &choice: choices)
-			if(!choice.node->is_leaf())
+			if(!choice.node->is_leaf() && !choice.node->is_subtree())
 				choice.node->branch().reset_strategy();
 	}
 
 	void reset_problematic_group(bool is_cr) const {
 		problematic_group = is_cr ? 1 : 0;
 		for(auto &choice: choices)
-			if(!choice.node->is_leaf()) {
+			if(!choice.node->is_leaf() && !choice.node->is_subtree()) {
 				choice.node->branch().reset_problematic_group(is_cr);
-			} else {
+			} else if (choice.node->is_leaf()){
 				choice.node->leaf().reset_problematic_group(is_cr);
+			} else {
+				choice.node->subtree().reset_problematic_group(is_cr);
 			}
 	}
 
@@ -546,7 +605,11 @@ struct Branch final : public Node {
 		practical_utilities = {};
 		for (auto& choice: choices){
 			if (!choice.node->is_leaf()){
-				choice.node->branch().reset_practical_utilities();
+				if (!choice.node->is_subtree()){
+					choice.node->branch().reset_practical_utilities();
+				} else {
+					choice.node->subtree().reset_practical_utilities();
+				}
 			}
 		}
 	}
@@ -840,8 +903,6 @@ struct Input {
 		}
 	}
 
-	// continue here:
-	// add compute_ce_case and print_counterexamples
 	void compute_cecase(std::vector<size_t> player_group, PropertyType property) const {
 		CeCase new_ce_case;
 

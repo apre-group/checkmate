@@ -396,14 +396,14 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 		std::unique_ptr<Branch> branch(new Branch(player));
 		for (const json &child: node["children"]) {
 			auto loaded = load_tree(input, parser, child["child"], supertree);
-			if (loaded->is_subtree()) {
-				auto &subtree = loaded->subtree();
-				std::cout << subtree.weaker_immunity.size() << std::endl;
-				std::cout << subtree.weaker_immunity[0].player_group << std::endl;
-				std::cout << subtree.weaker_immunity[1].player_group << std::endl;
-				std::cout << subtree.weaker_immunity[0].satisfied_in_case << std::endl;
-				std::cout << subtree.weaker_immunity[1].satisfied_in_case << std::endl;
-			}
+			// if (loaded->is_subtree()) {
+			// 	auto &subtree = loaded->subtree();
+			// 	std::cout << subtree.weaker_immunity.size() << std::endl;
+			// 	std::cout << subtree.weaker_immunity[0].player_group << std::endl;
+			// 	std::cout << subtree.weaker_immunity[1].player_group << std::endl;
+			// 	std::cout << subtree.weaker_immunity[0].satisfied_in_case << std::endl;
+			// 	std::cout << subtree.weaker_immunity[1].satisfied_in_case << std::endl;
+			// }
 
 			branch->choices.push_back({child["action"], std::move(loaded)});
 			if (branch->choices[branch->choices.size()-1].node->is_subtree()) {
@@ -413,12 +413,16 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 				std::cout << test.weaker_immunity[1].player_group << std::endl;
 				std::cout << test.weaker_immunity[0].satisfied_in_case << std::endl;
 				std::cout << test.weaker_immunity[1].satisfied_in_case << std::endl;
+
+				std::cout << std::endl;
+				std::cout << test.practicality[0].utilities << " in case " << test.practicality[0]._case << std::endl;
+				std::cout << std::endl;
 			}
 		}
 		return branch;
 	}
 
-	// leaf - usual
+	// leaf 
 	if (node.contains("utility")) {
 		// (player, utility) pairs
 		using PlayerUtility = std::pair<std::string, Utility>;
@@ -461,7 +465,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 		return leaf;
 	}
 
-	// leaf - subtree summary
+	// subtree summary
 	if (node.contains("subtree")) {
 
 		if (!supertree) {
@@ -503,7 +507,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 
 		if (node["subtree"].contains("weaker_immunity")){
 			for (const json &weri: node["subtree"]["weaker_immunity"]) {
-				std::cout << "xx" << std::endl;
+				//std::cout << "xx" << std::endl;
 				const json &players_json = weri["player_group"];
 				std::vector<std::string> player_group = {};
 				for (const auto &player : players_json){
@@ -553,13 +557,15 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 		}
 
 		if (node["subtree"].contains("practicality")) {
+			
 			for (const json &pr: node["subtree"]["practicality"]) {
+				//std::cout << "test" << std::endl;
 				const std::string &_case = pr["case"];
 				z3::Bool pr_case = parser.parse_constraint(_case.c_str());
 				std::vector<std::vector<Utility>> utilities = {};
 
 				for (const json& utility_tuple: pr["utilities"]) {
-
+					//std::cout << "test2" << std::endl;
 					using PlayerUtility = std::pair<std::string, Utility>;
 					std::vector<PlayerUtility> player_utilities;
 					for (const json &utility: utility_tuple) {
@@ -598,6 +604,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 					for (auto &player_utility: player_utilities)
 						pr_utility.push_back(player_utility.second);
 
+					//std::cout << pr_utility << std::endl;
 					utilities.push_back(pr_utility);
 				}
 
@@ -606,19 +613,66 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 				practicality.push_back(pr_sub_result);
 			}
 		}
-		std::cout << weaker_immunity.size() << std::endl;
-		std::cout << weaker_immunity[0].player_group << std::endl;
-		std::cout << weaker_immunity[1].player_group << std::endl;
-		std::cout << weaker_immunity[0].satisfied_in_case << std::endl;
-		std::cout << weaker_immunity[1].satisfied_in_case << std::endl;
-		std::unique_ptr<Subtree> subtree(new Subtree(weak_immunity, weaker_immunity, collusion_resilience, practicality));
+
+		std::vector<Utility> honest_utility;
+		if (node["subtree"].contains("honest_utility")) {
+			using PlayerUtility = std::pair<std::string, Utility>;
+			std::vector<PlayerUtility> player_utilities;
+			for (const json &utility: node["subtree"]["honest_utility"]) {
+				const json &value = utility["value"];
+				// parse a utility expression
+				if (value.is_string()) {
+					const std::string &string = value;
+					player_utilities.push_back({
+													utility["player"],
+													parser.parse_utility(string.c_str())
+											});
+				}
+					// numeric utility, assumed real
+				else if (value.is_number_unsigned()) {
+					unsigned number = value;
+					player_utilities.push_back({
+													utility["player"],
+													{z3::Real::value(number), z3::Real::ZERO}
+											});
+				}
+					// foreign object, bail
+				else {
+					std::cerr << "checkmate: unsupported utility value " << value << std::endl;
+					std::exit(EXIT_FAILURE);
+				}
+			}
+
+			// sort (player, utility) pairs alphabetically by player
+			sort(
+					player_utilities.begin(),
+					player_utilities.end(),
+					[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
+			);
+
+			for (auto &player_utility: player_utilities)
+				honest_utility.push_back(player_utility.second);
+
+		}
+
+
+
+
+		// std::cout << weaker_immunity.size() << std::endl;
+		// std::cout << weaker_immunity[0].player_group << std::endl;
+		// std::cout << weaker_immunity[1].player_group << std::endl;
+		// std::cout << weaker_immunity[0].satisfied_in_case << std::endl;
+		// std::cout << weaker_immunity[1].satisfied_in_case << std::endl;
+		std::unique_ptr<Subtree> subtree(new Subtree(weak_immunity, weaker_immunity, collusion_resilience, practicality, honest_utility));
 
 		// control subtree.weaker_immunity 
-		std::cout << subtree->weaker_immunity.size() << std::endl;
-		std::cout << subtree->weaker_immunity[0].player_group << std::endl;
-		std::cout << subtree->weaker_immunity[1].player_group << std::endl;
-		std::cout << subtree->weaker_immunity[0].satisfied_in_case << std::endl;
-		std::cout << subtree->weaker_immunity[1].satisfied_in_case << std::endl;
+		// std::cout << subtree->weaker_immunity.size() << std::endl;
+		// std::cout << subtree->weaker_immunity[0].player_group << std::endl;
+		// std::cout << subtree->weaker_immunity[1].player_group << std::endl;
+		// std::cout << subtree->weaker_immunity[0].satisfied_in_case << std::endl;
+		// std::cout << subtree->weaker_immunity[1].satisfied_in_case << std::endl;
+
+
 		return subtree;
 	}
 
@@ -770,8 +824,18 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 	// load the game tree and leak it so we can downcast to Branch
 	auto node = load_tree(*this, parser, document["tree"], supertree).release();
-	if (node->is_leaf()) {
-		std::cerr << "checkmate: root node is a leaf (?!) - exiting" << std::endl;
+	// printing test
+	const Subtree &subtree = node->branch().choices[1].node->subtree();
+	std::cout << "size of wi: " << subtree.weak_immunity.size() << std::endl;
+	// std::cout << "wi[0]: " << subtree.weak_immunity[0].player_group << " sat in " <<  subtree.weak_immunity[0].satisfied_in_case << std::endl;
+	// std::cout << "wi[1]: " << subtree.weak_immunity[1].player_group << " sat in " <<  subtree.weak_immunity[1].satisfied_in_case << std::endl;
+	// std::cout << "wi[2]: " << subtree.weak_immunity[2].player_group << " sat in " <<  subtree.weak_immunity[2].satisfied_in_case << std::endl;
+	std::cout << "size of weri: " << subtree.weaker_immunity.size() << std::endl;
+	std::cout << "size of cr: " << subtree.collusion_resilience.size() << std::endl;
+	std::cout << "size of pr: " << subtree.practicality.size() << std::endl;
+
+	if (node->is_leaf() || node->is_subtree()) {
+		std::cerr << "checkmate: root node is a leaf or a subtree (?!) - exiting" << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 	// un-leaked and downcasted here
@@ -781,7 +845,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const {
 
-		if (this -> is_leaf()){
+		if (this -> is_leaf() || this->is_subtree()){
 			return {};
 		}
 		std::vector<HistoryChoice> strategy;
@@ -874,7 +938,7 @@ bool Node::cr_against_supergroups_of(std::vector<uint> deviating_players) const 
 void Node::add_violation_cr() const {
 	violates_cr.push_back(false);
 
-	if (!this->is_leaf()){
+	if (!this->is_leaf() && !this->is_subtree()){
 
 		for (const auto& child: this->branch().choices){
 			child.node->add_violation_cr();
@@ -885,7 +949,7 @@ void Node::add_violation_cr() const {
 
 std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players) const {
 
-		if (this -> is_leaf()){
+		if (this -> is_leaf() || this->is_subtree()){
 			return {};
 		}
 		std::vector<HistoryChoice> strategy;
@@ -952,7 +1016,7 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> pl
 
 std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector) const {
 
-		if (this -> is_leaf()){
+		if (this -> is_leaf() || this->is_subtree()){
 			return {};
 		}
 
@@ -979,7 +1043,7 @@ std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> pl
 
 std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
 
-		if (this->is_leaf()){
+		if (this->is_leaf() || this->is_subtree()){
 			return {};
 		}
 		std::vector<CeChoice> counterexample;
@@ -1029,7 +1093,7 @@ std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std:
 
 std::vector<CeChoice> Node::compute_cr_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
 
-		if (this->is_leaf()){
+		if (this->is_leaf() || this->is_subtree()){
 			return {};
 		}
 		std::vector<CeChoice> counterexample;
@@ -1107,6 +1171,7 @@ const Node* Node::compute_deviation_node(std::vector<std::string> actions_so_far
 	
 	if(actions_so_far.size() > 0) {
 		assert(!this->is_leaf());
+		assert(!this->is_subtree());
 		for (const auto &child: this->branch().choices){
 			if(child.action == actions_so_far[0]) {
 				actions_so_far.erase(actions_so_far.begin());
@@ -1147,7 +1212,7 @@ std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, std::vecto
 
 std::vector<std::string> Node::strat2hist(std::vector<std::string> &strategy) const {
 	
-	if(this->is_leaf()) {
+	if(this->is_leaf() || this->is_subtree()) {
 		return {};
 	} 
 
@@ -1178,7 +1243,7 @@ std::vector<std::string> Node::strat2hist(std::vector<std::string> &strategy) co
 
 void Node::prune_actions_from_strategy(std::vector<std::string> &strategy) const {
 
-	if(this->is_leaf()) {
+	if(this->is_leaf() || this->is_subtree()) {
 		return;
 	} 
 
@@ -1192,7 +1257,7 @@ void Node::prune_actions_from_strategy(std::vector<std::string> &strategy) const
 void Node::reset_violation_cr() const {
 		violates_cr = {};
 
-		if (!this->is_leaf()){
+		if (!this->is_leaf() && !this->is_subtree()){
 
 			for (const auto& child: this->branch().choices){
 				child.node->reset_violation_cr();
@@ -1205,7 +1270,7 @@ std::vector<std::vector<bool>> Node::store_violation_cr() const {
 
 	std::vector<std::vector<bool>> violation = {violates_cr};
 
-	if (!this->is_leaf()){
+	if (!this->is_leaf() && !this->is_subtree()){
 
 		for (const auto& child: this->branch().choices){
 			std::vector<std::vector<bool>> child_violation = child.node->store_violation_cr();
@@ -1221,7 +1286,7 @@ void Node::restore_violation_cr(std::vector<std::vector<bool>> &violation) const
 	violates_cr = violation[0];
 	violation.erase(violation.begin());
 
-	if (!this->is_leaf()){
+	if (!this->is_leaf() && !this->is_subtree()){
 
 		for (const auto& child: this->branch().choices){
 			child.node->restore_violation_cr(violation);
