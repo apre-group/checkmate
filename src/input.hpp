@@ -46,6 +46,8 @@ struct UtilityTuple {
 	// Anja's compiler doesn't want to generate this because leaf is a reference
 	// Therefore: delegate to copy constructor via placement-new
 	UtilityTuple &operator=(const UtilityTuple &other) {
+		// need to destruct `this` now to deallocate `strategy_vector`
+		this->~UtilityTuple();
 		::new (this) UtilityTuple(other);
 		return *this;
 	}
