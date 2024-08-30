@@ -45,6 +45,12 @@ class Expr:
 
     def __rmul__(self, other: LExpr) -> LExpr:
         return mul_expr(other, self)
+    
+    def __truediv__(self, other: LExpr) -> LExpr:
+        return div_expr(other, self)
+    
+    def __rtruediv__(self, other: LExpr) -> LExpr:
+        return div_expr(other, self)
 
     def __neg__(self) -> TermExpr:
         return neg_expr(self)
@@ -227,6 +233,31 @@ def mul_expr(left: LExpr, right: LExpr) -> LExpr:
         return TermExpr.mul_constant(left, float(right))
 
     return MultiplicationExpr(left, right)
+    
+
+class DivisionExpr(Expr):
+    left: LExpr
+    right: LExpr
+
+    def __init__(self, left: LExpr, right: LExpr):
+        self.left = left
+        self.right = right
+
+    def __repr__(self):
+        left = f"({self.left})" if isinstance(self.left, TermExpr) else f"{self.left}"
+        right = f"({self.right})" if isinstance(self.right, TermExpr) else f"{self.right}"
+        return f"{left} / {right}"
+
+def div_expr(left: LExpr, right: LExpr) -> LExpr:
+    if is_exactly(right, 0.0) or (isinstance(right, int) and is_exactly(right, 0)):
+        raise ZeroDivisionError
+    if is_exactly(left, 0.0) or (isinstance(left, int) and is_exactly(left, 0)):
+        return 0.0
+    elif is_exactly(right, 1.0) or (isinstance(right, int) and is_exactly(right, 1)):
+        return left
+
+    return DivisionExpr(left, right)
+
 
 class Constraint:
     def json(self):
