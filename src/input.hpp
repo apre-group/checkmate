@@ -10,9 +10,9 @@
 #include "z3++.hpp"
 
 // forward declarations for Node methods
-struct Leaf;
-struct Subtree;
-struct Branch;
+//struct Leaf;
+//struct Subtree;
+//struct Branch;
 struct Choice;
 struct Node;
 
@@ -140,19 +140,14 @@ inline bool are_compatible_cases(const std::vector<z3::Bool> _case1, const std::
 	return compatible_cases;
 }
 
-// abstract base class for Leaf and Branch
-struct Node {
+class Node {
+	public:
+	virtual NodeType type() const = 0;
 
-	// public:
-	// 	virtual NodeType type() = 0;
-
-	// 	// convenience functions
-	// 	bool is_leaf() const { return type() == NodeType::LEAF; }
-	// 	bool is_branch() const { return type() == NodeType::BRANCH; }
-	// 	bool is_subtree() const { return type() == NodeType::SUBTREE; }
-
-
-
+	// convenience functions
+	bool is_leaf() const { return type() == NodeType::LEAF; }
+	bool is_branch() const { return type() == NodeType::BRANCH; }
+	bool is_subtree() const { return type() == NodeType::SUBTREE; }
 
 	// can default-construct and move Nodes...
 	Node() = default;
@@ -168,11 +163,11 @@ struct Node {
 
 	virtual ~Node() {};
 
-	// is this a leaf?
-	virtual bool is_leaf() const = 0;
+	// is this a leaf? - OLD
+	//virtual bool is_leaf() const = 0;
 
-	// is this a subtree?
-	virtual bool is_subtree() const = 0;
+	// is this a subtree? - OLD
+	//virtual bool is_subtree() const = 0;
 
 	// if is_leaf(), do the downcast
 	const Leaf &leaf() const;
@@ -252,9 +247,13 @@ struct PracticalitySubtreeResult {
 
 
 // subtree node
-struct Subtree final : public Node {
+class Subtree : public Node {
 
-	// NodeType type() override { return NodeType::SUBTREE; }
+	public:
+	mutable uint64_t problematic_group;
+	mutable std::vector<std::vector<Utility>> utilities;
+
+	NodeType type() const override { return NodeType::SUBTREE; }
 
 	std::vector<SubtreeResult> weak_immunity; // each player occurs exactly once in vector
 	std::vector<SubtreeResult> weaker_immunity;
@@ -263,24 +262,21 @@ struct Subtree final : public Node {
 	// honest utility needed in case the honest history ends in this subtree
 	std::vector<Utility> honest_utility;
 
-	Subtree(std::vector<SubtreeResult> _weak_immunity, std::vector<SubtreeResult> _weaker_immunity,
-		 std::vector<SubtreeResult> _collusion_resilience, std::vector<PracticalitySubtreeResult> _practicality, std::vector<Utility> _honest_utility) {
+	Subtree(std::vector<SubtreeResult> _weak_immunity,
+        std::vector<SubtreeResult> _weaker_immunity,
+        std::vector<SubtreeResult> _collusion_resilience,
+        std::vector<PracticalitySubtreeResult> _practicality,
+        std::vector<Utility> _honest_utility)
+    : weak_immunity(_weak_immunity),
+      weaker_immunity(_weaker_immunity),
+      collusion_resilience(_collusion_resilience),
+      practicality(_practicality),
+      honest_utility(_honest_utility),
+      problematic_group(0) {}
 
-		weak_immunity.insert(weak_immunity.end(),_weak_immunity.begin(),_weak_immunity.end());
-		weaker_immunity.insert(weaker_immunity.end(),_weaker_immunity.begin(),_weaker_immunity.end());
-		collusion_resilience.insert(collusion_resilience.end(),_collusion_resilience.begin(),_collusion_resilience.end());
-		practicality.insert(practicality.end(),_practicality.begin(),_practicality.end());
+	//virtual bool is_leaf() const { return false; }
 
-		honest_utility = _honest_utility;
-
-		problematic_group = 0;
-	}
-
-	virtual bool is_leaf() const { return false; }
-
-	virtual bool is_subtree() const { return true; }
-
-	mutable uint64_t problematic_group;
+	//virtual bool is_subtree() const { return true; }
 
 	void reset_reason() const {
 		::new (&reason) z3::Bool();
@@ -289,8 +285,6 @@ struct Subtree final : public Node {
 	void reset_problematic_group(bool is_cr) const {
 		problematic_group = is_cr ? 1 : 0;
 	}
-
-	mutable std::vector<std::vector<Utility>> utilities;
 
 	virtual UtilityTuplesSet get_utilities() const {
 		
@@ -311,20 +305,21 @@ struct Subtree final : public Node {
 
 
 // leaf node
-struct Leaf final : public Node {
+class Leaf final : public Node {
 
-	//  NodeType type() override { return NodeType::LEAF; }
-
-	virtual bool is_leaf() const { return true; }
-
-	virtual bool is_subtree() const { return false; }
-
-	virtual UtilityTuplesSet get_utilities() const {return {utilities}; }
-
+	public:
 	// utilities for each player: NB in lexicographic order of players!
 	std::vector<Utility> utilities;
 
 	mutable uint64_t problematic_group;
+
+	NodeType type() const override { return NodeType::LEAF; }
+
+	//virtual bool is_leaf() const { return true; }
+
+	//virtual bool is_subtree() const { return false; }
+
+	virtual UtilityTuplesSet get_utilities() const {return {utilities}; }
 
 	void reset_reason() const {
 		::new (&reason) z3::Bool();
@@ -358,15 +353,30 @@ struct Leaf final : public Node {
 };
 
 // branch node
-struct Branch final : public Node {
+class Branch final : public Node {
 
-	//NodeType type() override { return NodeType::BRANCH; }
+	public:
+	// whose turn is it?
+	unsigned player;
+	// available choices, from which actions should be unique
+	std::vector<Choice> choices;
+	// take this action
+	mutable std::string strategy;
+
+	mutable std::vector<std::vector<z3::Bool>> pr_strategies_cases;
+	mutable std::vector<std::string> pr_strategies_actions;
+
+	mutable uint64_t problematic_group;
+	mutable UtilityTuplesSet practical_utilities;
+	mutable std::vector<std::string> counterexample_choices;
+
+	NodeType type() const override { return NodeType::BRANCH; }
 
 	Branch(unsigned player) : player(player), counterexample_choices({}) {}
 
-	virtual bool is_leaf() const { return false; }
+	//virtual bool is_leaf() const { return false; }
 
-	virtual bool is_subtree() const { return false; }
+	//virtual bool is_subtree() const { return false; }
 
 	virtual UtilityTuplesSet get_utilities() const {return practical_utilities; }
 
@@ -399,24 +409,11 @@ struct Branch final : public Node {
 		UNREACHABLE;
 	}
 
-	// whose turn is it?
-	unsigned player;
-	// available choices, from which actions should be unique
-	std::vector<Choice> choices;
-	// take this action
-	mutable std::string strategy;
-
-	mutable std::vector<std::vector<z3::Bool>> pr_strategies_cases;
-	mutable std::vector<std::string> pr_strategies_actions;
-
-	mutable uint64_t problematic_group;
-	mutable UtilityTuplesSet practical_utilities;
-	mutable std::vector<std::string> counterexample_choices;
-
 	void reset_counterexample_choices() const {
 		counterexample_choices = {};
 		for (auto& choice: choices) {
 			if (!choice.node->is_leaf() && !choice.node->is_subtree()) {
+				//Branch* branch = dynamic_cast<Branch*>(choice.node); TODO
 				choice.node->branch().reset_counterexample_choices();
 			}
 		}
@@ -1078,6 +1075,7 @@ struct Input {
 		return simp;
 	}
 };
+
 
 inline const Leaf &Node::leaf() const {
 	assert(is_leaf());
