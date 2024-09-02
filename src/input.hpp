@@ -13,6 +13,9 @@
 //struct Leaf;
 //struct Subtree;
 //struct Branch;
+class Leaf;
+class Subtree;
+class Branch;
 struct Choice;
 struct Node;
 
