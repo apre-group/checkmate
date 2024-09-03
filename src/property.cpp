@@ -135,6 +135,9 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		std::string player_name = input.players[player]; 
 
 		for (const SubtreeResult &subtree_result : subtree_results) {
+
+			//std::cout << "Subtree result cases: " << subtree_result.satisfied_in_case << std::endl;
+
 			assert(subtree_result.player_group.size() == 1);
 			if (subtree_result.player_group[0] == player_name) {
 

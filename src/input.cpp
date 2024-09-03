@@ -374,6 +374,16 @@ struct Parser {
 // third-party library for parsing JSON
 using json = nlohmann::json;
 
+static z3::Bool parse_case(Parser &parser, const std::string &_case) {
+
+	if(_case == "true") {
+		z3::Bool bool_obj;	
+		return bool_obj.True();	
+	} 
+
+	return parser.parse_constraint(_case.c_str());
+}
+
 /*
  * load a tree from a JSON document `node`, assuming a certain format
  * - `input` is the input parsed so far
@@ -477,7 +487,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 				const json &cases = wi["satisfied_in_case"];
 				for (const json &json_case: cases) {
 					const std::string &_case = json_case;
-					satisfied_in_case.push_back(parser.parse_constraint(_case.c_str()));
+					satisfied_in_case.push_back(parse_case(parser, _case));
 				}
 
 				SubtreeResult wi_result { player_group, satisfied_in_case };
@@ -502,7 +512,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 				const json &cases = weri["satisfied_in_case"];
 				for (const json &json_case: cases) {
 					const std::string &_case = json_case;
-					satisfied_in_case.push_back(parser.parse_constraint(_case.c_str()));
+					satisfied_in_case.push_back(parse_case(parser, _case));
 				}
 
 				SubtreeResult weri_result { player_group, satisfied_in_case };
@@ -527,7 +537,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 				const json &cases = cr["satisfied_in_case"];
 				for (const json &json_case: cases) {
 					const std::string &_case = json_case;
-					satisfied_in_case.push_back(parser.parse_constraint(_case.c_str()));
+					satisfied_in_case.push_back(parse_case(parser, _case));
 				}
 
 				SubtreeResult cr_result { player_group, satisfied_in_case };
@@ -539,7 +549,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 			
 			for (const json &pr: node["subtree"]["practicality"]) {
 				const std::string &_case = pr["case"];
-				z3::Bool pr_case = parser.parse_constraint(_case.c_str());
+				z3::Bool pr_case = parse_case(parser, _case);
 				std::vector<std::vector<Utility>> utilities = {};
 
 				for (const json& utility_tuple: pr["utilities"]) {
