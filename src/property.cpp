@@ -47,7 +47,6 @@ const Node& get_honest_leaf(Node *node, const std::vector<std::string> &history,
     // no need for default
     }
 
-
 	unsigned next_index = index + 1;
 	return get_honest_leaf(node->branch().get_choice(history[index]).node.get(), history, next_index);
 }
@@ -1870,10 +1869,13 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 		// we have an honest history, so there will be at most 1 practical utility
 		// when printing cases check if a case is the empty conjuction and in this case print true
 		// we need to be able to parse z3:Bool to human-readable string
+		const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
+
 		std::cout << std::endl;
 		std::cout << "*****************" << std::endl;
 		std::cout << "TO BE PRINTED IN FILE" << std::endl;
 		std::cout << "History: " << input.honest[history] << std::endl;
+		std::cout << "Honest utility: " << honest_leaf.leaf().utilities << std::endl;
 		for (auto &subtree_result : subtree_results_pr) {
 			std::cout << "Case: " << subtree_result._case << std::endl;
 			std::cout << "Utilities: " << std::endl;
@@ -1930,10 +1932,14 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 		// TODO print to file here
 		// when printing cases check if a case is the empty conjuction and in this case print true
 		// we need to be able to parse z3:Bool to human-readable string
+
+		const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
+
 		std::cout << std::endl;
 		std::cout << "*****************" << std::endl;
 		std::cout << "TO BE PRINTED IN FILE" << std::endl;
 		std::cout << "History: " << input.honest[history] << std::endl;
+		std::cout << "Honest utility: " << honest_leaf.leaf().utilities << std::endl;
 		for (auto &subtree_result : subtree_results) {
 			std::cout << "Player(group): " << subtree_result.player_group << std::endl;
 			std::cout << "Satisfied in case: " << subtree_result.satisfied_in_case << std::endl;
