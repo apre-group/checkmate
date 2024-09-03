@@ -36,11 +36,17 @@ z3::Bool get_split_approx(z3::Solver &solver, Utility a, Utility b) {
 }
 
 const Node& get_honest_leaf(Node *node, const std::vector<std::string> &history, unsigned index) {
-    if (node->is_leaf()) {
-        return node->leaf();
-    } else if (node->is_subtree()) {
-		return node->subtree();
-	}
+	switch(node->type()) {
+    case NodeType::LEAF:
+		return node->leaf();
+    case NodeType::SUBTREE:
+        return node->subtree();
+	case NodeType::BRANCH:
+		break;
+    // no need for default
+    }
+
+
 	unsigned next_index = index + 1;
 	return get_honest_leaf(node->branch().get_choice(history[index]).node.get(), history, next_index);
 }
