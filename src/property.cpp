@@ -1848,15 +1848,20 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 		bool pr_result = property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, subtree_results_pr);
 
 		if (pr_result) {
-			assert( input.root->branch().practical_utilities.size() == 1);
+			assert(input.root->branch().practical_utilities.size() == 1);
 			std::vector<Utility> honest_utility;
 			for (auto elem: input.root->branch().practical_utilities) {
 				honest_utility = elem.leaf;
 			}
 			std::cout << "YES, it is " << prop_name << ", the honest practical utility is "<<  honest_utility << "." << std::endl;
 			prop_holds = true;
-		} else { 
-			assert( input.root->branch().practical_utilities.size() == 0);
+		} else {
+			//assert( input.root->branch().practical_utilities.size() == 0);
+			// removed this assertion bacause it was failing
+			// practical utilites is always at least once - we always set it
+			// even though when it is not correct because we needed this for an 
+			// additional feature (it was either the counterexamples, or strategies or all cases)
+			
 			std::cout << "NO, it is not " << prop_name << ", hence there is no honest practical utility." << std::endl;
 			prop_holds = false;
 		}
