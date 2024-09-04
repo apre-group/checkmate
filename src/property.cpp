@@ -1811,7 +1811,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 	
 }
 
-void property_subtree(const Options &options, const Input &input, PropertyType property, size_t history) {
+void property_subtree(const Options &options, const Input &input, PropertyType property, size_t history, Subtree &subtree) {
 	
 	/* determine if the input has some property for the current honest history */
 	Solver solver;
@@ -1883,6 +1883,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 		// we have an honest history, so there will be at most 1 practical utility
 		// when printing cases check if a case is the empty conjuction and in this case print true
 		// we need to be able to parse z3:Bool to human-readable string
+		/*
 		const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
 
 		std::cout << std::endl;
@@ -1897,9 +1898,9 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 				std::cout << "\t Utility: " << utility << std::endl;
 			}
 			std::cout << std::endl;
-		}
+		}*/
 
-
+		subtree.practicality.insert(subtree.practicality.end(), subtree_results_pr.begin(), subtree_results_pr.end());
 
 	} else {
 
@@ -1947,8 +1948,8 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 		// when printing cases check if a case is the empty conjuction and in this case print true
 		// we need to be able to parse z3:Bool to human-readable string
 
+		/*
 		const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
-
 		std::cout << std::endl;
 		std::cout << "*****************" << std::endl;
 		std::cout << "TO BE PRINTED IN FILE" << std::endl;
@@ -1958,6 +1959,14 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 			std::cout << "Player(group): " << subtree_result.player_group << std::endl;
 			std::cout << "Satisfied in case: " << subtree_result.satisfied_in_case << std::endl;
 			std::cout << std::endl;
+		}*/
+
+		if(property == PropertyType::WeakImmunity) {
+			subtree.weak_immunity.insert(subtree.weak_immunity.end(), subtree_results.begin(), subtree_results.end());
+		} else if (property == PropertyType::WeakerImmunity) {
+			subtree.weaker_immunity.insert(subtree.weaker_immunity.end(), subtree_results.begin(), subtree_results.end());
+		} else if (property == PropertyType::CollusionResilience) {
+			subtree.collusion_resilience.insert(subtree.collusion_resilience.end(), subtree_results.begin(), subtree_results.end());
 		}
 
 	}
@@ -1999,7 +2008,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 	return;
 }
 
-void property_subtree_utility(const Options &options, const Input &input, PropertyType property, std::vector<Utility> honest_utility) {
+void property_subtree_utility(const Options &options, const Input &input, PropertyType property, std::vector<Utility> honest_utility, Subtree &subtree) {
 	/* determine if the input has some property for the current honest history */
 
 	assert(property == PropertyType::CollusionResilience);
@@ -2058,6 +2067,7 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 	// when printing cases check if a case is the empty conjuction and in this case print true
 	// we need to be able to parse z3:Bool to human-readable string
 
+	/*
 	std::cout << std::endl;
 	std::cout << "*****************" << std::endl;
 	std::cout << "TO BE PRINTED IN FILE" << std::endl;
@@ -2065,9 +2075,10 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 		std::cout << "Player(group): " << subtree_result.player_group << std::endl;
 		std::cout << "Satisfied in case: " << subtree_result.satisfied_in_case << std::endl;
 		std::cout << std::endl;
-	}
+	}*/
 
-	
+	subtree.collusion_resilience.insert(subtree.collusion_resilience.end(), subtree_results.begin(), subtree_results.end());
+
 	
 	// generate preconditions -- not now, maybe consider later
 	// if (options.preconditions && !prop_holds) {
@@ -2106,7 +2117,7 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 	return;
 }
 
-void property_subtree_nohistory(const Options &options, const Input &input, PropertyType property) {
+void property_subtree_nohistory(const Options &options, const Input &input, PropertyType property, Subtree &subtree) {
 	
 
 	Solver solver;
@@ -2168,6 +2179,7 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 			}
 		}
 
+		/*
 		std::cout << std::endl;
 		std::cout << "*****************" << std::endl;
 		std::cout << "TO BE PRINTED IN FILE" << std::endl;
@@ -2178,9 +2190,9 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 				std::cout << "\t Utility: " << utility << std::endl;
 			}
 			std::cout << std::endl;
-		}
+		}*/
 
-
+		subtree.practicality.insert(subtree.practicality.end(), subtree_results_pr.begin(), subtree_results_pr.end());
 	} else {
 		size_t number_groups = input.players.size();
 
@@ -2226,7 +2238,7 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 		// TODO print to file here
 		// when printing cases check if a case is the empty conjuction and in this case print true
 		// we need to be able to parse z3:Bool to human-readable string
-
+		/*
 		std::cout << std::endl;
 		std::cout << "*****************" << std::endl;
 		std::cout << "TO BE PRINTED IN FILE" << std::endl;
@@ -2234,7 +2246,15 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 			std::cout << "Player(group): " << subtree_result.player_group << std::endl;
 			std::cout << "Satisfied in case: " << subtree_result.satisfied_in_case << std::endl;
 			std::cout << std::endl;
+		}*/
+
+		if(property == PropertyType::WeakImmunity) {
+			subtree.weak_immunity.insert(subtree.weak_immunity.end(), subtree_results.begin(), subtree_results.end());
+		} else if (property == PropertyType::WeakerImmunity) {
+			subtree.weaker_immunity.insert(subtree.weaker_immunity.end(), subtree_results.begin(), subtree_results.end());
 		}
+
+
 	}
 
 	
@@ -2351,6 +2371,11 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 		assert(property_chosen.size() == property_types.size());
 
+		Subtree st({}, {}, {}, {}, {});
+		Subtree &subtree = st;
+		const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
+		subtree.honest_utility = honest_leaf.leaf().utilities;
+
 		for (size_t i=0; i<property_chosen.size(); i++) {
 			if(property_chosen[i]) {
 				input.reset_counterexamples();
@@ -2362,8 +2387,43 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				input.reset_strategies(); 
 				input.root->reset_problematic_group(i==2); 
 				input.reset_reset_point();
-				property_subtree(options, input, property_types[i], history);
+				property_subtree(options, input, property_types[i], history, subtree);
 			}
+		}
+
+		// TODO
+		// create one file for this history
+		// set honest utility to the one corresponding to this honest history
+		// set wi, weri, cr, pr subtree results
+		std::cout << "********************" << std::endl;
+		std::cout << "To be written in JSON" << std::endl;
+		std::cout << "Honest utility" << subtree.honest_utility<< std::endl;
+		std::cout << "WI" << std::endl;
+		for (auto &subtree_result : subtree.weak_immunity) {
+			std::cout << "Player(group): " << subtree_result.player_group << std::endl;
+			std::cout << "Satisfied in case: " << subtree_result.satisfied_in_case << std::endl;
+			std::cout << std::endl;
+		}
+		std::cout << "WERI" << std::endl;
+		for (auto &subtree_result : subtree.weaker_immunity) {
+			std::cout << "Player(group): " << subtree_result.player_group << std::endl;
+			std::cout << "Satisfied in case: " << subtree_result.satisfied_in_case << std::endl;
+			std::cout << std::endl;
+		}
+		std::cout << "CR" << std::endl;
+		for (auto &subtree_result : subtree.collusion_resilience) {
+			std::cout << "Player(group): " << subtree_result.player_group << std::endl;
+			std::cout << "Satisfied in case: " << subtree_result.satisfied_in_case << std::endl;
+			std::cout << std::endl;
+		}
+		std::cout << "PR" << std::endl;
+		for (auto &subtree_result : subtree.practicality) {
+			std::cout << "Case: " << subtree_result._case << std::endl;
+			std::cout << "Utilities: " << std::endl;
+			for(auto &utility : subtree_result.utilities) {
+				std::cout << "\t Utility: " << utility << std::endl;
+			}
+			std::cout << std::endl;
 		}
 	}
 
@@ -2383,6 +2443,9 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			input.root->reset_violation_cr();
 		}
 
+		Subtree st({}, {}, {}, {}, {});
+		Subtree &subtree = st;
+
 		// cr handled below
 		std::vector<bool> property_chosen = {options.weak_immunity, options.weaker_immunity, options.practicality};
 		std::vector<PropertyType> property_types = {PropertyType::WeakImmunity, PropertyType::WeakerImmunity, PropertyType::Practicality};
@@ -2399,7 +2462,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				input.root->reset_strategy();
 				input.reset_strategies(); 
 				input.reset_reset_point();
-				property_subtree_nohistory(options, input, property_types[i]);
+				property_subtree_nohistory(options, input, property_types[i], subtree);
 			}
 		}
 
@@ -2417,6 +2480,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				input.root->reset_violation_cr();
 			}
 
+			subtree.collusion_resilience = {};
 
 			if(options.collusion_resilience) {
 				input.reset_counterexamples();
@@ -2428,13 +2492,50 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				input.reset_strategies(); 
 				input.root->reset_problematic_group(true); 
 				input.reset_reset_point();
-				property_subtree_utility(options, input, PropertyType::CollusionResilience, input.honest_utilities[utility].leaf);
+				property_subtree_utility(options, input, PropertyType::CollusionResilience, input.honest_utilities[utility].leaf, subtree);
+			}
+
+			// TODO
+			// create one file for this utility
+			// set honest utility to this utility
+			// set wi, weri, cr, pr subtree results
+			// wi, weri, pr always the same, only cr changes
+			subtree.honest_utility = input.honest_utilities[utility].leaf;
+
+			std::cout << "********************" << std::endl;
+			std::cout << "To be written in JSON" << std::endl;
+			std::cout << "Honest utility" << subtree.honest_utility<< std::endl;
+			std::cout << "WI" << std::endl;
+			for (auto &subtree_result : subtree.weak_immunity) {
+				std::cout << "Player(group): " << subtree_result.player_group << std::endl;
+				std::cout << "Satisfied in case: " << subtree_result.satisfied_in_case << std::endl;
+				std::cout << std::endl;
+			}
+			std::cout << "WERI" << std::endl;
+			for (auto &subtree_result : subtree.weaker_immunity) {
+				std::cout << "Player(group): " << subtree_result.player_group << std::endl;
+				std::cout << "Satisfied in case: " << subtree_result.satisfied_in_case << std::endl;
+				std::cout << std::endl;
+			}
+			std::cout << "CR" << std::endl;
+			for (auto &subtree_result : subtree.collusion_resilience) {
+				std::cout << "Player(group): " << subtree_result.player_group << std::endl;
+				std::cout << "Satisfied in case: " << subtree_result.satisfied_in_case << std::endl;
+				std::cout << std::endl;
+			}
+			std::cout << "PR" << std::endl;
+			for (auto &subtree_result : subtree.practicality) {
+				std::cout << "Case: " << subtree_result._case << std::endl;
+				std::cout << "Utilities: " << std::endl;
+				for(auto &utility : subtree_result.utilities) {
+					std::cout << "\t Utility: " << utility << std::endl;
+				}
+				std::cout << std::endl;
 			}
 			
 		}
 		
 	}
-
 
 }
 
