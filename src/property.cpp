@@ -3,6 +3,7 @@
 #include <cassert>
 #include <unordered_set>
 #include <string>
+#include <sstream>
 #include <cmath>
 #include <fstream>
 #include <algorithm> 
@@ -12,11 +13,14 @@
 #include "z3++.hpp"
 #include "utils.hpp"
 #include "property.hpp"
+#include "json.hpp"
 
 
 using z3::Bool;
 using z3::Solver;
 
+// third-party library for parsing JSON
+using json = nlohmann::json;
 
 z3::Bool get_split_approx(z3::Solver &solver, Utility a, Utility b) {
 // split on a>=b
@@ -2424,6 +2428,72 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				std::cout << "\t Utility: " << utility << std::endl;
 			}
 			std::cout << std::endl;
+		}
+
+		std::string file_name = "subtree_result_history" + std::to_string(history) + ".txt";
+		std::ofstream outputFile(file_name);
+		if (outputFile.is_open()) {  
+			// Convert the subtree object to JSON
+    		json subtree_json;
+
+			json arr_wi = json::array();
+			for(auto &subtree_result : subtree.weak_immunity) {
+				// TODO: parse satisfied_in_case
+				json obj = {{"player_group", subtree_result.player_group}, {"satisfied_in_case", json::array()}};
+				arr_wi.push_back(obj);
+			}
+
+			json arr_pr = json::array();
+			for(auto &subtree_result : subtree.practicality) {
+				// TODO: parse case
+				
+				
+				// parse utilities
+				json utilities = json::array();
+				for(auto &utility_list : subtree_result.utilities) {
+					// parse utility
+					json utility = json::array();
+					unsigned player_index = 0;
+					for(auto &u : utility_list) {
+						json obj = {{"player", input.players[player_index]}};
+						std::stringstream ss; // Use stringstream to capture the output of operator<< into a string
+						ss << u;  // Using the overloaded operator<<
+						std::string utility_string = ss.str(); // Convert stringstream to a string
+						obj["value"] = utility_string;
+						utility.push_back(obj);
+						player_index++;
+					}
+					utilities.push_back(utility);
+				}
+				
+				json obj = {{"case", ""}, {"utilities", utilities}};
+				arr_pr.push_back(obj);
+			}
+
+			json arr_honest_utility = json::array();
+			unsigned player_index = 0;
+			for(auto &utility : subtree.honest_utility) {
+				json obj = {{"player", input.players[player_index]}};
+				std::stringstream ss; // Use stringstream to capture the output of operator<< into a string
+				ss << utility;  // Using the overloaded operator<<
+				std::string utility_string = ss.str(); // Convert stringstream to a string
+				obj["value"] = utility_string;
+				arr_honest_utility.push_back(obj);
+				player_index++;
+			}
+
+			subtree_json["subtree"]["weak_immunity"] = arr_wi;
+			subtree_json["subtree"]["weaker_immunity"] = json::array();
+			subtree_json["subtree"]["collusion_resilience"] = json::array();
+			subtree_json["subtree"]["practicality"] = arr_pr;
+			subtree_json["subtree"]["honest_utility"] = arr_honest_utility;
+
+			// Print the JSON representation
+			outputFile << subtree_json.dump(4); // Pretty print with 4 spaces
+			outputFile.close(); 
+
+		} else {
+			std::cerr << "Failed to create the file." << std::endl; 
 		}
 	}
 
