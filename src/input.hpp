@@ -240,11 +240,11 @@ struct Choice {
 
 struct SubtreeResult {
 	std::vector<std::string> player_group;
-	std::vector<z3::Bool> satisfied_in_case;
+	std::vector<std::vector<z3::Bool>> satisfied_in_case;
 };
 
 struct PracticalitySubtreeResult {
-	z3::Bool _case;
+	std::vector<z3::Bool> _case;
 	std::vector<std::vector<Utility>> utilities;
 };
 

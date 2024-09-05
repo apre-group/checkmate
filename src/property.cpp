@@ -150,7 +150,12 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				// (init_cons && wi_cons && current_case) && !disj_of_cases UNSAT
 				// init_cons && wi_cons && current_case    && !disj_of_cased UNSAT
 
-				z3::Bool disj_of_cases = z3::disjunction(subtree_result.satisfied_in_case);
+				std::vector<z3::Bool> cases_as_conjunctions = {};
+				for (auto _case: subtree_result.satisfied_in_case) {
+					cases_as_conjunctions.push_back(z3::conjunction(_case));
+				}
+
+				z3::Bool disj_of_cases = z3::disjunction(cases_as_conjunctions);
 				z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
 				if (z3_result_implied == z3::Result::UNSAT) {
@@ -359,7 +364,11 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					// (init_cons && wi_cons && current_case) && !disj_of_cases UNSAT
 					// init_cons && wi_cons && current_case    && !disj_of_cased UNSAT
 
-					z3::Bool disj_of_cases = z3::disjunction(subtree_result.satisfied_in_case);
+					std::vector<z3::Bool> cases_as_conjunctions = {};
+					for (auto _case: subtree_result.satisfied_in_case) {
+						cases_as_conjunctions.push_back(z3::conjunction(_case));
+					}
+					z3::Bool disj_of_cases = z3::disjunction(cases_as_conjunctions);
 					z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
 					if (z3_result_implied == z3::Result::UNSAT) {
@@ -528,13 +537,15 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		const auto &subtree = node->subtree();
 
 		for (const PracticalitySubtreeResult &subtree_result: subtree.practicality) {
-			z3::Result overlapping = solver.solve({subtree_result._case});
+			z3::Bool subtree_case = z3::conjunction(subtree_result._case);
+
+			z3::Result overlapping = solver.solve({subtree_case});
 
 			if (overlapping == z3::Result::SAT){
-				z3::Result implied = solver.solve({!subtree_result._case});
+				z3::Result implied = solver.solve({!subtree_case});
 
 				if (implied == z3::Result::SAT){
-					subtree.reason = subtree_result._case;
+					subtree.reason = subtree_case;
 					return false;
 				} else {
 					if (subtree_result.utilities.size() == 0) {
@@ -1134,7 +1145,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 		if(options.subtree) {
 			PracticalitySubtreeResult subtree_result_pr;
-			subtree_result_pr._case = z3::conjunction(current_case);
+			subtree_result_pr._case = current_case;
 			subtree_result_pr.utilities = {};
 			std::vector<Utility> honest_utility;
 			for (auto elem: input.root->branch().practical_utilities) {
@@ -1257,7 +1268,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	return result;
 }
 
-bool property_rec_subtree(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, size_t history, unsigned group_nr, std::vector<z3::Bool> &satisfied_in_case) {
+bool property_rec_subtree(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, size_t history, unsigned group_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case) {
 	/* 
 		only called for weak(er) immunity and collusion resilience
 		actual case splitting engine
@@ -1296,7 +1307,7 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 			std::cout << "\tProperty satisfied for case: " << current_case << std::endl; 
 		}
 
-		satisfied_in_case.push_back(z3::conjunction(current_case));
+		satisfied_in_case.push_back(current_case);
 
 		// if strategies, add a "potential case" to keep track of all strategies
 		// if (options.strategies){
@@ -1411,7 +1422,7 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 	return result;
 }
 
-bool property_rec_utility(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, std::vector<Utility> honest_utility, unsigned group_nr, std::vector<z3::Bool> &satisfied_in_case) {
+bool property_rec_utility(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, std::vector<Utility> honest_utility, unsigned group_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case) {
 	/* 
 		only called for collusion resilience
 		actual case splitting engine
@@ -1447,7 +1458,7 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 		// 		input.root->reset_violation_cr();
 		// 	}
 		// }
-		satisfied_in_case.push_back(z3::conjunction(current_case));
+		satisfied_in_case.push_back(current_case);
 		return true;
 	}
 
@@ -1552,7 +1563,7 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 	return result;
 }
 
-bool property_rec_nohistory(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, unsigned player_nr, std::vector<z3::Bool> &satisfied_in_case, std::vector<PracticalitySubtreeResult> &subtree_results_pr) {
+bool property_rec_nohistory(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, unsigned player_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case, std::vector<PracticalitySubtreeResult> &subtree_results_pr) {
 	
 	/* 
 		only called for w(er)i and practicality
@@ -1588,14 +1599,14 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 
 		if(options.subtree && property == PropertyType::Practicality) {
 			PracticalitySubtreeResult subtree_result_pr;
-			subtree_result_pr._case = z3::conjunction(current_case);
+			subtree_result_pr._case = current_case;
 			subtree_result_pr.utilities = {};
 			for (auto elem: input.root->branch().practical_utilities) {
 				subtree_result_pr.utilities.push_back(elem.leaf);
 			}
 			subtree_results_pr.push_back(subtree_result_pr);
 		} else if (property != PropertyType::Practicality) {
-			satisfied_in_case.push_back(z3::conjunction(current_case));
+			satisfied_in_case.push_back(current_case);
 		}
 
 
@@ -2160,7 +2171,7 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 	if (property == PropertyType::Practicality){
 		input.reset_practical_utilities();
 
-		std::vector<z3::Bool> satisfied_in_case;
+		std::vector<std::vector<z3::Bool>> satisfied_in_case;
 		std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
 
 		std::cout << "What are the subtree's practical utilities?" << std::endl;

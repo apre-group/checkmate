@@ -482,12 +482,16 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 						std::exit(EXIT_FAILURE);
 					}
 				}
-				std::vector<z3::Bool> satisfied_in_case;
+				std::vector<std::vector<z3::Bool>> satisfied_in_case = {};
 
 				const json &cases = wi["satisfied_in_case"];
 				for (const json &json_case: cases) {
-					const std::string &_case = json_case;
-					satisfied_in_case.push_back(parse_case(parser, _case));
+					std::vector<z3::Bool> _case = {};
+					for (const json &_case_entry: json_case) {
+						const std::string &_case_e = _case_entry;
+						_case.push_back(parse_case(parser, _case_e));
+					}
+					satisfied_in_case.push_back(_case);					
 				}
 
 				SubtreeResult wi_result { player_group, satisfied_in_case };
@@ -507,12 +511,16 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 						std::exit(EXIT_FAILURE);
 					}
 				}
-				std::vector<z3::Bool> satisfied_in_case = {};
+				std::vector<std::vector<z3::Bool>> satisfied_in_case = {};
 
 				const json &cases = weri["satisfied_in_case"];
 				for (const json &json_case: cases) {
-					const std::string &_case = json_case;
-					satisfied_in_case.push_back(parse_case(parser, _case));
+					std::vector<z3::Bool> _case = {};
+					for (const json &_case_entry: json_case) {
+						const std::string &_case_e = _case_entry;
+						_case.push_back(parse_case(parser, _case_e));
+					}
+					satisfied_in_case.push_back(_case);					
 				}
 
 				SubtreeResult weri_result { player_group, satisfied_in_case };
@@ -532,12 +540,16 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 						std::exit(EXIT_FAILURE);
 					}
 				}
-				std::vector<z3::Bool> satisfied_in_case = {};
+				std::vector<std::vector<z3::Bool>> satisfied_in_case = {};
 
 				const json &cases = cr["satisfied_in_case"];
 				for (const json &json_case: cases) {
-					const std::string &_case = json_case;
-					satisfied_in_case.push_back(parse_case(parser, _case));
+					std::vector<z3::Bool> _case = {};
+					for (const json &_case_entry: json_case) {
+						const std::string &_case_e = _case_entry;
+						_case.push_back(parse_case(parser, _case_e));
+					}
+					satisfied_in_case.push_back(_case);					
 				}
 
 				SubtreeResult cr_result { player_group, satisfied_in_case };
@@ -548,8 +560,12 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 		if (node["subtree"].contains("practicality")) {
 			
 			for (const json &pr: node["subtree"]["practicality"]) {
-				const std::string &_case = pr["case"];
-				z3::Bool pr_case = parse_case(parser, _case);
+				const std::string &_case_pr = pr["case"];
+				std::vector<z3::Bool> _case = {};
+				for (const json &_case_entry: _case_pr) {
+						const std::string &_case_e = _case_entry;
+						_case.push_back(parse_case(parser, _case_e));
+					}
 				std::vector<std::vector<Utility>> utilities = {};
 
 				for (const json& utility_tuple: pr["utilities"]) {
@@ -595,7 +611,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 					utilities.push_back(pr_utility);
 				}
 
-				PracticalitySubtreeResult pr_sub_result { pr_case, utilities };
+				PracticalitySubtreeResult pr_sub_result { _case, utilities };
 
 				practicality.push_back(pr_sub_result);
 			}
