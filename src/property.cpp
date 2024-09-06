@@ -75,7 +75,6 @@ std::vector<std::string> index2player(const Input &input, unsigned index) {
 	std::bitset<Input::MAX_PLAYERS> group = index;
 	std::vector<std::string> players;
 
-	// compute the honest total for the current group
 	for (size_t player = 0; player < input.players.size(); player++) {
 		if (group[player]) {
 			players.push_back(input.players[player]);
@@ -1929,6 +1928,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 		for (unsigned i = 0; i < number_groups; i++){
 			input.reset_reset_point();
 			input.root.get()->reset_reason();
+			
 			std::vector<std::string> players = index2player(input, i+1);
 
 			SubtreeResult subtree_result_player;
@@ -2450,14 +2450,31 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			json arr_wi = json::array();
 			for(auto &subtree_result : subtree.weak_immunity) {
 				// TODO: parse satisfied_in_case
-				json obj = {{"player_group", subtree_result.player_group}, {"satisfied_in_case", json::array()}};
+				json arr_cases = json::array();
+				for(auto &sat_case: subtree_result.satisfied_in_case) {
+					json arr_case = json::array();
+					if(sat_case.size() == 0) {
+						arr_case.push_back("true");
+					} else {
+						for(auto &case_entry: sat_case) {
+							//convert case_entry to readable format
+							//std::cout << "ATTENTION::" << std::endl;
+							//std::cout << "Correct is ::" << case_entry << std::endl;
+							std::string case_to_print = pretty_print(case_entry);
+							//std::cout << "We have::" << case_to_print << std::endl;
+							arr_case.push_back(case_to_print);
+						}
+					}
+					arr_cases.push_back(arr_case);
+				}
+
+				json obj = {{"player_group", subtree_result.player_group}, {"satisfied_in_case", arr_cases}};
 				arr_wi.push_back(obj);
 			}
 
 			json arr_pr = json::array();
 			for(auto &subtree_result : subtree.practicality) {
-				// TODO: parse case
-				
+				// TODO: parse case				
 				
 				// parse utilities
 				json utilities = json::array();

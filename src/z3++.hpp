@@ -11,6 +11,8 @@
 #include <cassert>
 #include <iostream>
 #include <string>
+#include <cctype>
+#include <sstream>
 #include <vector>
 #include <unordered_map>
 
@@ -58,9 +60,39 @@ namespace z3 {
 			return result;
 		}
 
-	protected:
+		bool wrap_Z3_is_app() {
+			return Z3_is_app(CONTEXT, ast);
+		}
+
+		std::string get_operator_name_expr() {
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			Z3_func_decl decl = Z3_get_app_decl(CONTEXT, app);
+			Z3_symbol symbol = Z3_get_decl_name(CONTEXT, decl);
+			std::string op_name = Z3_get_symbol_string(CONTEXT, symbol);
+			return op_name;
+		}
+
+		Z3_app wrap_Z3_to_app() {
+			return Z3_to_app(CONTEXT, ast);
+		}
+
+		unsigned wrap_Z3_get_app_num_args(){
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			return Z3_get_app_num_args(CONTEXT, app);
+		}	
+
+		Z3_ast wrap_Z3_get_app_arg(Z3_app a, unsigned i) {
+			return Z3_get_app_arg(CONTEXT, a, i);
+		}
+
+		bool wrap_is_bool() {
+			return is_bool();
+		}
+
 		// wrap `ast`
 		Expression(Z3_ast ast) : ast(ast) {}
+
+	protected:
 
 		// are we of Boolean sort? moderately expensive so protected
 		bool is_bool() {
@@ -452,6 +484,67 @@ namespace z3 {
 		// wrapper solver
 		Z3_solver solver;
 	};
+
+	// Helper function to check if an expression is an application of an operator
+	inline bool is_operator(Expression expr) {
+		return expr.wrap_Z3_is_app();
+	}
+
+	// Helper function to get the operator name from an expression
+	inline std::string get_operator_name(Expression expr) {
+		if (!is_operator(expr)) return "";
+		return expr.get_operator_name_expr();
+	}
+
+	// Recursive pretty-print function for Z3 expressions
+	inline std::string pretty_print(Expression expr) {
+
+		if (is_operator(expr)) {	
+			std::string op_name = get_operator_name(expr);
+			const unsigned int num_args =  expr.wrap_Z3_get_app_num_args();
+			Z3_ast* args = new Z3_ast[num_args]; 
+			//above line instead of: Z3_ast args[num_args]; cause that's not allowed in c++
+			for (unsigned int i = 0; i < num_args; i++) {
+				Z3_ast current_ast = expr.wrap_Z3_get_app_arg(expr.wrap_Z3_to_app(), i);
+				args[i] = current_ast;
+			}
+
+			// Check for known operators and format accordingly
+			if (op_name == "or") {
+				std::string result = "(";
+				for (unsigned i = 0; i < num_args; ++i) {
+					result += pretty_print(args[i]);
+					if (i < num_args - 1) result += " ∨ ";
+				}
+				result += ")";
+				return result;
+			} else if (op_name == "+") {
+				return "(" + pretty_print(args[0]) + " + " + pretty_print(args[1]) + ")";
+			} else if (op_name == "-") {
+				if(num_args == 1) {
+					return "(- " + pretty_print(args[0]) + ")";
+				}
+				return "(" + pretty_print(args[0]) + " - " + pretty_print(args[1]) + ")";
+			} else if (op_name == "*") {
+				return "(" + pretty_print(args[0]) + " * " + pretty_print(args[1]) + ")";
+			} else if (op_name == "<=") {
+				return "(" + pretty_print(args[0]) + " <= " + pretty_print(args[1]) + ")";
+			} else if (op_name == "<") {
+				return "(" + pretty_print(args[0]) + " < " + pretty_print(args[1]) + ")";
+			} else if (op_name == ">=") {
+				return "(" + pretty_print(args[0]) + " >= " + pretty_print(args[1]) + ")";
+			} else if (op_name == ">") {
+				return "(" + pretty_print(args[0]) + " > " + pretty_print(args[1]) + ")";
+			}
+		}
+
+		// Fallback to Z3's default string representation
+		std::stringstream ss;
+		ss << expr;
+		std::string std_representation = ss.str();
+
+		return std_representation;
+	}
 }
 
 // used in e.g. hash tables rather than operator==

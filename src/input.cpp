@@ -488,8 +488,10 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 				for (const json &json_case: cases) {
 					std::vector<z3::Bool> _case = {};
 					for (const json &_case_entry: json_case) {
-						const std::string &_case_e = _case_entry;
-						_case.push_back(parse_case(parser, _case_e));
+						if(_case_entry != "true") {
+							const std::string &_case_e = _case_entry;
+							_case.push_back(parse_case(parser, _case_e));
+						}
 					}
 					satisfied_in_case.push_back(_case);					
 				}
@@ -517,8 +519,10 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 				for (const json &json_case: cases) {
 					std::vector<z3::Bool> _case = {};
 					for (const json &_case_entry: json_case) {
-						const std::string &_case_e = _case_entry;
-						_case.push_back(parse_case(parser, _case_e));
+						if(_case_entry != "true") {
+							const std::string &_case_e = _case_entry;
+							_case.push_back(parse_case(parser, _case_e));
+						}
 					}
 					satisfied_in_case.push_back(_case);					
 				}
@@ -546,8 +550,10 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 				for (const json &json_case: cases) {
 					std::vector<z3::Bool> _case = {};
 					for (const json &_case_entry: json_case) {
-						const std::string &_case_e = _case_entry;
-						_case.push_back(parse_case(parser, _case_e));
+						if(_case_entry != "true") {
+							const std::string &_case_e = _case_entry;
+							_case.push_back(parse_case(parser, _case_e));
+						}
 					}
 					satisfied_in_case.push_back(_case);					
 				}
@@ -563,9 +569,11 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 				const std::string &_case_pr = pr["case"];
 				std::vector<z3::Bool> _case = {};
 				for (const json &_case_entry: _case_pr) {
+					if(_case_entry != "true") {
 						const std::string &_case_e = _case_entry;
 						_case.push_back(parse_case(parser, _case_e));
 					}
+				}
 				std::vector<std::vector<Utility>> utilities = {};
 
 				for (const json& utility_tuple: pr["utilities"]) {
