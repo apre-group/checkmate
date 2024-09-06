@@ -2622,6 +2622,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			// wi, weri, pr always the same, only cr changes
 			subtree.honest_utility = input.honest_utilities[utility].leaf;
 
+			/*
 			std::cout << "********************" << std::endl;
 			std::cout << "To be written in JSON" << std::endl;
 			std::cout << "Honest utility" << subtree.honest_utility<< std::endl;
@@ -2651,7 +2652,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 					std::cout << "\t Utility: " << utility << std::endl;
 				}
 				std::cout << std::endl;
-			}
+			}*/
 
 			std::string file_name = "subtree_result_utility" + std::to_string(utility) + ".txt";
         	print_subtree_result_to_file(input, file_name, subtree);
