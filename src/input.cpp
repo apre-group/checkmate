@@ -566,7 +566,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 		if (node["subtree"].contains("practicality")) {
 			
 			for (const json &pr: node["subtree"]["practicality"]) {
-				const std::string &_case_pr = pr["case"];
+				const json &_case_pr = pr["case"];
 				std::vector<z3::Bool> _case = {};
 				for (const json &_case_entry: _case_pr) {
 					if(_case_entry != "true") {
