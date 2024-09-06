@@ -22,6 +22,98 @@ using z3::Solver;
 // third-party library for parsing JSON
 using json = nlohmann::json;
 
+json parse_sat_case(std::vector<z3::Bool> sat_case) {			
+    json arr_case = json::array();
+    if(sat_case.size() == 0) {
+        arr_case.push_back("true");
+    } else {
+        for(auto &case_entry: sat_case) {
+            std::string case_to_print = pretty_print(case_entry);
+            arr_case.push_back(case_to_print);
+        }
+    }
+    return arr_case;
+}
+
+json parse_utility(const Input &input, std::vector<Utility> utility_to_parse) {
+    json utility = json::array();
+    unsigned player_index = 0;
+    for(auto &u : utility_to_parse) {
+        json obj = {{"player", input.players[player_index]}};
+        std::stringstream ss; 
+        ss << u; 
+        std::string utility_string = ss.str();
+        obj["value"] = utility_string;
+        utility.push_back(obj);
+        player_index++;
+    }
+    return utility;
+}
+
+json parse_property_to_json(std::vector<SubtreeResult> property_result) {
+
+    json arr_res = json::array();
+
+    for(auto &subtree_result : property_result) {
+        // parse satisfied_in_case
+        json arr_cases = json::array();
+        for(auto &sat_case: subtree_result.satisfied_in_case) {
+            json arr_case = parse_sat_case(sat_case);
+            arr_cases.push_back(arr_case);
+        }
+
+        json obj = {{"player_group", subtree_result.player_group}, {"satisfied_in_case", arr_cases}};
+        arr_res.push_back(obj);
+    }
+    return arr_res;
+}
+
+json parse_practicality_property_to_json(const Input &input, std::vector<PracticalitySubtreeResult> property_result) {
+    json arr_pr = json::array();
+    for(auto &subtree_result : property_result) {
+        // parse case				
+        json arr_case = parse_sat_case(subtree_result._case);
+        // parse utilities
+        json utilities = json::array();
+        for(auto &utility_list : subtree_result.utilities) {
+            // parse utility
+            json utility = parse_utility(input, utility_list);
+            utilities.push_back(utility);
+        }
+        
+        json obj = {{"case", arr_case}, {"utilities", utilities}};
+        arr_pr.push_back(obj);
+    }
+    return arr_pr;
+}
+
+void print_subtree_result_to_file(const Input &input, std::string file_name, Subtree &subtree) {
+    std::ofstream outputFile(file_name);
+    if (outputFile.is_open()) {  
+        // Convert the subtree object to JSON
+        json subtree_json;
+
+        json arr_wi = parse_property_to_json(subtree.weak_immunity);
+        json arr_weri = parse_property_to_json(subtree.weaker_immunity);
+        json arr_cr = parse_property_to_json(subtree.collusion_resilience);
+        json arr_pr = parse_practicality_property_to_json(input, subtree.practicality);
+        json arr_honest_utility = parse_utility(input, subtree.honest_utility);
+
+        subtree_json["subtree"]["weak_immunity"] = arr_wi;
+        subtree_json["subtree"]["weaker_immunity"] = arr_weri;
+        subtree_json["subtree"]["collusion_resilience"] = arr_cr;
+        subtree_json["subtree"]["practicality"] = arr_pr;
+        subtree_json["subtree"]["honest_utility"] = arr_honest_utility;
+
+        // Print the JSON representation
+        outputFile << subtree_json.dump(4); // Pretty print with 4 spaces
+        outputFile.close(); 
+
+    } else {
+        std::cerr << "Failed to create the file." << std::endl; 
+    }
+}
+
 z3::Bool get_split_approx(z3::Solver &solver, Utility a, Utility b) {
 // split on a>=b
 
@@ -2416,6 +2508,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		// create one file for this history
 		// set honest utility to the one corresponding to this honest history
 		// set wi, weri, cr, pr subtree results
+		/*
 		std::cout << "********************" << std::endl;
 		std::cout << "To be written in JSON" << std::endl;
 		std::cout << "Honest utility" << subtree.honest_utility<< std::endl;
@@ -2447,88 +2540,11 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			std::cout << std::endl;
 		}
 
+		*/
+
 		std::string file_name = "subtree_result_history" + std::to_string(history) + ".txt";
-		std::ofstream outputFile(file_name);
-		if (outputFile.is_open()) {  
-			// Convert the subtree object to JSON
-    		json subtree_json;
-
-			json arr_wi = json::array();
-			for(auto &subtree_result : subtree.weak_immunity) {
-				// TODO: parse satisfied_in_case
-				json arr_cases = json::array();
-				for(auto &sat_case: subtree_result.satisfied_in_case) {
-					json arr_case = json::array();
-					if(sat_case.size() == 0) {
-						arr_case.push_back("true");
-					} else {
-						for(auto &case_entry: sat_case) {
-							//convert case_entry to readable format
-							//std::cout << "ATTENTION::" << std::endl;
-							//std::cout << "Correct is ::" << case_entry << std::endl;
-							std::string case_to_print = pretty_print(case_entry);
-							//std::cout << "We have::" << case_to_print << std::endl;
-							arr_case.push_back(case_to_print);
-						}
-					}
-					arr_cases.push_back(arr_case);
-				}
-
-				json obj = {{"player_group", subtree_result.player_group}, {"satisfied_in_case", arr_cases}};
-				arr_wi.push_back(obj);
-			}
-
-			json arr_pr = json::array();
-			for(auto &subtree_result : subtree.practicality) {
-				// TODO: parse case				
-				
-				// parse utilities
-				json utilities = json::array();
-				for(auto &utility_list : subtree_result.utilities) {
-					// parse utility
-					json utility = json::array();
-					unsigned player_index = 0;
-					for(auto &u : utility_list) {
-						json obj = {{"player", input.players[player_index]}};
-						std::stringstream ss; // Use stringstream to capture the output of operator<< into a string
-						ss << u;  // Using the overloaded operator<<
-						std::string utility_string = ss.str(); // Convert stringstream to a string
-						obj["value"] = utility_string;
-						utility.push_back(obj);
-						player_index++;
-					}
-					utilities.push_back(utility);
-				}
-				
-				json obj = {{"case", ""}, {"utilities", utilities}};
-				arr_pr.push_back(obj);
-			}
-
-			json arr_honest_utility = json::array();
-			unsigned player_index = 0;
-			for(auto &utility : subtree.honest_utility) {
-				json obj = {{"player", input.players[player_index]}};
-				std::stringstream ss; // Use stringstream to capture the output of operator<< into a string
-				ss << utility;  // Using the overloaded operator<<
-				std::string utility_string = ss.str(); // Convert stringstream to a string
-				obj["value"] = utility_string;
-				arr_honest_utility.push_back(obj);
-				player_index++;
-			}
-
-			subtree_json["subtree"]["weak_immunity"] = arr_wi;
-			subtree_json["subtree"]["weaker_immunity"] = json::array();
-			subtree_json["subtree"]["collusion_resilience"] = json::array();
-			subtree_json["subtree"]["practicality"] = arr_pr;
-			subtree_json["subtree"]["honest_utility"] = arr_honest_utility;
-
-			// Print the JSON representation
-			outputFile << subtree_json.dump(4); // Pretty print with 4 spaces
-			outputFile.close(); 
-
-		} else {
-			std::cerr << "Failed to create the file." << std::endl; 
-		}
+        print_subtree_result_to_file(input, file_name, subtree);
+		
 	}
 
 	// iterate over all honest utilities (only for cr) and check the properties for each of them 
@@ -2636,14 +2652,15 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				}
 				std::cout << std::endl;
 			}
+
+			std::string file_name = "subtree_result_utility" + std::to_string(utility) + ".txt";
+        	print_subtree_result_to_file(input, file_name, subtree);
 			
 		}
 		
 	}
 
 }
-
-
 
 
 // FROM HERE ON ONLY COMMENTS
