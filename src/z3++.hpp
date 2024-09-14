@@ -60,10 +60,12 @@ namespace z3 {
 			return result;
 		}
 
+		// check whether this is an operator application
 		bool wrap_Z3_is_app() {
 			return Z3_is_app(CONTEXT, ast);
 		}
 
+		// return name of applied operator
 		std::string get_operator_name_expr() {
 			Z3_app app = Z3_to_app(CONTEXT, ast);
 			Z3_func_decl decl = Z3_get_app_decl(CONTEXT, app);
@@ -76,11 +78,13 @@ namespace z3 {
 			return Z3_to_app(CONTEXT, ast);
 		}
 
+		// return number of arguments of the applied operator
 		unsigned wrap_Z3_get_app_num_args(){
 			Z3_app app = Z3_to_app(CONTEXT, ast);
 			return Z3_get_app_num_args(CONTEXT, app);
 		}	
 
+		// return the arguments of the applied operator
 		Z3_ast wrap_Z3_get_app_arg(Z3_app a, unsigned i) {
 			return Z3_get_app_arg(CONTEXT, a, i);
 		}
@@ -497,6 +501,7 @@ namespace z3 {
 	}
 
 	// Recursive pretty-print function for Z3 expressions
+	// Used when printing into a JSON file in subtree mode
 	inline std::string pretty_print(Expression expr) {
 
 		if (is_operator(expr)) {	

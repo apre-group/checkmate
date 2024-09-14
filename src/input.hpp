@@ -10,9 +10,6 @@
 #include "z3++.hpp"
 
 // forward declarations for Node methods
-//struct Leaf;
-//struct Subtree;
-//struct Branch;
 class Leaf;
 class Subtree;
 class Branch;
@@ -24,19 +21,6 @@ enum class NodeType {
     BRANCH,
     SUBTREE
 };
-
-
-// struct SubtreeResult {
-// 	std::vector<std::string> players;
-// 	bool property_sat;
-// 	std::vector<std::vector<Utility>> pr_utilities;
-
-// 	SubtreeResult(std::vector<std::string> _players, bool _property_sat, std::vector<std::vector<Utility>> _pr_utilities = {}) {
-// 		players = _players;
-// 		property_sat = property_sat;
-// 		pr_utilities = _pr_utilities;
-// 	}
-// };
 
 // reference to a utility tuple in a leaf
 struct UtilityTuple {
@@ -54,7 +38,6 @@ struct UtilityTuple {
 		::new (this) UtilityTuple(other);
 		return *this;
 	}
-
 
 	UtilityTuple(decltype(leaf) leaf) : leaf(leaf), strategy_vector() {}
 	size_t size() const { return leaf.size(); }
@@ -166,12 +149,6 @@ class Node {
 
 	virtual ~Node() {};
 
-	// is this a leaf? - OLD
-	//virtual bool is_leaf() const = 0;
-
-	// is this a subtree? - OLD
-	//virtual bool is_subtree() const = 0;
-
 	// if is_leaf(), do the downcast
 	const Leaf &leaf() const;
 
@@ -277,10 +254,6 @@ class Subtree : public Node {
       honest_utility(_honest_utility),
       problematic_group(0) {}
 
-	//virtual bool is_leaf() const { return false; }
-
-	//virtual bool is_subtree() const { return true; }
-
 	void reset_reason() const {
 		::new (&reason) z3::Bool();
 	}
@@ -306,7 +279,6 @@ class Subtree : public Node {
 };
 
 
-
 // leaf node
 class Leaf final : public Node {
 
@@ -317,10 +289,6 @@ class Leaf final : public Node {
 	mutable uint64_t problematic_group;
 
 	NodeType type() const override { return NodeType::LEAF; }
-
-	//virtual bool is_leaf() const { return true; }
-
-	//virtual bool is_subtree() const { return false; }
 
 	virtual UtilityTuplesSet get_utilities() const {return {utilities}; }
 
@@ -376,10 +344,6 @@ class Branch final : public Node {
 	NodeType type() const override { return NodeType::BRANCH; }
 
 	Branch(unsigned player) : player(player), counterexample_choices({}) {}
-
-	//virtual bool is_leaf() const { return false; }
-
-	//virtual bool is_subtree() const { return false; }
 
 	virtual UtilityTuplesSet get_utilities() const {return practical_utilities; }
 
@@ -749,8 +713,6 @@ class Branch final : public Node {
 };
 
 
-
-
 // an action available at a branch
 struct Action {
 	// the name of the action
@@ -975,7 +937,6 @@ struct Input {
 		}
 		
 	}
-
 
 	void add_unsat_case(std::vector<z3::Bool> _case) const {
 		unsat_cases.push_back(_case);
