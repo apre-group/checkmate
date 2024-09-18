@@ -848,9 +848,6 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		UtilityTuple honest_utility = *to_clear_strategy.begin();
 		
 		honest_utility.strategy_vector = {};
-		
-		bool wtf =  honest_utility.strategy_vector.size() == 0;
-		assert(wtf);
 		honest_utility.strategy_vector.push_back(honest_choice);
 		
 		// this should be maximal against other players, so...
@@ -917,6 +914,9 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				}
 			}
 			j++;
+		}
+		if(j == honest_index) {
+			honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
 		}
 		/*if (result != false) {
 			branch.practical_utilities = {honest_utility};
