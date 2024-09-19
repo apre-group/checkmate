@@ -380,7 +380,6 @@ class Branch final : public Node {
 		counterexample_choices = {};
 		for (auto& choice: choices) {
 			if (!choice.node->is_leaf() && !choice.node->is_subtree()) {
-				//Branch* branch = dynamic_cast<Branch*>(choice.node); TODO
 				choice.node->branch().reset_counterexample_choices();
 			}
 		}
@@ -923,16 +922,25 @@ struct Input {
 			}
 		} else {
 			for (CeCase ce_case : counterexamples){
-				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-				std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
-				std::cout << "Practical histories:" << std::endl;
-				for(auto history : ce_case.counterexample) {
-					std::vector<std::string> history_to_print;
-					history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
-					history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
-					std::cout << history_to_print << std::endl;	
+				if(ce_case.player_group.size() == 0) {
+					// user should check ce in subtree mode manually
+					std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+					std::cout << "The subtree after history " << ce_case.counterexample[0].history << " is not practical. Run subtree in default mode with option counterexamples." << std::endl;
+				} else {
+					std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+					std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
+					std::cout << "Practical histories:" << std::endl;
+					for(auto history : ce_case.counterexample) {
+						std::vector<std::string> history_to_print;
+						history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
+						history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
+						std::cout << history_to_print << std::endl;	
+						
+						/*if(history.player == "subtree") {
+							std::cout << "The above history ends in a subtree. " << std::endl;
+						}*/
+					}
 				}
-
 			}
 		}
 		

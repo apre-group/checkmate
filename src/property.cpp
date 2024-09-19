@@ -640,6 +640,10 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					return false;
 				} else {
 					if (subtree_result.utilities.size() == 0) {
+						// we have to be along honest at this point, otw we would have had at least one pr utility
+						if(options.counterexamples) {
+							input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
+						}
 						return false;
 					}
 					subtree.utilities.insert(subtree.utilities.end(), subtree_result.utilities.begin(), subtree_result.utilities.end());
@@ -1903,6 +1907,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 		bool is_wi = (property == PropertyType::WeakerImmunity) || (property == PropertyType::WeakImmunity);
 		input.print_strategies(is_wi);
 	}
+
 	if (options.counterexamples && !prop_holds){
 		bool is_wi = (property == PropertyType::WeakerImmunity) || (property == PropertyType::WeakImmunity);
 		bool is_cr = (property == PropertyType::CollusionResilience);
