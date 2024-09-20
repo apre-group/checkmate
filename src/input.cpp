@@ -1184,15 +1184,7 @@ std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, std::vecto
 		//cechoice.choices = {current_action};
 		cechoice.choices = {};
 		
-		std::vector<std::string> history_and_end_type = strat2hist(utility.strategy_vector);
-		std::string end_type = history_and_end_type[history_and_end_type.size()-1];
-
-		if(end_type == "subtree") {
-			cechoice.player = "subtree";
-		}
-
-		std::vector<std::string> result_hist;
-		result_hist.insert(result_hist.end(), history_and_end_type.begin(), history_and_end_type.end()-1);
+		std::vector<std::string> result_hist = strat2hist(utility.strategy_vector);
 		cechoice.choices.insert(cechoice.choices.end(), result_hist.begin(), result_hist.end());
 		
 		std::vector<std::string> updated_history;
@@ -1209,9 +1201,9 @@ std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, std::vecto
 std::vector<std::string> Node::strat2hist(std::vector<std::string> &strategy) const {
 	
 	if(this->is_leaf()) {
-		return {"leaf"};
+		return {};
 	} else if (this->is_subtree()) {
-		return {"subtree"};
+		return {};
 	}
 
 	assert(strategy.size() > 0);

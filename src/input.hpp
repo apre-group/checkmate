@@ -8,6 +8,7 @@
 #include "utility.hpp"
 #include "utils.hpp"
 #include "z3++.hpp"
+#include "options.hpp"
 
 // forward declarations for Node methods
 class Leaf;
@@ -898,7 +899,7 @@ struct Input {
 		}
 	}
 
-	void print_counterexamples(bool is_wi, bool is_cr) const {
+	void print_counterexamples(const Options &options, bool is_wi, bool is_cr) const {
 		if(is_wi || is_cr) {
 			std::cout << std::endl;
 			for (CeCase ce_case : counterexamples){
@@ -929,9 +930,17 @@ struct Input {
 		} else {
 			for (CeCase ce_case : counterexamples){
 				if(ce_case.player_group.size() == 0) {
-					// user should check ce in subtree mode manually
-					std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-					std::cout << "The subtree after history " << ce_case.counterexample[0].history << " is not practical. Run subtree in default mode with option counterexamples." << std::endl;
+					if(options.supertree) {
+						// user should check ce in subtree mode manually
+						std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+						std::cout << "The subtree after history " << ce_case.counterexample[0].history << " is not practical. Run subtree in default mode with option counterexamples." << std::endl;
+					} else {
+						assert(!options.subtree);
+						std::cout << "Practical histories that extend supertree counterexamples for case: " << ce_case._case <<  std::endl;
+						for(auto history : ce_case.counterexample) {
+							std::cout << history.choices << std::endl;	
+						}
+					}
 				} else {
 					std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
 					std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;

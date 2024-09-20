@@ -519,7 +519,7 @@ namespace z3 {
 				std::string result = "(";
 				for (unsigned i = 0; i < num_args; ++i) {
 					result += pretty_print(args[i]);
-					if (i < num_args - 1) result += " ∨ ";
+					if (i < num_args - 1) result += " || ";
 				}
 				result += ")";
 				return result;

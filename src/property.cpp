@@ -1117,7 +1117,19 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 
 	else if (property == PropertyType::CollusionResilience) {
 		// lookup the leaf for this history
-		const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
+		std::vector<Utility> utility;
+		if(history < input.honest.size()) {
+			const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
+			if (honest_leaf.is_leaf()){
+				utility = honest_leaf.leaf().utilities;
+			} else {
+				// the case where the honest history ends in an subtree
+				utility = honest_leaf.subtree().honest_utility;
+			}
+		} else {
+			utility = input.honest_utilities[history - input.honest.size()].leaf;
+		}
+		
 
 		// sneaky hack follows: all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
 		// done this way more for concision than efficiency
@@ -1142,13 +1154,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 				// compute the honest total for the current group
 				for (size_t player = 0; player < input.players.size(); player++) {
 					if (group[player]) {
-						Utility player_utility;
-						if (honest_leaf.is_leaf()){
-							player_utility = honest_leaf.leaf().utilities[player];
-						} else {
-							// the case where the honest history ends in an subtree
-							player_utility = honest_leaf.subtree().honest_utility[player];
-						}
+						Utility player_utility = utility[player];
 						honest_total = honest_total + player_utility;
 					}
 				}
@@ -1212,7 +1218,19 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 	}
 
 	else if (property == PropertyType::Practicality) {
-		return practicality_rec_old(input, options, solver, input.root.get(), {}, true);
+		bool pr_result = practicality_rec_old(input, options, solver, input.root.get(), {}, true);
+		if(pr_result && options.counterexamples && !input.root->branch().honest) {
+			CeCase pr_ce_case;
+			std::vector<CeChoice> pr_choices;
+			for(const auto& pr_utility : input.root->practical_utilities) {
+				CeChoice ce_choice;
+				ce_choice.choices = input.root->strat2hist(pr_utility.strategy_vector);
+				pr_choices.push_back(ce_choice);
+			}
+			pr_ce_case.counterexample = pr_choices;
+			input.counterexamples.push_back(pr_ce_case);
+		}
+		return pr_result;
 	}
 	
  
@@ -1256,6 +1274,12 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 				input.root->reset_violation_cr();
 			}
 		}
+
+		if(options.counterexamples && property == PropertyType::Practicality && !input.root->honest) {
+			input.add_case2ce(current_case);
+		}
+
+
 		return true;
 	}
 
@@ -1851,7 +1875,20 @@ void property(const Options &options, const Input &input, PropertyType property,
 
 	std::cout << std::endl;
 	std::cout << std::endl;
-	std::cout << "Is history " << input.honest[history] << " " << prop_name << "?" << std::endl;
+	if(history < input.honest.size()) {
+		std::cout << "Is history " << input.honest[history] << " " << prop_name << "?" << std::endl;
+	} else {
+		if(property == PropertyType::Practicality) {
+			std::cout << "Computing practical histories/strategies." << std::endl;
+		} else if (property == PropertyType::CollusionResilience) {
+			// see comment in analyze properties
+			// if history >= input.honest.size() then we are running subtree in default mode
+			// and are considering an honest utility, not an honest history
+			std::cout << "Is the subtree " << prop_name << " for honest utility " << input.honest_utilities[history - input.honest.size()].leaf << "?" << std::endl;
+		} else {
+			std::cout << "Is the subtree " << prop_name << "?" << std::endl;
+		}
+	}
 
 	assert(solver.solve() == z3::Result::SAT);
 
@@ -1859,7 +1896,9 @@ void property(const Options &options, const Input &input, PropertyType property,
 		input.reset_practical_utilities();
 		std::vector<PracticalitySubtreeResult> satisfied_in_case = {};
 		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, satisfied_in_case)) {
-			std::cout << "YES, it is " << prop_name << "." << std::endl;
+			if(history < input.honest.size()) {
+				std::cout << "YES, it is " << prop_name << "." << std::endl;
+			}
 			prop_holds = true;
 		} else { 
 			std::cout << "NO, it is not " << prop_name << "." << std::endl;
@@ -1911,9 +1950,12 @@ void property(const Options &options, const Input &input, PropertyType property,
 	if (options.counterexamples && !prop_holds){
 		bool is_wi = (property == PropertyType::WeakerImmunity) || (property == PropertyType::WeakImmunity);
 		bool is_cr = (property == PropertyType::CollusionResilience);
-		input.print_counterexamples(is_wi, is_cr);
+		input.print_counterexamples(options, is_wi, is_cr);
 	}
 	
+	if(options.counterexamples && prop_holds && history == input.honest.size() && property == PropertyType::Practicality) {
+		input.print_counterexamples(options, false, false);
+	}
 }
 
 void property_subtree(const Options &options, const Input &input, PropertyType property, size_t history, Subtree &subtree) {
@@ -2342,8 +2384,9 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 
 void analyse_properties(const Options &options, const Input &input) {
 
-
-	assert(input.honest_utilities.size()==0);
+	if(input.honest_utilities.size() != 0) {
+		std::cout << "INFO: This file is a subtree, but CheckMate is running in default mode" << std::endl;
+	}
 
 	/* iterate over all honest histories and check the properties for each of them */
 	for (size_t history = 0; history < input.honest.size(); history++) { 
@@ -2378,6 +2421,66 @@ void analyse_properties(const Options &options, const Input &input) {
 				property(options, input, property_types[i], history);
 			}
 		}
+	}
+
+	if(input.honest_utilities.size() != 0) {
+
+		input.root->reset_honest();
+
+		std::vector<bool> property_chosen = {options.weak_immunity, options.weaker_immunity, options.practicality};
+		std::vector<PropertyType> property_types = {PropertyType::WeakImmunity, PropertyType::WeakerImmunity, PropertyType::Practicality};
+
+		assert(property_chosen.size() == property_types.size());
+
+		if(property_chosen.size() > 0) {
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Checking no honest history " << std::endl; 
+		}
+
+		for (size_t i=0; i<property_chosen.size(); i++) {
+			if(property_chosen[i]) {
+				input.reset_counterexamples();
+				input.root.get()->reset_counterexample_choices();
+				input.reset_logging();
+				input.reset_unsat_cases();
+				input.root->reset_reason();
+				input.root->reset_strategy();
+				input.reset_strategies(); 
+				input.root->reset_problematic_group(false); 
+				input.reset_reset_point();
+				property(options, input, property_types[i], input.honest.size());
+			}
+		}
+
+		if(options.collusion_resilience) {
+
+			for(unsigned honest_utility = 0; honest_utility < input.honest_utilities.size(); honest_utility++) {
+				std::cout << std::endl;
+				std::cout << std::endl;
+				std::cout << "Checking honest utility " << input.honest_utilities[honest_utility].leaf << std::endl; 
+
+				if(options.strategies) {
+					input.root->reset_violation_cr();
+				}
+
+				input.reset_counterexamples();
+				input.root.get()->reset_counterexample_choices();
+				input.reset_logging();
+				input.reset_unsat_cases();
+				input.root->reset_reason();
+				input.root->reset_strategy();
+				input.reset_strategies(); 
+				input.root->reset_problematic_group(true); 
+				input.reset_reset_point();
+				// input.honest.size() + honest_utility means we are running a subree in default mode
+				// and we consider collusion resilience for the honest utility
+				property(options, input, PropertyType::CollusionResilience, input.honest.size() + honest_utility);
+
+			}
+
+		}
+
 	}
 }
 
