@@ -903,22 +903,28 @@ struct Input {
 			std::cout << std::endl;
 			for (CeCase ce_case : counterexamples){
 				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-				if(is_wi){
-					std::cout << "Player " << ce_case.player_group[0] << " can be harmed, if" << std::endl;
+				if(ce_case.counterexample.size() == 0) {
+					assert(is_wi);
+					std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history." << std::endl;
+				} else {
+					if(is_wi){
+						std::cout << "Player " << ce_case.player_group[0] << " can be harmed, if" << std::endl;
+					}
+					else if(is_cr){
+						std::cout << "Group " << ce_case.player_group << " can deviate profitably, if" << std::endl;
+					}
+					for (CeChoice ce_choice : ce_case.counterexample){
+						std::cout
+							<< "\tPlayer "
+							<< ce_choice.player
+							<< " takes one of the actions "
+							<< ce_choice.choices
+							<< " after history "
+							<< ce_choice.history
+							<< std::endl;
+					}
 				}
-				else if(is_cr){
-					std::cout << "Group " << ce_case.player_group << " can deviate profitably, if" << std::endl;
-				}
-				for (CeChoice ce_choice : ce_case.counterexample){
-					std::cout
-						<< "\tPlayer "
-						<< ce_choice.player
-						<< " takes one of the actions "
-						<< ce_choice.choices
-						<< " after history "
-						<< ce_choice.history
-						<< std::endl;
-				}
+				
 			}
 		} else {
 			for (CeCase ce_case : counterexamples){
