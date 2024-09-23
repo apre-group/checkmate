@@ -723,6 +723,11 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 		utilities.insert({name, {z3::Real::ZERO, constant}});
 	}
 
+	if(document["honest_utilities"].size() > 0 && supertree) {
+		std::cerr << "checkmate: honest utility should not be specified in supertree mode " << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+
 	// load honest utilities
 	for (auto utility_dict : document["honest_utilities"]) {
 

@@ -70,6 +70,15 @@ Options::Options(char **argv) {
 		argv++;
 	}
 
+	if (subtree && supertree)
+		bail("cannot combine subtree and supertree mode");
+
+	if(subtree) {
+		if(counterexamples || all_counterexamples || strategies || preconditions) {
+			bail("cannot combine subtree with any other option");
+		}
+	}
+
 	// analyze everything by default
 	if (!weak_immunity && !weaker_immunity && !collusion_resilience && !practicality)
 		weak_immunity = weaker_immunity = collusion_resilience = practicality = true;
