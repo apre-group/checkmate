@@ -936,6 +936,9 @@ struct Input {
 							<< ce_choice.history
 							<< std::endl;
 					}
+					if(options.supertree) {
+						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
+					}
 				}
 				
 			}
@@ -966,6 +969,9 @@ struct Input {
 						/*if(history.player == "subtree") {
 							std::cout << "The above history ends in a subtree. " << std::endl;
 						}*/
+					}
+					if(options.supertree) {
+						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
 					}
 				}
 			}
