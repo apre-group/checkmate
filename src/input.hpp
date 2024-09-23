@@ -906,7 +906,11 @@ struct Input {
 				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
 				if(ce_case.counterexample.size() == 0) {
 					if(is_wi) {
-						std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history." << std::endl;
+						if(options.subtree) {
+							std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history. Run subtree along honest history in default mode with option counterexamples." << std::endl;
+						} else {
+							std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history." << std::endl;
+						}
 					}
 					else if(is_cr) {
 						if(options.supertree) {
