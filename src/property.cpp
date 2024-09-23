@@ -242,11 +242,24 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				// init_cons && wi_cons && current_case    && !disj_of_cased UNSAT
 
 				std::vector<z3::Bool> cases_as_conjunctions = {};
+
 				for (auto _case: subtree_result.satisfied_in_case) {
-					cases_as_conjunctions.push_back(z3::conjunction(_case));
+					// try to optimize: if only 1 -> no need for conjunction
+					if(_case.size() == 1) {
+						cases_as_conjunctions.push_back(_case[0]);
+					} else {
+						cases_as_conjunctions.push_back(z3::conjunction(_case));
+					}
 				}
 
 				z3::Bool disj_of_cases = z3::disjunction(cases_as_conjunctions);
+
+				if(cases_as_conjunctions.size() == 1) {
+					disj_of_cases = cases_as_conjunctions[0];
+				} else {
+					disj_of_cases = z3::disjunction(cases_as_conjunctions);
+				}
+
 				z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
 				if (z3_result_implied == z3::Result::UNSAT) {
@@ -456,10 +469,23 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					// init_cons && wi_cons && current_case    && !disj_of_cased UNSAT
 
 					std::vector<z3::Bool> cases_as_conjunctions = {};
+
 					for (auto _case: subtree_result.satisfied_in_case) {
-						cases_as_conjunctions.push_back(z3::conjunction(_case));
+						// try to optimize: if only 1 -> no need for conjunction
+						if(_case.size() == 1) {
+							cases_as_conjunctions.push_back(_case[0]);
+						} else {
+							cases_as_conjunctions.push_back(z3::conjunction(_case));
+						}
 					}
-					z3::Bool disj_of_cases = z3::disjunction(cases_as_conjunctions);
+					z3::Bool disj_of_cases;
+
+					if(cases_as_conjunctions.size() == 1) {
+						disj_of_cases = cases_as_conjunctions[0];
+					} else {
+						disj_of_cases = z3::disjunction(cases_as_conjunctions);
+					}
+					
 					z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
 					if (z3_result_implied == z3::Result::UNSAT) {
@@ -628,7 +654,13 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		const auto &subtree = node->subtree();
 
 		for (const PracticalitySubtreeResult &subtree_result: subtree.practicality) {
-			z3::Bool subtree_case = z3::conjunction(subtree_result._case);
+			z3::Bool subtree_case;
+			// try to optimize: if only 1 -> no need for conjunction
+			if(subtree_result._case.size() == 1) {
+				subtree_case = subtree_result._case[0];
+			} else {
+				subtree_case = z3::conjunction(subtree_result._case);
+			}
 
 			z3::Result overlapping = solver.solve({subtree_case});
 
