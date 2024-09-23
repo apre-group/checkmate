@@ -905,8 +905,16 @@ struct Input {
 			for (CeCase ce_case : counterexamples){
 				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
 				if(ce_case.counterexample.size() == 0) {
-					assert(is_wi);
-					std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history." << std::endl;
+					if(is_wi) {
+						std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history." << std::endl;
+					}
+					else if(is_cr) {
+						if(options.supertree) {
+							std::cout << "Group " << ce_case.player_group << " can deviate profitably. Run subtree along honest history in default mode with option counterexamples." << std::endl;
+						} else {
+							std::cout << "Group " << ce_case.player_group << " can deviate profitably." << std::endl;
+						}
+					}
 				} else {
 					if(is_wi){
 						std::cout << "Player " << ce_case.player_group[0] << " can be harmed, if" << std::endl;

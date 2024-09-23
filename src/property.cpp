@@ -651,6 +651,12 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				}
 			} 
 		}
+		// in case we have listed only cases where it is practical and they do not 
+		// span the whole universe, return false, because no corresponding case has been found
+		if(options.counterexamples) {
+			input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
+		}
+		return false;
 	}
 
 	// else we deal with a branch

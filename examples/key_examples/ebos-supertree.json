@@ -1,0 +1,555 @@
+{
+    "players": [
+        "W",
+        "M",
+        "G",
+        "B"
+    ],
+    "actions": [
+        "MINE",
+        "YOURS"
+    ],
+    "infinitesimals": [],
+    "constants": [
+        "p",
+        "f",
+        "a",
+        "d"
+    ],
+    "initial_constraints": [
+        "p > 0",
+        "f > 0",
+        "-a > 0",
+        "d > 0",
+        "p - d > 0",
+        "f - d > 0"
+    ],
+    "property_constraints": {
+        "weak_immunity": [],
+        "weaker_immunity": [],
+        "collusion_resilience": [],
+        "practicality": []
+    },
+    "honest_histories": [
+        [
+            "MINE"
+        ]
+    ],
+    "tree": {
+        "player": "W",
+        "children": [
+            {
+                "action": "MINE",
+                "child": {
+                    "subtree": {
+                        "collusion_resilience": [
+                            {
+                                "player_group": [
+                                    "B"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "d + f >= p - d"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "G"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "true"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "B",
+                                    "G"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "d + f + d + f >= p - d + d + p"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "M"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "d + f >= p - d"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "B",
+                                    "M"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "d + f + d + f >= p - d + a",
+                                        "d + f + d + f >= p - d + p - d"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "G",
+                                    "M"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "d + f + d + f >= a + p - d"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "B",
+                                    "G",
+                                    "M"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "d + f + d + f + d + f >= p - d + d + p + a",
+                                        "d + f + d + f + d + f >= p - d + d + p + p - d"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "W"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "true"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "B",
+                                    "W"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "d + f + d + f >= p - d + a"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "G",
+                                    "W"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "true"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "B",
+                                    "G",
+                                    "W"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "d + f + d + f + d + f >= p - d + d + p + a"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "M",
+                                    "W"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "d + f + d + f >= p - d + d + p"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "B",
+                                    "M",
+                                    "W"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "d + f + d + f + d + f >= p - d + a + a",
+                                        "d + f + d + f + d + f >= a + p - d + d + p",
+                                        "d + f + d + f + d + f >= p - d + p - d + d + p"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "G",
+                                    "M",
+                                    "W"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "d + f + d + f + d + f >= a + p - d + d + p"
+                                    ]
+                                ]
+                            }
+                        ],
+                        "honest_utility": [
+                            {
+                                "player": "B",
+                                "value": "d + f + 0.0"
+                            },
+                            {
+                                "player": "G",
+                                "value": "d + f + 0.0"
+                            },
+                            {
+                                "player": "M",
+                                "value": "d + f + 0.0"
+                            },
+                            {
+                                "player": "W",
+                                "value": "d + f + 0.0"
+                            }
+                        ],
+                        "practicality": [
+                            {
+                                "case": [
+                                    "d + f >= p - d"
+                                ],
+                                "utilities": [
+                                    [
+                                        {
+                                            "player": "B",
+                                            "value": "d + f + 0.0"
+                                        },
+                                        {
+                                            "player": "G",
+                                            "value": "d + f + 0.0"
+                                        },
+                                        {
+                                            "player": "M",
+                                            "value": "d + f + 0.0"
+                                        },
+                                        {
+                                            "player": "W",
+                                            "value": "d + f + 0.0"
+                                        }
+                                    ]
+                                ]
+                            }
+                        ],
+                        "weak_immunity": [
+                            {
+                                "player_group": [
+                                    "B"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "true"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "G"
+                                ],
+                                "satisfied_in_case": []
+                            },
+                            {
+                                "player_group": [
+                                    "M"
+                                ],
+                                "satisfied_in_case": []
+                            },
+                            {
+                                "player_group": [
+                                    "W"
+                                ],
+                                "satisfied_in_case": []
+                            }
+                        ],
+                        "weaker_immunity": [
+                            {
+                                "player_group": [
+                                    "B"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "true"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "G"
+                                ],
+                                "satisfied_in_case": []
+                            },
+                            {
+                                "player_group": [
+                                    "M"
+                                ],
+                                "satisfied_in_case": []
+                            },
+                            {
+                                "player_group": [
+                                    "W"
+                                ],
+                                "satisfied_in_case": []
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "action": "YOURS",
+                "child": {
+                    "player": "M",
+                    "children": [
+                        {
+                            "action": "MINE",
+                            "child": {
+                                "player": "G",
+                                "children": [
+                                    {
+                                        "action": "MINE",
+                                        "child": {
+                                            "player": "B",
+                                            "children": [
+                                                {
+                                                    "action": "MINE",
+                                                    "child": {
+                                                        "utility": [
+                                                            {
+                                                                "player": "W",
+                                                                "value": "p - d"
+                                                            },
+                                                            {
+                                                                "player": "M",
+                                                                "value": "d + p"
+                                                            },
+                                                            {
+                                                                "player": "G",
+                                                                "value": "a"
+                                                            },
+                                                            {
+                                                                "player": "B",
+                                                                "value": "a"
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                {
+                                                    "action": "YOURS",
+                                                    "child": {
+                                                        "utility": [
+                                                            {
+                                                                "player": "W",
+                                                                "value": "p - d"
+                                                            },
+                                                            {
+                                                                "player": "M",
+                                                                "value": "d + p"
+                                                            },
+                                                            {
+                                                                "player": "G",
+                                                                "value": "d + p"
+                                                            },
+                                                            {
+                                                                "player": "B",
+                                                                "value": "p - d"
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "action": "YOURS",
+                                        "child": {
+                                            "player": "B",
+                                            "children": [
+                                                {
+                                                    "action": "MINE",
+                                                    "child": {
+                                                        "utility": [
+                                                            {
+                                                                "player": "W",
+                                                                "value": "p - d"
+                                                            },
+                                                            {
+                                                                "player": "M",
+                                                                "value": "d + p"
+                                                            },
+                                                            {
+                                                                "player": "G",
+                                                                "value": "p - d"
+                                                            },
+                                                            {
+                                                                "player": "B",
+                                                                "value": "d + p"
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                {
+                                                    "action": "YOURS",
+                                                    "child": {
+                                                        "utility": [
+                                                            {
+                                                                "player": "W",
+                                                                "value": "p - d"
+                                                            },
+                                                            {
+                                                                "player": "M",
+                                                                "value": "d + p"
+                                                            },
+                                                            {
+                                                                "player": "G",
+                                                                "value": "a"
+                                                            },
+                                                            {
+                                                                "player": "B",
+                                                                "value": "a"
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "action": "YOURS",
+                            "child": {
+                                "player": "G",
+                                "children": [
+                                    {
+                                        "action": "MINE",
+                                        "child": {
+                                            "player": "B",
+                                            "children": [
+                                                {
+                                                    "action": "MINE",
+                                                    "child": {
+                                                        "utility": [
+                                                            {
+                                                                "player": "W",
+                                                                "value": "-d - f"
+                                                            },
+                                                            {
+                                                                "player": "M",
+                                                                "value": "-d - f"
+                                                            },
+                                                            {
+                                                                "player": "G",
+                                                                "value": "d - f"
+                                                            },
+                                                            {
+                                                                "player": "B",
+                                                                "value": "d - f"
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                {
+                                                    "action": "YOURS",
+                                                    "child": {
+                                                        "utility": [
+                                                            {
+                                                                "player": "W",
+                                                                "value": "a"
+                                                            },
+                                                            {
+                                                                "player": "M",
+                                                                "value": "a"
+                                                            },
+                                                            {
+                                                                "player": "G",
+                                                                "value": "d + p"
+                                                            },
+                                                            {
+                                                                "player": "B",
+                                                                "value": "p - d"
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "action": "YOURS",
+                                        "child": {
+                                            "player": "B",
+                                            "children": [
+                                                {
+                                                    "action": "MINE",
+                                                    "child": {
+                                                        "utility": [
+                                                            {
+                                                                "player": "W",
+                                                                "value": "a"
+                                                            },
+                                                            {
+                                                                "player": "M",
+                                                                "value": "a"
+                                                            },
+                                                            {
+                                                                "player": "G",
+                                                                "value": "p - d"
+                                                            },
+                                                            {
+                                                                "player": "B",
+                                                                "value": "d + p"
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                {
+                                                    "action": "YOURS",
+                                                    "child": {
+                                                        "utility": [
+                                                            {
+                                                                "player": "W",
+                                                                "value": "f - d"
+                                                            },
+                                                            {
+                                                                "player": "M",
+                                                                "value": "f - d"
+                                                            },
+                                                            {
+                                                                "player": "G",
+                                                                "value": "f - d"
+                                                            },
+                                                            {
+                                                                "player": "B",
+                                                                "value": "f - d"
+                                                            }
+                                                        ]
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}
