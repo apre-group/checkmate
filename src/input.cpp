@@ -10,6 +10,8 @@ struct Lexer {
 	enum class Token {
 		NUMERAL,
 		IDENTIFIER,
+		LPAREN,
+		RPAREN,
 		PLUS,
 		MINUS,
 		MULTIPLY,
@@ -63,6 +65,16 @@ struct Lexer {
 				buffer.push_back(*remaining++);
 			unary = false;
 			return Token::NUMERAL;
+		}
+		else if(*remaining == '(') {
+			remaining++;
+			unary = true;
+			return Token::LPAREN;
+		}
+		else if(*remaining == ')') {
+			remaining++;
+			unary = false;
+			return Token::RPAREN;
 		}
 		// operators
 		else if (*remaining == '+') {
@@ -120,6 +132,7 @@ struct Lexer {
 struct Parser {
 	// possible operators to apply to the stack
 	enum class Operation {
+		PAREN,
 		PLUS,
 		MINUS,
 		MULTIPLY,
@@ -135,16 +148,19 @@ struct Parser {
 
 	// operator precedence classes, binding from loosest to tightest
 	enum class Precedence {
+		PAREN,
 		OR,
 		COMPARISON,
 		PLUSMINUS,
 		MULTIPLY,
-		NEGATE
+		NEGATE,
 	};
 
 	// the precedence class of an operator
 	static Precedence precedence(Operation operation) {
 		switch (operation) {
+			case Operation::PAREN:
+				return Precedence::PAREN;
 			case Operation::PLUS:
 			case Operation::MINUS:
 				return Precedence::PLUSMINUS;
@@ -163,7 +179,6 @@ struct Parser {
 			case Operation::OR:
 				return Precedence::OR;
 		}
-		UNREACHABLE;
 	}
 
 	// construct a parser object based on `identifiers`, but don't parse anything yet
@@ -215,6 +230,9 @@ struct Parser {
 	// once we know we have to apply an operation, commit to it
 	void commit(Operation operation) {
 		switch (operation) {
+			case Operation::PAREN:
+				// nothing to do
+				break;
 			case Operation::PLUS: {
 				auto right = pop_utility();
 				auto left = pop_utility();
@@ -302,13 +320,22 @@ struct Parser {
 					Utility utility;
 					try {
 						utility = identifiers.at(lexer.buffer);
-
 					}
 					catch (const std::out_of_range &) {
 						std::cerr << "checkmate: undeclared constant " << lexer.buffer << std::endl;
 						std::exit(EXIT_FAILURE);
 					}
 					utility_stack.push_back(utility);
+					break;
+				}
+				case Lexer::Token::LPAREN: {
+					operation_stack.push_back(Operation::PAREN);
+					break;
+				}
+				case Lexer::Token::RPAREN: {
+					while (!operation_stack.empty() && operation_stack.back() != Operation::PAREN)
+						commit(pop_operation());
+					pop_operation();
 					break;
 				}
 				case Lexer::Token::PLUS:
