@@ -231,7 +231,7 @@ struct PracticalitySubtreeResult {
 class Subtree : public Node {
 
 	public:
-	mutable uint64_t problematic_group;
+	mutable uint64_t problematic_group = 0;
 	mutable std::vector<std::vector<Utility>> utilities;
 
 	NodeType type() const override { return NodeType::SUBTREE; }
@@ -252,8 +252,7 @@ class Subtree : public Node {
       weaker_immunity(_weaker_immunity),
       collusion_resilience(_collusion_resilience),
       practicality(_practicality),
-      honest_utility(_honest_utility),
-      problematic_group(0) {}
+      honest_utility(_honest_utility) {}
 
 	void reset_reason() const {
 		::new (&reason) z3::Bool();
