@@ -23,4 +23,60 @@ namespace z3 {
 	Z3_sort Expression::REAL_SORT = Z3_mk_real_sort(CONTEXT);
 
 	Real Real::ZERO = Real::value(0);
+
+	// TODO keep track of precedence
+	std::ostream &operator<<(std::ostream &out, z3::Real expr) {
+		auto op = expr.op();
+		switch(op) {
+		case Real::Operator::NUMERAL:
+		case Real::Operator::CONSTANT:
+			out << Z3_ast_to_string(CONTEXT, expr.ast);
+			check_error();
+			return out;
+		case Real::Operator::MIN:
+			return out << '(' << op << ' ' << expr.real_child(0) << ')';
+		case Real::Operator::ADD:
+		case Real::Operator::SUB:
+		case Real::Operator::MUL:
+		case Real::Operator::DIV:
+			out << '(';
+			for(unsigned i = 0; i < expr.num_args(); i++) {
+				if(i)
+					out << ' ' << op << ' ';
+				out << expr.real_child(i);
+			}
+			out << ')';
+			return out;
+		}
+	}
+
+	// TODO keep track of precedence
+	std::ostream &operator<<(std::ostream &out, z3::Bool expr) {
+		auto op = expr.op();
+		switch(op) {
+		case Bool::Operator::TRUE:
+			return out << "true";
+		case Bool::Operator::FALSE:
+			return out << "false";
+		case Bool::Operator::NOT:
+			return out << "!(" << expr.bool_child(0) << ")";
+		case Bool::Operator::AND:
+		case Bool::Operator::OR:
+			out << '(';
+			for(unsigned i = 0; i < expr.num_args(); i++) {
+				if(i)
+					out << ' ' << op << ' ';
+				out << expr.bool_child(i);
+			}
+			out << ')';
+			return out;
+		case Bool::Operator::EQ:
+		case Bool::Operator::NE:
+		case Bool::Operator::LT:
+		case Bool::Operator::LE:
+		case Bool::Operator::GT:
+		case Bool::Operator::GE:
+			return out << '(' << expr.real_child(0) << ' ' << op << ' ' << expr.real_child(1) << ')';
+		}
+	}
 }

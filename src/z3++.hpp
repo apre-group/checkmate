@@ -16,6 +16,7 @@
 #include <vector>
 #include <unordered_map>
 
+#include "utils.hpp"
 #include "z3.h"
 
 namespace z3 {
@@ -41,57 +42,28 @@ namespace z3 {
 		Expression() = default;
 
 		// does this point to a valid expression?
-		inline bool null() const { return ast == nullptr; }
+		bool null() const { return ast == nullptr; }
 
 		// is this expression exactly the same as `other`?
-		inline bool is(Expression other) const { return ast == other.ast; }
+		bool is(Expression other) const { return ast == other.ast; }
 
 		// Z3's internal ID for this AST
-		inline unsigned id() const {
+		unsigned id() const {
 			unsigned result = Z3_get_ast_id(CONTEXT, ast);
 			check_error();
 			return result;
 		}
 
-		// invoke Z3's internal printer
-		friend std::ostream &operator<<(std::ostream &out, Expression expr) {
-			std::ostream &result = out << Z3_ast_to_string(CONTEXT, expr.ast);
+		// return number of arguments of the applied operator
+		unsigned num_args() const {
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			unsigned result = Z3_get_app_num_args(CONTEXT, app);
 			check_error();
 			return result;
 		}
 
-		// check whether this is an operator application
-		bool wrap_Z3_is_app() {
-			return Z3_is_app(CONTEXT, ast);
-		}
-
-		// return name of applied operator
-		std::string get_operator_name_expr() {
-			Z3_app app = Z3_to_app(CONTEXT, ast);
-			Z3_func_decl decl = Z3_get_app_decl(CONTEXT, app);
-			Z3_symbol symbol = Z3_get_decl_name(CONTEXT, decl);
-			std::string op_name = Z3_get_symbol_string(CONTEXT, symbol);
-			return op_name;
-		}
-
-		Z3_app wrap_Z3_to_app() {
-			return Z3_to_app(CONTEXT, ast);
-		}
-
-		// return number of arguments of the applied operator
-		unsigned wrap_Z3_get_app_num_args(){
-			Z3_app app = Z3_to_app(CONTEXT, ast);
-			return Z3_get_app_num_args(CONTEXT, app);
-		}	
-
-		// return the arguments of the applied operator
-		Z3_ast wrap_Z3_get_app_arg(Z3_app a, unsigned i) {
-			return Z3_get_app_arg(CONTEXT, a, i);
-		}
-
-		bool wrap_is_bool() {
-			return is_bool();
-		}
+		// the nth child of an operator application
+		Real real_child(unsigned n);
 
 		// wrap `ast`
 		Expression(Z3_ast ast) : ast(ast) {}
@@ -130,12 +102,14 @@ namespace z3 {
 		// Model wants to construct Booleans from models
 		friend Model;
 
+		friend std::ostream &operator<<(std::ostream &, Bool);
+
 	public:
 		Bool() : Expression() {}
 
-		Bool True() {
-			Z3_ast result = Z3_mk_true(CONTEXT);
-			return result;
+		Bool(bool b) {
+			ast = b ? Z3_mk_true(CONTEXT) : Z3_mk_false(CONTEXT);
+			check_error();
 		}
 
 		Bool operator!() const {
@@ -164,10 +138,10 @@ namespace z3 {
 
 		static Bool disjunction(const std::vector<Bool> &disjuncts) {
 			Z3_ast result = Z3_mk_or(
-					CONTEXT,
-					disjuncts.size(),
-					// safety: Z3_ast should have the same size/alignment as Bool
-					reinterpret_cast<const Z3_ast *>(disjuncts.data())
+				CONTEXT,
+				disjuncts.size(),
+				// safety: Z3_ast should have the same size/alignment as Bool
+				reinterpret_cast<const Z3_ast *>(disjuncts.data())
 			);
 			check_error();
 			return result;
@@ -191,6 +165,64 @@ namespace z3 {
 			return simp_exp;
 		}
 
+		enum class Operator {
+			TRUE,
+			FALSE,
+			NOT,
+			AND,
+			OR,
+			EQ,
+			NE,
+			LT,
+			LE,
+			GT,
+			GE
+		};
+
+		// what kind of operator we have
+		Operator op() const {
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			Z3_func_decl decl = Z3_get_app_decl(CONTEXT, app);
+			Z3_decl_kind kind = Z3_get_decl_kind(CONTEXT, decl);
+			check_error();
+			switch(kind) {
+			case Z3_OP_TRUE:
+				return Operator::TRUE;
+			case Z3_OP_FALSE:
+				return Operator::FALSE;
+			case Z3_OP_NOT:
+				return Operator::NOT;
+			case Z3_OP_AND:
+				return Operator::AND;
+			case Z3_OP_OR:
+				return Operator::OR;
+			case Z3_OP_EQ:
+				return Operator::EQ;
+			case Z3_OP_DISTINCT:
+				return Operator::NE;
+			case Z3_OP_LT:
+				return Operator::LT;
+			case Z3_OP_LE:
+				return Operator::LE;
+			case Z3_OP_GT:
+				return Operator::GT;
+			case Z3_OP_GE:
+				return Operator::GE;
+			default:
+				assert(false);
+				UNREACHABLE
+			}
+		}
+
+		// the nth child of an operator application
+		Bool bool_child(unsigned n) {
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			Z3_ast child = Z3_get_app_arg(CONTEXT, app, n);
+			check_error();
+			return child;
+		}
+
+		// TODO is this just checking that two things are syntactically identical?
 		bool is_equal(const Bool other) const {
 			Z3_app app = Z3_to_app(CONTEXT, ast);
 			Z3_ast ast_left = Z3_get_app_arg(CONTEXT, app, 0);
@@ -214,7 +246,7 @@ namespace z3 {
 		Bool invert() const {
 			Z3_app app = Z3_to_app(CONTEXT, ast);
 			const unsigned int num_args =  Z3_get_app_num_args(CONTEXT, app);
-			Z3_ast* args = new Z3_ast[num_args]; 
+			Z3_ast* args = new Z3_ast[num_args];
 			//above line instead of: Z3_ast args[num_args]; cause that's not allowed in c++
 			for (unsigned int i = 0; i < num_args; i++) {
 				Z3_ast current_ast = Z3_get_app_arg(CONTEXT, app, i);
@@ -270,13 +302,43 @@ namespace z3 {
 		"the size of Bool must be equal to that of Z3_ast to allow cast magic"
 	);
 
+	inline std::ostream &operator<<(std::ostream &out, Bool::Operator op) {
+		using Operator = Bool::Operator;
+		switch(op) {
+		case Operator::TRUE:
+			return out << "true";
+		case Operator::FALSE:
+			return out << "false";
+		case Operator::NOT:
+			return out << "!";
+		case Operator::AND:
+			return out << "&";
+		case Operator::OR:
+			return out << "|";
+		case Operator::EQ:
+			return out << "=";
+		case Operator::NE:
+			return out << "!=";
+		case Operator::LT:
+			return out << "<";
+		case Operator::LE:
+			return out << "<=";
+		case Operator::GT:
+			return out << ">";
+		case Operator::GE:
+			return out << "<=";
+		}
+	}
+
 	inline Bool conjunction(const std::vector<Bool> &conjuncts) { return Bool::conjunction(conjuncts); }
 
-	inline Bool disjunction(const std::vector<Bool> &disjuncts) { return Bool::disjunction(disjuncts); }	
+	inline Bool disjunction(const std::vector<Bool> &disjuncts) { return Bool::disjunction(disjuncts); }
 
 
 	// Expression of real sort by construction
 	class Real : public Expression {
+		friend Expression;
+		friend std::ostream &operator<<(std::ostream &, Real);
 	public:
 		Real() : Expression() {}
 
@@ -386,9 +448,73 @@ namespace z3 {
 		// zero constant
 		static Real ZERO;
 
+		enum class Operator {
+			NUMERAL,
+			CONSTANT,
+			MIN,
+			ADD,
+			SUB,
+			MUL,
+			DIV
+		};
+
+		// what kind of operator we have
+		Operator op() const {
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			Z3_func_decl decl = Z3_get_app_decl(CONTEXT, app);
+			Z3_decl_kind kind = Z3_get_decl_kind(CONTEXT, decl);
+			check_error();
+			switch(kind) {
+			case Z3_OP_ANUM:
+				return Operator::NUMERAL;
+			case Z3_OP_UNINTERPRETED:
+				return Operator::CONSTANT;
+			case Z3_OP_UMINUS:
+				return Operator::MIN;
+			case Z3_OP_ADD:
+				return Operator::ADD;
+			case Z3_OP_SUB:
+				return Operator::SUB;
+			case Z3_OP_MUL:
+				return Operator::MUL;
+			case Z3_OP_DIV:
+				return Operator::DIV;
+			default:
+				assert(false);
+				UNREACHABLE
+			}
+		}
+
 	private:
 		Real(Z3_ast ast) : Expression(ast) { assert(is_real()); }
 	};
+
+	// the nth child of an operator application
+	inline Real Expression::real_child(unsigned n) {
+		Z3_app app = Z3_to_app(CONTEXT, ast);
+		Z3_ast child = Z3_get_app_arg(CONTEXT, app, n);
+		check_error();
+		return child;
+	}
+
+	inline std::ostream &operator<<(std::ostream &out, Real::Operator op) {
+		using Operator = Real::Operator;
+		switch(op) {
+		case Operator::NUMERAL:
+		case Operator::CONSTANT:
+			assert(false);
+			UNREACHABLE;
+		case Operator::MIN:
+		case Operator::SUB:
+			return out << '-';
+		case Operator::ADD:
+			return out << '+';
+		case Operator::MUL:
+			return out << '*';
+		case Operator::DIV:
+			return out << '/';
+		}
+	}
 
 	// possible results from a `solve()` call
 	enum class Result {
@@ -477,80 +603,15 @@ namespace z3 {
 			return result;
 		}
 
-		friend std::ostream &operator<<(std::ostream &out, const Solver &solver) {
-			return out << Z3_solver_to_string(CONTEXT, solver.solver);
-		}
-
-		
-
-
 	private:
 		// wrapper solver
 		Z3_solver solver;
 	};
 
-	// Helper function to check if an expression is an application of an operator
-	inline bool is_operator(Expression expr) {
-		return expr.wrap_Z3_is_app();
-	}
-
-	// Helper function to get the operator name from an expression
-	inline std::string get_operator_name(Expression expr) {
-		if (!is_operator(expr)) return "";
-		return expr.get_operator_name_expr();
-	}
-
-	// Recursive pretty-print function for Z3 expressions
-	// Used when printing into a JSON file in subtree mode
-	inline std::string pretty_print(Expression expr) {
-
-		if (is_operator(expr)) {	
-			std::string op_name = get_operator_name(expr);
-			const unsigned int num_args =  expr.wrap_Z3_get_app_num_args();
-			Z3_ast* args = new Z3_ast[num_args]; 
-			//above line instead of: Z3_ast args[num_args]; cause that's not allowed in c++
-			for (unsigned int i = 0; i < num_args; i++) {
-				Z3_ast current_ast = expr.wrap_Z3_get_app_arg(expr.wrap_Z3_to_app(), i);
-				args[i] = current_ast;
-			}
-
-			// Check for known operators and format accordingly
-			if (op_name == "or") {
-				std::string result = "(";
-				for (unsigned i = 0; i < num_args; ++i) {
-					result += pretty_print(args[i]);
-					if (i < num_args - 1) result += " || ";
-				}
-				result += ")";
-				return result;
-			} else if (op_name == "+") {
-				return "(" + pretty_print(args[0]) + " + " + pretty_print(args[1]) + ")";
-			} else if (op_name == "-") {
-				if(num_args == 1) {
-					return "(- " + pretty_print(args[0]) + ")";
-				}
-				return "(" + pretty_print(args[0]) + " - " + pretty_print(args[1]) + ")";
-			} else if (op_name == "*") {
-				return "(" + pretty_print(args[0]) + " * " + pretty_print(args[1]) + ")";
-			} else if (op_name == "<=") {
-				return "(" + pretty_print(args[0]) + " <= " + pretty_print(args[1]) + ")";
-			} else if (op_name == "<") {
-				return "(" + pretty_print(args[0]) + " < " + pretty_print(args[1]) + ")";
-			} else if (op_name == ">=") {
-				return "(" + pretty_print(args[0]) + " >= " + pretty_print(args[1]) + ")";
-			} else if (op_name == ">") {
-				return "(" + pretty_print(args[0]) + " > " + pretty_print(args[1]) + ")";
-			}
-		}
-
-		// Fallback to Z3's default string representation
-		std::stringstream ss;
-		ss << expr;
-		std::string std_representation = ss.str();
-
-		return std_representation;
-	}
+	std::ostream &operator<<(std::ostream &out, z3::Real expr);
+	std::ostream &operator<<(std::ostream &out, z3::Bool expr);
 }
+
 
 // used in e.g. hash tables rather than operator==
 template<>

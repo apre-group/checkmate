@@ -375,11 +375,8 @@ struct Parser {
 using json = nlohmann::json;
 
 static z3::Bool parse_case(Parser &parser, const std::string &_case) {
-
-	if(_case == "true") {
-		z3::Bool bool_obj;	
-		return bool_obj.True();	
-	} 
+	if(_case == "true")
+		return true;
 
 	return parser.parse_constraint(_case.c_str());
 }

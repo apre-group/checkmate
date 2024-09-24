@@ -22,14 +22,15 @@ using z3::Solver;
 // third-party library for parsing JSON
 using json = nlohmann::json;
 
-json parse_sat_case(std::vector<z3::Bool> sat_case) {			
+json parse_sat_case(std::vector<z3::Bool> sat_case) {
     json arr_case = json::array();
     if(sat_case.size() == 0) {
         arr_case.push_back("true");
     } else {
         for(auto &case_entry: sat_case) {
-            std::string case_to_print = pretty_print(case_entry);
-            arr_case.push_back(case_to_print);
+            std::stringstream ss;
+            ss << case_entry;
+            arr_case.push_back(ss.str());
         }
     }
     return arr_case;

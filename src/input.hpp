@@ -15,7 +15,7 @@ class Leaf;
 class Subtree;
 class Branch;
 struct Choice;
-struct Node;
+class Node;
 
 enum class NodeType {
     LEAF,
@@ -128,7 +128,7 @@ inline bool are_compatible_cases(const std::vector<z3::Bool> _case1, const std::
 }
 
 class Node {
-	public:
+public:
 	virtual NodeType type() const = 0;
 
 	// convenience functions
@@ -262,7 +262,7 @@ class Subtree : public Node {
 		problematic_group = is_cr ? 1 : 0;
 	}
 
-	virtual UtilityTuplesSet get_utilities() const {
+	virtual UtilityTuplesSet get_utilities() const override {
 		
 		UtilityTuplesSet result;
 
@@ -290,7 +290,7 @@ class Leaf final : public Node {
 
 	NodeType type() const override { return NodeType::LEAF; }
 
-	virtual UtilityTuplesSet get_utilities() const {return {utilities}; }
+	virtual UtilityTuplesSet get_utilities() const override {return {utilities}; }
 
 	void reset_reason() const {
 		::new (&reason) z3::Bool();
@@ -345,7 +345,7 @@ class Branch final : public Node {
 
 	Branch(unsigned player) : player(player), counterexample_choices({}) {}
 
-	virtual UtilityTuplesSet get_utilities() const {return practical_utilities; }
+	virtual UtilityTuplesSet get_utilities() const override {return practical_utilities;}
 
 	// do a linear-time lookup of `action` by name in the branch, which must be present
 	const Choice &get_choice(const std::string &action) const {
@@ -1033,7 +1033,7 @@ struct Input {
 					} else {
 						rule1 = false;
 					}
-					if ((case_.size() == 1) | (other_case.size() == 1)) {
+					if ((case_.size() == 1) || (other_case.size() == 1)) {
 						// continue
 						std::vector<z3::Bool> singleton;
 						std::vector<z3::Bool> other;
