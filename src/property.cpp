@@ -32,8 +32,8 @@ json parse_sat_case(std::vector<z3::Bool> sat_case) {
             ss << case_entry;
             arr_case.push_back(ss.str());
         }
-    }
-    return arr_case;
+    }	
+	return arr_case;
 }
 
 json parse_utility(const Input &input, std::vector<Utility> utility_to_parse) {
@@ -2003,7 +2003,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 	Solver solver;
 	solver.assert_(input.initial_constraint);
 	std::string prop_name;
-	bool prop_holds;
+	//bool prop_holds;
 
 	switch (property)
 	{
@@ -2050,7 +2050,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 				honest_utility = elem.leaf;
 			}
 			std::cout << "YES, it is " << prop_name << ", the honest practical utility is "<<  honest_utility << "." << std::endl;
-			prop_holds = true;
+			// prop_holds = true;
 		} else {
 			//assert( input.root->branch().practical_utilities.size() == 0);
 			// removed this assertion bacause it was failing
@@ -2059,7 +2059,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 			// additional feature (it was either the counterexamples, or strategies or all cases)
 			
 			std::cout << "NO, it is not " << prop_name << ", hence there is no honest practical utility." << std::endl;
-			prop_holds = false;
+			// prop_holds = false;
 		}
 
 		subtree.practicality.insert(subtree.practicality.end(), subtree_results_pr.begin(), subtree_results_pr.end());
@@ -2167,7 +2167,7 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 
 	Solver solver;
 	solver.assert_(input.initial_constraint);
-	bool prop_holds;
+	// bool prop_holds;
 
 	solver.assert_(input.collusion_resilience_constraint);
 
@@ -2259,7 +2259,7 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 
 	Solver solver;
 	solver.assert_(input.initial_constraint);
-	bool prop_holds;
+	// bool prop_holds;
 	std::string prop_name;
 
 
@@ -2380,8 +2380,6 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 
 
 	}
-
-	
 	
 	// generate preconditions -- not now, maybe consider later
 	// if (options.preconditions && !prop_holds) {
