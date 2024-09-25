@@ -179,6 +179,8 @@ struct Parser {
 			case Operation::OR:
 				return Precedence::OR;
 		}
+		assert(false);
+		UNREACHABLE;
 	}
 
 	// construct a parser object based on `identifiers`, but don't parse anything yet

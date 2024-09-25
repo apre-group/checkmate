@@ -48,6 +48,8 @@ namespace z3 {
 			out << ')';
 			return out;
 		}
+		assert(false);
+		UNREACHABLE;
 	}
 
 	// TODO keep track of precedence
@@ -78,5 +80,7 @@ namespace z3 {
 		case Bool::Operator::GE:
 			return out << '(' << expr.real_child(0) << ' ' << op << ' ' << expr.real_child(1) << ')';
 		}
+		assert(false);
+		UNREACHABLE;
 	}
 }

@@ -328,6 +328,8 @@ namespace z3 {
 		case Operator::GE:
 			return out << "<=";
 		}
+		assert(false);
+		UNREACHABLE;
 	}
 
 	inline Bool conjunction(const std::vector<Bool> &conjuncts) { return Bool::conjunction(conjuncts); }
@@ -514,6 +516,8 @@ namespace z3 {
 		case Operator::DIV:
 			return out << '/';
 		}
+		assert(false);
+		UNREACHABLE;
 	}
 
 	// possible results from a `solve()` call
