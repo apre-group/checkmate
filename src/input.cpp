@@ -1238,21 +1238,24 @@ std::vector<std::string> Node::strat2hist(std::vector<std::string> &strategy) co
 	}
 
 	assert(strategy.size() > 0);
+
+	std::vector<std::string> strategy_copy;
+	strategy_copy.insert(strategy_copy.begin(), strategy.begin(), strategy.end());
 	
 	std::vector<std::string> hist_player_pairs;
-	std::string first_action = strategy[0];
-	strategy.erase(strategy.begin());
+	std::string first_action = strategy_copy[0];
+	strategy_copy.erase(strategy_copy.begin());
 	hist_player_pairs.push_back(first_action);
 
 	bool found = false;
 	for(auto &child: this->branch().choices) {
 
 		if(child.action == first_action) {
-			std::vector<std::string> child_result = child.node->strat2hist(strategy);
+			std::vector<std::string> child_result = child.node->strat2hist(strategy_copy);
 			hist_player_pairs.insert(hist_player_pairs.end(), child_result.begin(), child_result.end());
 			found = true;
 		} else {
-			child.node->prune_actions_from_strategy(strategy);
+			child.node->prune_actions_from_strategy(strategy_copy);
 		}
 	}
 

@@ -826,28 +826,43 @@ struct Input {
 	}
 
 	void compute_strategy_case(std::vector<z3::Bool> _case, PropertyType property) const {
-		StrategyCase new_strat_case;
-
-		new_strat_case._case = _case;
+		
 		if (property == PropertyType::Practicality){
-			std::vector<std::string> strategy_vector;
-			assert(root.get()->practical_utilities.size()==1);
-			for (const auto& pr_utility: root.get()->practical_utilities){
-				strategy_vector = pr_utility.strategy_vector;
+			if(root.get()->branch().honest) {
+				// the honest one has to be the practical one
+				// otw (if we call a subtree in default mode to obtain the strategies)
+				//  there can be more than one pr strategy if the subtree is not along the 
+				//  honest history 
+				assert(root.get()->practical_utilities.size()==1);
 			}
-			new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector);
-		} else if (property == PropertyType::CollusionResilience) {
-			new_strat_case.strategy = root.get()->compute_cr_strategy(players, {}, {});
-		} else {
-			new_strat_case.strategy = root.get()->compute_strategy(players, {});
-		}
+			for (const auto& pr_utility: root.get()->practical_utilities){
+				StrategyCase new_strat_case;
+				new_strat_case._case = _case;
+				std::vector<std::string> strategy_vector;
+				strategy_vector.insert(strategy_vector.begin(), pr_utility.strategy_vector.begin(), pr_utility.strategy_vector.end()); 
+				new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector);
+				strategies.push_back(new_strat_case);
+			}
 
-		strategies.push_back(new_strat_case);
+		} else {
+
+			StrategyCase new_strat_case;
+			new_strat_case._case = _case;
+
+			if (property == PropertyType::CollusionResilience) {
+				new_strat_case.strategy = root.get()->compute_cr_strategy(players, {}, {});
+			} else {
+				new_strat_case.strategy = root.get()->compute_strategy(players, {});
+			}
+
+			strategies.push_back(new_strat_case);
+
+		}
 	}
 
-	void print_strategies(bool is_wi) const {
+	void print_strategies(const Options &options, bool is_wi) const {
 		std::cout << std::endl;
-		for (StrategyCase strategy_case : strategies){
+		for (StrategyCase strategy_case : strategies) {
 			std::cout << "Strategy for case: " <<  strategy_case._case << std::endl;
 			for (HistoryChoice hist_choice : strategy_case.strategy){
 				std::cout
@@ -859,8 +874,11 @@ struct Input {
 					<< hist_choice.history
 					<< std::endl;
 			}
-			if (is_wi){
+			if (is_wi) {
 				std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
+			}
+			if(options.supertree) {
+				std::cout << "\tYou need to run subtrees in default mode with option strategies for complete strategies." << std::endl;
 			}
 		}
 	}

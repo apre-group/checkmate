@@ -1983,7 +1983,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 	if (options.strategies && prop_holds){
 		// for each case a strategy
 		bool is_wi = (property == PropertyType::WeakerImmunity) || (property == PropertyType::WeakImmunity);
-		input.print_strategies(is_wi);
+		input.print_strategies(options, is_wi);
 	}
 
 	if (options.counterexamples && !prop_holds){
