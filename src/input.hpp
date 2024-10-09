@@ -296,28 +296,6 @@ class Leaf final : public Node {
 		::new (&reason) z3::Bool();
 	}
 
-	// DO NOT USE, OUTDATED VERSION
-	// void restore_problematic_group(uint64_t problematic_group, Node &reset_node, bool below_problematic) const {
-	// 	/*after the first case of a case split, reset the problematic group and reset point (reset node) in the tree to pre-case splitting settings
-	// 	to ensure correct computation
-	// 	after reset_node every node has to be set to problematic group, also all the parent nodes of reset_node
-	// 	all the others have to be set to problematic group + 1*/
-		
-	// 	bool new_below_problematic = below_problematic;
-	// 	if (reset_node.is_leaf()){
-	// 		if (this == &reset_node.leaf()){
-	// 			new_below_problematic = true;
-	// 		}
-	// 	}
-		
-	// 	if (new_below_problematic){
-	// 		this->problematic_group = problematic_group;
-	// 	} else {
-	// 		this->problematic_group = problematic_group + 1;
-	// 	}
-
-	// }
-
 	void reset_problematic_group(bool is_cr) const {
 		problematic_group = is_cr ? 1 : 0;
 	}
@@ -578,137 +556,6 @@ class Branch final : public Node {
 		}
 	}
 
-	// DO NOT USE, OUTDATED VERSION
-	// void restore_problematic_group(uint64_t problematic_group, Node &reset_node, bool below_problematic) const {
-	// 	/*after the first case of a case split, reset the problematic group and reset point (reset node) in the tree to pre-case splitting settings
-	// 	to ensure correct computation
-	// 	after reset_node every node has to be set to problematic group, also all the parent nodes of reset_node
-	// 	all the others have to be set to problematic group + 1*/
-		
-
-
-	// 	// above problematic is considered
-	// 	// below problematic is considered
-	// 	bool new_below_problematic = below_problematic;
-	// 	if (!reset_node.is_leaf()){
-	// 		if (this == &reset_node.branch()){
-	// 			new_below_problematic = true;
-	// 		}
-	// 	}
-
-	// 	bool above_prob = false;
-	// 	for (auto &choice : choices){
-	// 		auto &child_node = choice.node;
-	// 		if (child_node->is_leaf()){
-	// 			child_node->leaf().restore_problematic_group(problematic_group, reset_node, new_below_problematic);
-	// 			if (child_node->branch().problematic_group == problematic_group) {
-	// 				above_prob = true;
-	// 			}
-
-	// 		} else {
-	// 			child_node->branch().restore_problematic_group(problematic_group, reset_node, new_below_problematic);
-	// 			if (child_node->branch().problematic_group == problematic_group) {
-	// 				above_prob = true;
-	// 			}
-	// 		}
-	// 	}
-	// 	if (above_prob || new_below_problematic){
-	// 		problematic_group = problematic_group;
-	// 	} else {
-	// 		problematic_group = problematic_group + 1;
-	// 	}
-
-	// 	}
-
-	// void reset_strategy_pr() const {
-	// 	pr_strategies_cases = {};
-	// 	pr_strategies_actions = {};
-	// 	for(auto &choice: choices)
-	// 		if(!choice.node->is_leaf())
-	// 			choice.node->branch().reset_strategy();
-	// }
-
-
-
-	// void print_strategy(const Input &input) const {
-	// 	std::vector<std::string> actions_so_far;
-	// 	std::cout << std::endl;
-	// 	std::cout << "Strategy:" << std::endl;
-	// 	const Node *current = this;
-	// 	print_strategy_rec(current, input, {});	
-	// 	std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
-	// }
-
-	// void print_strategy_rec(const Node *current, const Input &input, std::vector<std::string> actions_so_far) const {
-	// 	if(current->is_leaf()) 
-	// 		return;
-
-	// 	if(!current->branch().strategy.empty()) {
-	// 		std::cout
-	// 				<< "\tPlayer "
-	// 				<< input.players[current->branch().player]
-	// 				<< " takes action "
-	// 				<< current->branch().strategy
-	// 				<< " after history "
-	// 				<< actions_so_far
-	// 				<< std::endl;
-	// 	}
-
-	// 	for (const Choice &choice: current->branch().choices) {
-	// 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-	// 		updated_actions.push_back(choice.action);
-	// 		print_strategy_rec(choice.node.get(), input, updated_actions);
-	// 	}
-	// }
-
-	// void print_strategy_pr(const Input &input, std::vector<z3::Bool> &current_case) const {
-	// 	std::vector<std::string> actions_so_far;
-	// 	const Node *current = this;
-
-	// 	std::cout << "Printing strategy for case " << current_case << "..." << std::endl;
-		
-	// 	//std::cout << "...................." << std::endl;
-	// 	//std::cout << current->branch().pr_strategies_cases << std::endl;
-	// 	//std::cout << "....Actions................" << std::endl;
-	// 	//std::cout << current->branch().pr_strategies_actions << std::endl;
-	// 	//std::cout << "...................." << std::endl;
-		
-		
-	// 	print_strategy_pr_rec(current, input, {}, current_case);	
-
-	// 	std::cout << std::endl;
-	// 	std::cout << std::endl;
-
-	// }
-
-	// void print_strategy_pr_rec(const Node *current, const Input &input, std::vector<std::string> actions_so_far, std::vector<z3::Bool> &current_case) const {
-	// 	if(current->is_leaf()) 
-	// 		return;
-
-	// 	if(!current->branch().pr_strategies_cases.empty()) {
-
-	// 		for (unsigned i = 0; i < current->branch().pr_strategies_cases.size(); i++) {
-	// 			if(are_compatible_cases(current->branch().pr_strategies_cases[i], current_case)) {
-	// 				std::cout
-	// 				<< "\tPlayer "
-	// 				<< input.players[current->branch().player]
-	// 				<< " takes action "
-	// 				<< current->branch().pr_strategies_actions[i]
-	// 				<< " after history "
-	// 				<< actions_so_far
-	// 				<< std::endl;
-	// 				break;
-	// 			}
-	// 		}			
-	// 	}
-
-	// 	for (const Choice &choice: current->branch().choices) {
-	// 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-	// 		updated_actions.push_back(choice.action);
-	// 		print_strategy_pr_rec(choice.node.get(), input, updated_actions, current_case);
-	// 	}
-	// }
-
 };
 
 
@@ -890,16 +737,10 @@ struct Input {
 		for (auto player : player_group) {
 			new_ce_case.player_group.push_back(players[player]);
 		}
-		if (property == PropertyType::Practicality){
-			// std::vector<std::string> strategy_vector;
-			// assert(root.get()->practical_utilities.size()==1);
-			// for (const auto& pr_utility: root.get()->practical_utilities){
-			// 	strategy_vector = pr_utility.strategy_vector;
-			// }
-			// new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector);
-		} else if (property != PropertyType::CollusionResilience) {
+		
+		if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
 			new_ce_case.counterexample = root.get()->compute_wi_ce(players, {}, player_group);
-		} else {
+		} else if (property == PropertyType::CollusionResilience) {
 			new_ce_case.counterexample = root.get()->compute_cr_ce(players, {}, player_group);
 		}
 
@@ -982,10 +823,6 @@ struct Input {
 						history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
 						history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
 						std::cout << history_to_print << std::endl;	
-						
-						/*if(history.player == "subtree") {
-							std::cout << "The above history ends in a subtree. " << std::endl;
-						}*/
 					}
 					if(options.supertree) {
 						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;

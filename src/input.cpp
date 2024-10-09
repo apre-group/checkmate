@@ -970,7 +970,6 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> pl
 					hist_choice.history = actions_so_far;
 					strategy_choice = choice.action;
 
-					// std::cout << "player " << hist_choice.player << " takes action " << choice.action << " after history " << actions_so_far << std::endl;
 					strategy.push_back(hist_choice);
 					break;
 				}
@@ -979,7 +978,6 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> pl
 			bool have_found_cr = false;
 			for (const Choice &choice: this->branch().choices) {
 
-				//std::cout << "After history " << actions_so_far << " action " << choice.action << " violates_cr: " << choice.node->violates_cr << " deviating players" << deviating_players << std::endl;
 				if (choice.node->cr_against_supergroups_of(deviating_players)){
 					if(!have_found_cr) {
 						have_found_cr = true;
@@ -989,14 +987,11 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> pl
 						hist_choice.history = actions_so_far;
 						strategy_choice = choice.action;
 
-						//std::cout << "player " << hist_choice.player << " takes action " << choice.action << " after history " << actions_so_far << std::endl;
 						strategy.push_back(hist_choice);
-						//break; 
 					}
 				}
 
 			}
-			//std::cout << actions_so_far << std::endl;
 			assert(have_found_cr);
 		}
 		
@@ -1154,20 +1149,14 @@ CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned curren
 	if(current_player < players.size()) {
 		CeCase cecase;
 		cecase.player_group = {players[current_player]};
-		//CeChoice deviation;
-		//deviation.history = actions_so_far;
-		//deviation.choices = {current_action};
-		//deviation.player = players[current_player];
-		//cecase.counterexample = {deviation};
 
 		const Node* deviation_node = nullptr;
 
 		std::vector<std::string> actions_to_deviation;
 		actions_to_deviation.insert(actions_to_deviation.end(), actions_so_far.begin(), actions_so_far.end());
-		actions_to_deviation.push_back(current_action); // BE AWARE current_action = action leading to subtree where pr histories are ce
+		actions_to_deviation.push_back(current_action); // BE AWARE: current_action = action leading to subtree where pr histories are ce
 
 		deviation_node = compute_deviation_node(actions_to_deviation);
-		// check here: is deviation node is subtree -> handle differently
 		std::vector<CeChoice> rec_choices = deviation_node->compute_pr_ce(current_action, actions_so_far, practical_utilities);
 		cecase.counterexample.insert(cecase.counterexample.end(), rec_choices.begin(), rec_choices.end());
 		return cecase;
@@ -1212,7 +1201,6 @@ std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, std::vecto
 		CeChoice cechoice;
 		cechoice.player = "";
 
-		//cechoice.choices = {current_action};
 		cechoice.choices = {};
 		
 		std::vector<std::string> result_hist = strat2hist(utility.strategy_vector);
