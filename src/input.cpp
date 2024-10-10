@@ -430,10 +430,32 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 			throw std::logic_error("undeclared player in the input");
 
 		std::unique_ptr<Branch> branch(new Branch(player));
-		for (const json &child: node["children"]) {
-			auto loaded = load_tree(input, parser, child["child"], supertree);
 
-			branch->choices.push_back({child["action"], std::move(loaded)});
+		if (node["children"][0].contains("condition")){
+			for (const json &condition_node: node["children"]) {
+				const json &condition_json = condition_node["condition"];
+				z3::Bool condition = parse_case(parser, condition_json);
+
+				Condition cond;
+				cond.condition = condition;
+				// iterate over the actions and populate the cond.children
+				for (const json &child: condition_node["actions"]){
+					auto loaded = load_tree(input, parser, child["child"], supertree);
+					cond.children.push_back({child["action"], std::move(loaded)});
+				}
+				branch->conditions.push_back(cond);
+			}
+		}
+		else{
+			Condition cond;
+			z3::Bool bool_obj;
+			cond.condition = bool_obj.True();
+			for (const json &child: node["children"]) {
+				auto loaded = load_tree(input, parser, child["child"], supertree);
+				cond.children.push_back({child["action"], std::move(loaded)});
+			}
+			branch->conditions.push_back(cond);
+
 		}
 		return branch;
 	}
@@ -703,6 +725,18 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 	std::exit(EXIT_FAILURE);
 }
 
+static std::unique_ptr<HonestNode> load_honest_history(const json &honest_node) {
+	std::unique_ptr<HonestNode> node;
+	node->action = honest_node["action"];
+	
+	if (honest_node["children"].size() > 0) {
+		for (const json &child: honest_node["children"]) {
+			node->children.push_back(load_honest_history(child));
+		}
+	}
+
+	return node;
+}
 
 
 Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , stop_log(false) {
@@ -733,8 +767,12 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 		players.push_back(std::string(player));
 	sort(players.begin(), players.end());
 
-	// load honest histories automatically
-	honest = document["honest_histories"];
+	// load honest histories 
+	std::vector<HonestTree> honest;
+	for (const json &honest_history_json : document["honest_histories"]){
+		honest.push_back(load_honest_history(honest_history_json));
+	}
+	
 
 
 	// load real/infinitesimal identifiers

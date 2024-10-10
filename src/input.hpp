@@ -16,6 +16,13 @@ class Subtree;
 class Branch;
 struct Choice;
 class Node;
+struct Condition;
+
+
+struct HonestNode {
+	std::string action;
+	std::vector<std::unique_ptr<HonestNode>> children;
+};
 
 enum class NodeType {
     LEAF,
@@ -216,6 +223,18 @@ struct Choice {
 	}
 };
 
+// a choice available at a branch
+struct Condition {
+	// condition of the conditional action
+	z3::Bool condition;
+	// children at this condition
+	std::vector<Choice> children;
+
+	friend std::ostream &operator<<(std::ostream &out, const Condition &condition) {
+		return out << condition.condition;
+	}
+};
+
 struct SubtreeResult {
 	std::vector<std::string> player_group;
 	std::vector<std::vector<z3::Bool>> satisfied_in_case;
@@ -307,8 +326,8 @@ class Branch final : public Node {
 	public:
 	// whose turn is it?
 	unsigned player;
-	// available choices, from which actions should be unique
-	std::vector<Choice> choices;
+	// available conditional alctions, from which actions should be unique
+	std::vector<Condition> conditions;
 	// take this action
 	mutable std::string strategy;
 
@@ -326,235 +345,235 @@ class Branch final : public Node {
 	virtual UtilityTuplesSet get_utilities() const override {return practical_utilities;}
 
 	// do a linear-time lookup of `action` by name in the branch, which must be present
-	const Choice &get_choice(const std::string &action) const {
-		for (const Choice &choice: choices)
-			if (choice.action == action)
-				return choice;
+	// const Choice &get_choice(const std::string &action) const {
+	// 	for (const Choice &choice: choices)
+	// 		if (choice.action == action)
+	// 			return choice;
 
-		assert(false);
-		UNREACHABLE;
-	}
+	// 	assert(false);
+	// 	UNREACHABLE;
+	// }
 
 	// do a linear-time lookup of `action` by child address in the branch, which must be present
-	const Choice &get_choice(const Node *child) const {
-		for (const Choice &choice: choices)
-			if (choice.node.get() == child)
-				return choice;
+	// const Choice &get_choice(const Node *child) const {
+	// 	for (const Choice &choice: choices)
+	// 		if (choice.node.get() == child)
+	// 			return choice;
 
-		assert(false);
-		UNREACHABLE;
-	}
+	// 	assert(false);
+	// 	UNREACHABLE;
+	// }
 
-	const Choice &get_honest_child() const {
-		for (const Choice &choice: choices)
-			if (choice.node->honest)
-				return choice;
+	// const Choice &get_honest_child() const {
+	// 	for (const Choice &choice: choices)
+	// 		if (choice.node->honest)
+	// 			return choice;
 
-		assert(false);
-		UNREACHABLE;
-	}
+	// 	assert(false);
+	// 	UNREACHABLE;
+	// }
 
-	void reset_counterexample_choices() const {
-		counterexample_choices = {};
-		for (auto& choice: choices) {
-			if (!choice.node->is_leaf() && !choice.node->is_subtree()) {
-				choice.node->branch().reset_counterexample_choices();
-			}
-		}
-	}
+	// void reset_counterexample_choices() const {
+	// 	counterexample_choices = {};
+	// 	for (auto& choice: choices) {
+	// 		if (!choice.node->is_leaf() && !choice.node->is_subtree()) {
+	// 			choice.node->branch().reset_counterexample_choices();
+	// 		}
+	// 	}
+	// }
 
-	std::vector<z3::Bool> store_reason() const {
+	// std::vector<z3::Bool> store_reason() const {
 
-		std::vector<z3::Bool> reason_vector = {reason};
+	// 	std::vector<z3::Bool> reason_vector = {reason};
 
-		for (const auto& child: choices){
-			if (!child.node->is_leaf() && !child.node->is_subtree()){
-				std::vector<z3::Bool> child_reason = child.node->branch().store_reason();
-				reason_vector.insert(reason_vector.end(), child_reason.begin(), child_reason.end());
-			} else if (child.node->is_leaf()){
-				reason_vector.push_back(child.node->leaf().reason);
-			} else {
-				reason_vector.push_back(child.node->subtree().reason);
-			}
-		}
+	// 	for (const auto& child: choices){
+	// 		if (!child.node->is_leaf() && !child.node->is_subtree()){
+	// 			std::vector<z3::Bool> child_reason = child.node->branch().store_reason();
+	// 			reason_vector.insert(reason_vector.end(), child_reason.begin(), child_reason.end());
+	// 		} else if (child.node->is_leaf()){
+	// 			reason_vector.push_back(child.node->leaf().reason);
+	// 		} else {
+	// 			reason_vector.push_back(child.node->subtree().reason);
+	// 		}
+	// 	}
 
-		return reason_vector;
-	}
+	// 	return reason_vector;
+	// }
 
-	void restore_reason(std::vector<z3::Bool> &reasons) const {
+	// void restore_reason(std::vector<z3::Bool> &reasons) const {
 
-		if (reasons.size() == 0) {
-			return;
-		}
-		reason = reasons[0];
-		reasons.erase(reasons.begin());
+	// 	if (reasons.size() == 0) {
+	// 		return;
+	// 	}
+	// 	reason = reasons[0];
+	// 	reasons.erase(reasons.begin());
 
-		for (const auto& child: this->branch().choices){
-			if (!child.node->is_leaf() && !child.node->is_subtree()){
-			child.node->branch().restore_reason(reasons);
-			} else if (child.node->is_leaf()) {
-				if (reasons.size() == 0) {
-					return;
-				}
-				child.node->leaf().reason = reasons[0];
-				reasons.erase(reasons.begin());
-			} else {
-				if (reasons.size() == 0) {
-					return;
-				}
-				child.node->subtree().reason = reasons[0];
-				reasons.erase(reasons.begin());
-			}
-		}
+	// 	for (const auto& child: this->branch().choices){
+	// 		if (!child.node->is_leaf() && !child.node->is_subtree()){
+	// 		child.node->branch().restore_reason(reasons);
+	// 		} else if (child.node->is_leaf()) {
+	// 			if (reasons.size() == 0) {
+	// 				return;
+	// 			}
+	// 			child.node->leaf().reason = reasons[0];
+	// 			reasons.erase(reasons.begin());
+	// 		} else {
+	// 			if (reasons.size() == 0) {
+	// 				return;
+	// 			}
+	// 			child.node->subtree().reason = reasons[0];
+	// 			reasons.erase(reasons.begin());
+	// 		}
+	// 	}
 
-		return;
-	}
+	// 	return;
+	// }
 
-	std::vector<uint64_t> store_problematic_groups() const {
+	// std::vector<uint64_t> store_problematic_groups() const {
 
-		std::vector<uint64_t> problematic_groups_vector = {problematic_group};
+	// 	std::vector<uint64_t> problematic_groups_vector = {problematic_group};
 
-		for (const auto& child: choices){
-			if(child.node->is_leaf()) {
-				problematic_groups_vector.push_back(child.node->leaf().problematic_group);
-			}
-			else if (child.node->is_subtree()){
-				problematic_groups_vector.push_back(child.node->subtree().problematic_group);
-			}
-			else {
-				std::vector<uint64_t> child_pg = child.node->branch().store_problematic_groups();
-				problematic_groups_vector.insert(problematic_groups_vector.end(), child_pg.begin(), child_pg.end());
-			}
-		}
+	// 	for (const auto& child: choices){
+	// 		if(child.node->is_leaf()) {
+	// 			problematic_groups_vector.push_back(child.node->leaf().problematic_group);
+	// 		}
+	// 		else if (child.node->is_subtree()){
+	// 			problematic_groups_vector.push_back(child.node->subtree().problematic_group);
+	// 		}
+	// 		else {
+	// 			std::vector<uint64_t> child_pg = child.node->branch().store_problematic_groups();
+	// 			problematic_groups_vector.insert(problematic_groups_vector.end(), child_pg.begin(), child_pg.end());
+	// 		}
+	// 	}
 
-		return problematic_groups_vector;
-	}
+	// 	return problematic_groups_vector;
+	// }
 
-	void restore_problematic_groups(std::vector<uint64_t> &pg) const {
+	// void restore_problematic_groups(std::vector<uint64_t> &pg) const {
 
-		if (pg.size() == 0) {
-			return;
-		}
-		problematic_group = pg[0];
-		pg.erase(pg.begin());
+	// 	if (pg.size() == 0) {
+	// 		return;
+	// 	}
+	// 	problematic_group = pg[0];
+	// 	pg.erase(pg.begin());
 
-		for (const auto& child: this->branch().choices){
-			if(child.node->is_leaf()){
-				child.node->leaf().problematic_group = pg[0];
-				pg.erase(pg.begin());
-			}
-			else if (child.node->is_subtree()) {
-				child.node->subtree().problematic_group = pg[0];
-				pg.erase(pg.begin());
-			}
-			else {
-				child.node->branch().restore_problematic_groups(pg);
-			}
-		}
+	// 	for (const auto& child: this->branch().choices){
+	// 		if(child.node->is_leaf()){
+	// 			child.node->leaf().problematic_group = pg[0];
+	// 			pg.erase(pg.begin());
+	// 		}
+	// 		else if (child.node->is_subtree()) {
+	// 			child.node->subtree().problematic_group = pg[0];
+	// 			pg.erase(pg.begin());
+	// 		}
+	// 		else {
+	// 			child.node->branch().restore_problematic_groups(pg);
+	// 		}
+	// 	}
 
-		return;
-	}
+	// 	return;
+	// }
 
-	std::vector<std::vector<std::string>> store_counterexample_choices() const {
+	// std::vector<std::vector<std::string>> store_counterexample_choices() const {
 
-		std::vector<std::vector<std::string>> counterexample_choices_vector = {counterexample_choices};
+	// 	std::vector<std::vector<std::string>> counterexample_choices_vector = {counterexample_choices};
 
-		for (const auto& child: choices){
-			if (!child.node->is_leaf() && !child.node->is_subtree()){
-				std::vector<std::vector<std::string>> child_ces = child.node->branch().store_counterexample_choices();
-				counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
-			}
-		}
+	// 	for (const auto& child: choices){
+	// 		if (!child.node->is_leaf() && !child.node->is_subtree()){
+	// 			std::vector<std::vector<std::string>> child_ces = child.node->branch().store_counterexample_choices();
+	// 			counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
+	// 		}
+	// 	}
 
-		return counterexample_choices_vector;
-	}
+	// 	return counterexample_choices_vector;
+	// }
 
-	void restore_counterexample_choices(std::vector<std::vector<std::string>> &ces) const {
+	// void restore_counterexample_choices(std::vector<std::vector<std::string>> &ces) const {
 
-		if (ces.size() == 0) {
-			return;
-		}
-		counterexample_choices = ces[0];
-		ces.erase(ces.begin());
+	// 	if (ces.size() == 0) {
+	// 		return;
+	// 	}
+	// 	counterexample_choices = ces[0];
+	// 	ces.erase(ces.begin());
 
-		for (const auto& child: this->branch().choices){
-			if (!child.node->is_leaf() && !child.node->is_subtree()){
-			child.node->branch().restore_counterexample_choices(ces);
-			}
-		}
+	// 	for (const auto& child: this->branch().choices){
+	// 		if (!child.node->is_leaf() && !child.node->is_subtree()){
+	// 		child.node->branch().restore_counterexample_choices(ces);
+	// 		}
+	// 	}
 
-		return;
-	}
+	// 	return;
+	// }
 
 
-	void mark_honest(const std::vector<std::string> &history) const {
-		assert(!honest);
+	// void mark_honest(const std::vector<std::string> &history) const {
+	// 	assert(!honest);
 
-		honest = true;
-		const Node *current = this;
-		unsigned index = 0;
-		do {
-			current = current->branch().get_choice(history[index++]).node.get();
-			current->honest = true;
-		} while(!current->is_leaf() && !current->is_subtree());
-	}
+	// 	honest = true;
+	// 	const Node *current = this;
+	// 	unsigned index = 0;
+	// 	do {
+	// 		current = current->branch().get_choice(history[index++]).node.get();
+	// 		current->honest = true;
+	// 	} while(!current->is_leaf() && !current->is_subtree());
+	// }
 
-	void reset_honest() const {
-		if(!honest)
-			return;
+	// void reset_honest() const {
+	// 	if(!honest)
+	// 		return;
 
-		honest = false;
-		const Node *current = this;
-		do {
-			current = current->branch().get_honest_child().node.get();
-			current->honest = false;
-		} while(!current->is_leaf() && !current->is_subtree());
-	}
+	// 	honest = false;
+	// 	const Node *current = this;
+	// 	do {
+	// 		current = current->branch().get_honest_child().node.get();
+	// 		current->honest = false;
+	// 	} while(!current->is_leaf() && !current->is_subtree());
+	// }
 
-	void reset_reason() const {
-		::new (&reason) z3::Bool();
-		for(auto &choice: choices)
-			if(!choice.node->is_leaf() && !choice.node->is_subtree()){
-				choice.node->branch().reset_reason();
-			}
-			else if (choice.node->is_leaf()) {
-				choice.node->leaf().reset_reason();
-			} else {
-				choice.node->subtree().reset_reason();
-			}
-	}
+	// void reset_reason() const {
+	// 	::new (&reason) z3::Bool();
+	// 	for(auto &choice: choices)
+	// 		if(!choice.node->is_leaf() && !choice.node->is_subtree()){
+	// 			choice.node->branch().reset_reason();
+	// 		}
+	// 		else if (choice.node->is_leaf()) {
+	// 			choice.node->leaf().reset_reason();
+	// 		} else {
+	// 			choice.node->subtree().reset_reason();
+	// 		}
+	// }
 
-	void reset_strategy() const {
-		strategy.clear();
-		for(auto &choice: choices)
-			if(!choice.node->is_leaf() && !choice.node->is_subtree())
-				choice.node->branch().reset_strategy();
-	}
+	// void reset_strategy() const {
+	// 	strategy.clear();
+	// 	for(auto &choice: choices)
+	// 		if(!choice.node->is_leaf() && !choice.node->is_subtree())
+	// 			choice.node->branch().reset_strategy();
+	// }
 
-	void reset_problematic_group(bool is_cr) const {
-		problematic_group = is_cr ? 1 : 0;
-		for(auto &choice: choices)
-			if(!choice.node->is_leaf() && !choice.node->is_subtree()) {
-				choice.node->branch().reset_problematic_group(is_cr);
-			} else if (choice.node->is_leaf()){
-				choice.node->leaf().reset_problematic_group(is_cr);
-			} else {
-				choice.node->subtree().reset_problematic_group(is_cr);
-			}
-	}
+	// void reset_problematic_group(bool is_cr) const {
+	// 	problematic_group = is_cr ? 1 : 0;
+	// 	for(auto &choice: choices)
+	// 		if(!choice.node->is_leaf() && !choice.node->is_subtree()) {
+	// 			choice.node->branch().reset_problematic_group(is_cr);
+	// 		} else if (choice.node->is_leaf()){
+	// 			choice.node->leaf().reset_problematic_group(is_cr);
+	// 		} else {
+	// 			choice.node->subtree().reset_problematic_group(is_cr);
+	// 		}
+	// }
 
-	void reset_practical_utilities() const {
-		practical_utilities = {};
-		for (auto& choice: choices){
-			if (!choice.node->is_leaf()){
-				if (!choice.node->is_subtree()){
-					choice.node->branch().reset_practical_utilities();
-				} else {
-					choice.node->subtree().reset_practical_utilities();
-				}
-			}
-		}
-	}
+	// void reset_practical_utilities() const {
+	// 	practical_utilities = {};
+	// 	for (auto& choice: choices){
+	// 		if (!choice.node->is_leaf()){
+	// 			if (!choice.node->is_subtree()){
+	// 				choice.node->branch().reset_practical_utilities();
+	// 			} else {
+	// 				choice.node->subtree().reset_practical_utilities();
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 };
 

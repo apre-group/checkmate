@@ -107,6 +107,11 @@ namespace z3 {
 	public:
 		Bool() : Expression() {}
 
+		Bool True() {
+			Z3_ast result = Z3_mk_true(CONTEXT);
+			return result;
+		}
+
 		Bool(bool b) {
 			ast = b ? Z3_mk_true(CONTEXT) : Z3_mk_false(CONTEXT);
 			check_error();
