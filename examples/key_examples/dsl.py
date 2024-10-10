@@ -69,6 +69,10 @@ class Expr:
 
     def __le__(self, other: LExpr) -> Constraint:
         return DisequationConstraint('<=', self, other)
+    
+    def __eq__(self, other: LExpr) -> Constraint:
+        return DisequationConstraint('=', self, other)
+    
 
     def json(self):
         return repr(self)
@@ -313,6 +317,27 @@ def conjunction(*args) -> Conjunction:
     for elem in args:
         arg_list.append(elem)
     return Conjunction(arg_list)
+
+# CheckMate does currently not support the || symbol
+class Disjunction(Constraint):
+    args: List[Constraint]
+
+    def __init__(self, args: List[Constraint]): 
+        self.args = args
+
+    def __repr__(self):
+        result = f""
+        for elem in self.args:
+            result = result + f" || {elem}" 
+        result = result[3:]
+        return result
+
+def disjunction(*args) -> Disjunction:
+    arg_list = []
+    for elem in args:
+        arg_list.append(elem)
+    return Disjunction(arg_list)
+
 
 
 class HistoryTree:
