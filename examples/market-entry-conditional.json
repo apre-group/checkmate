@@ -26,8 +26,8 @@
   },
   "honest_histories": [
     {
-      "action" : "",
-      "children":[
+      "action": "",
+      "children": [
         {
           "action": "o",
           "children": []
@@ -77,36 +77,44 @@
           "player": "E",
           "children": [
             {
-              "action": "i",
-              "child": {
-                "condition": "p <= 2 * a",
-                "utility": [
-                  {
-                    "player": "N",
-                    "value": "p"
-                  },
-                  {
-                    "player": "E",
-                    "value": "p"
+              "condition": "p <= 2 * a",
+              "actions": [
+                {
+                  "action": "i",
+                  "child": {
+                    "utility": [
+                      {
+                        "player": "N",
+                        "value": "p"
+                      },
+                      {
+                        "player": "E",
+                        "value": "p"
+                      }
+                    ]
                   }
-                ]
-              }
+                }
+              ]
             },
             {
-              "action": "s",
-              "child": {
-                "condition": "p > 2 * a",
-                "utility": [
-                  {
-                    "player": "N",
-                    "value": "-a"
-                  },
-                  {
-                    "player": "E",
-                    "value": "-a"
+              "condition": "p > 2 * a",
+              "actions": [
+                {
+                  "action": "s",
+                  "child": {
+                    "utility": [
+                      {
+                        "player": "N",
+                        "value": "-a"
+                      },
+                      {
+                        "player": "E",
+                        "value": "-a"
+                      }
+                    ]
                   }
-                ]
-              }
+                }
+              ]
             }
           ]
         }
