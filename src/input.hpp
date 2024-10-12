@@ -18,7 +18,6 @@ struct Choice;
 class Node;
 struct Condition;
 
-
 struct HonestNode {
 	std::string action;
 	std::vector<std::unique_ptr<HonestNode>> children;
@@ -340,19 +339,20 @@ class Branch final : public Node {
 
 	NodeType type() const override { return NodeType::BRANCH; }
 
-	Branch(unsigned player) : player(player), counterexample_choices({}) {}
+	Branch(unsigned player, std::vector<Condition> conditions) : player(player), conditions(conditions), counterexample_choices({}) {}
 
 	virtual UtilityTuplesSet get_utilities() const override {return practical_utilities;}
 
 	// do a linear-time lookup of `action` by name in the branch, which must be present
-	// const Choice &get_choice(const std::string &action) const {
-	// 	for (const Choice &choice: choices)
-	// 		if (choice.action == action)
-	// 			return choice;
+	const Choice &get_choice(const std::string &action) const {
+		for (const Condition &condition: conditions) 
+			for (const Choice &choice: condition.children)
+				if (choice.action == action)
+					return choice;
 
-	// 	assert(false);
-	// 	UNREACHABLE;
-	// }
+		assert(false);
+		UNREACHABLE;
+	}
 
 	// do a linear-time lookup of `action` by child address in the branch, which must be present
 	// const Choice &get_choice(const Node *child) const {
@@ -364,14 +364,16 @@ class Branch final : public Node {
 	// 	UNREACHABLE;
 	// }
 
-	// const Choice &get_honest_child() const {
-	// 	for (const Choice &choice: choices)
-	// 		if (choice.node->honest)
-	// 			return choice;
+	const Choice &get_honest_child(size_t index) const {
+		assert(index < conditions.size());
+		
+		for (const Choice &choice: conditions[index].children)
+			if (choice.node->honest)
+				return choice;
 
-	// 	assert(false);
-	// 	UNREACHABLE;
-	// }
+		assert(false);
+		UNREACHABLE;
+	}
 
 	// void reset_counterexample_choices() const {
 	// 	counterexample_choices = {};
@@ -506,42 +508,55 @@ class Branch final : public Node {
 	// }
 
 
-	// void mark_honest(const std::vector<std::string> &history) const {
-	// 	assert(!honest);
+	void mark_honest(const std::unique_ptr<HonestNode> &history) const {
+		assert(!honest);
 
-	// 	honest = true;
-	// 	const Node *current = this;
-	// 	unsigned index = 0;
-	// 	do {
-	// 		current = current->branch().get_choice(history[index++]).node.get();
-	// 		current->honest = true;
-	// 	} while(!current->is_leaf() && !current->is_subtree());
-	// }
+		honest = true;
+		const Node *current = this;
+		for(auto &child : history.get()->children) {
+			// find corresponding tree after action 
+			// and call the function recursively for children of shistory entry
+			Node *subtree = current->branch().get_choice(child.get()->action).node.get();
+			
+			if(subtree->is_branch()) {
+				subtree->branch().mark_honest(child);
+			} else {
+				subtree->honest = true;
+			}
+			
+		}
+	}
 
-	// void reset_honest() const {
-	// 	if(!honest)
-	// 		return;
+	void reset_honest() const {
+		if(!honest)
+			return;
 
-	// 	honest = false;
-	// 	const Node *current = this;
-	// 	do {
-	// 		current = current->branch().get_honest_child().node.get();
-	// 		current->honest = false;
-	// 	} while(!current->is_leaf() && !current->is_subtree());
-	// }
+		honest = false;
 
-	// void reset_reason() const {
-	// 	::new (&reason) z3::Bool();
-	// 	for(auto &choice: choices)
-	// 		if(!choice.node->is_leaf() && !choice.node->is_subtree()){
-	// 			choice.node->branch().reset_reason();
-	// 		}
-	// 		else if (choice.node->is_leaf()) {
-	// 			choice.node->leaf().reset_reason();
-	// 		} else {
-	// 			choice.node->subtree().reset_reason();
-	// 		}
-	// }
+		for (size_t i=0; i<conditions.size(); i++) {
+			const Node *honest_subtree = this->branch().get_honest_child(i).node.get();
+
+			if(honest_subtree->is_branch()) {
+				honest_subtree->branch().reset_honest();
+			} else {
+				honest_subtree->honest = false;
+			}
+		}
+	}
+
+	void reset_reason() const {
+		::new (&reason) z3::Bool();
+		for(auto &condition: conditions)
+			for(auto &choice: condition.children)
+				if(!choice.node->is_leaf() && !choice.node->is_subtree()){
+					choice.node->branch().reset_reason();
+				}
+				else if (choice.node->is_leaf()) {
+					choice.node->leaf().reset_reason();
+				} else {
+					choice.node->subtree().reset_reason();
+				}
+	}
 
 	// void reset_strategy() const {
 	// 	strategy.clear();
@@ -595,7 +610,7 @@ struct Input {
 	// list of players in alphabetical order
 	std::vector<std::string> players;
 	// list of honest histories
-	std::vector<std::vector<std::string>> honest;
+	std::vector<std::unique_ptr<HonestNode>> honest;
 	// list of honest utilities - for the subtree option
 	std::vector<UtilityTuple> honest_utilities;
 
@@ -687,9 +702,9 @@ struct Input {
 		counterexamples = {};
 	}
 
-	void reset_practical_utilities() const {
-		root.get()->reset_practical_utilities();
-	}
+	// void reset_practical_utilities() const {
+	// 	root.get()->reset_practical_utilities();
+	// }
 
 	void compute_strategy_case(std::vector<z3::Bool> _case, PropertyType property) const {
 		
