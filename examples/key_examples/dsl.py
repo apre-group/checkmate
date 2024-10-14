@@ -86,6 +86,9 @@ class NameExpr(Expr):
 
     def __repr__(self):
         return self.name
+    
+    def __hash__(self) -> int:
+        return self.name.__hash__()
 
 
 LExpr = Union[Expr, float, int]
@@ -220,6 +223,9 @@ class MultiplicationExpr(Expr):
         left = f"({self.left})" if isinstance(self.left, TermExpr) else f"{self.left}"
         right = f"({self.right})" if isinstance(self.right, TermExpr) else f"{self.right}"
         return f"{left} * {right}"
+    
+    def __hash__(self) -> int:
+        return f"{self.left} * {self.right}".__hash__()
 
 
 def mul_expr(left: LExpr, right: LExpr) -> LExpr:
@@ -251,6 +257,10 @@ class DivisionExpr(Expr):
         left = f"({self.left})" if isinstance(self.left, TermExpr) else f"{self.left}"
         right = f"({self.right})" if isinstance(self.right, TermExpr) else f"{self.right}"
         return f"{left} / {right}"
+    
+    def __hash__(self) -> int:
+        return f"{self.left} * {self.right}".__hash__()
+
 
 def div_expr(left: LExpr, right: LExpr) -> LExpr:
     if is_exactly(right, 0.0) or (isinstance(right, int) and is_exactly(right, 0)):
