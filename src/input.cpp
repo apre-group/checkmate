@@ -788,12 +788,10 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 	sort(players.begin(), players.end());
 
 	// load honest histories 
-	std::vector<HonestNode*> honest;
 	for (const json &honest_history_json : document["honest_histories"]){
 		auto *h = load_honest_history(honest_history_json);
 		honest.push_back(h);
 	}
-	std::cout << "kiwi " << honest.size() << std::endl;
 
 	// load real/infinitesimal identifiers
 	for (const json &real: document["constants"]) {

@@ -5,11 +5,10 @@
 int main(int, char **argv) {
 	Options options(argv);
 	Input input(options.input_path, options.supertree);
-	std::cout << "banana " << input.honest.size() << std::endl; 
 
 	// if (options.subtree){
 	// 	// analyse properties in subtree mode
-	// 	analyse_properties_subtree(options, input);
+	// 	analyse_properties_subtree(options, input); 
 	// } else {
 		// analyse properties in default mode or supertree mode
 		analyse_properties(options, input);
