@@ -20,7 +20,9 @@ struct Condition;
 
 struct HonestNode {
 	std::string action;
-	std::vector<std::unique_ptr<HonestNode>> children;
+	std::vector<HonestNode*> children;
+
+	HonestNode(std::string action, std::vector<HonestNode*> children) : action(action), children(children) {}
 };
 
 enum class NodeType {
@@ -215,7 +217,9 @@ struct Choice {
 	// take this action
 	std::string action;
 	// end up in this subtree
-	std::unique_ptr<Node> node;
+	Node *node;
+
+	// Choice(std::string action, Node *node): action(action), node(node) {};
 
 	friend std::ostream &operator<<(std::ostream &out, const Choice &choice) {
 		return out << choice.action;
@@ -508,15 +512,15 @@ class Branch final : public Node {
 	// }
 
 
-	void mark_honest(const std::unique_ptr<HonestNode> &history) const {
+	void mark_honest(const HonestNode* history) const {
 		assert(!honest);
 
 		honest = true;
 		const Node *current = this;
-		for(auto &child : history.get()->children) {
+		for(auto &child : history->children) {
 			// find corresponding tree after action 
 			// and call the function recursively for children of shistory entry
-			Node *subtree = current->branch().get_choice(child.get()->action).node.get();
+			Node *subtree = current->branch().get_choice(child->action).node;
 			
 			if(subtree->is_branch()) {
 				subtree->branch().mark_honest(child);
@@ -534,7 +538,7 @@ class Branch final : public Node {
 		honest = false;
 
 		for (size_t i=0; i<conditions.size(); i++) {
-			const Node *honest_subtree = this->branch().get_honest_child(i).node.get();
+			const Node *honest_subtree = this->branch().get_honest_child(i).node;
 
 			if(honest_subtree->is_branch()) {
 				honest_subtree->branch().reset_honest();
@@ -610,7 +614,7 @@ struct Input {
 	// list of players in alphabetical order
 	std::vector<std::string> players;
 	// list of honest histories
-	std::vector<std::unique_ptr<HonestNode>> honest;
+	std::vector<HonestNode*> honest;
 	// list of honest utilities - for the subtree option
 	std::vector<UtilityTuple> honest_utilities;
 

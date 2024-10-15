@@ -22,7 +22,8 @@ struct Lexer {
 		GE,
 		LT,
 		LE,
-		OR
+		OR,
+		AND
 	};
 
 	// should the next '-' be negation or subtraction?
@@ -121,7 +122,12 @@ struct Lexer {
 			remaining++;
 			unary = true;
 			return Token::OR;
-		} else {
+		} else if (*remaining == '&') {
+			remaining++;
+			unary = true;
+			return Token::AND;
+		}
+		else {
 			std::cerr << "checkmate: unexpected character '" << *remaining << "' in expression " << current << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
@@ -143,12 +149,14 @@ struct Parser {
 		GE,
 		LE,
 		LT,
-		OR
+		OR,
+		AND
 	};
 
 	// operator precedence classes, binding from loosest to tightest
 	enum class Precedence {
 		PAREN,
+		AND,
 		OR,
 		COMPARISON,
 		PLUSMINUS,
@@ -178,6 +186,8 @@ struct Parser {
 				return Precedence::COMPARISON;
 			case Operation::OR:
 				return Precedence::OR;
+			case Operation::AND:
+				return Precedence::AND;
 		}
 		assert(false);
 		UNREACHABLE;
@@ -294,10 +304,16 @@ struct Parser {
 				constraint_stack.push_back(left <= right);
 				break;
 			}
-			case Operation::OR:
+			case Operation::OR: {
 				auto right = pop_constraint();
 				auto left = pop_constraint();
 				constraint_stack.push_back(left || right);
+				break;
+			}
+			case Operation::AND:
+				auto right = pop_constraint();
+				auto left = pop_constraint();
+				constraint_stack.push_back(left && right);
 				break;
 		}
 	}
@@ -372,6 +388,8 @@ struct Parser {
 					break;
 				case Lexer::Token::OR:
 					operation(Operation::OR);
+				case Lexer::Token::AND:
+					operation(Operation::AND);
 			}
 		}
 		// when there is no more input, we know all the operators have to be committed
@@ -418,7 +436,7 @@ static z3::Bool parse_case(Parser &parser, const std::string &_case) {
  * TODO does not check all aspects
  * (hoping to have new input format based on s-expressions, which would be much easier to parse)
  */
-static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const json &node, bool supertree) {
+static Node* load_tree(const Input &input, Parser &parser, const json &node, bool supertree) {
 	// branch
 	if (node.contains("children")) {
 		// do linear-time lookup for the index of the node's player in the input player list
@@ -440,7 +458,10 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 				// iterate over the actions and populate the cond.children
 				for (const json &child: condition_node["actions"]){
 					auto loaded = load_tree(input, parser, child["child"], supertree);
-					cond.children.push_back({child["action"], std::move(loaded)});
+					Choice c;
+					c.action = child["action"];
+					c.node = loaded;
+					cond.children.push_back(c);
 				}
 				conditions.push_back(cond);
 			}
@@ -456,7 +477,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 			conditions.push_back(cond);
 		}
 
-		std::unique_ptr<Branch> branch(new Branch(player, conditions));
+		Branch *branch(new Branch(player, conditions));
 		return branch;
 	}
 
@@ -497,7 +518,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 				[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
 		);
 
-		std::unique_ptr<Leaf> leaf(new Leaf);
+		Leaf *leaf(new Leaf);
 		for (auto &player_utility: player_utilities)
 			leaf->utilities.push_back(player_utility.second);
 		return leaf;
@@ -715,7 +736,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 		}
 
 
-		std::unique_ptr<Subtree> subtree(new Subtree(weak_immunity, weaker_immunity, collusion_resilience, practicality, honest_utility));
+		Subtree *subtree(new Subtree(weak_immunity, weaker_immunity, collusion_resilience, practicality, honest_utility));
 
 		return subtree;
 	}
@@ -725,17 +746,16 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 	std::exit(EXIT_FAILURE);
 }
 
-static std::unique_ptr<HonestNode> load_honest_history(const json &honest_node) {
-	std::unique_ptr<HonestNode> node;
-	node->action = honest_node["action"];
-	
-	if (honest_node["children"].size() > 0) {
-		for (const json &child: honest_node["children"]) {
-			node->children.push_back(load_honest_history(child));
-		}
-	}
+static HonestNode* load_honest_history(const json &honest_node) {
+	std::string act = honest_node["action"];
+	std::vector<HonestNode*> children; 
 
-	return node;
+	for (const json &child: honest_node["children"]) {
+		children.push_back(load_honest_history(child));
+	}
+	
+
+	return new HonestNode(act, children);
 }
 
 
@@ -768,10 +788,12 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 	sort(players.begin(), players.end());
 
 	// load honest histories 
-	std::vector<std::unique_ptr<HonestNode>> honest;
+	std::vector<HonestNode*> honest;
 	for (const json &honest_history_json : document["honest_histories"]){
-		honest.push_back(load_honest_history(honest_history_json));
+		auto *h = load_honest_history(honest_history_json);
+		honest.push_back(h);
 	}
+	std::cout << "kiwi " << honest.size() << std::endl;
 
 	// load real/infinitesimal identifiers
 	for (const json &real: document["constants"]) {
@@ -886,7 +908,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 
 	// load the game tree and leak it so we can downcast to Branch
-	auto node = load_tree(*this, parser, document["tree"], supertree).release();
+	Node *node = load_tree(*this, parser, document["tree"], supertree);
 
 	if (node->is_leaf() || node->is_subtree()) {
 		std::cerr << "checkmate: root node is a leaf or a subtree (?!) - exiting" << std::endl;

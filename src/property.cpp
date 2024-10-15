@@ -19,14 +19,14 @@
 using z3::Bool;
 using z3::Solver;
 
-static std::string print_history(const std::unique_ptr<HonestNode> &history) {
+static std::string print_history(const HonestNode* history) {
 
-	std::string history_representation = history.get()->action + " [ ";
-	for(size_t i=0; i<history.get()->children.size(); i++) {
+	std::string history_representation = history->action + " [ ";
+	for(size_t i=0; i<history->children.size(); i++) {
 		if(i!=0) {
 			history_representation = history_representation + ", ";
 		}
-		history_representation = history_representation + print_history(history.get()->children[i]);
+		history_representation = history_representation + print_history(history->children[i]);
 	}
 
 	history_representation = history_representation + " ]";
@@ -314,7 +314,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			for (size_t i=0; i<branch.conditions.size(); i++) {
 
 				auto &honest_choice = branch.get_honest_child(i);
-				auto *subtree = honest_choice.node.get();
+				auto *subtree = honest_choice.node;
 
 				// set chosen action, needed for printing strategy
 				//branch.strategy = honest_choice.action;
@@ -342,7 +342,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			unsigned reset_index;
 			unsigned i = 0;
 			for (const Choice &choice: branch.conditions[j].children) {
-				if (weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker, consider_prob_groups)) {
+				if (weak_immunity_rec(input, solver, options, choice.node, player, weaker, consider_prob_groups)) {
 					// set chosen action, needed for printing strategy
 					// branch.strategy = choice.action;
 					// if (consider_prob_groups) {
@@ -376,7 +376,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			unsigned reset_index;
 			unsigned i = 0;
 			for (const Choice &choice: branch.conditions[j].children) {
-				if (!weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker, consider_prob_groups)) {
+				if (!weak_immunity_rec(input, solver, options, choice.node, player, weaker, consider_prob_groups)) {
 					if (choice.node->reason.null()){
 						// if (options.counterexamples) {
 						// 	branch.counterexample_choices.push_back(choice.action);
