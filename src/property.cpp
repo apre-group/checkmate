@@ -310,33 +310,48 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		if (branch.honest) {
 			// if we are along the honest history, we want to take an honest strategy
 
+			bool at_least_one_non_contradictory_condition = false;
+
 			for (size_t i=0; i<branch.conditions.size(); i++) {
 
-				auto &honest_choice = branch.get_honest_child(i);
-				auto *subtree = honest_choice.node;
+				solver.push();
+				solver.assert_(branch.conditions[i].condition);
 
-				// set chosen action, needed for printing strategy
-				//branch.strategy = honest_choice.action;
+				// while we refine the case by adding a case split, we may have to prune
+				// the tree of contradictory actions. In practice, we can ignore the 
+				// branches belonging to contradictory actions "on the fly"; see next line 
+				if(solver.solve() != z3::Result::UNSAT) {
 
-				// the honest choice must be weak immune
-				if (weak_immunity_rec(input, solver, options, subtree, player, weaker, consider_prob_groups)) {
-					// if (consider_prob_groups) {
-					// 	branch.problematic_group = player + 1;
-					// }
+					at_least_one_non_contradictory_condition = true;
 
-					if(options.weak_conditional_actions) {
-						return true;
-					}
-				} else {
-					if(branch.reason.null()) {
-						branch.reason = subtree->reason;
-					}
-					// input.set_reset_point(branch);
+					auto &honest_choice = branch.get_honest_child(i);
+					auto *subtree = honest_choice.node;
 
-					if(options.strong_conditional_actions) {
-						return false;
+					// set chosen action, needed for printing strategy
+					//branch.strategy = honest_choice.action;
+
+					// the honest choice must be weak immune
+					if (weak_immunity_rec(input, solver, options, subtree, player, weaker, consider_prob_groups)) {
+						// if (consider_prob_groups) {
+						// 	branch.problematic_group = player + 1;
+						// }
+
+						if(options.weak_conditional_actions) {
+							return true;
+						}
+					} else {
+						if(branch.reason.null()) {
+							branch.reason = subtree->reason;
+						}
+						// input.set_reset_point(branch);
+
+						if(options.strong_conditional_actions) {
+							return false;
+						}
 					}
 				}
+
+				solver.pop();
 			} 
 			// in the loop above
 			// mode weak_conditional_actions: we return as soon as we find one which is ok
@@ -344,45 +359,60 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			// so if we reach the code after the loop, only one the following cases is possible
 			// mode weak_conditional_actions and no condition is secure -> return false
 			// mode strong_conditional_actions and all conditions are secure -> return true
-			return options.weak_conditional_actions ? false : true;
+			return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
 		}
 		// otherwise we can take any strategy we please as long as it's weak immune
 		// weak version of conditional actions: we need to have one such option for one condition
 		// strong version of conditional actions: we need to have one such option for each condition
+		bool at_least_one_non_contradictory_condition = false;
 		for (size_t j=0; j<branch.conditions.size(); j++) {
-			bool secure_choice_found = false;
-			z3::Bool reason;
-			unsigned reset_index;
-			unsigned i = 0;
-			for (const Choice &choice: branch.conditions[j].children) {
-				if (weak_immunity_rec(input, solver, options, choice.node, player, weaker, consider_prob_groups)) {
-					// set chosen action, needed for printing strategy
-					// branch.strategy = choice.action;
-					// if (consider_prob_groups) {
-					// 		branch.problematic_group = player + 1;
-					// }
-					secure_choice_found = true;
-					if(options.weak_conditional_actions) {
-						return true;
-					}
-				}
-				if ((!choice.node->reason.null()) && (reason.null())) {
-						reason = choice.node->reason;
-						//reset_index = i;
-				}
-				i++;
-			}
-			if (!reason.null()) {
-				branch.reason = reason;
-				//input.set_reset_point(*branch.choices[reset_index].node);
-			}	
 
-			if(options.strong_conditional_actions && !secure_choice_found) {
-				return false;
+			solver.push();
+			solver.assert_(branch.conditions[j].condition);
+
+			// while we refine the case by adding a case split, we may have to prune
+			// the tree of contradictory actions. In practice, we can ignore the 
+			// branches belonging to contradictory actions "on the fly"; see next line 
+			if(solver.solve() != z3::Result::UNSAT) {
+				at_least_one_non_contradictory_condition = true;
+				bool secure_choice_found = false;
+				z3::Bool reason;
+				unsigned reset_index;
+				unsigned i = 0;
+				for (const Choice &choice: branch.conditions[j].children) {
+					if (weak_immunity_rec(input, solver, options, choice.node, player, weaker, consider_prob_groups)) {
+						// set chosen action, needed for printing strategy
+						// branch.strategy = choice.action;
+						// if (consider_prob_groups) {
+						// 		branch.problematic_group = player + 1;
+						// }
+						secure_choice_found = true;
+						if(options.weak_conditional_actions) {
+							return true;
+						}
+					}
+					if ((!choice.node->reason.null()) && (reason.null())) {
+							reason = choice.node->reason;
+							//reset_index = i;
+					}
+					i++;
+				}
+				if (!reason.null()) {
+					branch.reason = reason;
+					//input.set_reset_point(*branch.choices[reset_index].node);
+				}	
+
+				if(options.strong_conditional_actions && !secure_choice_found) {
+					return false;
+				}
+
 			}
+
+			solver.pop();
+
 		}
 
-		return options.weak_conditional_actions ? false : true;
+		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
 		
 
 	} else {
@@ -390,56 +420,68 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		// so all branches should be weak immune for the player
 		// weak version of conditional actions: we need to ensure this for one condition
 		// strong version of conditional actions: we need to ensure this for each condition
+		bool at_least_one_non_contradictory_condition = false;
 		for (size_t j=0; j<branch.conditions.size(); j++) {
-			bool not_secure_choice_found = false;
-			bool result = true;
-			z3::Bool reason;
-			unsigned reset_index;
-			unsigned i = 0;
-			for (const Choice &choice: branch.conditions[j].children) {
-				if (!weak_immunity_rec(input, solver, options, choice.node, player, weaker, consider_prob_groups)) {
-					// if (choice.node->reason.null()){
-					// 	if (options.counterexamples) {
-					// 		branch.counterexample_choices.push_back(choice.action);
-					// 	 }
-					// 	if (!options.all_counterexamples){
-					// 	 	return false;
-					// 	} else {
-					// 		result = false;
-					// 	}
-					// } else {
-					// 	if (result && reason.null()){
-					// 		reason = choice.node->reason;
-					// 		reset_index = i;
-					// 	}
-					// 	result = false;
-					// }	
-					not_secure_choice_found = true;
-					
-					// we have found one condition where not all choices are secure
-					if(options.strong_conditional_actions) {
-						return false;
-					}
-				}
-				i++;
-			}
-			if (!reason.null()) {
-				branch.reason = reason;
-				// input.set_reset_point(*branch.choices[reset_index].node);
-			}
-			// if (result && consider_prob_groups) {
-			// 	branch.problematic_group = player + 1;
-			// }
-			//return result;
+			solver.push();
+			solver.assert_(branch.conditions[j].condition);
 
-			// we have one condition where all choices are secure
-			if(options.weak_conditional_actions && !not_secure_choice_found) {
-				return true;
+			// while we refine the case by adding a case split, we may have to prune
+			// the tree of contradictory actions. In practice, we can ignore the 
+			// branches belonging to contradictory actions "on the fly"; see next line 
+			if(solver.solve() != z3::Result::UNSAT) {
+
+				bool not_secure_choice_found = false;
+				bool result = true;
+				z3::Bool reason;
+				unsigned reset_index;
+				unsigned i = 0;
+				for (const Choice &choice: branch.conditions[j].children) {
+					if (!weak_immunity_rec(input, solver, options, choice.node, player, weaker, consider_prob_groups)) {
+						// if (choice.node->reason.null()){
+						// 	if (options.counterexamples) {
+						// 		branch.counterexample_choices.push_back(choice.action);
+						// 	 }
+						// 	if (!options.all_counterexamples){
+						// 	 	return false;
+						// 	} else {
+						// 		result = false;
+						// 	}
+						// } else {
+						// 	if (result && reason.null()){
+						// 		reason = choice.node->reason;
+						// 		reset_index = i;
+						// 	}
+						// 	result = false;
+						// }	
+						not_secure_choice_found = true;
+						
+						// we have found one condition where not all choices are secure
+						if(options.strong_conditional_actions) {
+							return false;
+						}
+					}
+					i++;
+				}
+				if (!reason.null()) {
+					branch.reason = reason;
+					// input.set_reset_point(*branch.choices[reset_index].node);
+				}
+				// if (result && consider_prob_groups) {
+				// 	branch.problematic_group = player + 1;
+				// }
+				//return result;
+
+				// we have one condition where all choices are secure
+				if(options.weak_conditional_actions && !not_secure_choice_found) {
+					return true;
+				}
 			}
+
+			solver.pop();
 
 		}
 
-		return options.weak_conditional_actions ? false : true;
+		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
 	}
 
 } 
