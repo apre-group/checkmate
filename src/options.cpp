@@ -16,6 +16,8 @@ const char *USAGE = R"(usage: checkmate PATH
 	--strategies
 	--subtree
 	--supertree
+	--weak_conditional_actions
+	--strong_conditional_actions
 )";
 
 // print a message, the usage information and exit with failure code
@@ -65,6 +67,10 @@ Options::Options(char **argv) {
 			subtree = true;
 		else if (!strcmp(*argv, "--supertree"))
 			supertree = true;
+		else if (!strcmp(*argv, "--weak_conditional_actions"))
+			weak_conditional_actions = true;
+		else if (!strcmp(*argv, "--strong_conditional_actions"))
+			strong_conditional_actions = true;
 		else
 			bail("unknown option");
 		argv++;
@@ -72,6 +78,9 @@ Options::Options(char **argv) {
 
 	if (subtree && supertree)
 		bail("cannot combine subtree and supertree mode");
+
+	if (weak_conditional_actions && strong_conditional_actions)
+		bail("cannot combine modes for weak and strong conditional actions");
 
 	if(subtree) {
 		if(counterexamples || all_counterexamples || strategies || preconditions) {
@@ -82,4 +91,9 @@ Options::Options(char **argv) {
 	// analyze everything by default
 	if (!weak_immunity && !weaker_immunity && !collusion_resilience && !practicality)
 		weak_immunity = weaker_immunity = collusion_resilience = practicality = true;
+
+	// analyze strong conditonal actions per default
+	if (!weak_conditional_actions && !strong_conditional_actions)
+		strong_conditional_actions = true;
+
 }

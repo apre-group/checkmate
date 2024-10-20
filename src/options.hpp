@@ -34,6 +34,10 @@ struct Options {
 	bool subtree = false;
 	// reason over a supertree, contains leaves that are property results of a subtree
 	bool supertree = false;
+
+	// options for conditional actions
+	bool weak_conditional_actions = false;
+	bool strong_conditional_actions = false;
 };
 
 #endif
