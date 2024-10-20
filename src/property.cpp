@@ -411,7 +411,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			solver.pop();
 
 		}
-
+		
 		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
 		
 
@@ -429,7 +429,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			// the tree of contradictory actions. In practice, we can ignore the 
 			// branches belonging to contradictory actions "on the fly"; see next line 
 			if(solver.solve() != z3::Result::UNSAT) {
-
+				at_least_one_non_contradictory_condition = true;
 				bool not_secure_choice_found = false;
 				bool result = true;
 				z3::Bool reason;
