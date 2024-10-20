@@ -310,7 +310,6 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		if (branch.honest) {
 			// if we are along the honest history, we want to take an honest strategy
 
-			// strong version: for each condition
 			for (size_t i=0; i<branch.conditions.size(); i++) {
 
 				auto &honest_choice = branch.get_honest_child(i);
@@ -324,20 +323,34 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					// if (consider_prob_groups) {
 					// 	branch.problematic_group = player + 1;
 					// }
-					return true;
-				} 
 
-				if(branch.reason.null()) {
-					branch.reason = subtree->reason;
+					if(options.weak_conditional_actions) {
+						return true;
+					}
+				} else {
+					if(branch.reason.null()) {
+						branch.reason = subtree->reason;
+					}
+					// input.set_reset_point(branch);
+
+					if(options.strong_conditional_actions) {
+						return false;
+					}
 				}
-				// input.set_reset_point(branch);
-				return false;
 			} 
+			// in the loop above
+			// mode weak_conditional_actions: we return as soon as we find one which is ok
+			// mode strong_conditional_actions: we return as soon as we find one which is not ok
+			// so if we reach the code after the loop, only one the following cases is possible
+			// mode weak_conditional_actions and no condition is secure -> return false
+			// mode strong_conditional_actions and all conditions are secure -> return true
+			return options.weak_conditional_actions ? false : true;
 		}
 		// otherwise we can take any strategy we please as long as it's weak immune
+		// weak version of conditional actions: we need to have one such option for one condition
 		// strong version of conditional actions: we need to have one such option for each condition
 		for (size_t j=0; j<branch.conditions.size(); j++) {
-
+			bool secure_choice_found = false;
 			z3::Bool reason;
 			unsigned reset_index;
 			unsigned i = 0;
@@ -348,7 +361,10 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					// if (consider_prob_groups) {
 					// 		branch.problematic_group = player + 1;
 					// }
-					return true;
+					secure_choice_found = true;
+					if(options.weak_conditional_actions) {
+						return true;
+					}
 				}
 				if ((!choice.node->reason.null()) && (reason.null())) {
 						reason = choice.node->reason;
@@ -360,39 +376,50 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				branch.reason = reason;
 				//input.set_reset_point(*branch.choices[reset_index].node);
 			}	
-			return false;
 
+			if(options.strong_conditional_actions && !secure_choice_found) {
+				return false;
+			}
 		}
+
+		return options.weak_conditional_actions ? false : true;
+		
 
 	} else {
 		// if we are not the honest player, we could do anything,
 		// so all branches should be weak immune for the player
+		// weak version of conditional actions: we need to ensure this for one condition
 		// strong version of conditional actions: we need to ensure this for each condition
-
 		for (size_t j=0; j<branch.conditions.size(); j++) {
-
+			bool not_secure_choice_found = false;
 			bool result = true;
 			z3::Bool reason;
 			unsigned reset_index;
 			unsigned i = 0;
 			for (const Choice &choice: branch.conditions[j].children) {
 				if (!weak_immunity_rec(input, solver, options, choice.node, player, weaker, consider_prob_groups)) {
-					if (choice.node->reason.null()){
-						// if (options.counterexamples) {
-						// 	branch.counterexample_choices.push_back(choice.action);
-						// }
-						// if (!options.all_counterexamples){
-						// 	return false;
-						// } else {
-							result = false;
-						// }
-					} else {
-						if (result && reason.null()){
-							reason = choice.node->reason;
-							// reset_index = i;
-						}
-						result = false;
-					}	
+					// if (choice.node->reason.null()){
+					// 	if (options.counterexamples) {
+					// 		branch.counterexample_choices.push_back(choice.action);
+					// 	 }
+					// 	if (!options.all_counterexamples){
+					// 	 	return false;
+					// 	} else {
+					// 		result = false;
+					// 	}
+					// } else {
+					// 	if (result && reason.null()){
+					// 		reason = choice.node->reason;
+					// 		reset_index = i;
+					// 	}
+					// 	result = false;
+					// }	
+					not_secure_choice_found = true;
+					
+					// we have found one condition where not all choices are secure
+					if(options.strong_conditional_actions) {
+						return false;
+					}
 				}
 				i++;
 			}
@@ -403,8 +430,16 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			// if (result && consider_prob_groups) {
 			// 	branch.problematic_group = player + 1;
 			// }
-			return result;
+			//return result;
+
+			// we have one condition where all choices are secure
+			if(options.weak_conditional_actions && !not_secure_choice_found) {
+				return true;
+			}
+
 		}
+
+		return options.weak_conditional_actions ? false : true;
 	}
 
 } 
