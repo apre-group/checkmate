@@ -607,6 +607,12 @@ struct Action {
 	}
 };
 
+struct CondActionsUtilityPair {
+	z3::Bool conditional_actions;
+	std::vector<Utility> utility;
+
+};
+
 struct Input {
 	// parse an input from `path`, exiting if malformed
 	Input(const char *path, bool supertree);
@@ -631,6 +637,8 @@ struct Input {
 	z3::Bool collusion_resilience_constraint;
 	// practicality initial constraints
 	z3::Bool practicality_constraint;
+
+	mutable std::vector<CondActionsUtilityPair> cond_actions_honest_utility_pairs = {};
 
 	mutable std::vector<std::vector<z3::Bool>> unsat_cases;
 

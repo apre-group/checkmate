@@ -486,261 +486,307 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 } 
 
-// bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, std::bitset<Input::MAX_PLAYERS> group, Utility honest_total, unsigned players, uint64_t group_nr, bool consider_prob_groups) {
+bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, std::bitset<Input::MAX_PLAYERS> group, unsigned players, uint64_t group_nr, bool consider_prob_groups) {
 	
-// 	if (node->is_leaf()) {
-// 		const auto &leaf = node->leaf();
+	// Ivana's thoughts about how to adapt cr for conditional actions: (Discuss this!)
+	// case branch: just copy paste parts from weak immunity (do code review for these parts!)
+	// case leaf: 
+	// 	- we do not pass "Utility honest_total" as an argument to this function
+	//	- instead before calling this function we traverse the tree and in the root we save a vector of
+	//   ({cond_action && ... && cond_action}, honest_utility) pairs
+	//  - now when we need to check whether a leaf is cr we iterate over all elements from the vector and check for each pair
+	//  	- if UNSAT when 1st element of the pair added to current solver -> continue (incompatible, no need to check anything)
+	// 		- else make sure that 2nd element of pair i.e. honest utility is >= current utility in the leaf
+	//		- if  !honest_total >= group_utility UNSAT continue with next element of vector 
+	// 		- if honest_total >= group_utility UNSAT return false immediately, set reason to null before returning 
+	// 		- else return false
+	
+	if (node->is_leaf()) {
+		const auto &leaf = node->leaf();
 
 
-// 		if  ((group_nr < leaf.problematic_group) && consider_prob_groups){
-// 			return true;
-// 		}
+		// if  ((group_nr < leaf.problematic_group) && consider_prob_groups){
+		// 	return true;
+		// }
 
-// 		// compute the total utility for the player group...
-// 		Utility group_utility{z3::Real::ZERO, z3::Real::ZERO};
+		// compute the total utility for the player group...
+		Utility group_utility{z3::Real::ZERO, z3::Real::ZERO};
 		
-// 		for (size_t player = 0; player < players; player++)
-// 			if (group[player])
-// 				group_utility = group_utility + leaf.utilities[player];
+		for (size_t player = 0; player < players; player++)
+			if (group[player])
+				group_utility = group_utility + leaf.utilities[player];
 
-// 		// ..and compare it to the honest total
-// 		auto condition = honest_total >= group_utility;		
 		
-// 		if (solver.solve({!condition}) == z3::Result::UNSAT) {
-// 			if (consider_prob_groups) {
-// 				leaf.problematic_group = group_nr + 1;
-// 			}
-// 			return true;
-// 		}
+		// ..and compare it to all honest utilities that are "compatible"
+		for (auto pair: input.cond_actions_honest_utility_pairs) {
 
-// 		if (solver.solve({condition}) == z3::Result::UNSAT) {
+			if(solver.solve({pair.conditional_actions}) == z3::Result::UNSAT) {
+				// incompatible, no need to check anything
+				continue;
+			}
 
-// 			if(options.strategies) {
-// 				node->violates_cr[group_nr - 1] = true;
-// 			}
+			// compute honest_total for this pair
+			Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
+			for (size_t player = 0; player < players; player++)
+				if (group[player])
+					honest_total = honest_total + pair.utility[player];
+
+			auto condition = honest_total >= group_utility;	
+
+			if (solver.solve({!condition}) == z3::Result::UNSAT) {
+				//nothing to do in this case
+				// we can continue
+				// this "if" can be completely removed in future
+				continue;
+			}
+
+			if (solver.solve({condition}) == z3::Result::UNSAT) {
+
+				// if(options.strategies) {
+				// 	node->violates_cr[group_nr - 1] = true;
+				// }
+
+				// we need to reset the reason because it can be the case that the reason is set from 
+				// a previous pair, and we want to return false with no reason (because we know that
+				// honest < group_utility so we do not want to split unnecessarily)
+				leaf.reason = ::new (&leaf.reason) z3::Bool(); 
+				return false;
+			}
+
+			if(leaf.reason.null()) {
+				leaf.reason = get_split_approx(solver, honest_total, group_utility);
+			}
+
+
+		}
+
+		// in the future we need to add a boolean which ensures that we only enter the 
+		// first "if". If this is the case we can increment "solved_for_group".
+
+	
+		// if (consider_prob_groups) {
+		// 	leaf.problematic_group = group_nr;
+		// }
+
 			
-// 			return false;
-// 		}
+		// input.set_reset_point(leaf);
+		
+		return false;
 
-// 		if (consider_prob_groups) {
-// 			leaf.problematic_group = group_nr;
-// 		}
-// 		leaf.reason = get_split_approx(solver, honest_total, group_utility);
-// 		input.set_reset_point(leaf);
-// 		return false;
+	// } else if (node->is_subtree()){
 
-// 	} else if (node->is_subtree()){
+	// 	const auto &subtree = node->subtree();
 
-// 		const auto &subtree = node->subtree();
+	// 	// look up current player_group:
+	// 	// 		if disj_of_cases (in satisfied_for_case) that is equivalent to current case or weaker we return true 
+	// 	//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
+	// 	//				 since a>b => a+1>b, we conclude satisfied for a>b (i.e. return true)
+	// 	// 		else if disj_of_cases not disjoint from current case --> need case split (set the first of these not disjoint ones to be reason)
+	// 	//			e.g. satisfied for case [a>b], current_case is a>0;
+	// 	//  			hence whether satisfied or not depends on b, so we add a>b as the reason 
+	// 	// 		else return false
+	// 	//			e.g. satisfied for case [a>b], current case a < b, then for sure not satisfied, make sure reason is empty and return false
 
-// 		// look up current player_group:
-// 		// 		if disj_of_cases (in satisfied_for_case) that is equivalent to current case or weaker we return true 
-// 		//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
-// 		//				 since a>b => a+1>b, we conclude satisfied for a>b (i.e. return true)
-// 		// 		else if disj_of_cases not disjoint from current case --> need case split (set the first of these not disjoint ones to be reason)
-// 		//			e.g. satisfied for case [a>b], current_case is a>0;
-// 		//  			hence whether satisfied or not depends on b, so we add a>b as the reason 
-// 		// 		else return false
-// 		//			e.g. satisfied for case [a>b], current case a < b, then for sure not satisfied, make sure reason is empty and return false
+	// 	// search for SubtreeResult in weak(er)_immunity that corresponds to the current player
 
-// 		// search for SubtreeResult in weak(er)_immunity that corresponds to the current player
-
-// 		const std::vector<SubtreeResult> &subtree_results = subtree.collusion_resilience;
-// 		std::vector<std::string> player_names = index2player(input, group_nr); 
+	// 	const std::vector<SubtreeResult> &subtree_results = subtree.collusion_resilience;
+	// 	std::vector<std::string> player_names = index2player(input, group_nr); 
 
 
-// 		for (const SubtreeResult &subtree_result : subtree_results) {
-// 			// find the correct subtree_result
-// 			bool correct_subtree = true;
-// 			if (subtree_result.player_group.size() != player_names.size()){
-// 				correct_subtree = false;
-// 			} else {
-// 				for (const std::string &subtree_player : subtree_result.player_group){
-// 					int counted = 0;
-// 					for (const auto &name : player_names){
-// 						if(name == subtree_player){
-// 							counted++;
-// 						}
-// 					}
-// 					if (counted == 0 ) {
-// 						correct_subtree = false;
-// 						break;
-// 					}
-// 				}
-// 				if (correct_subtree){
+	// 	for (const SubtreeResult &subtree_result : subtree_results) {
+	// 		// find the correct subtree_result
+	// 		bool correct_subtree = true;
+	// 		if (subtree_result.player_group.size() != player_names.size()){
+	// 			correct_subtree = false;
+	// 		} else {
+	// 			for (const std::string &subtree_player : subtree_result.player_group){
+	// 				int counted = 0;
+	// 				for (const auto &name : player_names){
+	// 					if(name == subtree_player){
+	// 						counted++;
+	// 					}
+	// 				}
+	// 				if (counted == 0 ) {
+	// 					correct_subtree = false;
+	// 					break;
+	// 				}
+	// 			}
+	// 			if (correct_subtree){
 
-// 					// (init_cons && wi_cons && curent_case) => disj_of_cases VALID
-// 					// ! (init_cons && wi_cons && current_case) || disj_of_cases VALID
-// 					// (init_cons && wi_cons && current_case) && !disj_of_cases UNSAT
-// 					// init_cons && wi_cons && current_case    && !disj_of_cased UNSAT
+	// 				// (init_cons && wi_cons && curent_case) => disj_of_cases VALID
+	// 				// ! (init_cons && wi_cons && current_case) || disj_of_cases VALID
+	// 				// (init_cons && wi_cons && current_case) && !disj_of_cases UNSAT
+	// 				// init_cons && wi_cons && current_case    && !disj_of_cased UNSAT
 
-// 					std::vector<z3::Bool> cases_as_conjunctions = {};
+	// 				std::vector<z3::Bool> cases_as_conjunctions = {};
 
-// 					for (auto _case: subtree_result.satisfied_in_case) {
-// 						// try to optimize: if only 1 -> no need for conjunction
-// 						if(_case.size() == 1) {
-// 							cases_as_conjunctions.push_back(_case[0]);
-// 						} else {
-// 							cases_as_conjunctions.push_back(z3::conjunction(_case));
-// 						}
-// 					}
-// 					z3::Bool disj_of_cases;
+	// 				for (auto _case: subtree_result.satisfied_in_case) {
+	// 					// try to optimize: if only 1 -> no need for conjunction
+	// 					if(_case.size() == 1) {
+	// 						cases_as_conjunctions.push_back(_case[0]);
+	// 					} else {
+	// 						cases_as_conjunctions.push_back(z3::conjunction(_case));
+	// 					}
+	// 				}
+	// 				z3::Bool disj_of_cases;
 
-// 					if(cases_as_conjunctions.size() == 1) {
-// 						disj_of_cases = cases_as_conjunctions[0];
-// 					} else {
-// 						disj_of_cases = z3::disjunction(cases_as_conjunctions);
-// 					}
+	// 				if(cases_as_conjunctions.size() == 1) {
+	// 					disj_of_cases = cases_as_conjunctions[0];
+	// 				} else {
+	// 					disj_of_cases = z3::disjunction(cases_as_conjunctions);
+	// 				}
 					
-// 					z3::Result z3_result_implied = solver.solve({!disj_of_cases});
+	// 				z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
-// 					if (z3_result_implied == z3::Result::UNSAT) {
-// 						return true;
-// 					} else {
+	// 				if (z3_result_implied == z3::Result::UNSAT) {
+	// 					return true;
+	// 				} else {
 
-// 						// compute if current_case and case are disjoint:
-// 						// is it sat that init && wi && case && current_case?
-// 						// if no, then disjoint
+	// 					// compute if current_case and case are disjoint:
+	// 					// is it sat that init && wi && case && current_case?
+	// 					// if no, then disjoint
 
-// 						z3::Result z3_result_disjoint = solver.solve({disj_of_cases});
+	// 					z3::Result z3_result_disjoint = solver.solve({disj_of_cases});
 						
-// 						if (z3_result_disjoint == z3::Result::SAT) {
-// 							// set reason
-// 							subtree.reason = disj_of_cases;
-// 						}
-// 						return false;
-// 					}
-// 				}
-// 			}		
-// 		}
-// 	} 
+	// 					if (z3_result_disjoint == z3::Result::SAT) {
+	// 						// set reason
+	// 						subtree.reason = disj_of_cases;
+	// 					}
+	// 					return false;
+	// 				}
+	// 			}
+	// 		}		
+	// 	}
+	// } 
 
-// 	const auto &branch = node->branch();
+	return true;
 
-// 	if  ((group_nr < branch.problematic_group) && consider_prob_groups ){
-// 		return true;
-// 	}
+	// const auto &branch = node->branch();
+
+	// if  ((group_nr < branch.problematic_group) && consider_prob_groups ){
+	// 	return true;
+	// }
 	
-// 	// else we deal with a branch
-// 	if (!group[branch.player]) { 
+	// // else we deal with a branch
+	// if (!group[branch.player]) { 
 
-// 		// player behaves honestly
-// 		if (branch.honest) {
-// 			// if we are along the honest history, we want to take an honest strategy
-// 			auto &honest_choice = branch.get_honest_child();
-// 			auto *subtree = honest_choice.node.get();
+	// 	// player behaves honestly
+	// 	if (branch.honest) {
+	// 		// if we are along the honest history, we want to take an honest strategy
+	// 		auto &honest_choice = branch.get_honest_child();
+	// 		auto *subtree = honest_choice.node.get();
 
-// 			// set chosen action, needed for printing strategy
-// 			//branch.strategy = honest_choice.action;
+	// 		// set chosen action, needed for printing strategy
+	// 		//branch.strategy = honest_choice.action;
 
-// 			// the honest choice must be collusion resilient
-// 			if (collusion_resilience_rec(input, solver, options, subtree, group, honest_total, players, group_nr, consider_prob_groups)) {
-// 				if (consider_prob_groups) {
-// 					branch.problematic_group = group_nr + 1;
-// 				}
-// 				return true;
-// 			} 
+	// 		// the honest choice must be collusion resilient
+	// 		if (collusion_resilience_rec(input, solver, options, subtree, group, players, group_nr, consider_prob_groups)) {
+	// 			if (consider_prob_groups) {
+	// 				branch.problematic_group = group_nr + 1;
+	// 			}
+	// 			return true;
+	// 		} 
 			
-// 			branch.reason = subtree->reason;
-// 			input.set_reset_point(*subtree);
-// 			return false;
-// 		}
-// 		// otherwise we can take any strategy we please as long as it's collusion resilient
-// 		// if options.strategies is set, we have to consider all branches, otherwise we can stop after the first cr one
-// 		if (options.strategies){
-// 			bool result = false;
-// 			z3::Bool reason;
-// 			unsigned reset_index;
-// 			unsigned i = 0;
-// 			for (const Choice &choice: branch.choices) {
-// 				if (collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr, consider_prob_groups)) {
-// 					// set chosen action, needed for printing strategy
-// 					//branch.strategy = choice.action;
-// 					if (consider_prob_groups){
-// 						branch.problematic_group = group_nr + 1;
-// 					}
-// 					result = true;
-// 				// if not cr and reason is null, then violated
-// 				} else if (choice.node->reason.null()) {
+	// 		branch.reason = subtree->reason;
+	// 		input.set_reset_point(*subtree);
+	// 		return false;
+	// 	}
+	// 	// otherwise we can take any strategy we please as long as it's collusion resilient
+	// 	// if options.strategies is set, we have to consider all branches, otherwise we can stop after the first cr one
+	// 	if (options.strategies){
+	// 		bool result = false;
+	// 		z3::Bool reason;
+	// 		unsigned reset_index;
+	// 		unsigned i = 0;
+	// 		for (const Choice &choice: branch.choices) {
+	// 			if (collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr, consider_prob_groups)) {
+	// 				// set chosen action, needed for printing strategy
+	// 				//branch.strategy = choice.action;
+	// 				if (consider_prob_groups){
+	// 					branch.problematic_group = group_nr + 1;
+	// 				}
+	// 				result = true;
+	// 			// if not cr and reason is null, then violated
+	// 			} else if (choice.node->reason.null()) {
 
-// 					choice.node->violates_cr[group_nr - 1] = true;
-// 				}
+	// 				choice.node->violates_cr[group_nr - 1] = true;
+	// 			}
 					
-// 				if ((!choice.node->reason.null()) && (reason.null())) {
-// 					reason = choice.node->reason;
-// 					reset_index = i;
-// 				}
-// 				i++;		
-// 			}
-// 			// only set reason if there is one
-// 			if (!reason.null()) {
-// 					branch.reason = reason;
-// 					input.set_reset_point(*branch.choices[reset_index].node);
-// 			}
-// 			return result;
-// 		} else {
-// 			z3::Bool reason;
-// 			unsigned reset_index;
-// 			unsigned i = 0;
-// 			for (const Choice &choice: branch.choices) {
-// 				if (collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr, consider_prob_groups)) {
-// 					// set chosen action, needed for printing strategy
-// 					branch.strategy = choice.action;
-// 					if (consider_prob_groups) {
-// 						branch.problematic_group = group_nr + 1;
-// 					}
-// 					return true;
-// 				}	
-// 				if ((!choice.node->reason.null()) && (reason.null())) {
-// 					reason = choice.node->reason;
-// 					reset_index = i;
-// 				}
-// 				i++;
-// 			}
-// 			if (!reason.null()) {
-// 					branch.reason = reason;
-// 					input.set_reset_point(*branch.choices[reset_index].node);
-// 			}
-// 		}
-// 		return false;
-// 	} else {
-// 		// if we are not the honest player, we could do anything,
-// 		// so all branches should be collusion resilient for the player
-// 		bool result = true;
-// 		z3::Bool reason;
-// 		unsigned reset_index;
-// 		unsigned i = 0;
-// 		for (const Choice &choice: branch.choices) {
-// 			if (!collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr, consider_prob_groups)) {
-// 				if (choice.node->reason.null()) {
-// 					if (options.counterexamples) {
-// 						branch.counterexample_choices.push_back(choice.action);
-// 					}
-// 					if (!options.all_counterexamples){
-// 						return false;
-// 					} else {
-// 						result = false;
-// 					}
-// 				} else {
-// 					if (result && reason.null()){
-// 						reason = choice.node->reason;
-// 						reset_index = i;
-// 					}
-// 					result = false;
-// 				}	
-// 			}
-// 			i++;
-// 		}
-// 		if (!reason.null()) {
-// 			branch.reason = reason;
-// 			input.set_reset_point(*branch.choices[reset_index].node);
-// 		}
-// 		if (result && consider_prob_groups) {
-// 			branch.problematic_group = group_nr + 1;
-// 		}
-// 		return result;
-// 	}
-// }
+	// 			if ((!choice.node->reason.null()) && (reason.null())) {
+	// 				reason = choice.node->reason;
+	// 				reset_index = i;
+	// 			}
+	// 			i++;		
+	// 		}
+	// 		// only set reason if there is one
+	// 		if (!reason.null()) {
+	// 				branch.reason = reason;
+	// 				input.set_reset_point(*branch.choices[reset_index].node);
+	// 		}
+	// 		return result;
+	// 	} else {
+	// 		z3::Bool reason;
+	// 		unsigned reset_index;
+	// 		unsigned i = 0;
+	// 		for (const Choice &choice: branch.choices) {
+	// 			if (collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr, consider_prob_groups)) {
+	// 				// set chosen action, needed for printing strategy
+	// 				branch.strategy = choice.action;
+	// 				if (consider_prob_groups) {
+	// 					branch.problematic_group = group_nr + 1;
+	// 				}
+	// 				return true;
+	// 			}	
+	// 			if ((!choice.node->reason.null()) && (reason.null())) {
+	// 				reason = choice.node->reason;
+	// 				reset_index = i;
+	// 			}
+	// 			i++;
+	// 		}
+	// 		if (!reason.null()) {
+	// 				branch.reason = reason;
+	// 				input.set_reset_point(*branch.choices[reset_index].node);
+	// 		}
+	// 	}
+	// 	return false;
+	// } else {
+	// 	// if we are not the honest player, we could do anything,
+	// 	// so all branches should be collusion resilient for the player
+	// 	bool result = true;
+	// 	z3::Bool reason;
+	// 	unsigned reset_index;
+	// 	unsigned i = 0;
+	// 	for (const Choice &choice: branch.choices) {
+	// 		if (!collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr, consider_prob_groups)) {
+	// 			if (choice.node->reason.null()) {
+	// 				if (options.counterexamples) {
+	// 					branch.counterexample_choices.push_back(choice.action);
+	// 				}
+	// 				if (!options.all_counterexamples){
+	// 					return false;
+	// 				} else {
+	// 					result = false;
+	// 				}
+	// 			} else {
+	// 				if (result && reason.null()){
+	// 					reason = choice.node->reason;
+	// 					reset_index = i;
+	// 				}
+	// 				result = false;
+	// 			}	
+	// 		}
+	// 		i++;
+	// 	}
+	// 	if (!reason.null()) {
+	// 		branch.reason = reason;
+	// 		input.set_reset_point(*branch.choices[reset_index].node);
+	// 	}
+	// 	if (result && consider_prob_groups) {
+	// 		branch.problematic_group = group_nr + 1;
+	// 	}
+	// 	return result;
+	}
+}
 
 // bool practicality_rec_old(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far, bool consider_prob_groups) {
 
@@ -1057,6 +1103,32 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 // }
 
+void compute_conditional_actions_honest_utility_pairs(const Input &input, std::vector<z3::Bool> cond_actions_so_far, Node *node) {
+
+	if(node->is_leaf()) {
+		CondActionsUtilityPair pair;
+		pair.conditional_actions = z3::conjunction(cond_actions_so_far);
+		pair.utility.insert(pair.utility.begin(), node->leaf().utilities.begin(), node->leaf().utilities.end());
+		input.cond_actions_honest_utility_pairs.push_back(pair);
+		return;
+	} else {
+
+		for(auto condition: node->branch().conditions) {
+			std::vector<z3::Bool> updated_actions;
+			updated_actions.insert(updated_actions.begin(), cond_actions_so_far.begin(), cond_actions_so_far.end());
+			updated_actions.push_back(condition.condition);
+			
+			for(auto child: condition.children) {
+				if(child.node->honest) {
+					// call recursively for honest child
+					compute_conditional_actions_honest_utility_pairs(input, updated_actions, child.node);
+				}
+			}
+		}
+	}
+
+}
+
 
 bool property_under_split(z3::Solver &solver, const Input &input, const Options &options, const PropertyType property, size_t history) {
 	/* determine if the input has some property for the current honest history under the current split */
@@ -1071,7 +1143,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		bool is_unsat = false;
 		for (size_t player = 0 ; player < input.players.size(); player++) {
 			
-			if (!input.solved_for_group[player]) {
+			// if (!input.solved_for_group[player]) {
 				// problematic groups are only considered when we haven't found a case split point yet
 			
 				bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity, true);
@@ -1097,8 +1169,8 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 				}
 
 				//input.root.get()->reset_counterexample_choices();
-				input.root->reset_reason();
-			}
+				// input.root->reset_reason();
+			// }
 		}
 		// if (!options.all_counterexamples) {
 		// 	if (!reason.null()){
@@ -1116,96 +1188,94 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		return result;
 	}
 
-	// else if (property == PropertyType::CollusionResilience) {
-	// 	// lookup the leaf for this history
-	// 	std::vector<Utility> utility;
-	// 	if(history < input.honest.size()) {
-	// 		const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
-	// 		if (honest_leaf.is_leaf()){
-	// 			utility = honest_leaf.leaf().utilities;
-	// 		} else {
-	// 			// the case where the honest history ends in an subtree
-	// 			utility = honest_leaf.subtree().honest_utility;
-	// 		}
-	// 	} else {
-	// 		utility = input.honest_utilities[history - input.honest.size()].leaf;
-	// 	}
-		
+	else if (property == PropertyType::CollusionResilience) {
 
-	// 	// sneaky hack follows: all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
-	// 	// done this way more for concision than efficiency
-	// 	bool result = true;
+		// THE CODE BELOW NEEDS TO BE CONSIDERED WHEN IMPLEMENTING SUBTREE/SUPERTREE FUNCTIONALITY FOR CONDITIONAL ACTIONSs
+		// lookup the leaf for this history
+		// std::vector<Utility> utility;
+		// if(history < input.honest.size()) {
+		// 	const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
+		// 	if (honest_leaf.is_leaf()){
+		// 		utility = honest_leaf.leaf().utilities;
+		// 	} else {
+		// 		// the case where the honest history ends in an subtree
+		// 		utility = honest_leaf.subtree().honest_utility;
+		// 	}
+		// } else {
+		// 	utility = input.honest_utilities[history - input.honest.size()].leaf;
+		// }	
 
-	// 	z3::Bool reason;
-	// 	Node *current_reset_point;
-	// 	std::vector<uint64_t> problematic_group_storage;
-	// 	std::vector<z3::Bool> reason_storage;
-	// 	bool is_unsat = false;
-	// 	for (uint64_t binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++) {
+		compute_conditional_actions_honest_utility_pairs(input, {}, input.root.get());
+		for(auto pair: input.cond_actions_honest_utility_pairs) {
+			std::cout << "Pair: " << pair.conditional_actions << " :: " << pair.utility << std::endl;
+		}
 
-	// 		if (!input.solved_for_group[binary_counter]){
-	// 			if(options.strategies) {
-	// 				input.root->add_violation_cr();
-	// 			}
+		// sneaky hack follows: all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
+		// done this way more for concision than efficiency
+		bool result = true;
 
-	// 			std::bitset<Input::MAX_PLAYERS> group = binary_counter;
-	// 			Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
-	// 			// compute the honest total for the current group
-	// 			for (size_t player = 0; player < input.players.size(); player++) {
-	// 				if (group[player]) {
-	// 					Utility player_utility = utility[player];
-	// 					honest_total = honest_total + player_utility;
-	// 				}
-	// 			}
+		z3::Bool reason;
+		Node *current_reset_point;
+		std::vector<uint64_t> problematic_group_storage;
+		std::vector<z3::Bool> reason_storage;
+		bool is_unsat = false;
+		for (uint64_t binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++) {
+
+			// if (!input.solved_for_group[binary_counter]){
+			// 	if(options.strategies) {
+			// 		input.root->add_violation_cr();
+			// 	}
 	
-	// 			// problematic groups are only considered when we haven't found a case split point yet
-	// 			bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), binary_counter, true);
-	// 			if (!collusion_resilient_for_group) {
+				std::bitset<Input::MAX_PLAYERS> group = binary_counter;
 
-	// 				if (options.counterexamples && input.root->reason.null()){
-	// 					is_unsat = true;
-	// 					std::vector<size_t> pl;
-	// 					for (size_t player = 0; player < input.players.size(); player++) {
-	// 						if (group[player]) {
-	// 							pl.push_back(player);
-	// 						}
-	// 					}
-	// 					input.compute_cecase(pl, property);
-	// 					input.root.get()->reset_counterexample_choices();
-	// 				}
+				// problematic groups are only considered when we haven't found a case split point yet
+				bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, input.players.size(), binary_counter, true);
+				if (!collusion_resilient_for_group) {
+
+					// if (options.counterexamples && input.root->reason.null()){
+					// 	is_unsat = true;
+					// 	std::vector<size_t> pl;
+					// 	for (size_t player = 0; player < input.players.size(); player++) {
+					// 		if (group[player]) {
+					// 			pl.push_back(player);
+					// 		}
+					// 	}
+					// 	input.compute_cecase(pl, property);
+					// 	input.root.get()->reset_counterexample_choices();
+					// }
 					
-	// 				if (!options.all_counterexamples && input.root->reason.null()){
-	// 					return false;
-	// 				} else if ((!options.all_counterexamples || !is_unsat ) && !input.root->reason.null() && reason.null()) {
-	// 					reason = input.root->reason;
-	// 					current_reset_point = input.reset_point;
-	// 					problematic_group_storage = input.root->store_problematic_groups();
-	// 					reason_storage = input.root->store_reason();	
-	// 				}
-	// 				result = false;
-	// 			} else {
-	// 				input.solved_for_group[binary_counter] = true;
-	// 			}
+					// if (!options.all_counterexamples && input.root->reason.null()){
+					// 	return false;
+					// } else if ((!options.all_counterexamples || !is_unsat ) && !input.root->reason.null() && reason.null()) {
+					// 	reason = input.root->reason;
+					// 	current_reset_point = input.reset_point;
+					// 	problematic_group_storage = input.root->store_problematic_groups();
+					// 	reason_storage = input.root->store_reason();	
+					// }
+					result = false;
+				// } else {
+				// 	input.solved_for_group[binary_counter] = true;
+				}
 
-	// 			input.root.get()->reset_counterexample_choices();
-	// 			input.root->reset_reason();
-	// 		}
-	// 	}
-	// 	if (!options.all_counterexamples) {
-	// 		if (!reason.null()){
-	// 			input.root->restore_problematic_groups(problematic_group_storage);
-	// 			input.root->restore_reason(reason_storage);
-	// 			input.reset_point = current_reset_point;
-	// 		}
-	// 	} else {
-	// 		if ((!reason.null()) && !is_unsat){
-	// 			input.root->restore_problematic_groups(problematic_group_storage);
-	// 			input.root->restore_reason(reason_storage);
-	// 			input.reset_point = current_reset_point;
-	// 		}
-	// 	}
-	// 	return result;
-	// }
+				// input.root.get()->reset_counterexample_choices();
+				// input.root->reset_reason();
+			// }
+		}
+		// if (!options.all_counterexamples) {
+		// 	if (!reason.null()){
+		// 		input.root->restore_problematic_groups(problematic_group_storage);
+		// 		input.root->restore_reason(reason_storage);
+		// 		input.reset_point = current_reset_point;
+		// 	}
+		// } else {
+		// 	if ((!reason.null()) && !is_unsat){
+		// 		input.root->restore_problematic_groups(problematic_group_storage);
+		// 		input.root->restore_reason(reason_storage);
+		// 		input.reset_point = current_reset_point;
+		// 	}
+		// }
+		return result;
+	}
 
 	// else if (property == PropertyType::Practicality) {
 	// 	bool pr_result = practicality_rec_old(input, options, solver, input.root.get(), {}, true);
@@ -2073,6 +2143,7 @@ void analyse_properties(const Options &options, const Input &input) {
 				//input.reset_strategies(); 
 				//input.root->reset_problematic_group(i==2); 
 				//input.reset_reset_point();
+				input.cond_actions_honest_utility_pairs = {};
 				property(options, input, property_types[i], history);
 			}
 		}
