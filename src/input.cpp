@@ -746,18 +746,38 @@ static Node* load_tree(const Input &input, Parser &parser, const json &node, boo
 	std::exit(EXIT_FAILURE);
 }
 
-static HonestNode* load_honest_history(const json &honest_node) {
+static HonestNode* load_honest_history_conditional_actions(const json &honest_node) {
+
 	std::string act = honest_node["action"];
 	std::vector<HonestNode*> children; 
 
 	for (const json &child: honest_node["children"]) {
-		children.push_back(load_honest_history(child));
+		children.push_back(load_honest_history_conditional_actions(child));
 	}
-	
 
 	return new HonestNode(act, children);
 }
 
+static HonestNode* load_honest_history_no_conditional_actions(const json &actions) {
+
+	assert (!actions.empty());
+
+    HonestNode* root = nullptr;
+
+    for (auto it = actions.rbegin(); it != actions.rend(); ++it) {
+        root = new HonestNode(*it, root ? std::vector<HonestNode*>{root} : std::vector<HonestNode*>{});
+    }
+    return  new HonestNode("", {root});
+}
+
+static HonestNode* load_honest_history(const json &honest_node) {
+
+	if (honest_node.is_array()) {
+		return load_honest_history_no_conditional_actions(honest_node);
+	} else {
+		return load_honest_history_conditional_actions(honest_node);
+	}
+}
 
 Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , stop_log(false) {
 	// parse a JSON document from `path`
