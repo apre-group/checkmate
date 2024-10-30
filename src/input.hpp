@@ -80,6 +80,11 @@ struct std::hash<UtilityTuple> {
 
 using UtilityTuplesSet = std::unordered_set<UtilityTuple>;
 
+struct ConditionalUtilities {
+	mutable std::vector<z3::Bool> condition;
+	mutable std::vector<UtilityTuplesSet> utilities; 
+};
+
 struct HistoryChoice{
 	std::string player;
 	std::string choice;
@@ -176,7 +181,7 @@ public:
 
 	mutable std::vector<bool> violates_cr; // set to true as soon as its not cr for one deviating group
 
-	virtual UtilityTuplesSet get_utilities() const = 0;
+	virtual std::vector<ConditionalUtilities> get_utilities() const = 0;
 
 	std::vector<HistoryChoice> compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
 
@@ -284,13 +289,13 @@ class Subtree : public Node {
 		problematic_group = is_cr ? 1 : 0;
 	}
 
-	virtual UtilityTuplesSet get_utilities() const override {
+	virtual std::vector<ConditionalUtilities> get_utilities() const override {
 		
-		UtilityTuplesSet result;
+		std::vector<ConditionalUtilities> result;
 
-		for (const auto &utility_tuple: utilities){
-			result.insert(result.end(), utility_tuple);
-		}
+		// for (const auto &utility_tuple: utilities){
+		// 	result.insert(result.end(), utility_tuple);
+		// }
 
 		return result; 
 	}
@@ -312,7 +317,13 @@ class Leaf final : public Node {
 
 	NodeType type() const override { return NodeType::LEAF; }
 
-	virtual UtilityTuplesSet get_utilities() const override {return {utilities}; }
+	virtual std::vector<ConditionalUtilities> get_utilities() const override 
+		{
+			ConditionalUtilities cu; 
+			cu.utilities.push_back({utilities}); 
+			z3::Bool bool_obj; cu.condition.push_back(bool_obj.True()); 
+			return {cu}; 
+		}
 
 	void reset_reason() const {
 		::new (&reason) z3::Bool();
@@ -338,14 +349,14 @@ class Branch final : public Node {
 	mutable std::vector<std::string> pr_strategies_actions;
 
 	mutable uint64_t problematic_group;
-	mutable UtilityTuplesSet practical_utilities;
+	mutable std::vector<ConditionalUtilities> practical_utilities;
 	mutable std::vector<std::string> counterexample_choices;
 
 	NodeType type() const override { return NodeType::BRANCH; }
 
 	Branch(unsigned player, std::vector<Condition> conditions) : player(player), conditions(conditions), counterexample_choices({}) {}
 
-	virtual UtilityTuplesSet get_utilities() const override {return practical_utilities;}
+	virtual std::vector<ConditionalUtilities> get_utilities() const override {return practical_utilities;}
 
 	// do a linear-time lookup of `action` by name in the branch, which must be present
 	const Choice &get_choice(const std::string &action) const {

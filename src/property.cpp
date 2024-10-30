@@ -851,320 +851,342 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 }
 
-// bool practicality_rec_old(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far, bool consider_prob_groups) {
+bool practicality_rec_old(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far, bool consider_prob_groups) {
 
-// 	if (node->is_leaf()) {
-// 		return true;
-// 	} else if (node->is_subtree()) {
-// 		// we again have to consider how the current case relates to the PracticalitySubtreeResult cases
-// 		// note that those cases are disjoint and span the whole universe
+	if (node->is_leaf()) {
+		return true;
+	}
+	// else if (node->is_subtree()) {
+	// 	// we again have to consider how the current case relates to the PracticalitySubtreeResult cases
+	// 	// note that those cases are disjoint and span the whole universe
 
-// 		// iterate over all PracticalitySubtreeResult
-// 		// 		ask whether case and current_case is satisfiable
-// 		//			if yes: ask whether current_case and not case is satisfiable
-// 		//				if yes: case split on case (i.e. set reason to case, return false)
-// 		//				if no: set practical_utilities for this node to the set of utilities in PracticalitySubtreeResult
-// 		//			if no: proceed to next PracticalitySubtreeResult
+	// 	// iterate over all PracticalitySubtreeResult
+	// 	// 		ask whether case and current_case is satisfiable
+	// 	//			if yes: ask whether current_case and not case is satisfiable
+	// 	//				if yes: case split on case (i.e. set reason to case, return false)
+	// 	//				if no: set practical_utilities for this node to the set of utilities in PracticalitySubtreeResult
+	// 	//			if no: proceed to next PracticalitySubtreeResult
 
-// 		const auto &subtree = node->subtree();
+	// 	const auto &subtree = node->subtree();
 
-// 		for (const PracticalitySubtreeResult &subtree_result: subtree.practicality) {
-// 			z3::Bool subtree_case;
-// 			// try to optimize: if only 1 -> no need for conjunction
-// 			if(subtree_result._case.size() == 1) {
-// 				subtree_case = subtree_result._case[0];
-// 			} else {
-// 				subtree_case = z3::conjunction(subtree_result._case);
-// 			}
+	// 	for (const PracticalitySubtreeResult &subtree_result: subtree.practicality) {
+	// 		z3::Bool subtree_case;
+	// 		// try to optimize: if only 1 -> no need for conjunction
+	// 		if(subtree_result._case.size() == 1) {
+	// 			subtree_case = subtree_result._case[0];
+	// 		} else {
+	// 			subtree_case = z3::conjunction(subtree_result._case);
+	// 		}
 
-// 			z3::Result overlapping = solver.solve({subtree_case});
+	// 		z3::Result overlapping = solver.solve({subtree_case});
 
-// 			if (overlapping == z3::Result::SAT){
-// 				z3::Result implied = solver.solve({!subtree_case});
+	// 		if (overlapping == z3::Result::SAT){
+	// 			z3::Result implied = solver.solve({!subtree_case});
 
-// 				if (implied == z3::Result::SAT){
-// 					subtree.reason = subtree_case;
-// 					return false;
-// 				} else {
-// 					if (subtree_result.utilities.size() == 0) {
-// 						// we have to be along honest at this point, otw we would have had at least one pr utility
-// 						if(options.counterexamples) {
-// 							input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
-// 						}
-// 						return false;
-// 					}
-// 					subtree.utilities.insert(subtree.utilities.end(), subtree_result.utilities.begin(), subtree_result.utilities.end());
-// 					return true;
-// 				}
-// 			} 
-// 		}
-// 		// in case we have listed only cases where it is practical and they do not 
-// 		// span the whole universe, return false, because no corresponding case has been found
-// 		if(options.counterexamples) {
-// 			input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
-// 		}
-// 		return false;
-// 	}
+	// 			if (implied == z3::Result::SAT){
+	// 				subtree.reason = subtree_case;
+	// 				return false;
+	// 			} else {
+	// 				if (subtree_result.utilities.size() == 0) {
+	// 					// we have to be along honest at this point, otw we would have had at least one pr utility
+	// 					if(options.counterexamples) {
+	// 						input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
+	// 					}
+	// 					return false;
+	// 				}
+	// 				subtree.utilities.insert(subtree.utilities.end(), subtree_result.utilities.begin(), subtree_result.utilities.end());
+	// 				return true;
+	// 			}
+	// 		} 
+	// 	}
+	// 	// in case we have listed only cases where it is practical and they do not 
+	// 	// span the whole universe, return false, because no corresponding case has been found
+	// 	if(options.counterexamples) {
+	// 		input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
+	// 	}
+	// 	return false;
+	// }
 
-// 	// else we deal with a branch
-//  	const auto &branch = node->branch();
+	// else we deal with a branch
+ 	const auto &branch = node->branch();
 
-// 	if  (branch.problematic_group == 1 && consider_prob_groups){
-// 		return true;
-// 	}	
+	// if  (branch.problematic_group == 1 && consider_prob_groups){
+	// 	return true;
+	// }
 
-// 	// get practical strategies and corresponding utilities recursively
-// 	std::vector<UtilityTuplesSet> children;
-// 	std::vector<std::string> children_actions;
+	// get practical strategies and corresponding utilities recursively
+	std::vector<std::vector<ConditionalUtilities>> children;
+	std::vector<std::string> children_actions;
 
-// 	UtilityTuplesSet honest_utilities;
-// 	unsigned int i = 0;
-// 	unsigned honest_index = 0;
-// 	std::string honest_choice;
+	std::vector<ConditionalUtilities> honest_utilities;
+	std::vector<unsigned> honest_index;
+	std::vector<std::string> honest_choice;
 
-// 	bool result = true;
+	bool result = true;
 
-// 	// check honest branch first
-// 	for (const Choice &choice: branch.choices) {
-// 		if (choice.node->honest) {
-// 			std::vector<std::string> updated_actions;
-// 			updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
-// 			updated_actions.push_back(choice.action);
-// 			if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions, consider_prob_groups)) {
-// 				if (result) {
-// 					branch.reason = choice.node->reason;
-// 					input.set_reset_point(branch);
-// 				}
+	for (size_t j=0; j<branch.conditions.size(); j++) {
 
-// 				result = false;
+			solver.push();
+			solver.assert_(branch.conditions[j].condition);
 
-// 				if(!options.all_counterexamples || !branch.reason.null()) {
-// 					return result;
-// 				}
-// 			}
+			ConditionalUtilities honest_utilities_per_condition;
+			unsigned int i = 0;
 
-			
-// 			honest_utilities = choice.node->get_utilities();
-// 			honest_choice = choice.action;
-// 			branch.strategy = choice.action; // choose the honest action along the honest history
-// 			honest_index = i;
-			
-// 			break;
-// 		}
-// 		i++;
-// 	}
+			// check honest branch first
+			for (const Choice &choice: branch.conditions[j].children) {
+				if (choice.node->honest) {
+					std::vector<std::string> updated_actions;
+					updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(choice.action);
+					if(!practicality_rec_old(input, options, solver, choice.node, updated_actions, consider_prob_groups)) {
+						if (result) {
+							branch.reason = choice.node->reason;
+							// input.set_reset_point(branch);
+						}
 
-// 	for (const Choice &choice: branch.choices) {
-// 		if (!choice.node->honest) {
-// 			// this child has no practical strategy (propagate reason for case split, if any) 
-// 			std::vector<std::string> updated_actions;
-// 			updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
-// 			updated_actions.push_back(choice.action);
-// 			if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions, consider_prob_groups)) {
-// 				if (result) {
-// 					branch.reason = choice.node->reason;
-// 					input.set_reset_point(branch);
-// 				}
+						result = false;
 
-// 				result = false;
+						// if(!options.all_counterexamples || !branch.reason.null()) {
+						// 	return result;
+						// }
+					}
 
-// 				if(!options.all_counterexamples || !branch.reason.null()) {
-// 					return result;
-// 				}
-// 			}
+					
+					honest_utilities_per_condition = choice.node->get_utilities();
+					honest_utilities_per_condition.condition.push_back(branch.conditions[j].condition);
+					honest_utilities.push_back(honest_utilities_per_condition);
+					honest_choice.push_back(choice.action);
+					branch.strategy = choice.action; // choose the honest action along the honest history
+					honest_index.push_back(i);
+					
+					break;
+				}
+				i++;
+			}
 
-			
-// 			if (choice.node->get_utilities().size()==0){
-// 				assert(!result);
-// 				assert(options.all_counterexamples);
-// 				assert(input.counterexamples.size()>0);
-// 			}
-		
-// 			children.push_back(choice.node->get_utilities());
-// 			children_actions.push_back(choice.action);
-			
-// 		}
-// 	}
+			solver.pop();
+	}
 
+	for (size_t j=0; j<branch.conditions.size(); j++) {
 
+		solver.push();
+		solver.assert_(branch.conditions[j].condition);
 
+		for (const Choice &choice: branch.conditions[j].children) {
+			if (!choice.node->honest) {
+				// this child has no practical strategy (propagate reason for case split, if any) 
+				std::vector<std::string> updated_actions;
+				updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
+				updated_actions.push_back(choice.action);
+				if(!practicality_rec_old(input, options, solver, choice.node, updated_actions, consider_prob_groups)) {
+					if (result) {
+						branch.reason = choice.node->reason;
+						// input.set_reset_point(branch);
+					}
 
-// 	if (branch.honest) {
-// 		// if we are at an honest node, our strategy must be the honest strategy
-		
-// 		assert(honest_utilities.size() == 1);
-// 		// the utility at the leaf of the honest history
-// 		std::vector<std::string> honest_strategy;
-// 		std::vector<Utility> leaf;
-// 		UtilityTuplesSet to_clear_strategy;
-// 		for (const auto& hon_utility: honest_utilities){
-// 		 	honest_strategy.insert(honest_strategy.end(), hon_utility.strategy_vector.begin(), hon_utility.strategy_vector.end());
-// 			UtilityTuple cleared_strategy(hon_utility.leaf);
-// 			to_clear_strategy.insert(cleared_strategy);
-// 		}
+					result = false;
 
-// 		UtilityTuple honest_utility = *to_clear_strategy.begin();
-		
-// 		honest_utility.strategy_vector = {};
-// 		honest_utility.strategy_vector.push_back(honest_choice);
-		
-// 		// this should be maximal against other players, so...
-// 		Utility maximum = honest_utility[branch.player]; 
+					// if(!options.all_counterexamples || !branch.reason.null()) {
+					// 	return result;
+					// }
+				}
 
-// 		// for all other children
-// 		unsigned int j = 0;
-// 		for (const auto& utilities : children) {
-// 			bool found = false;
-// 			// does there exist a possible utility such that `maximum` is geq than it?				
-
-// 			for (const auto& utility : utilities) {
-// 				auto condition =   maximum < utility[branch.player];
-// 				if (solver.solve({condition}) == z3::Result::SAT) {
-// 					if (solver.solve({!condition}) == z3::Result::SAT) {
-// 						// might be maximal, just couldn't prove it
-// 						if (result){
-// 							branch.reason =  get_split_approx(solver, maximum, utility[branch.player]); 
-// 							input.set_reset_point(branch);
-// 						}
-// 					}
-// 				} 
-// 				else {
-// 					found = true;
-// 					// need to insert strategy after honest at right point in vector
-// 					if (j == honest_index){
-// 						honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
-// 					} 
-// 					honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
-// 					break;
-// 				}
-// 			}
-// 			if (!found && utilities.size()>0) {
 				
-// 				// counterexample: current child (deviating choice) is the counterexample together with all its practical histories/strategies, 
-// 				//                  additional information needed: current history (to be able to document deviation point)
-// 				//                                                 current player
-// 				// NOTE format of ce different from wi and cr, since all practical histories of child are needed to be a CE 
+				// if (choice.node->get_utilities().size()==0){
+				// 	assert(!result);
+				// 	assert(options.all_counterexamples);
+				// 	assert(input.counterexamples.size()>0);
+				// }
+				for (const auto& conditional_utilities : choice.node->get_utilities()){
+					conditional_utilities.condition.push_back(branch.conditions[j].condition);
+				}
+				children.push_back(choice.node->get_utilities());
+				children_actions.push_back(choice.action);
+				
+			}
+		}
+	}
 
-// 				// store (push back) it in input.counterexamples; case will be added in property rec
 
 
-// 				// all counterexamples: do not return here (store return value in variable), but check all other children for further violations --> counterexamples
-// 				// 						then also do not return yet, but continue the reasoning up to the root to collect further CEs
 
-// 				// NOTE: for not along honest history, nothing to do
 
-// 				std::string deviating_action = children_actions[j];
-
-// 				if(options.counterexamples && branch.reason.null()) {
-// 					input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, deviating_action, utilities));
-// 				}
-
-// 				result = false;
-
-// 				if(!options.all_counterexamples || !branch.reason.null()) {
-// 					return result; //false
-// 				}
-// 			}
-// 			j++;
-// 		}
-// 		if(j == honest_index) {
-// 			honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
-// 		}
+	if (branch.honest) {
+		// if we are at an honest node, our strategy must be the honest strategy
 		
-// 		branch.practical_utilities = {honest_utility};
+		assert(honest_utilities.size() == 1);
+		// the utility at the leaf of the honest history
+		std::vector<std::string> honest_strategy;
+		std::vector<Utility> leaf;
+		UtilityTuplesSet to_clear_strategy;
+		for (const auto& hon_utility: honest_utilities){
+		 	honest_strategy.insert(honest_strategy.end(), hon_utility.strategy_vector.begin(), hon_utility.strategy_vector.end());
+			UtilityTuple cleared_strategy(hon_utility.leaf);
+			to_clear_strategy.insert(cleared_strategy);
+		}
+
+		UtilityTuple honest_utility = *to_clear_strategy.begin();
 		
-// 		// we return the maximal strategy 
-// 		// honest choice is practical for current player
-// 		// return true;
-
-// 		return result;
-
-// 	} else {
-// 		// not in the honest history
-// 		// to do: we could do this more efficiently by working out the set of utilities for the player
-// 		// but utilities can't be put in a set easily -> fix this here in the C++ version
-
-// 		// compute the set of possible utilities by merging the set of children's utilities
-// 		UtilityTuplesSet utility_result;
-// 		unsigned int k = 0;
-// 		for (const auto& utilities : children) {
-// 			for (const auto& utility : utilities) {
-// 				UtilityTuple to_insert(utility.leaf); 
-// 				to_insert.strategy_vector.push_back(children_actions[k]);
-// 				utility_result.insert(to_insert);
-// 			}
-// 			k++;
-// 		}
-
-// 		// the set to drop
-// 		UtilityTuplesSet remove;
-
-// 		// work out whether to drop `candidate`
-// 		unsigned int l = 0;
-// 		for (const auto& candidate : utility_result) {
-// 			// this player's utility
-// 			auto dominatee = candidate[branch.player];
-// 			// check all other children
-//             // if any child has the property that all its utilities are bigger than `dominatee`
-//             // it can be dropped
-//             for (const auto& utilities : children) {
-// 				// skip any where the cadidate is already contained
-
-// 				// this logic can be factored out in an external function
-// 				bool contained = false;
-// 				for (const auto& utility : utilities) {
-// 					if (utility_tuples_eq(utility, candidate)) {
-// 						contained = true;
-// 						candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
-// 						break;
-// 					}
-// 				}
-
-// 				if (contained) {
-// 					continue;
-// 				}
-
-// 				// *all* utilities have to be bigger
-// 				bool dominated = true;
-
-// 				for (const auto& utility : utilities) {
-// 					auto dominator = utility[branch.player];
-// 					auto condition = dominator <= dominatee;
-// 					if (solver.solve({condition}) == z3::Result::SAT) {
-// 						if (dominated){
-// 							candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
-// 						}
-// 						dominated = false;
-
-// 						if (solver.solve({!condition}) == z3::Result::SAT) {
-// 							branch.reason = get_split_approx(solver, dominatee, dominator); 
-// 							input.set_reset_point(branch);
-// 							return false; 
-// 						}
-// 					}
-// 				}  
-
-// 				if (dominated) {
-// 					remove.insert(candidate);
-// 					break;
-// 				}
-// 			}
-// 			l++;
-// 		}
-
-// 		// result is all children's utilities inductively, minus those dropped
-// 		for (const auto& elem : remove) {
-// 			utility_result.erase(elem);
-// 		}
-
-// 		branch.practical_utilities = utility_result;
+		honest_utility.strategy_vector = {};
+		honest_utility.strategy_vector.push_back(honest_choice);
 		
-// 		assert(utility_result.size()>0);
-// 		return true;
+		// this should be maximal against other players, so...
+		Utility maximum = honest_utility[branch.player]; 
 
-// 	} 
+		// for all other children
+		unsigned int j = 0;
+		for (const auto& utilities : children) {
+			bool found = false;
+			// does there exist a possible utility such that `maximum` is geq than it?				
 
-// }
+			for (const auto& utility : utilities) {
+				auto condition =   maximum < utility[branch.player];
+				if (solver.solve({condition}) == z3::Result::SAT) {
+					if (solver.solve({!condition}) == z3::Result::SAT) {
+						// might be maximal, just couldn't prove it
+						if (result){
+							branch.reason =  get_split_approx(solver, maximum, utility[branch.player]); 
+							input.set_reset_point(branch);
+						}
+					}
+				} 
+				else {
+					found = true;
+					// need to insert strategy after honest at right point in vector
+					if (j == honest_index){
+						honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
+					} 
+					honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+					break;
+				}
+			}
+			if (!found && utilities.size()>0) {
+				
+				// counterexample: current child (deviating choice) is the counterexample together with all its practical histories/strategies, 
+				//                  additional information needed: current history (to be able to document deviation point)
+				//                                                 current player
+				// NOTE format of ce different from wi and cr, since all practical histories of child are needed to be a CE 
+
+				// store (push back) it in input.counterexamples; case will be added in property rec
+
+
+				// all counterexamples: do not return here (store return value in variable), but check all other children for further violations --> counterexamples
+				// 						then also do not return yet, but continue the reasoning up to the root to collect further CEs
+
+				// NOTE: for not along honest history, nothing to do
+
+				std::string deviating_action = children_actions[j];
+
+				if(options.counterexamples && branch.reason.null()) {
+					input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, deviating_action, utilities));
+				}
+
+				result = false;
+
+				if(!options.all_counterexamples || !branch.reason.null()) {
+					return result; //false
+				}
+			}
+			j++;
+		}
+		if(j == honest_index) {
+			honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
+		}
+		
+		branch.practical_utilities = {honest_utility};
+		
+		// we return the maximal strategy 
+		// honest choice is practical for current player
+		// return true;
+
+		return result;
+
+	} else {
+		// not in the honest history
+		// to do: we could do this more efficiently by working out the set of utilities for the player
+		// but utilities can't be put in a set easily -> fix this here in the C++ version
+
+		// compute the set of possible utilities by merging the set of children's utilities
+		UtilityTuplesSet utility_result;
+		unsigned int k = 0;
+		for (const auto& utilities : children) {
+			for (const auto& utility : utilities) {
+				UtilityTuple to_insert(utility.leaf); 
+				to_insert.strategy_vector.push_back(children_actions[k]);
+				utility_result.insert(to_insert);
+			}
+			k++;
+		}
+
+		// the set to drop
+		UtilityTuplesSet remove;
+
+		// work out whether to drop `candidate`
+		unsigned int l = 0;
+		for (const auto& candidate : utility_result) {
+			// this player's utility
+			auto dominatee = candidate[branch.player];
+			// check all other children
+            // if any child has the property that all its utilities are bigger than `dominatee`
+            // it can be dropped
+            for (const auto& utilities : children) {
+				// skip any where the cadidate is already contained
+
+				// this logic can be factored out in an external function
+				bool contained = false;
+				for (const auto& utility : utilities) {
+					if (utility_tuples_eq(utility, candidate)) {
+						contained = true;
+						candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+						break;
+					}
+				}
+
+				if (contained) {
+					continue;
+				}
+
+				// *all* utilities have to be bigger
+				bool dominated = true;
+
+				for (const auto& utility : utilities) {
+					auto dominator = utility[branch.player];
+					auto condition = dominator <= dominatee;
+					if (solver.solve({condition}) == z3::Result::SAT) {
+						if (dominated){
+							candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+						}
+						dominated = false;
+
+						if (solver.solve({!condition}) == z3::Result::SAT) {
+							branch.reason = get_split_approx(solver, dominatee, dominator); 
+							input.set_reset_point(branch);
+							return false; 
+						}
+					}
+				}  
+
+				if (dominated) {
+					remove.insert(candidate);
+					break;
+				}
+			}
+			l++;
+		}
+
+		// result is all children's utilities inductively, minus those dropped
+		for (const auto& elem : remove) {
+			utility_result.erase(elem);
+		}
+
+		branch.practical_utilities = utility_result;
+		
+		assert(utility_result.size()>0);
+		return true;
+
+	} 
+
+}
 
 void compute_conditional_actions_honest_utility_pairs(const Input &input, std::vector<z3::Bool> cond_actions_so_far, Node *node) {
 
@@ -1337,21 +1359,21 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		return result;
 	}
 
-	// else if (property == PropertyType::Practicality) {
-	// 	bool pr_result = practicality_rec_old(input, options, solver, input.root.get(), {}, true);
-	// 	if(pr_result && options.counterexamples && !input.root->branch().honest) {
-	// 		CeCase pr_ce_case;
-	// 		std::vector<CeChoice> pr_choices;
-	// 		for(const auto& pr_utility : input.root->practical_utilities) {
-	// 			CeChoice ce_choice;
-	// 			ce_choice.choices = input.root->strat2hist(pr_utility.strategy_vector);
-	// 			pr_choices.push_back(ce_choice);
-	// 		}
-	// 		pr_ce_case.counterexample = pr_choices;
-	// 		input.counterexamples.push_back(pr_ce_case);
-	// 	}
-	// 	return pr_result;
-	// }
+	else if (property == PropertyType::Practicality) {
+		bool pr_result = practicality_rec_old(input, options, solver, input.root.get(), {}, true);
+		// if(pr_result && options.counterexamples && !input.root->branch().honest) {
+		// 	CeCase pr_ce_case;
+		// 	std::vector<CeChoice> pr_choices;
+		// 	for(const auto& pr_utility : input.root->practical_utilities) {
+		// 		CeChoice ce_choice;
+		// 		ce_choice.choices = input.root->strat2hist(pr_utility.strategy_vector);
+		// 		pr_choices.push_back(ce_choice);
+		// 	}
+		// 	pr_ce_case.counterexample = pr_choices;
+		// 	input.counterexamples.push_back(pr_ce_case);
+		// }
+		return pr_result;
+	}
 	
  
 	assert(false);
@@ -1808,19 +1830,19 @@ void property(const Options &options, const Input &input, PropertyType property,
 
 	assert(solver.solve() == z3::Result::SAT);
 
-	// if (property == PropertyType::Practicality) {
-	// 	input.reset_practical_utilities();
-	// 	std::vector<PracticalitySubtreeResult> satisfied_in_case = {};
-	// 	if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, satisfied_in_case)) {
-	// 		if(history < input.honest.size()) {
-	// 			std::cout << "YES, it is " << prop_name << "." << std::endl;
-	// 		}
-	// 		prop_holds = true;
-	// 	} else { 
-	// 		std::cout << "NO, it is not " << prop_name << "." << std::endl;
-	// 		prop_holds = false;
-	// 	}
-	// } else {
+	if (property == PropertyType::Practicality) {
+		input.reset_practical_utilities();
+		std::vector<PracticalitySubtreeResult> satisfied_in_case = {};
+		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, satisfied_in_case)) {
+			if(history < input.honest.size()) {
+				std::cout << "YES, it is " << prop_name << "." << std::endl;
+			}
+			prop_holds = true;
+		} else { 
+			std::cout << "NO, it is not " << prop_name << "." << std::endl;
+			prop_holds = false;
+		}
+	} else {
 		size_t number_groups = property == PropertyType::CollusionResilience ? pow(2,input.players.size())-1 : input.players.size();
 		input.init_solved_for_group(number_groups);
 
@@ -1832,7 +1854,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 			std::cout << "NO, it is not " << prop_name << "." << std::endl;
 			prop_holds = false;
 		}
-	// }
+	}
 
 
 	// generate preconditions
