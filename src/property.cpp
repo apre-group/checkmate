@@ -488,8 +488,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, std::bitset<Input::MAX_PLAYERS> group, unsigned players, uint64_t group_nr, bool consider_prob_groups) {
 	
-	// Ivana's thoughts about how to adapt cr for conditional actions: (Discuss this!)
-	// case branch: just copy paste parts from weak immunity (do code review for these parts!)
+	// case branch: just copy paste parts from weak immunity
 	// case leaf: 
 	// 	- we do not pass "Utility honest_total" as an argument to this function
 	//	- instead before calling this function we traverse the tree and in the root we save a vector of
@@ -516,6 +515,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 			if (group[player])
 				group_utility = group_utility + leaf.utilities[player];
 
+		bool can_decide_for_all = true;
 		
 		// ..and compare it to all honest utilities that are "compatible"
 		for (auto pair: input.cond_actions_honest_utility_pairs) {
@@ -553,6 +553,8 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 				return false;
 			}
 
+			can_decide_for_all = false;
+
 			if(leaf.reason.null()) {
 				leaf.reason = get_split_approx(solver, honest_total, group_utility);
 			}
@@ -571,7 +573,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 			
 		// input.set_reset_point(leaf);
 		
-		return false;
+		return can_decide_for_all; }
 
 	// } else if (node->is_subtree()){
 
@@ -659,133 +661,194 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 	// 	}
 	// } 
 
-	return true;
 
-	// const auto &branch = node->branch();
+	const auto &branch = node->branch();
 
 	// if  ((group_nr < branch.problematic_group) && consider_prob_groups ){
 	// 	return true;
 	// }
 	
-	// // else we deal with a branch
-	// if (!group[branch.player]) { 
+	// else we deal with a branch
+	if (!group[branch.player]) { 
 
-	// 	// player behaves honestly
-	// 	if (branch.honest) {
-	// 		// if we are along the honest history, we want to take an honest strategy
-	// 		auto &honest_choice = branch.get_honest_child();
-	// 		auto *subtree = honest_choice.node.get();
+		// player behaves honestly
+		if (branch.honest) {
+			// if we are along the honest history, we want to take an honest strategy
 
-	// 		// set chosen action, needed for printing strategy
-	// 		//branch.strategy = honest_choice.action;
+			bool at_least_one_non_contradictory_condition = false;
 
-	// 		// the honest choice must be collusion resilient
-	// 		if (collusion_resilience_rec(input, solver, options, subtree, group, players, group_nr, consider_prob_groups)) {
-	// 			if (consider_prob_groups) {
-	// 				branch.problematic_group = group_nr + 1;
-	// 			}
-	// 			return true;
-	// 		} 
-			
-	// 		branch.reason = subtree->reason;
-	// 		input.set_reset_point(*subtree);
-	// 		return false;
-	// 	}
-	// 	// otherwise we can take any strategy we please as long as it's collusion resilient
-	// 	// if options.strategies is set, we have to consider all branches, otherwise we can stop after the first cr one
-	// 	if (options.strategies){
-	// 		bool result = false;
-	// 		z3::Bool reason;
-	// 		unsigned reset_index;
-	// 		unsigned i = 0;
-	// 		for (const Choice &choice: branch.choices) {
-	// 			if (collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr, consider_prob_groups)) {
-	// 				// set chosen action, needed for printing strategy
-	// 				//branch.strategy = choice.action;
-	// 				if (consider_prob_groups){
-	// 					branch.problematic_group = group_nr + 1;
-	// 				}
-	// 				result = true;
-	// 			// if not cr and reason is null, then violated
-	// 			} else if (choice.node->reason.null()) {
+			for (size_t i=0; i<branch.conditions.size(); i++) {
 
-	// 				choice.node->violates_cr[group_nr - 1] = true;
-	// 			}
-					
-	// 			if ((!choice.node->reason.null()) && (reason.null())) {
-	// 				reason = choice.node->reason;
-	// 				reset_index = i;
-	// 			}
-	// 			i++;		
-	// 		}
-	// 		// only set reason if there is one
-	// 		if (!reason.null()) {
-	// 				branch.reason = reason;
-	// 				input.set_reset_point(*branch.choices[reset_index].node);
-	// 		}
-	// 		return result;
-	// 	} else {
-	// 		z3::Bool reason;
-	// 		unsigned reset_index;
-	// 		unsigned i = 0;
-	// 		for (const Choice &choice: branch.choices) {
-	// 			if (collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr, consider_prob_groups)) {
-	// 				// set chosen action, needed for printing strategy
-	// 				branch.strategy = choice.action;
-	// 				if (consider_prob_groups) {
-	// 					branch.problematic_group = group_nr + 1;
-	// 				}
-	// 				return true;
-	// 			}	
-	// 			if ((!choice.node->reason.null()) && (reason.null())) {
-	// 				reason = choice.node->reason;
-	// 				reset_index = i;
-	// 			}
-	// 			i++;
-	// 		}
-	// 		if (!reason.null()) {
-	// 				branch.reason = reason;
-	// 				input.set_reset_point(*branch.choices[reset_index].node);
-	// 		}
-	// 	}
-	// 	return false;
-	// } else {
-	// 	// if we are not the honest player, we could do anything,
-	// 	// so all branches should be collusion resilient for the player
-	// 	bool result = true;
-	// 	z3::Bool reason;
-	// 	unsigned reset_index;
-	// 	unsigned i = 0;
-	// 	for (const Choice &choice: branch.choices) {
-	// 		if (!collusion_resilience_rec(input, solver, options, choice.node.get(), group, honest_total, players, group_nr, consider_prob_groups)) {
-	// 			if (choice.node->reason.null()) {
-	// 				if (options.counterexamples) {
-	// 					branch.counterexample_choices.push_back(choice.action);
-	// 				}
-	// 				if (!options.all_counterexamples){
-	// 					return false;
-	// 				} else {
-	// 					result = false;
-	// 				}
-	// 			} else {
-	// 				if (result && reason.null()){
-	// 					reason = choice.node->reason;
-	// 					reset_index = i;
-	// 				}
-	// 				result = false;
-	// 			}	
-	// 		}
-	// 		i++;
-	// 	}
-	// 	if (!reason.null()) {
-	// 		branch.reason = reason;
-	// 		input.set_reset_point(*branch.choices[reset_index].node);
-	// 	}
-	// 	if (result && consider_prob_groups) {
-	// 		branch.problematic_group = group_nr + 1;
-	// 	}
-	// 	return result;
+				solver.push();
+				solver.assert_(branch.conditions[i].condition);
+
+				// while we refine the case by adding a case split, we may have to prune
+				// the tree of contradictory actions. In practice, we can ignore the 
+				// branches belonging to contradictory actions "on the fly"; see next line 
+				if(solver.solve() != z3::Result::UNSAT) {
+
+					at_least_one_non_contradictory_condition = true;
+
+					auto &honest_choice = branch.get_honest_child(i);
+					auto *subtree = honest_choice.node;
+
+					// set chosen action, needed for printing strategy
+					//branch.strategy = honest_choice.action;
+
+					// the honest choice must be collusion resilient
+					if (collusion_resilience_rec(input, solver, options, subtree, group, players, group_nr, consider_prob_groups)) {
+						// if (consider_prob_groups) {
+						// 	branch.problematic_group = player + 1;
+						// }
+
+						if(options.weak_conditional_actions) {
+							return true;
+						}
+					} else {
+						if(branch.reason.null()) {
+							branch.reason = subtree->reason;
+						}
+						// input.set_reset_point(branch);
+
+						if(options.strong_conditional_actions) {
+							return false;
+						}
+					}
+				}
+
+				solver.pop();
+			} 
+			// in the loop above
+			// mode weak_conditional_actions: we return as soon as we find one which is ok
+			// mode strong_conditional_actions: we return as soon as we find one which is not ok
+			// so if we reach the code after the loop, only one the following cases is possible
+			// mode weak_conditional_actions and no condition is secure -> return false
+			// mode strong_conditional_actions and all conditions are secure -> return true
+			return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
+		}
+		// otherwise we can take any strategy we please as long as it's collusion resilient
+		// weak version of conditional actions: we need to have one such option for one condition
+		// strong version of conditional actions: we need to have one such option for each condition
+		bool at_least_one_non_contradictory_condition = false;
+		for (size_t j=0; j<branch.conditions.size(); j++) {
+
+			solver.push();
+			solver.assert_(branch.conditions[j].condition);
+
+			// while we refine the case by adding a case split, we may have to prune
+			// the tree of contradictory actions. In practice, we can ignore the 
+			// branches belonging to contradictory actions "on the fly"; see next line 
+			if(solver.solve() != z3::Result::UNSAT) {
+				at_least_one_non_contradictory_condition = true;
+				bool secure_choice_found = false;
+				z3::Bool reason;
+				unsigned reset_index;
+				unsigned i = 0;
+				for (const Choice &choice: branch.conditions[j].children) {
+					if (collusion_resilience_rec(input, solver, options, choice.node, group, players, group_nr, consider_prob_groups)) {
+						// set chosen action, needed for printing strategy
+						// branch.strategy = choice.action;
+						// if (consider_prob_groups) {
+						// 		branch.problematic_group = player + 1;
+						// }
+						secure_choice_found = true;
+						if(options.weak_conditional_actions) {
+							return true;
+						}
+					}
+					if ((!choice.node->reason.null()) && (reason.null())) {
+							reason = choice.node->reason;
+							//reset_index = i;
+					}
+					i++;
+				}
+				if (!reason.null()) {
+					branch.reason = reason;
+					//input.set_reset_point(*branch.choices[reset_index].node);
+				}	
+
+				if(options.strong_conditional_actions && !secure_choice_found) {
+					return false;
+				}
+
+			}
+
+			solver.pop();
+
+		}
+		
+		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
+		
+
+	} else {
+		// if we are not the honest player, we could do anything,
+		// so all branches should be collusion resilient for the player
+		// weak version of conditional actions: we need to ensure this for one condition
+		// strong version of conditional actions: we need to ensure this for each condition
+		bool at_least_one_non_contradictory_condition = false;
+		for (size_t j=0; j<branch.conditions.size(); j++) {
+			solver.push();
+			solver.assert_(branch.conditions[j].condition);
+
+			// while we refine the case by adding a case split, we may have to prune
+			// the tree of contradictory actions. In practice, we can ignore the 
+			// branches belonging to contradictory actions "on the fly"; see next line 
+			if(solver.solve() != z3::Result::UNSAT) {
+				at_least_one_non_contradictory_condition = true;
+				bool not_secure_choice_found = false;
+				bool result = true;
+				z3::Bool reason;
+				unsigned reset_index;
+				unsigned i = 0;
+				for (const Choice &choice: branch.conditions[j].children) {
+					if (!collusion_resilience_rec(input, solver, options, choice.node, group, players, group_nr, consider_prob_groups)) {
+						// if (choice.node->reason.null()){
+						// 	if (options.counterexamples) {
+						// 		branch.counterexample_choices.push_back(choice.action);
+						// 	 }
+						// 	if (!options.all_counterexamples){
+						// 	 	return false;
+						// 	} else {
+						// 		result = false;
+						// 	}
+						// } else {
+						// 	if (result && reason.null()){
+						// 		reason = choice.node->reason;
+						// 		reset_index = i;
+						// 	}
+						// 	result = false;
+						// }	
+						not_secure_choice_found = true;
+						
+						// we have found one condition where not all choices are secure
+						if(options.strong_conditional_actions) {
+							return false;
+						}
+					}
+					i++;
+				}
+				if (!reason.null()) {
+					branch.reason = reason;
+					// input.set_reset_point(*branch.choices[reset_index].node);
+				}
+				// if (result && consider_prob_groups) {
+				// 	branch.problematic_group = player + 1;
+				// }
+				//return result;
+
+				// we have one condition where all choices are secure
+				if(options.weak_conditional_actions && !not_secure_choice_found) {
+					return true;
+				}
+			}
+
+			solver.pop();
+
+		}
+
+		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
 	}
+
 }
 
 // bool practicality_rec_old(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far, bool consider_prob_groups) {
@@ -1206,9 +1269,6 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		// }	
 
 		compute_conditional_actions_honest_utility_pairs(input, {}, input.root.get());
-		for(auto pair: input.cond_actions_honest_utility_pairs) {
-			std::cout << "Pair: " << pair.conditional_actions << " :: " << pair.utility << std::endl;
-		}
 
 		// sneaky hack follows: all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
 		// done this way more for concision than efficiency
@@ -2122,6 +2182,7 @@ void analyse_properties(const Options &options, const Input &input) {
 		
 		input.root->reset_honest();
 		input.root->mark_honest(input.honest[history]);
+		input.cond_actions_honest_utility_pairs = {};
 
 		// if(options.strategies) {
 		// 	input.root->reset_violation_cr();
@@ -2143,7 +2204,6 @@ void analyse_properties(const Options &options, const Input &input) {
 				//input.reset_strategies(); 
 				//input.root->reset_problematic_group(i==2); 
 				//input.reset_reset_point();
-				input.cond_actions_honest_utility_pairs = {};
 				property(options, input, property_types[i], history);
 			}
 		}
