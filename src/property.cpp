@@ -915,22 +915,22 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 	// }
 
 	// get practical strategies and corresponding utilities recursively
-	std::vector<std::vector<ConditionalUtilities>> children;
+	std::vector<ConditionalUtilities> children;
 	// TODO: think about how to store the actions for extracting strategies and counterexamples
 	// std::vector<std::string> children_actions;
 
-	std::vector<ConditionalUtilities> honest_utilities;
+	ConditionalUtilities honest_utilities;
 	std::vector<unsigned> honest_index;
 	std::vector<std::string> honest_choice;
 
 	bool result = true;
+	bool any_honest_practical = false;
 
 	for (size_t j=0; j<branch.conditions.size(); j++) {
 
 			solver.push();
 			solver.assert_(branch.conditions[j].condition);
 
-			ConditionalUtilities honest_utilities_per_condition;
 			unsigned int i = 0;
 
 			// check honest branch first
@@ -950,12 +950,23 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 						// if(!options.all_counterexamples || !branch.reason.null()) {
 						// 	return result;
 						// }
+						if(!branch.reason.null() || options.strong_conditional_actions) {
+							return result;
+						}
+					}
+					else {
+						any_honest_practical = true;
 					}
 
-					assert(choice.node->get_utilities().size() == 1);
-					honest_utilities_per_condition = choice.node->get_utilities()[0];
-					honest_utilities_per_condition.condition.push_back(branch.conditions[j].condition);
-					honest_utilities.push_back(honest_utilities_per_condition);
+					if (choice.node->get_utilities().size() > 0){
+						assert(choice.node->get_utilities().size() == 1);
+						ConditionalUtilities honest_utilities_per_condition = choice.node->get_utilities()[0];
+						for (int k = 0; k < honest_utilities_per_condition.condition.size(); k++){
+							honest_utilities.condition.push_back(z3::conjunction({honest_utilities_per_condition.condition[k], branch.conditions[j].condition}));
+							honest_utilities.utilities.push_back(honest_utilities_per_condition.utilities[k]);
+						}
+					}
+					
 					honest_choice.push_back(choice.action);
 					// branch.strategy = choice.action; // choose the honest action along the honest history
 					honest_index.push_back(i);
@@ -964,9 +975,14 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				}
 				i++;
 			}
-
+			
 			solver.pop();
 	}
+	if (!any_honest_practical && options.weak_conditional_actions){
+		return false;
+	}
+
+	bool any_practical = false;
 
 	for (size_t j=0; j<branch.conditions.size(); j++) {
 
@@ -990,6 +1006,11 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					// if(!options.all_counterexamples || !branch.reason.null()) {
 					// 	return result;
 					// }
+					if(!branch.reason.null() || options.strong_conditional_actions) {
+							return result;
+						}
+				} else {
+					any_practical = true;
 				}
 
 				
@@ -1006,6 +1027,10 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				
 			}
 		}
+	}
+
+	if (!any_practical && options.weak_conditional_actions){
+		return false;
 	}
 
 
@@ -1043,13 +1068,13 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			Utility maximum = honest_utilities[j].utilities[0].begin()->leaf[branch.player]; 
 
 			// for all other children
-			unsigned int j = 0;
-			for (const auto& utilities : children) {
+			unsigned int k = 0;
+			for (const auto& utilities : children[j]) {
 				bool found = false;
 				// does there exist a possible utility such that `maximum` is geq than it?				
 
-				for (const auto& utility : utilities) {
-					auto condition =   maximum < utility[branch.player];
+				for (const auto& utility : utilities.utilities) {
+					auto condition =   maximum < utility.begin()->leaf[branch.player];
 					if (solver.solve({condition}) == z3::Result::SAT) {
 						if (solver.solve({!condition}) == z3::Result::SAT) {
 							// might be maximal, just couldn't prove it
@@ -1062,7 +1087,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					else {
 						found = true;
 						// need to insert strategy after honest at right point in vector
-						if (j == honest_index){
+						if (k == honest_index){
 							honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
 						} 
 						honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
