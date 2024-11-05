@@ -916,7 +916,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 	// get practical strategies and corresponding utilities recursively
 	std::vector<std::vector<ConditionalUtilities>> children;
-	std::vector<std::string> children_actions;
+	// TODO: think about how to store the actions for extracting strategies and counterexamples
+	// std::vector<std::string> children_actions;
 
 	std::vector<ConditionalUtilities> honest_utilities;
 	std::vector<unsigned> honest_index;
@@ -951,12 +952,12 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 						// }
 					}
 
-					
-					honest_utilities_per_condition = choice.node->get_utilities();
+					assert(choice.node->get_utilities().size() == 1);
+					honest_utilities_per_condition = choice.node->get_utilities()[0];
 					honest_utilities_per_condition.condition.push_back(branch.conditions[j].condition);
 					honest_utilities.push_back(honest_utilities_per_condition);
 					honest_choice.push_back(choice.action);
-					branch.strategy = choice.action; // choose the honest action along the honest history
+					// branch.strategy = choice.action; // choose the honest action along the honest history
 					honest_index.push_back(i);
 					
 					break;
@@ -1001,7 +1002,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					conditional_utilities.condition.push_back(branch.conditions[j].condition);
 				}
 				children.push_back(choice.node->get_utilities());
-				children_actions.push_back(choice.action);
+				// children_actions.push_back(choice.action);
 				
 			}
 		}
@@ -1013,93 +1014,104 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 	if (branch.honest) {
 		// if we are at an honest node, our strategy must be the honest strategy
-		
-		assert(honest_utilities.size() == 1);
-		// the utility at the leaf of the honest history
-		std::vector<std::string> honest_strategy;
-		std::vector<Utility> leaf;
-		UtilityTuplesSet to_clear_strategy;
 		for (const auto& hon_utility: honest_utilities){
-		 	honest_strategy.insert(honest_strategy.end(), hon_utility.strategy_vector.begin(), hon_utility.strategy_vector.end());
-			UtilityTuple cleared_strategy(hon_utility.leaf);
-			to_clear_strategy.insert(cleared_strategy);
+			// the utility at the leaf of the honest subtree
+			assert(hon_utility.utilities.size() == 1);
 		}
+		// std::vector<std::string> honest_strategy;
+		// std::vector<Utility> leaf;
+		// UtilityTuplesSet to_clear_strategy;
+		// for (const auto& hon_utility: honest_utilities){
+		//  	honest_strategy.insert(honest_strategy.end(), hon_utility.strategy_vector.begin(), hon_utility.strategy_vector.end());
+		// 	UtilityTuple cleared_strategy(hon_utility.leaf);
+		// 	to_clear_strategy.insert(cleared_strategy);
+		// }
 
-		UtilityTuple honest_utility = *to_clear_strategy.begin();
+		// UtilityTuple honest_utility = *to_clear_strategy.begin();
 		
-		honest_utility.strategy_vector = {};
-		honest_utility.strategy_vector.push_back(honest_choice);
+		// honest_utility.strategy_vector = {};
+		// honest_utility.strategy_vector.push_back(honest_choice);
 		
-		// this should be maximal against other players, so...
-		Utility maximum = honest_utility[branch.player]; 
+		
 
-		// for all other children
-		unsigned int j = 0;
-		for (const auto& utilities : children) {
-			bool found = false;
-			// does there exist a possible utility such that `maximum` is geq than it?				
+		for (size_t j=0; j<branch.conditions.size(); j++) {
 
-			for (const auto& utility : utilities) {
-				auto condition =   maximum < utility[branch.player];
-				if (solver.solve({condition}) == z3::Result::SAT) {
-					if (solver.solve({!condition}) == z3::Result::SAT) {
-						// might be maximal, just couldn't prove it
-						if (result){
-							branch.reason =  get_split_approx(solver, maximum, utility[branch.player]); 
-							input.set_reset_point(branch);
+			solver.push();
+			solver.assert_(branch.conditions[j].condition);
+
+			// this should be maximal against other players, so...
+			Utility maximum = honest_utilities[j].utilities[0].begin()->leaf[branch.player]; 
+
+			// for all other children
+			unsigned int j = 0;
+			for (const auto& utilities : children) {
+				bool found = false;
+				// does there exist a possible utility such that `maximum` is geq than it?				
+
+				for (const auto& utility : utilities) {
+					auto condition =   maximum < utility[branch.player];
+					if (solver.solve({condition}) == z3::Result::SAT) {
+						if (solver.solve({!condition}) == z3::Result::SAT) {
+							// might be maximal, just couldn't prove it
+							if (result){
+								branch.reason =  get_split_approx(solver, maximum, utility[branch.player]); 
+								input.set_reset_point(branch);
+							}
 						}
-					}
-				} 
-				else {
-					found = true;
-					// need to insert strategy after honest at right point in vector
-					if (j == honest_index){
-						honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
 					} 
-					honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
-					break;
+					else {
+						found = true;
+						// need to insert strategy after honest at right point in vector
+						if (j == honest_index){
+							honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
+						} 
+						honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+						break;
+					}
 				}
+				if (!found && utilities.size()>0) {
+					
+					// counterexample: current child (deviating choice) is the counterexample together with all its practical histories/strategies, 
+					//                  additional information needed: current history (to be able to document deviation point)
+					//                                                 current player
+					// NOTE format of ce different from wi and cr, since all practical histories of child are needed to be a CE 
+
+					// store (push back) it in input.counterexamples; case will be added in property rec
+
+
+					// all counterexamples: do not return here (store return value in variable), but check all other children for further violations --> counterexamples
+					// 						then also do not return yet, but continue the reasoning up to the root to collect further CEs
+
+					// NOTE: for not along honest history, nothing to do
+
+					std::string deviating_action = children_actions[j];
+
+					if(options.counterexamples && branch.reason.null()) {
+						input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, deviating_action, utilities));
+					}
+
+					result = false;
+
+					if(!options.all_counterexamples || !branch.reason.null()) {
+						return result; //false
+					}
+				}
+				j++;
 			}
-			if (!found && utilities.size()>0) {
-				
-				// counterexample: current child (deviating choice) is the counterexample together with all its practical histories/strategies, 
-				//                  additional information needed: current history (to be able to document deviation point)
-				//                                                 current player
-				// NOTE format of ce different from wi and cr, since all practical histories of child are needed to be a CE 
-
-				// store (push back) it in input.counterexamples; case will be added in property rec
-
-
-				// all counterexamples: do not return here (store return value in variable), but check all other children for further violations --> counterexamples
-				// 						then also do not return yet, but continue the reasoning up to the root to collect further CEs
-
-				// NOTE: for not along honest history, nothing to do
-
-				std::string deviating_action = children_actions[j];
-
-				if(options.counterexamples && branch.reason.null()) {
-					input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, deviating_action, utilities));
-				}
-
-				result = false;
-
-				if(!options.all_counterexamples || !branch.reason.null()) {
-					return result; //false
-				}
+			if(j == honest_index) {
+				honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
 			}
-			j++;
-		}
-		if(j == honest_index) {
-			honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
-		}
-		
-		branch.practical_utilities = {honest_utility};
-		
-		// we return the maximal strategy 
-		// honest choice is practical for current player
-		// return true;
+			
+			branch.practical_utilities = {honest_utility};
+			
+			// we return the maximal strategy 
+			// honest choice is practical for current player
+			// return true;
 
-		return result;
+			solver.pop();
+
+			return result;
+		}
 
 	} else {
 		// not in the honest history
