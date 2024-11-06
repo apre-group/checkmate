@@ -181,7 +181,7 @@ public:
 
 	mutable std::vector<bool> violates_cr; // set to true as soon as its not cr for one deviating group
 
-	virtual std::vector<ConditionalUtilities> get_utilities() const = 0;
+	virtual ConditionalUtilities get_utilities() const = 0;
 
 	std::vector<HistoryChoice> compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
 
@@ -289,9 +289,9 @@ class Subtree : public Node {
 		problematic_group = is_cr ? 1 : 0;
 	}
 
-	virtual std::vector<ConditionalUtilities> get_utilities() const override {
+	virtual ConditionalUtilities get_utilities() const override {
 		
-		std::vector<ConditionalUtilities> result;
+		ConditionalUtilities result;
 
 		// for (const auto &utility_tuple: utilities){
 		// 	result.insert(result.end(), utility_tuple);
@@ -317,12 +317,12 @@ class Leaf final : public Node {
 
 	NodeType type() const override { return NodeType::LEAF; }
 
-	virtual std::vector<ConditionalUtilities> get_utilities() const override 
+	virtual ConditionalUtilities get_utilities() const override 
 		{
 			ConditionalUtilities cu; 
 			cu.utilities.push_back({utilities}); 
 			z3::Bool bool_obj; cu.condition.push_back(bool_obj.True()); 
-			return {cu}; 
+			return cu; 
 		}
 
 	void reset_reason() const {
@@ -349,14 +349,14 @@ class Branch final : public Node {
 	mutable std::vector<std::string> pr_strategies_actions;
 
 	mutable uint64_t problematic_group;
-	mutable std::vector<ConditionalUtilities> practical_utilities;
+	mutable ConditionalUtilities practical_utilities;
 	mutable std::vector<std::string> counterexample_choices;
 
 	NodeType type() const override { return NodeType::BRANCH; }
 
 	Branch(unsigned player, std::vector<Condition> conditions) : player(player), conditions(conditions), counterexample_choices({}) {}
 
-	virtual std::vector<ConditionalUtilities> get_utilities() const override {return practical_utilities;}
+	virtual ConditionalUtilities get_utilities() const override {return practical_utilities;}
 
 	// do a linear-time lookup of `action` by name in the branch, which must be present
 	const Choice &get_choice(const std::string &action) const {
