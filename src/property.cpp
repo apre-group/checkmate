@@ -1043,7 +1043,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 
 
-
+	bool any_condition_practical = false;
 
 	if (branch.honest) {
 		// if we are at an honest node, our strategy must be the honest strategy
@@ -1076,6 +1076,9 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			ConditionalUtilities honest_conditional_utility = honest_utilities[j];
 
 			assert(honest_conditional_utility.condition.size() == honest_conditional_utility.utilities.size());
+
+			// check for weak conditional actions, that we can return true after finding one practical condition
+			bool every_honest_practical = true; 
 
 			for (size_t m=0; m<honest_conditional_utility.condition.size(); m++) {
 
@@ -1124,7 +1127,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 								// 	honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
 								// } 
 								// honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
-								// break;
+								break;
 							}
 						}
 						if (!found && utilities.utilities.size()>0) {
@@ -1149,8 +1152,12 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							// }
 
 							result = false;
+							every_honest_practical = false;
 
-							if(!options.all_counterexamples || !branch.reason.null()) {
+							// if(!options.all_counterexamples || !branch.reason.null()) {
+							// 	return result; //false
+							// }
+							if(options.strong_conditional_actions) {
 								return result; //false
 							}
 						}
@@ -1164,6 +1171,11 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 					solver.pop(); // pop the condition_maximum_utility
 				}
+			}
+			if (options.weak_conditional_actions && every_honest_practical){
+				assert (false);
+				return true;
+				// what about setting practical utilities for branch??
 			}
 			solver.pop(); // pop the branch_conditions[j]
 
