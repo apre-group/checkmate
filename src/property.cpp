@@ -161,21 +161,21 @@ z3::Bool get_split_approx(z3::Solver &solver, Utility a, Utility b) {
 // 	return get_honest_leaf(node->branch().get_choice(history[index]).node.get(), history, next_index);
 // }
 
-// bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
-// 	if(tuple1.size() != tuple2.size()) {
-// 		return false;
-// 	} else {
-// 		bool all_same = true;
-// 		for (size_t i = 0; i < tuple1.size(); i++) {
-// 			if (!tuple1[i].is(tuple2[i])) {
-// 				all_same = false;
-// 			}
-// 		}
-// 		return all_same;
-// 	}
-// 	return false;
+bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
+	if(tuple1.size() != tuple2.size()) {
+		return false;
+	} else {
+		bool all_same = true;
+		for (size_t i = 0; i < tuple1.size(); i++) {
+			if (!tuple1[i].is(tuple2[i])) {
+				all_same = false;
+			}
+		}
+		return all_same;
+	}
+	return false;
 
-// }
+}
 
 // std::vector<std::string> index2player(const Input &input, unsigned index) {
 // 	std::bitset<Input::MAX_PLAYERS> group = index;
@@ -940,6 +940,9 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					std::vector<std::string> updated_actions;
 					updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
 					updated_actions.push_back(choice.action);
+					
+					// Question: do we need to push/pop the condition here?
+
 					if(!practicality_rec_old(input, options, solver, choice.node, updated_actions, consider_prob_groups)) {
 						if (result) {
 							branch.reason = choice.node->reason;
@@ -982,7 +985,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		return false;
 	}
 
-	bool any_practical = false;
+
 
 	for (size_t j=0; j<branch.conditions.size(); j++) {
 
@@ -992,6 +995,9 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		std::vector<std::string> actions_per_condition;
 
 		for (const Choice &choice: branch.conditions[j].children) {
+
+			// Question: do we need to push/pop the condition here?
+
 			if (!choice.node->honest) {
 				// this child has no practical strategy (propagate reason for case split, if any) 
 				std::vector<std::string> updated_actions;
@@ -1009,10 +1015,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					// 	return result;
 					// }
 					if(!branch.reason.null() || options.strong_conditional_actions) {
-							return result;
-						}
-				} else {
-					any_practical = true;
+						return result;
+					}
 				}
 
 				
@@ -1037,13 +1041,6 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		children_actions.push_back(actions_per_condition);
 	}
 
-	if (!any_practical && options.weak_conditional_actions){
-		return false;
-	}
-
-
-
-	bool any_condition_practical = false;
 
 	if (branch.honest) {
 		// if we are at an honest node, our strategy must be the honest strategy
@@ -1065,8 +1062,10 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		
 		// honest_utility.strategy_vector = {};
 		// honest_utility.strategy_vector.push_back(honest_choice);
+
+		ConditionalUtilities practical_utilities_for_branch;
 		
-		
+		bool condition_where_honest_practical = false;
 
 		for (size_t j=0; j<branch.conditions.size(); j++) {
 
@@ -1088,7 +1087,6 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 				solver.push();
 				solver.assert_(condition_maximum_utility);
-
 
 				// for all other children
 				unsigned int k = 0;
@@ -1130,7 +1128,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 								break;
 							}
 						}
-						if (!found && utilities.utilities.size()>0) {
+						if (!found && utilities.utilities.size()>0) { // !! utilities.utilities.size()>0 is always true -> discuss
 							
 							// counterexample: current child (deviating choice) is the counterexample together with all its practical histories/strategies, 
 							//                  additional information needed: current history (to be able to document deviation point)
@@ -1169,31 +1167,48 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					// 	honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
 					// }
 
-					solver.pop(); // pop the condition_maximum_utility
 				}
+
+				solver.pop(); // pop the condition_maximum_utility
 			}
-			if (options.weak_conditional_actions && every_honest_practical){
-				assert (false);
-				return true;
-				// what about setting practical utilities for branch??
+
+			if(every_honest_practical) {
+				condition_where_honest_practical = true; 
+				// cannot return yet, need to gather information about whether the other honest ones are pr
+				// to set the practical utilities of the node
+				// crucial for decisions that might come later (higher in the tree)
+
+				// NEW!
+				// the honest utilities from this condition are pr
+				// take them to the result that will be saved at the node
+				for (size_t i=0; i < honest_conditional_utility.condition.size(); i++){
+					practical_utilities_for_branch.condition.push_back(honest_conditional_utility.condition[i]);
+					practical_utilities_for_branch.utilities.push_back(honest_conditional_utility.utilities[i]);
+				}
+
 			}
+
+			// if (options.weak_conditional_actions && every_honest_practical){
+			// 	condition_where_honest_practical = true;
+			// 	assert (false);
+			// 	return true;
+			// 	// what about setting practical utilities for branch??
+			// }
+			
 			solver.pop(); // pop the branch_conditions[j]
 
 		}
-		ConditionalUtilities practical_utilities_for_branch;
-		for (auto &cu : honest_utilities){
-			for (size_t i=0; i < cu.condition.size(); i++){
-				practical_utilities_for_branch.condition.push_back(cu.condition[i]);
-				practical_utilities_for_branch.utilities.push_back(cu.utilities[i]);
-			}
-		}
+
+		// set the honest utilities for the branch
 		branch.practical_utilities = practical_utilities_for_branch;
 		
 		// we return the maximal strategy 
 		// honest choice is practical for current player
 		// return true;
 
-		
+		if(condition_where_honest_practical && options.weak_conditional_actions) {
+			return true;
+		}
 
 		return result;
 
@@ -1202,82 +1217,134 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		// to do: we could do this more efficiently by working out the set of utilities for the player
 		// but utilities can't be put in a set easily -> fix this here in the C++ version
 
-		// compute the set of possible utilities by merging the set of children's utilities
-		UtilityTuplesSet utility_result;
-		unsigned int k = 0;
-		for (const auto& utilities : children) {
-			for (const auto& utility : utilities) {
-				UtilityTuple to_insert(utility.leaf); 
-				to_insert.strategy_vector.push_back(children_actions[k]);
-				utility_result.insert(to_insert);
-			}
-			k++;
-		}
-
-		// the set to drop
-		UtilityTuplesSet remove;
-
-		// work out whether to drop `candidate`
-		unsigned int l = 0;
-		for (const auto& candidate : utility_result) {
-			// this player's utility
-			auto dominatee = candidate[branch.player];
-			// check all other children
-            // if any child has the property that all its utilities are bigger than `dominatee`
-            // it can be dropped
-            for (const auto& utilities : children) {
-				// skip any where the cadidate is already contained
-
-				// this logic can be factored out in an external function
-				bool contained = false;
-				for (const auto& utility : utilities) {
-					if (utility_tuples_eq(utility, candidate)) {
-						contained = true;
-						candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
-						break;
-					}
-				}
-
-				if (contained) {
-					continue;
-				}
-
-				// *all* utilities have to be bigger
-				bool dominated = true;
-
-				for (const auto& utility : utilities) {
-					auto dominator = utility[branch.player];
-					auto condition = dominator <= dominatee;
-					if (solver.solve({condition}) == z3::Result::SAT) {
-						if (dominated){
-							candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
-						}
-						dominated = false;
-
-						if (solver.solve({!condition}) == z3::Result::SAT) {
-							branch.reason = get_split_approx(solver, dominatee, dominator); 
-							input.set_reset_point(branch);
-							return false; 
-						}
-					}
-				}  
-
-				if (dominated) {
-					remove.insert(candidate);
-					break;
+		// merge the conditional utilities for each condition
+		std::vector<ConditionalUtilities> practical_utilities_per_condition;
+		for (size_t j=0; j<branch.conditions.size(); j++) {
+			ConditionalUtilities cu;
+			for(const auto& child: children[j]) {
+				for (size_t i=0; i<child.condition.size(); i++) {
+					cu.condition.push_back(child.condition[i]);
+					cu.utilities.push_back(child.utilities[i]);
 				}
 			}
-			l++;
+			practical_utilities_per_condition.push_back(cu);
 		}
 
-		// result is all children's utilities inductively, minus those dropped
-		for (const auto& elem : remove) {
-			utility_result.erase(elem);
+		for (size_t j=0; j<branch.conditions.size(); j++) {
+
+			solver.push();
+			solver.assert_(branch.conditions[j].condition);
+
+			// we need to make sure that
+			// for each conditional utility, for each set of practical utilities, for each element
+			// there is one other set which contains an element <= than the one we look at
+
+			// the set to drop
+			UtilityTuplesSet remove_set;
+
+			ConditionalUtilities &conditional_utilites_for_condition = practical_utilities_per_condition[j];
+
+			for(size_t k=0; k<conditional_utilites_for_condition.condition.size(); k++) {
+
+				solver.push();
+				solver.assert_(conditional_utilites_for_condition.condition[k]);
+				
+				UtilityTuplesSet& practical_utilities_set = conditional_utilites_for_condition.utilities[k];
+				for(const UtilityTuple& candidate: practical_utilities_set) {
+
+					// work out whether to drop `candidate`
+					// this player's utility
+					auto dominatee = candidate[branch.player];
+					// check all other children
+					// if any child has the property that all its utilities are bigger than `dominatee`
+					// it can be dropped
+					
+					for (size_t m=0; m<conditional_utilites_for_condition.condition.size(); m++) {
+
+						if(solver.solve({conditional_utilites_for_condition.condition[m]}) == z3::Result::UNSAT) {	
+							// incompatible, continue
+							continue;
+						}
+
+						solver.push();
+						solver.assert_(conditional_utilites_for_condition.condition[m]);
+
+						UtilityTuplesSet &utilities = conditional_utilites_for_condition.utilities[m];
+						// skip any where the cadidate is already contained
+
+						// this logic can be factored out in an external function
+						bool contained = false;
+						for (const auto& utility : utilities) {
+							if (utility_tuples_eq(utility, candidate)) {
+								contained = true;
+								// candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+								break;
+							}
+						}
+
+						if (contained) {
+							continue;
+						}
+
+						// *all* utilities have to be bigger
+						bool dominated = true;
+
+						for (const auto& utility : utilities) {
+							auto dominator = utility[branch.player];
+							auto condition = dominator <= dominatee;
+							if (solver.solve({condition}) == z3::Result::SAT) {
+								// if (dominated){
+								// 	candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+								// }
+								dominated = false;
+
+								if (solver.solve({!condition}) == z3::Result::SAT) {
+									branch.reason = get_split_approx(solver, dominatee, dominator); 
+									// input.set_reset_point(branch);
+									return false; 
+								}
+							}
+						}  
+
+						if (dominated) {
+							remove_set.insert(candidate);
+							break;
+						}
+
+						solver.pop(); // pop conditional_utilites_for_condition.condition[m]
+					}
+				}
+				solver.pop(); // pop conditional_utilites_for_condition.condition[k]
+			}
+
+			// iterate over practical_utilities_per_condition[j] and drop remove set
+			for(auto& utilities_set: practical_utilities_per_condition[j].utilities) {
+				for (const auto& elem : remove_set) {
+					utilities_set.erase(elem);
+				}
+			}
+
+			solver.pop(); // pop branch.conditions[j].condition
 		}
 
-		branch.practical_utilities = utility_result;
-		
-		assert(utility_result.size()>0);
+		// set branch practical utilities
+		ConditionalUtilities practical_utilities;
+		for (size_t j=0; j<branch.conditions.size(); j++) {
+			// iterate over all conditions and utilities of the conditional utilities 
+			// object corresponding to the current condition
+			ConditionalUtilities &cond_util = practical_utilities_per_condition[j];
+			for (size_t m=0; m<cond_util.condition.size(); m++) {
+				// take only condition, utility pairs where the utility pair is not empty
+				// it can be empty if we dropped/removed all of its elements previously
+				if(cond_util.utilities[m].size() > 0) {
+					practical_utilities.condition.push_back(cond_util.condition[m]);
+					practical_utilities.utilities.push_back(cond_util.utilities[m]);
+				}
+
+			}
+		}
+
+		branch.practical_utilities = practical_utilities;
 		return true;
 
 	} 

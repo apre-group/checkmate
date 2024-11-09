@@ -592,18 +592,21 @@ class Branch final : public Node {
 	// 		}
 	// }
 
-	// void reset_practical_utilities() const {
-	// 	practical_utilities = {};
-	// 	for (auto& choice: choices){
-	// 		if (!choice.node->is_leaf()){
-	// 			if (!choice.node->is_subtree()){
-	// 				choice.node->branch().reset_practical_utilities();
-	// 			} else {
-	// 				choice.node->subtree().reset_practical_utilities();
-	// 			}
-	// 		}
-	// 	}
-	// }
+	void reset_practical_utilities() const {
+		practical_utilities.condition = {};
+		practical_utilities.utilities = {};
+		for(auto &condition: conditions) {
+			for (auto& choice: condition.children){
+				if (!choice.node->is_leaf()){
+					if (!choice.node->is_subtree()){
+						choice.node->branch().reset_practical_utilities();
+					} else {
+						choice.node->subtree().reset_practical_utilities(); // TODO still not correctly implemented
+					}
+				}
+			}	
+		}
+	}
 
 };
 
@@ -725,271 +728,271 @@ struct Input {
 		counterexamples = {};
 	}
 
-	// void reset_practical_utilities() const {
-	// 	root.get()->reset_practical_utilities();
+	void reset_practical_utilities() const {
+		root.get()->reset_practical_utilities();
+	}
+
+	// void compute_strategy_case(std::vector<z3::Bool> _case, PropertyType property) const {
+		
+	// 	if (property == PropertyType::Practicality){
+	// 		if(root.get()->branch().honest) {
+	// 			// the honest one has to be the practical one
+	// 			// otw (if we call a subtree in default mode to obtain the strategies)
+	// 			//  there can be more than one pr strategy if the subtree is not along the 
+	// 			//  honest history 
+	// 			assert(root.get()->practical_utilities.size()==1);
+	// 		}
+	// 		for (const auto& pr_utility: root.get()->practical_utilities){
+	// 			StrategyCase new_strat_case;
+	// 			new_strat_case._case = _case;
+	// 			std::vector<std::string> strategy_vector;
+	// 			strategy_vector.insert(strategy_vector.begin(), pr_utility.strategy_vector.begin(), pr_utility.strategy_vector.end()); 
+	// 			new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector);
+	// 			strategies.push_back(new_strat_case);
+	// 		}
+
+	// 	} else {
+
+	// 		StrategyCase new_strat_case;
+	// 		new_strat_case._case = _case;
+
+	// 		if (property == PropertyType::CollusionResilience) {
+	// 			new_strat_case.strategy = root.get()->compute_cr_strategy(players, {}, {});
+	// 		} else {
+	// 			new_strat_case.strategy = root.get()->compute_strategy(players, {});
+	// 		}
+
+	// 		strategies.push_back(new_strat_case);
+
+	// 	}
 	// }
 
-	void compute_strategy_case(std::vector<z3::Bool> _case, PropertyType property) const {
+	// void print_strategies(const Options &options, bool is_wi) const {
+	// 	std::cout << std::endl;
+	// 	for (StrategyCase strategy_case : strategies) {
+	// 		std::cout << "Strategy for case: " <<  strategy_case._case << std::endl;
+	// 		for (HistoryChoice hist_choice : strategy_case.strategy){
+	// 			std::cout
+	// 				<< "\tPlayer "
+	// 				<< hist_choice.player
+	// 				<< " takes action "
+	// 				<< hist_choice.choice
+	// 				<< " after history "
+	// 				<< hist_choice.history
+	// 				<< std::endl;
+	// 		}
+	// 		if (is_wi) {
+	// 			std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
+	// 		}
+	// 		if(options.supertree) {
+	// 			std::cout << "\tYou need to run subtrees in default mode with option strategies for complete strategies." << std::endl;
+	// 		}
+	// 	}
+	// }
+
+	// void compute_cecase(std::vector<size_t> player_group, PropertyType property) const {
+	// 	CeCase new_ce_case;
+
+	// 	new_ce_case._case = {};
+	// 	for (auto player : player_group) {
+	// 		new_ce_case.player_group.push_back(players[player]);
+	// 	}
 		
-		if (property == PropertyType::Practicality){
-			if(root.get()->branch().honest) {
-				// the honest one has to be the practical one
-				// otw (if we call a subtree in default mode to obtain the strategies)
-				//  there can be more than one pr strategy if the subtree is not along the 
-				//  honest history 
-				assert(root.get()->practical_utilities.size()==1);
-			}
-			for (const auto& pr_utility: root.get()->practical_utilities){
-				StrategyCase new_strat_case;
-				new_strat_case._case = _case;
-				std::vector<std::string> strategy_vector;
-				strategy_vector.insert(strategy_vector.begin(), pr_utility.strategy_vector.begin(), pr_utility.strategy_vector.end()); 
-				new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector);
-				strategies.push_back(new_strat_case);
-			}
+	// 	if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
+	// 		new_ce_case.counterexample = root.get()->compute_wi_ce(players, {}, player_group);
+	// 	} else if (property == PropertyType::CollusionResilience) {
+	// 		new_ce_case.counterexample = root.get()->compute_cr_ce(players, {}, player_group);
+	// 	}
 
-		} else {
+	// 	counterexamples.push_back(new_ce_case);
+	// }
 
-			StrategyCase new_strat_case;
-			new_strat_case._case = _case;
+	// void add_case2ce(std::vector<z3::Bool> _case) const {
+	// 	// the empty case has a counterexample -> no case splitting
+	// 	// case splitting -> the empty case has no counterexample
+	// 	for (CeCase& ce: counterexamples){
+	// 		if (ce._case.size() == 0){
+	// 			ce._case = _case;
+	// 		}
+	// 	}
+	// }
 
-			if (property == PropertyType::CollusionResilience) {
-				new_strat_case.strategy = root.get()->compute_cr_strategy(players, {}, {});
-			} else {
-				new_strat_case.strategy = root.get()->compute_strategy(players, {});
-			}
-
-			strategies.push_back(new_strat_case);
-
-		}
-	}
-
-	void print_strategies(const Options &options, bool is_wi) const {
-		std::cout << std::endl;
-		for (StrategyCase strategy_case : strategies) {
-			std::cout << "Strategy for case: " <<  strategy_case._case << std::endl;
-			for (HistoryChoice hist_choice : strategy_case.strategy){
-				std::cout
-					<< "\tPlayer "
-					<< hist_choice.player
-					<< " takes action "
-					<< hist_choice.choice
-					<< " after history "
-					<< hist_choice.history
-					<< std::endl;
-			}
-			if (is_wi) {
-				std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
-			}
-			if(options.supertree) {
-				std::cout << "\tYou need to run subtrees in default mode with option strategies for complete strategies." << std::endl;
-			}
-		}
-	}
-
-	void compute_cecase(std::vector<size_t> player_group, PropertyType property) const {
-		CeCase new_ce_case;
-
-		new_ce_case._case = {};
-		for (auto player : player_group) {
-			new_ce_case.player_group.push_back(players[player]);
-		}
-		
-		if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
-			new_ce_case.counterexample = root.get()->compute_wi_ce(players, {}, player_group);
-		} else if (property == PropertyType::CollusionResilience) {
-			new_ce_case.counterexample = root.get()->compute_cr_ce(players, {}, player_group);
-		}
-
-		counterexamples.push_back(new_ce_case);
-	}
-
-	void add_case2ce(std::vector<z3::Bool> _case) const {
-		// the empty case has a counterexample -> no case splitting
-		// case splitting -> the empty case has no counterexample
-		for (CeCase& ce: counterexamples){
-			if (ce._case.size() == 0){
-				ce._case = _case;
-			}
-		}
-	}
-
-	void print_counterexamples(const Options &options, bool is_wi, bool is_cr) const {
-		if(is_wi || is_cr) {
-			std::cout << std::endl;
-			for (CeCase ce_case : counterexamples){
-				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-				if(ce_case.counterexample.size() == 0) {
-					if(is_wi) {
-						if(options.subtree) {
-							std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history. Run subtree along honest history in default mode with option counterexamples." << std::endl;
-						} else {
-							std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history." << std::endl;
-						}
-					}
-					else if(is_cr) {
-						if(options.supertree) {
-							std::cout << "Group " << ce_case.player_group << " can deviate profitably. Run subtree along honest history in default mode with option counterexamples." << std::endl;
-						} else {
-							std::cout << "Group " << ce_case.player_group << " can deviate profitably." << std::endl;
-						}
-					}
-				} else {
-					if(is_wi){
-						std::cout << "Player " << ce_case.player_group[0] << " can be harmed, if" << std::endl;
-					}
-					else if(is_cr){
-						std::cout << "Group " << ce_case.player_group << " can deviate profitably, if" << std::endl;
-					}
-					for (CeChoice ce_choice : ce_case.counterexample){
-						std::cout
-							<< "\tPlayer "
-							<< ce_choice.player
-							<< " takes one of the actions "
-							<< ce_choice.choices
-							<< " after history "
-							<< ce_choice.history
-							<< std::endl;
-					}
-					if(options.supertree) {
-						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
-					}
-				}
+	// void print_counterexamples(const Options &options, bool is_wi, bool is_cr) const {
+	// 	if(is_wi || is_cr) {
+	// 		std::cout << std::endl;
+	// 		for (CeCase ce_case : counterexamples){
+	// 			std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+	// 			if(ce_case.counterexample.size() == 0) {
+	// 				if(is_wi) {
+	// 					if(options.subtree) {
+	// 						std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history. Run subtree along honest history in default mode with option counterexamples." << std::endl;
+	// 					} else {
+	// 						std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history." << std::endl;
+	// 					}
+	// 				}
+	// 				else if(is_cr) {
+	// 					if(options.supertree) {
+	// 						std::cout << "Group " << ce_case.player_group << " can deviate profitably. Run subtree along honest history in default mode with option counterexamples." << std::endl;
+	// 					} else {
+	// 						std::cout << "Group " << ce_case.player_group << " can deviate profitably." << std::endl;
+	// 					}
+	// 				}
+	// 			} else {
+	// 				if(is_wi){
+	// 					std::cout << "Player " << ce_case.player_group[0] << " can be harmed, if" << std::endl;
+	// 				}
+	// 				else if(is_cr){
+	// 					std::cout << "Group " << ce_case.player_group << " can deviate profitably, if" << std::endl;
+	// 				}
+	// 				for (CeChoice ce_choice : ce_case.counterexample){
+	// 					std::cout
+	// 						<< "\tPlayer "
+	// 						<< ce_choice.player
+	// 						<< " takes one of the actions "
+	// 						<< ce_choice.choices
+	// 						<< " after history "
+	// 						<< ce_choice.history
+	// 						<< std::endl;
+	// 				}
+	// 				if(options.supertree) {
+	// 					std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
+	// 				}
+	// 			}
 				
-			}
-		} else {
-			for (CeCase ce_case : counterexamples){
-				if(ce_case.player_group.size() == 0) {
-					if(options.supertree) {
-						// user should check ce in subtree mode manually
-						std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-						std::cout << "The subtree after history " << ce_case.counterexample[0].history << " is not practical. Run subtree in default mode with option counterexamples." << std::endl;
-					} else {
-						assert(!options.subtree);
-						std::cout << "Practical histories that extend supertree counterexamples for case: " << ce_case._case <<  std::endl;
-						for(auto history : ce_case.counterexample) {
-							std::cout << history.choices << std::endl;	
-						}
-					}
-				} else {
-					std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-					std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
-					std::cout << "Practical histories:" << std::endl;
-					for(auto history : ce_case.counterexample) {
-						std::vector<std::string> history_to_print;
-						history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
-						history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
-						std::cout << history_to_print << std::endl;	
-					}
-					if(options.supertree) {
-						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
-					}
-				}
-			}
-		}
+	// 		}
+	// 	} else {
+	// 		for (CeCase ce_case : counterexamples){
+	// 			if(ce_case.player_group.size() == 0) {
+	// 				if(options.supertree) {
+	// 					// user should check ce in subtree mode manually
+	// 					std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+	// 					std::cout << "The subtree after history " << ce_case.counterexample[0].history << " is not practical. Run subtree in default mode with option counterexamples." << std::endl;
+	// 				} else {
+	// 					assert(!options.subtree);
+	// 					std::cout << "Practical histories that extend supertree counterexamples for case: " << ce_case._case <<  std::endl;
+	// 					for(auto history : ce_case.counterexample) {
+	// 						std::cout << history.choices << std::endl;	
+	// 					}
+	// 				}
+	// 			} else {
+	// 				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+	// 				std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
+	// 				std::cout << "Practical histories:" << std::endl;
+	// 				for(auto history : ce_case.counterexample) {
+	// 					std::vector<std::string> history_to_print;
+	// 					history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
+	// 					history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
+	// 					std::cout << history_to_print << std::endl;	
+	// 				}
+	// 				if(options.supertree) {
+	// 					std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
+	// 				}
+	// 			}
+	// 		}
+	// 	}
 		
-	}
+	// }
 
-	void add_unsat_case(std::vector<z3::Bool> _case) const {
-		unsat_cases.push_back(_case);
-	}
+	// void add_unsat_case(std::vector<z3::Bool> _case) const {
+	// 	unsat_cases.push_back(_case);
+	// }
 
-	std::vector<std::vector<z3::Bool>> precondition_simplify() const {
+	// std::vector<std::vector<z3::Bool>> precondition_simplify() const {
 
-		std::vector<std::vector<z3::Bool>> simp;
-		for (const std::vector<z3::Bool> &case_: unsat_cases) {
-			std::vector<z3::Bool> copy;
-			for (const z3::Bool &atom: case_) {
-				copy.push_back(atom);
-			}
-			simp.push_back(copy);
-		}
-		bool any_rule1 = true;
-		bool any_rule2 = true;
-		while (any_rule1 || any_rule2) {
-			any_rule1 = false;
-			any_rule2 = false;
-			for (long unsigned int j = 0; j < simp.size(); j++) {
-				auto case_ = simp[j];
-				for (long unsigned int k = j + 1; k < simp.size(); k++) {
-					auto other_case = simp[k];
-					bool rule1 = true;
-					bool rule2 = false;
-					if (case_.size() == other_case.size()) {
-						bool one_inverse = false;
-						long unsigned int inverse;
-						for (long unsigned int i = 0; i < case_.size(); i++) {
-							if (case_[i].is_equal(other_case[i].invert()) && not one_inverse) {
-								one_inverse = true;
-								inverse = i;
-							} else if (case_[i].is_equal(other_case[i].invert()) && one_inverse) {
-								rule1 = false;
-								break;
-							} else if (not case_[i].is_equal(other_case[i])) {
-								rule1 = false;
-								break;
-							}
-						}
-						rule1 = rule1 && one_inverse;
-						if (rule1) {
-							// remove other_case
-							std::swap(simp[k], simp.back());
-							simp.pop_back();
-							// remove case_[i] from case_
-							std::swap(case_[inverse], case_.back());
-							case_.pop_back();
-							simp[j] = case_;
-							any_rule1 = true;
-							break;
-						}
-					} else {
-						rule1 = false;
-					}
-					if ((case_.size() == 1) || (other_case.size() == 1)) {
-						// continue
-						std::vector<z3::Bool> singleton;
-						std::vector<z3::Bool> other;
-						int which_singleton;
-						if (case_.size() == 1) {
-							singleton = case_;
-							other = other_case;
-							which_singleton = 0;
-						} else {
-							singleton = other_case;
-							other = case_;
-							which_singleton = 1;
-						}
-						int inverse;
-						for (long unsigned int l = 0; l < other.size(); l++) {
-							z3::Bool other_bool = other[l].invert();
-							z3::Bool this_bool = singleton[0];
-							bool the_hell = this_bool.is_equal(other_bool);
-							if (the_hell) {
-								rule2 = true;
-								inverse = l;
-							}
-						}
-						if (rule2) {
-							std::swap(other[inverse], other.back());
-							other.pop_back();
-							if (which_singleton == 0) {
-								simp[k] = other;
-							} else {
-								simp[j] = other;
-							}
-							any_rule2 = true;
-						}
+	// 	std::vector<std::vector<z3::Bool>> simp;
+	// 	for (const std::vector<z3::Bool> &case_: unsat_cases) {
+	// 		std::vector<z3::Bool> copy;
+	// 		for (const z3::Bool &atom: case_) {
+	// 			copy.push_back(atom);
+	// 		}
+	// 		simp.push_back(copy);
+	// 	}
+	// 	bool any_rule1 = true;
+	// 	bool any_rule2 = true;
+	// 	while (any_rule1 || any_rule2) {
+	// 		any_rule1 = false;
+	// 		any_rule2 = false;
+	// 		for (long unsigned int j = 0; j < simp.size(); j++) {
+	// 			auto case_ = simp[j];
+	// 			for (long unsigned int k = j + 1; k < simp.size(); k++) {
+	// 				auto other_case = simp[k];
+	// 				bool rule1 = true;
+	// 				bool rule2 = false;
+	// 				if (case_.size() == other_case.size()) {
+	// 					bool one_inverse = false;
+	// 					long unsigned int inverse;
+	// 					for (long unsigned int i = 0; i < case_.size(); i++) {
+	// 						if (case_[i].is_equal(other_case[i].invert()) && not one_inverse) {
+	// 							one_inverse = true;
+	// 							inverse = i;
+	// 						} else if (case_[i].is_equal(other_case[i].invert()) && one_inverse) {
+	// 							rule1 = false;
+	// 							break;
+	// 						} else if (not case_[i].is_equal(other_case[i])) {
+	// 							rule1 = false;
+	// 							break;
+	// 						}
+	// 					}
+	// 					rule1 = rule1 && one_inverse;
+	// 					if (rule1) {
+	// 						// remove other_case
+	// 						std::swap(simp[k], simp.back());
+	// 						simp.pop_back();
+	// 						// remove case_[i] from case_
+	// 						std::swap(case_[inverse], case_.back());
+	// 						case_.pop_back();
+	// 						simp[j] = case_;
+	// 						any_rule1 = true;
+	// 						break;
+	// 					}
+	// 				} else {
+	// 					rule1 = false;
+	// 				}
+	// 				if ((case_.size() == 1) || (other_case.size() == 1)) {
+	// 					// continue
+	// 					std::vector<z3::Bool> singleton;
+	// 					std::vector<z3::Bool> other;
+	// 					int which_singleton;
+	// 					if (case_.size() == 1) {
+	// 						singleton = case_;
+	// 						other = other_case;
+	// 						which_singleton = 0;
+	// 					} else {
+	// 						singleton = other_case;
+	// 						other = case_;
+	// 						which_singleton = 1;
+	// 					}
+	// 					int inverse;
+	// 					for (long unsigned int l = 0; l < other.size(); l++) {
+	// 						z3::Bool other_bool = other[l].invert();
+	// 						z3::Bool this_bool = singleton[0];
+	// 						bool the_hell = this_bool.is_equal(other_bool);
+	// 						if (the_hell) {
+	// 							rule2 = true;
+	// 							inverse = l;
+	// 						}
+	// 					}
+	// 					if (rule2) {
+	// 						std::swap(other[inverse], other.back());
+	// 						other.pop_back();
+	// 						if (which_singleton == 0) {
+	// 							simp[k] = other;
+	// 						} else {
+	// 							simp[j] = other;
+	// 						}
+	// 						any_rule2 = true;
+	// 					}
 
-					} else {
-						rule2 = false;
-					}
+	// 				} else {
+	// 					rule2 = false;
+	// 				}
 
-				}
-			}
-		}
+	// 			}
+	// 		}
+	// 	}
 
-		return simp;
-	}
+	// 	return simp;
+	// }
 };
 
 
