@@ -846,6 +846,8 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 		}
 
+		// Refactor: A ? !B : true
+
 		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
 	}
 
@@ -940,8 +942,6 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					std::vector<std::string> updated_actions;
 					updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
 					updated_actions.push_back(choice.action);
-					
-					// Question: do we need to push/pop the condition here?
 
 					if(!practicality_rec_old(input, options, solver, choice.node, updated_actions, consider_prob_groups)) {
 						if (result) {
@@ -996,8 +996,6 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 		for (const Choice &choice: branch.conditions[j].children) {
 
-			// Question: do we need to push/pop the condition here?
-
 			if (!choice.node->honest) {
 				// this child has no practical strategy (propagate reason for case split, if any) 
 				std::vector<std::string> updated_actions;
@@ -1014,7 +1012,11 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					// if(!options.all_counterexamples || !branch.reason.null()) {
 					// 	return result;
 					// }
-					if(!branch.reason.null() || options.strong_conditional_actions) {
+
+					// We (Anja, Ivana) believe that this is always the case 
+					// When NOT along honest history there is always a pr unitility except when we need to spilit i.e. reason is not null
+					// At least in the usual mode (no all_cases, all_counterexamples, etc.)
+					if(!branch.reason.null()) {
 						return result;
 					}
 				}
@@ -1206,16 +1208,20 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		// honest choice is practical for current player
 		// return true;
 
-		if(condition_where_honest_practical && options.weak_conditional_actions) {
-			return true;
+		if(options.weak_conditional_actions) {
+			return condition_where_honest_practical;
 		}
 
-		return result;
+		assert(result);
+		return true;
 
 	} else {
 		// not in the honest history
 		// to do: we could do this more efficiently by working out the set of utilities for the player
 		// but utilities can't be put in a set easily -> fix this here in the C++ version
+
+		// for this scenario we do not need to distinguish between weak and strong conditional actions
+		// we need to figure out the set to be dropped and this is independent on weak/strong conditional actions
 
 		// merge the conditional utilities for each condition
 		std::vector<ConditionalUtilities> practical_utilities_per_condition;
@@ -1344,6 +1350,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			}
 		}
 
+		assert(practical_utilities.condition.size() > 0);
 		branch.practical_utilities = practical_utilities;
 		return true;
 
