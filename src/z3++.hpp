@@ -619,6 +619,12 @@ namespace z3 {
 
 	std::ostream &operator<<(std::ostream &out, z3::Real expr);
 	std::ostream &operator<<(std::ostream &out, z3::Bool expr);
+
+	struct Frame {
+		Solver &solver;
+		Frame(Solver &solver) : solver(solver) { solver.push(); }
+		~Frame() { solver.pop(); }
+	};
 }
 
 

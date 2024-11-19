@@ -314,7 +314,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 			for (size_t i=0; i<branch.conditions.size(); i++) {
 
-				solver.push();
+				z3::Frame f1(solver);
 				solver.assert_(branch.conditions[i].condition);
 
 				// while we refine the case by adding a case split, we may have to prune
@@ -351,7 +351,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					}
 				}
 
-				solver.pop();
+				// solver.pop(); , done implicitly because the frame dies
 			} 
 			// in the loop above
 			// mode weak_conditional_actions: we return as soon as we find one which is ok
@@ -367,7 +367,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		bool at_least_one_non_contradictory_condition = false;
 		for (size_t j=0; j<branch.conditions.size(); j++) {
 
-			solver.push();
+			z3::Frame f2(solver);
 			solver.assert_(branch.conditions[j].condition);
 
 			// while we refine the case by adding a case split, we may have to prune
@@ -408,7 +408,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 			}
 
-			solver.pop();
+			// solver.pop(); , done implicitly because the frame dies
 
 		}
 		
@@ -422,7 +422,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		// strong version of conditional actions: we need to ensure this for each condition
 		bool at_least_one_non_contradictory_condition = false;
 		for (size_t j=0; j<branch.conditions.size(); j++) {
-			solver.push();
+			z3::Frame f3(solver);
 			solver.assert_(branch.conditions[j].condition);
 
 			// while we refine the case by adding a case split, we may have to prune
@@ -477,7 +477,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				}
 			}
 
-			solver.pop();
+			// solver.pop(); , done implicitly because the frame dies
 
 		}
 
@@ -679,7 +679,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 			for (size_t i=0; i<branch.conditions.size(); i++) {
 
-				solver.push();
+				z3::Frame f1(solver);
 				solver.assert_(branch.conditions[i].condition);
 
 				// while we refine the case by adding a case split, we may have to prune
@@ -716,7 +716,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					}
 				}
 
-				solver.pop();
+				// solver.pop(); , done implicitly because the frame dies
 			} 
 			// in the loop above
 			// mode weak_conditional_actions: we return as soon as we find one which is ok
@@ -732,7 +732,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		bool at_least_one_non_contradictory_condition = false;
 		for (size_t j=0; j<branch.conditions.size(); j++) {
 
-			solver.push();
+			z3::Frame f2(solver);
 			solver.assert_(branch.conditions[j].condition);
 
 			// while we refine the case by adding a case split, we may have to prune
@@ -773,7 +773,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 			}
 
-			solver.pop();
+			// solver.pop(); , done implicitly because the frame dies
 
 		}
 		
@@ -787,7 +787,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		// strong version of conditional actions: we need to ensure this for each condition
 		bool at_least_one_non_contradictory_condition = false;
 		for (size_t j=0; j<branch.conditions.size(); j++) {
-			solver.push();
+			z3::Frame f3(solver);
 			solver.assert_(branch.conditions[j].condition);
 
 			// while we refine the case by adding a case split, we may have to prune
@@ -842,7 +842,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 				}
 			}
 
-			solver.pop();
+			// solver.pop(); , done implicitly because the frame dies
 
 		}
 
@@ -931,7 +931,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 	for (size_t j=0; j<branch.conditions.size(); j++) {
 
-			solver.push();
+			z3::Frame f1(solver);
 			solver.assert_(branch.conditions[j].condition);
 
 			unsigned int i = 0;
@@ -979,7 +979,6 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				i++;
 			}
 			
-			solver.pop();
 	}
 	if (!any_honest_practical && options.weak_conditional_actions){
 		return false;
@@ -989,8 +988,9 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 	for (size_t j=0; j<branch.conditions.size(); j++) {
 
-		solver.push();
+		z3::Frame f2(solver);
 		solver.assert_(branch.conditions[j].condition);
+
 		std::vector<ConditionalUtilities> children_per_condition;
 		std::vector<std::string> actions_per_condition;
 
@@ -1071,7 +1071,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 		for (size_t j=0; j<branch.conditions.size(); j++) {
 
-			solver.push();
+			z3::Frame f3(solver);
 			solver.assert_(branch.conditions[j].condition);
 
 			ConditionalUtilities honest_conditional_utility = honest_utilities[j];
@@ -1087,7 +1087,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				// this should be maximal against other players, so...
 				Utility maximum = honest_conditional_utility.utilities[m].begin()->leaf[branch.player]; 
 
-				solver.push();
+				z3::Frame f4(solver);
 				solver.assert_(condition_maximum_utility);
 
 				// for all other children
@@ -1106,7 +1106,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							continue;
 						}
 
-						solver.push();
+						z3::Frame f5(solver);
 						solver.assert_(child_condition);
 					
 						for (const auto& utility : child_utilities_set) {
@@ -1163,7 +1163,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 						}
 						// k++;
 
-						solver.pop(); // pop the child_condition
+						// pop the child_condition, done implicitly because the frame dies 
 					}
 					// if(k == honest_index) {
 					// 	honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
@@ -1171,7 +1171,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 				}
 
-				solver.pop(); // pop the condition_maximum_utility
+				// pop the condition_maximum_utility, done implicitly because the frame dies
 			}
 
 			if(every_honest_practical) {
@@ -1197,7 +1197,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			// 	// what about setting practical utilities for branch??
 			// }
 			
-			solver.pop(); // pop the branch_conditions[j]
+			// pop the branch_conditions[j], done implicitly because the frame dies
 
 		}
 
@@ -1238,7 +1238,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 		for (size_t j=0; j<branch.conditions.size(); j++) {
 
-			solver.push();
+			z3::Frame f6(solver);
 			solver.assert_(branch.conditions[j].condition);
 
 			// we need to make sure that
@@ -1252,7 +1252,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 			for(size_t k=0; k<conditional_utilites_for_condition.condition.size(); k++) {
 
-				solver.push();
+				z3::Frame f7(solver);
 				solver.assert_(conditional_utilites_for_condition.condition[k]);
 				
 				UtilityTuplesSet& practical_utilities_set = conditional_utilites_for_condition.utilities[k];
@@ -1272,7 +1272,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							continue;
 						}
 
-						solver.push();
+						z3::Frame f8(solver);
 						solver.assert_(conditional_utilites_for_condition.condition[m]);
 
 						UtilityTuplesSet &utilities = conditional_utilites_for_condition.utilities[m];
@@ -1317,10 +1317,10 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							break;
 						}
 
-						solver.pop(); // pop conditional_utilites_for_condition.condition[m]
+						// pop conditional_utilites_for_condition.condition[m], done implicitly because the frame dies
 					}
 				}
-				solver.pop(); // pop conditional_utilites_for_condition.condition[k]
+				// pop conditional_utilites_for_condition.condition[k], done implicitly because the frame dies
 			}
 
 			// iterate over practical_utilities_per_condition[j] and drop remove set
@@ -1330,7 +1330,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				}
 			}
 
-			solver.pop(); // pop branch.conditions[j].condition
+			// pop branch.conditions[j].condition, done implicitly because the frame dies
 		}
 
 		// set branch practical utilities
@@ -2292,7 +2292,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 // 		// ATTENTION THINK ABOUT HOW LATER (IN SUPERTREE) CASE SPLITS MAY IMPACT THE RESULT
 // 		// we need to print the corresponding utilities for each case
 // 		// kind of "all cases" for practicality_subtree
-// 		// since in property_rec_nohistory we are not along honest, we consider all cases implicitely
+// 		// since in property_rec_nohistory we are not along honest, we consider all cases implicitly
 // 		// it suffices to have a new data structure where we store <case, utulities> information and print them below
 // 		//std::cout << "print utilities" << std::endl;
 
