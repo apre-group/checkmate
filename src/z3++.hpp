@@ -331,7 +331,7 @@ namespace z3 {
 		case Operator::GT:
 			return out << ">";
 		case Operator::GE:
-			return out << "<=";
+			return out << ">=";
 		}
 		assert(false);
 		UNREACHABLE;
