@@ -163,7 +163,12 @@ bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
 
 }
 
-std::vector<std::string> index2player(const Input &input, unsigned index) {
+std::vector<std::string> index2player(const Input &input, const Options &options, unsigned index) {
+
+	if(options.weak_immunity || options.weaker_immunity) {
+		return {input.players[index]};
+	}
+
 	std::bitset<Input::MAX_PLAYERS> group = index;
 	std::vector<std::string> players;
 
@@ -438,7 +443,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		// search for SubtreeResult in weak(er)_immunity that corresponds to the current player
 
 		const std::vector<SubtreeResult> &subtree_results = subtree.collusion_resilience;
-		std::vector<std::string> player_names = index2player(input, group_nr); 
+		std::vector<std::string> player_names = index2player(input, options, group_nr); 
 
 
 		for (const SubtreeResult &subtree_result : subtree_results) {
@@ -1706,7 +1711,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 			std::vector<std::string> players;
 
             if(property == PropertyType::CollusionResilience) {
-                players = index2player(input, i+1);
+                players = index2player(input, options, i+1);
             } else if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
                 players = { input.players[i] };
             }
@@ -1774,7 +1779,7 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 	for (unsigned i = 0; i < number_groups; i++){
 		input.reset_reset_point();
 		input.root.get()->reset_reason();
-		std::vector<std::string> players = index2player(input, i+1);
+		std::vector<std::string> players = index2player(input, options, i+1);
 
 		SubtreeResult subtree_result_player;
 		subtree_result_player.player_group = players;
@@ -1878,10 +1883,12 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 		std::cout << "Is this subtree " << prop_name << "?" << std::endl;
 		std::vector<SubtreeResult> subtree_results;
 
-		for (unsigned i = 0; i < number_groups; i++){
+		for (size_t i = 0; i < number_groups; i++){
 			input.reset_reset_point();
 			input.root.get()->reset_reason();
-			std::vector<std::string> players = index2player(input, i+1);
+
+			size_t value = options.collusion_resilience ? i+1 : i;
+			std::vector<std::string> players = index2player(input, options, value);
 
 			SubtreeResult subtree_result_player;
 			subtree_result_player.player_group = players;
