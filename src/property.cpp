@@ -163,9 +163,9 @@ bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
 
 }
 
-std::vector<std::string> index2player(const Input &input, const Options &options, unsigned index) {
+std::vector<std::string> index2player(const Input &input, PropertyType property, unsigned index) {
 
-	if(options.weak_immunity || options.weaker_immunity) {
+	if(property==PropertyType::WeakImmunity || property==PropertyType::WeakerImmunity) {
 		return {input.players[index]};
 	}
 
@@ -443,7 +443,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		// search for SubtreeResult in weak(er)_immunity that corresponds to the current player
 
 		const std::vector<SubtreeResult> &subtree_results = subtree.collusion_resilience;
-		std::vector<std::string> player_names = index2player(input, options, group_nr); 
+		std::vector<std::string> player_names = index2player(input, PropertyType::CollusionResilience, group_nr); 
 
 
 		for (const SubtreeResult &subtree_result : subtree_results) {
@@ -1711,7 +1711,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 			std::vector<std::string> players;
 
             if(property == PropertyType::CollusionResilience) {
-                players = index2player(input, options, i+1);
+                players = index2player(input, property, i+1);
             } else if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
                 players = { input.players[i] };
             }
@@ -1779,7 +1779,7 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 	for (unsigned i = 0; i < number_groups; i++){
 		input.reset_reset_point();
 		input.root.get()->reset_reason();
-		std::vector<std::string> players = index2player(input, options, i+1);
+		std::vector<std::string> players = index2player(input, property, i+1);
 
 		SubtreeResult subtree_result_player;
 		subtree_result_player.player_group = players;
@@ -1887,8 +1887,8 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 			input.reset_reset_point();
 			input.root.get()->reset_reason();
 
-			size_t value = options.collusion_resilience ? i+1 : i;
-			std::vector<std::string> players = index2player(input, options, value);
+			size_t value = property == PropertyType::CollusionResilience? i+1 : i;
+			std::vector<std::string> players = index2player(input, property, value);
 
 			SubtreeResult subtree_result_player;
 			subtree_result_player.player_group = players;
@@ -2100,7 +2100,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		
 		std::cout << std::endl;
 		std::cout << std::endl;
-		std::cout << "Checking no honest history " << std::endl; 
+		std::cout << "Checking no honest history " << std::endl;
 
 		input.root->reset_honest();
 		input.root->reset_practical_utilities();
