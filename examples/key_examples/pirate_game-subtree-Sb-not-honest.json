@@ -1,0 +1,1005 @@
+{
+  "players": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "actions": [
+    "y",
+    "n"
+  ],
+  "infinitesimals": [],
+  "constants": [
+    "d",
+    "a_A",
+    "a_B",
+    "a_C",
+    "a_D",
+    "b_B",
+    "b_C",
+    "b_D",
+    "c_C",
+    "c_D",
+    "g"
+  ],
+  "initial_constraints": [
+    "d > 0",
+    "g > 0",
+    "a_A >= 0",
+    "a_B >= 0",
+    "a_C >= 0",
+    "a_D >= 0",
+    "b_B >= 0",
+    "b_C >= 0",
+    "b_D >= 0",
+    "c_C >= 0",
+    "c_D >= 0",
+    "a_A + a_B + a_C + a_D = g",
+    "b_B + b_C + b_D = g",
+    "c_C + c_D = g"
+  ],
+  "property_constraints": {
+    "weak_immunity": [],
+    "weaker_immunity": [],
+    "collusion_resilience": [],
+    "practicality": []
+  },
+  "honest_histories": [],
+  "honest_utilities": [
+    {
+      "utility": [
+        {
+          "player": "A",
+          "value": "-d"
+        },
+        {
+          "player": "B",
+          "value": "b_B"
+        },
+        {
+          "player": "C",
+          "value": "b_C"
+        },
+        {
+          "player": "D",
+          "value": "b_D"
+        }
+      ]
+    }
+  ],
+  "tree": {
+    "player": "B",
+    "children": [
+      {
+        "action": "y",
+        "child": {
+          "player": "C",
+          "children": [
+            {
+              "action": "y",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "-d"
+                  },
+                  {
+                    "player": "B",
+                    "value": "b_B"
+                  },
+                  {
+                    "player": "C",
+                    "value": "b_C"
+                  },
+                  {
+                    "player": "D",
+                    "value": "b_D"
+                  }
+                ]
+              }
+            },
+            {
+              "action": "n",
+              "child": {
+                "player": "D",
+                "children": [
+                  {
+                    "action": "y",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "-d"
+                        },
+                        {
+                          "player": "B",
+                          "value": "b_B"
+                        },
+                        {
+                          "player": "C",
+                          "value": "b_C"
+                        },
+                        {
+                          "player": "D",
+                          "value": "b_D"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "action": "n",
+                    "child": {
+                      "subtree": {
+                        "collusion_resilience": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "A",
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "C"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "(b_C >= c_C)"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "A",
+                              "C"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "(((- d) + b_C) >= ((- d) + c_C))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B",
+                              "C"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "((b_B + b_C) >= ((- d) + c_C))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "A",
+                              "B",
+                              "C"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "(b_D >= c_D)"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "A",
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "(((- d) + b_D) >= ((- d) + c_D))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B",
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "((b_B + b_D) >= ((- d) + c_D))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "A",
+                              "B",
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "C",
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "((b_C + b_D) >= (c_C + c_D))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "A",
+                              "C",
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B",
+                              "C",
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ],
+                        "honest_utility": [
+                          {
+                            "player": "A",
+                            "value": "(- d) + 0.0"
+                          },
+                          {
+                            "player": "B",
+                            "value": "b_B + 0.0"
+                          },
+                          {
+                            "player": "C",
+                            "value": "b_C + 0.0"
+                          },
+                          {
+                            "player": "D",
+                            "value": "b_D + 0.0"
+                          }
+                        ],
+                        "practicality": [
+                          {
+                            "case": [
+                              "true"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "(- d) + 0.0"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "(- d) + 0.0"
+                                },
+                                {
+                                  "player": "C",
+                                  "value": "c_C + 0.0"
+                                },
+                                {
+                                  "player": "D",
+                                  "value": "c_D + 0.0"
+                                }
+                              ]
+                            ]
+                          }
+                        ],
+                        "weak_immunity": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": []
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": []
+                          },
+                          {
+                            "player_group": [
+                              "C"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ],
+                        "weaker_immunity": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": []
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": []
+                          },
+                          {
+                            "player_group": [
+                              "C"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "action": "n",
+        "child": {
+          "player": "C",
+          "children": [
+            {
+              "action": "y",
+              "child": {
+                "player": "D",
+                "children": [
+                  {
+                    "action": "y",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "-d"
+                        },
+                        {
+                          "player": "B",
+                          "value": "b_B"
+                        },
+                        {
+                          "player": "C",
+                          "value": "b_C"
+                        },
+                        {
+                          "player": "D",
+                          "value": "b_D"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "action": "n",
+                    "child": {
+                      "subtree": {
+                        "collusion_resilience": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "A",
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "C"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "(b_C >= c_C)"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "A",
+                              "C"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "(((- d) + b_C) >= ((- d) + c_C))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B",
+                              "C"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "((b_B + b_C) >= ((- d) + c_C))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "A",
+                              "B",
+                              "C"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "(b_D >= c_D)"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "A",
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "(((- d) + b_D) >= ((- d) + c_D))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B",
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "((b_B + b_D) >= ((- d) + c_D))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "A",
+                              "B",
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "C",
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "((b_C + b_D) >= (c_C + c_D))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "A",
+                              "C",
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B",
+                              "C",
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ],
+                        "honest_utility": [
+                          {
+                            "player": "A",
+                            "value": "(- d) + 0.0"
+                          },
+                          {
+                            "player": "B",
+                            "value": "b_B + 0.0"
+                          },
+                          {
+                            "player": "C",
+                            "value": "b_C + 0.0"
+                          },
+                          {
+                            "player": "D",
+                            "value": "b_D + 0.0"
+                          }
+                        ],
+                        "practicality": [
+                          {
+                            "case": [
+                              "true"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "(- d) + 0.0"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "(- d) + 0.0"
+                                },
+                                {
+                                  "player": "C",
+                                  "value": "c_C + 0.0"
+                                },
+                                {
+                                  "player": "D",
+                                  "value": "c_D + 0.0"
+                                }
+                              ]
+                            ]
+                          }
+                        ],
+                        "weak_immunity": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": []
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": []
+                          },
+                          {
+                            "player_group": [
+                              "C"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ],
+                        "weaker_immunity": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": []
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": []
+                          },
+                          {
+                            "player_group": [
+                              "C"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "D"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "action": "n",
+              "child": {
+                "subtree": {
+                  "collusion_resilience": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "A",
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "C"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "(b_C >= c_C)"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "A",
+                        "C"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "(((- d) + b_C) >= ((- d) + c_C))"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B",
+                        "C"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "((b_B + b_C) >= ((- d) + c_C))"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "A",
+                        "B",
+                        "C"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "D"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "(b_D >= c_D)"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "A",
+                        "D"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "(((- d) + b_D) >= ((- d) + c_D))"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B",
+                        "D"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "((b_B + b_D) >= ((- d) + c_D))"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "A",
+                        "B",
+                        "D"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "C",
+                        "D"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "((b_C + b_D) >= (c_C + c_D))"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "A",
+                        "C",
+                        "D"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B",
+                        "C",
+                        "D"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ],
+                  "honest_utility": [
+                    {
+                      "player": "A",
+                      "value": "(- d) + 0.0"
+                    },
+                    {
+                      "player": "B",
+                      "value": "b_B + 0.0"
+                    },
+                    {
+                      "player": "C",
+                      "value": "b_C + 0.0"
+                    },
+                    {
+                      "player": "D",
+                      "value": "b_D + 0.0"
+                    }
+                  ],
+                  "practicality": [
+                    {
+                      "case": [
+                        "true"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "(- d) + 0.0"
+                          },
+                          {
+                            "player": "B",
+                            "value": "(- d) + 0.0"
+                          },
+                          {
+                            "player": "C",
+                            "value": "c_C + 0.0"
+                          },
+                          {
+                            "player": "D",
+                            "value": "c_D + 0.0"
+                          }
+                        ]
+                      ]
+                    }
+                  ],
+                  "weak_immunity": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": []
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": []
+                    },
+                    {
+                      "player_group": [
+                        "C"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "D"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ],
+                  "weaker_immunity": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": []
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": []
+                    },
+                    {
+                      "player_group": [
+                        "C"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "D"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
