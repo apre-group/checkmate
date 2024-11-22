@@ -352,7 +352,9 @@ def finish(
         collusion_resilience_constraints: List[Constraint],
         practicality_constraints: List[Constraint],
         honest_histories: List[List[Action]],
+        honest_utilities: List,
         tree: Tree,
+        file = None
 ):
     import sys
     mode = sys.argv[1] if len(sys.argv) >= 2 else ''
@@ -360,7 +362,7 @@ def finish(
         print("digraph tree {")
         tree.graphviz()
         print("}")
-    else:
+    elif file is None:
         json.dump({
             'players': players,
             'actions': actions,
@@ -374,7 +376,26 @@ def finish(
                 'practicality': practicality_constraints
             },
             'honest_histories': honest_histories,
+            'honest_utilities': honest_utilities,
             'tree': tree
         }, default=lambda x: x.json(), fp=sys.stdout, indent=2)
+        sys.exit(0)
+    else: 
+        json.dump({
+            'players': players,
+            'actions': actions,
+            'infinitesimals': infinitesimals,
+            'constants': constants,
+            'initial_constraints': initial_constraints,
+            'property_constraints': {
+                'weak_immunity': weak_immunity_constraints,
+                'weaker_immunity': weaker_immunity_constraints,
+                'collusion_resilience': collusion_resilience_constraints,
+                'practicality': practicality_constraints
+            },
+            'honest_histories': honest_histories,
+            'honest_utilities': honest_utilities,
+            'tree': tree
+        }, default=lambda x: x.json(), fp=file, indent=2)
 
-    sys.exit(0)
+    
