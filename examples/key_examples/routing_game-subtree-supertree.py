@@ -1,6 +1,9 @@
 from dsl import *
 import itertools
 import re
+import subprocess
+import json
+import sys
 
 """
 This file generates a game model for Lightning's routing protocol. To set the number of intermediaries to n,
@@ -91,11 +94,9 @@ with a variable (possibly equal to the correct amount). This way we capture all 
 no one could ever unlock the contract and therefore it is security-equivalent to not creating a contract at all.
 """
 
-
-
 PRINT_HISTORIES = False
 
-ps = PLAYERS = players('A', 'I1', 'I2', 'B')
+ps = PLAYERS = players('A', 'I', 'B')
 S_H, U, J, I_L, I_U= ACTIONS = actions(
     'S_H', 'U', 'J', 'I_L', 'I_U')
 epsilon, rho = INFINITESIMALS = infinitesimals('epsilon', 'rho')
@@ -107,12 +108,15 @@ INITIAL_CONSTRAINTS = [
     f > 0,
     m > 0
 ]
+
 #dishonest amounts different from honest amounts (first deviation only)
 for i in range(len(ps)-1):
+    CONSTANTS.append(NameExpr(f"a_{ps[i]}_{ps[i]}"))
     INITIAL_CONSTRAINTS.append(NameExpr(f"a_{ps[i]}_{ps[i]}") !=  m + (len(ps) - 2 - i) * f)
     for j in range(i,len(ps)-1):
+        if j != i:
+            CONSTANTS.append(NameExpr(f"a_{ps[i]}_{ps[j]}"))
         INITIAL_CONSTRAINTS.append(NameExpr(f"a_{ps[i]}_{ps[j]}") >= 0 )
-
 
 WEAK_IMMUNITY_CONSTRAINTS = []
 WEAKER_IMMUNITY_CONSTRAINTS = []
@@ -397,11 +401,12 @@ def generate_routing_locking(player, state, deviator, history):
                     else:
                         position = new_state2["time_orderings"].index(None)
                         new_state2["time_orderings"][position] = ps[-1]
-                    branch_actions[Action(action)] = dict()
+                    #branch_actions[Action(action)] = dict()
                     tree = generate_routing_unlocking(ps[-1], new_state2, False, history + str(player) + f".{action};")
                     honest_histories = []
                     honest_utilities = []
                     new_history = history + str(player) + f".{action}"
+                    result_file = 'subtree_result_history0.txt'
 
                     along_honest = True
                     if len(HONEST_HISTORIES[0]) < len(new_history):
@@ -414,10 +419,13 @@ def generate_routing_locking(player, state, deviator, history):
                     if along_honest:
                         honest_histories = [HONEST_HISTORIES[0][len(new_history):]] 
                     else:
-                        honest_utilities = HONEST_UTILITIES                    
+                        result_file = 'subtree_result_utility0.txt'
+                        honest_utilities = HONEST_UTILITIES 
 
-                    
-                    with open('routing_game-subtree-' + new_history + '.json', 'w') as f1:
+                    #filename = 'routing_game-subtree-' + new_history + '.json'         
+                    filename = 'subtree.json'
+
+                    with open(filename, 'w') as f1:
                         finish(
                             PLAYERS,
                             ACTIONS,
@@ -433,6 +441,41 @@ def generate_routing_locking(player, state, deviator, history):
                             tree,
                             f1
                         )
+                    
+
+                    ## call checkmate with this file in subtree mode 
+                    sys.stdout.flush()
+                    print('************ Calling checkmate now *****************')
+                    sys.stdout.flush()
+                    try:
+                        #sub_res = subprocess.run(['./checkmate', filename] + ['--subtree'])
+                        sub_res = subprocess.run(
+                                ['./checkmate', filename, '--subtree'],
+                                bufsize=0,
+                                text=True
+                            )
+                        sys.stdout.flush()
+                        print(sub_res)
+                        sys.stdout.flush()
+                    except:
+                        print('********************ERROR**********************')
+                    
+                    sys.stdout.flush()
+                    print('************ Checkmate returned *****************')
+
+                    ## read produced file and put result of subtree back in supertree
+                    with open(result_file, 'r') as result:
+                        result_content = result.read()
+                        print('************ Reading result file *****************')
+                        try:
+                            json_result = json.loads(result_content)
+                            print('************ Parsing result done *****************')
+                            branch_actions[Action(action)] = json_result
+                            print('************ Result set *****************')
+                        except json.JSONDecodeError as e:
+                            print(f"Error decoding JSON from file {result_file}: {e}")
+                    
+
                 else:
                     branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state2, deviator, history + str(player) + f".{action};")
             # I am my own eq class therefore I know my own secret
@@ -449,11 +492,12 @@ def generate_routing_locking(player, state, deviator, history):
                 else:
                     position = new_state1["time_orderings"].index(None)
                     new_state1["time_orderings"][position] = ps[-1]
-                branch_actions[Action(action)] = dict()
+                #branch_actions[Action(action)] = dict()
                 tree = generate_routing_unlocking(ps[-1], new_state2, False, history + str(player) + f".{action};")
                 honest_histories = []
                 honest_utilities = []
                 new_history = history + str(player) + f".{action}"
+                result_file = 'subtree_result_history0.txt'
                 
                 along_honest = True
                 if len(HONEST_HISTORIES[0]) < len(new_history):
@@ -466,9 +510,13 @@ def generate_routing_locking(player, state, deviator, history):
                 if along_honest:
                     honest_histories = [HONEST_HISTORIES[0][len(new_history):]] 
                 else:
-                    honest_utilities = HONEST_UTILITIES             
+                    result_file = 'subtree_result_utility0.txt'
+                    honest_utilities = HONEST_UTILITIES   
 
-                with open('routing_game-subtree-' + new_history + '.json', 'w') as f2:
+                #filename = 'routing_game-subtree-' + new_history + '.json'         
+                filename = 'subtree.json'          
+
+                with open(filename, 'w') as f2:
                     finish(
                         PLAYERS,
                         ACTIONS,
@@ -484,6 +532,24 @@ def generate_routing_locking(player, state, deviator, history):
                         tree,
                         f2
                     )
+                    ## call checkmate with this file in subtree mode 
+                    #subprocess.run(['./checkmate', filename] + ['--subtree'])
+
+                    sub_res = subprocess.run(
+                        ['./checkmate', filename, '--subtree'],
+                        bufsize=0,
+                        text=True
+                    )
+
+                    ## read produced file and put result of subtree back in supertree
+                    with open(result_file, 'r') as result:
+                        result_content = result.read()
+                        try:
+                            json_result = json.loads(result_content)
+                            branch_actions[Action(action)] = json_result
+                        except json.JSONDecodeError as e:
+                            print(f"Error decoding JSON from file {result_file}: {e}")
+                    
             else:
                 branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state1, deviator, history + str(player) + f".{action};")
 
@@ -543,11 +609,7 @@ HONEST_UTILITIES = [
           "value": "rho"
         },
         {
-          "player": "I1",
-          "value": "f"
-        },
-        {
-          "player": "I2",
+          "player": "I",
           "value": "f"
         },
         {
@@ -558,21 +620,21 @@ HONEST_UTILITIES = [
     }
 ]
 
-locking_tree = generate_routing_locking(ps[0], initial_state, None, "")
-
-routing_tree = branch(ps[-1], {
-    J: leaf({p: 0 for p in ps}),
-    S_H: locking_tree
-})
-
 for act in actions_for_sharing_secrets:
     ACTIONS.append(Action(act))
 
 for act in actions_for_locking:
     ACTIONS.append(Action(act))
 
-for const in constants_for_wrong_amounts:
-    CONSTANTS.append(NameExpr(const))
+locking_tree = generate_routing_locking(ps[0], initial_state, None, "")
+
+#for const in constants_for_wrong_amounts:
+    #CONSTANTS.append(NameExpr(const))
+
+routing_tree = branch(ps[-1], {
+    J: leaf({p: 0 for p in ps}),
+    S_H: locking_tree
+})
 
 ### This part here is for debugging
 intermediate_state = {
