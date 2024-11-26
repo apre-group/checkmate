@@ -444,36 +444,17 @@ def generate_routing_locking(player, state, deviator, history):
                     
 
                     ## call checkmate with this file in subtree mode 
-                    sys.stdout.flush()
-                    print('************ Calling checkmate now *****************')
-                    sys.stdout.flush()
-                    try:
-                        #sub_res = subprocess.run(['./checkmate', filename] + ['--subtree'])
-                        sub_res = subprocess.run(
-                                ['./checkmate', filename, '--subtree'],
-                                bufsize=0,
-                                text=True
-                            )
-                        sys.stdout.flush()
-                        print(sub_res)
-                        sys.stdout.flush()
-                    except:
-                        print('********************ERROR**********************')
-                    
-                    sys.stdout.flush()
-                    print('************ Checkmate returned *****************')
+                    subprocess.run(['./checkmate', filename, '--subtree'])
 
                     ## read produced file and put result of subtree back in supertree
                     with open(result_file, 'r') as result:
                         result_content = result.read()
-                        print('************ Reading result file *****************')
                         try:
                             json_result = json.loads(result_content)
-                            print('************ Parsing result done *****************')
                             branch_actions[Action(action)] = json_result
-                            print('************ Result set *****************')
                         except json.JSONDecodeError as e:
                             print(f"Error decoding JSON from file {result_file}: {e}")
+
                     
 
                 else:
@@ -532,23 +513,18 @@ def generate_routing_locking(player, state, deviator, history):
                         tree,
                         f2
                     )
-                    ## call checkmate with this file in subtree mode 
-                    #subprocess.run(['./checkmate', filename] + ['--subtree'])
 
-                    sub_res = subprocess.run(
-                        ['./checkmate', filename, '--subtree'],
-                        bufsize=0,
-                        text=True
-                    )
+                ## call checkmate with this file in subtree mode 
+                subprocess.run(['./checkmate', filename, '--subtree'])
 
-                    ## read produced file and put result of subtree back in supertree
-                    with open(result_file, 'r') as result:
-                        result_content = result.read()
-                        try:
-                            json_result = json.loads(result_content)
-                            branch_actions[Action(action)] = json_result
-                        except json.JSONDecodeError as e:
-                            print(f"Error decoding JSON from file {result_file}: {e}")
+                ## read produced file and put result of subtree back in supertree
+                with open(result_file, 'r') as result:
+                    result_content = result.read()
+                    try:
+                        json_result = json.loads(result_content)
+                        branch_actions[Action(action)] = json_result
+                    except json.JSONDecodeError as e:
+                        print(f"Error decoding JSON from file {result_file}: {e}")
                     
             else:
                 branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state1, deviator, history + str(player) + f".{action};")
