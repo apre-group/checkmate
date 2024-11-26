@@ -92,6 +92,39 @@ with a variable (possibly equal to the correct amount). This way we capture all 
 
 6) Wlog we assume that everytime a player locks a contract with a new hash, they also know the corresponding secret. Otherwise,
 no one could ever unlock the contract and therefore it is security-equivalent to not creating a contract at all.
+
+How to adapt the generation based on the number of players:
+- Make sure you list all players in `ps`, e.g.
+    - for 3-player routing: ps = PLAYERS = players('A', 'I', 'B')
+    - for 4-player routing: ps = PLAYERS = players('A', 'I1', 'I2', 'B')
+- Make sure, you provide the honest utility of each player, e.g
+    - for 4-player routing:
+        HONEST_UTILITIES = [
+        {
+            "utility": [
+                {
+                "player": "A",
+                "value": "rho"
+                },
+                {
+                "player": "I1",
+                "value": "f"
+                },
+                {
+                "player": "I2",
+                "value": "f"
+                },
+                {
+                "player": "B",
+                "value": "rho"
+                }
+            ]
+        }
+
+Call this script from the checkmate build folder.
+    -  python3 ../examples/key_examples/routing_game-subtree-supertree.py
+        
+]
 """
 
 PRINT_HISTORIES = False
