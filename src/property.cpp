@@ -218,6 +218,10 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 		const auto &subtree = node->subtree();
 
+		if ((player < subtree.problematic_group) && consider_prob_groups){
+			return true;
+		}
+
 		// look up current player:
 		// 		if disj_of_cases (in satisfied_for_case) is equivalent to current case or weaker we return true 
 		//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
@@ -266,6 +270,9 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
 				if (z3_result_implied == z3::Result::UNSAT) {
+					if (consider_prob_groups) {
+						subtree.problematic_group = player + 1;
+					}
 					return true;
 				} else {
 
@@ -279,6 +286,11 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 						// set reason
 						subtree.reason = disj_of_cases;
 					}
+
+					if (consider_prob_groups) {
+						subtree.problematic_group = player;
+					}
+					input.set_reset_point(subtree);
 					return false;
 				}
 			}
@@ -430,6 +442,10 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 		const auto &subtree = node->subtree();
 
+		if  ((group_nr < subtree.problematic_group) && consider_prob_groups){
+			return true;
+		}
+
 		// look up current player_group:
 		// 		if disj_of_cases (in satisfied_for_case) that is equivalent to current case or weaker we return true 
 		//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
@@ -492,6 +508,9 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
 					if (z3_result_implied == z3::Result::UNSAT) {
+						if (consider_prob_groups) {
+							subtree.problematic_group = group_nr + 1;
+						}
 						return true;
 					} else {
 
@@ -505,6 +524,11 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 							// set reason
 							subtree.reason = disj_of_cases;
 						}
+
+						if (consider_prob_groups) {
+							subtree.problematic_group = group_nr;
+						}
+						input.set_reset_point(subtree);
 						return false;
 					}
 				}
@@ -681,7 +705,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 						}
 						return false;
 					}
-					subtree.utilities.insert(subtree.utilities.end(), subtree_result.utilities.begin(), subtree_result.utilities.end());
+					subtree.utilities = subtree_result.utilities;
 					return true;
 				}
 			} 
