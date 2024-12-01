@@ -612,6 +612,13 @@ namespace z3 {
 			return result;
 		}
 
+	    // Overload the `<<` operator as a friend
+        friend std::ostream& operator<<(std::ostream& os, const Solver& s) {
+            const char* solver_string = Z3_solver_to_string(CONTEXT, s.solver);
+            os << solver_string;
+            return os;
+        }
+
 	private:
 		// wrapper solver
 		Z3_solver solver;
