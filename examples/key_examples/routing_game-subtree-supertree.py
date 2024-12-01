@@ -513,7 +513,7 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
                 tree = generate_routing_unlocking(ps[-1], new_state2, False, history + str(player) + f".{action};")
                 honest_histories = []
                 honest_utilities = []
-                new_history = history + str(player) + f".{action}"
+                #new_history = history + str(player) + f".{action}"
                 result_file = 'subtree_result_history0.txt'
                 
                 along_honest = True
