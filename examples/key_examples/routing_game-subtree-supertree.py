@@ -409,7 +409,7 @@ def locking_action(deviator, slot, eq_class):
     return f"L_({deviator},{slot},{eq_class})"
 
 
-def generate_routing_locking(player, state, deviator, history):
+def generate_routing_locking(player, state, deviator, history, actions_so_far):
     if PRINT_HISTORIES:
         print(history)
     branch_actions = {}
@@ -438,19 +438,22 @@ def generate_routing_locking(player, state, deviator, history):
                     tree = generate_routing_unlocking(ps[-1], new_state2, False, history + str(player) + f".{action};")
                     honest_histories = []
                     honest_utilities = []
-                    new_history = history + str(player) + f".{action}"
+                    #new_history = history + str(player) + f".{action}"
                     result_file = 'subtree_result_history0.txt'
 
                     along_honest = True
-                    if len(HONEST_HISTORIES[0]) < len(new_history):
+                    updated_actions = actions_so_far + [Action(action)]
+
+                    if len(HONEST_HISTORIES[0]) < len(updated_actions):
                         along_honest = False
                     else:
-                        for i in range(len(new_history)):
-                            if HONEST_HISTORIES[0][i] != new_history[i]:
+                        for i in range(len(updated_actions)):
+                            if str(HONEST_HISTORIES[0][i]) != str(updated_actions[i]):
                                 along_honest = False
+                                break
 
                     if along_honest:
-                        honest_histories = [HONEST_HISTORIES[0][len(new_history):]] 
+                        honest_histories = [HONEST_HISTORIES[0][len(updated_actions):]] 
                     else:
                         result_file = 'subtree_result_utility0.txt'
                         honest_utilities = HONEST_UTILITIES 
@@ -491,7 +494,7 @@ def generate_routing_locking(player, state, deviator, history):
                     
 
                 else:
-                    branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state2, deviator, history + str(player) + f".{action};")
+                    branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state2, deviator, history + str(player) + f".{action};", actions_so_far + [Action(action)])
             # I am my own eq class therefore I know my own secret
             new_state1["eq_secrets"].append([player])
             new_state1[player]["secrets"][player] = True
@@ -514,15 +517,18 @@ def generate_routing_locking(player, state, deviator, history):
                 result_file = 'subtree_result_history0.txt'
                 
                 along_honest = True
-                if len(HONEST_HISTORIES[0]) < len(new_history):
+                updated_actions = actions_so_far + [Action(action)]
+
+                if len(HONEST_HISTORIES[0]) < len(updated_actions):
                     along_honest = False
                 else:
-                    for i in range(len(new_history)):
-                        if HONEST_HISTORIES[0][i] != new_history[i]:
+                    for i in range(len(updated_actions)):
+                        if str(HONEST_HISTORIES[0][i]) != str(updated_actions[i]):
                             along_honest = False
+                            break
 
                 if along_honest:
-                    honest_histories = [HONEST_HISTORIES[0][len(new_history):]] 
+                    honest_histories = [HONEST_HISTORIES[0][len(updated_actions):]] 
                 else:
                     result_file = 'subtree_result_utility0.txt'
                     honest_utilities = HONEST_UTILITIES   
@@ -560,7 +566,7 @@ def generate_routing_locking(player, state, deviator, history):
                         print(f"Error decoding JSON from file {result_file}: {e}")
                     
             else:
-                branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state1, deviator, history + str(player) + f".{action};")
+                branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state1, deviator, history + str(player) + f".{action};", actions_so_far + [Action(action)])
 
     if deviator is None:
         # case honest amount
@@ -635,7 +641,7 @@ for act in actions_for_sharing_secrets:
 for act in actions_for_locking:
     ACTIONS.append(Action(act))
 
-locking_tree = generate_routing_locking(ps[0], initial_state, None, "")
+locking_tree = generate_routing_locking(ps[0], initial_state, None, "", [Action('S_H')])
 
 #for const in constants_for_wrong_amounts:
     #CONSTANTS.append(NameExpr(const))
