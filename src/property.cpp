@@ -19,6 +19,39 @@
 using z3::Bool;
 using z3::Solver;
 
+int count_wi = 0;
+int count_weri = 0;
+int count_cr = 0;
+int count_pr = 0;
+
+void reset_global_counters(bool wi, bool weri, bool cr, bool pr) {
+	if(wi)
+		count_wi = 0;
+
+	if(weri)
+		count_weri = 0;
+	
+	if(cr)
+		count_cr = 0;
+
+	if(pr)
+		count_pr = 0;
+}
+
+void print_global_counters(bool wi, bool weri, bool cr, bool pr) {
+	if(wi)
+		std::cout << "\t  WI:" << count_wi << std::endl;
+
+	if(weri)
+		std::cout << "\tWERI:" << count_weri << std::endl;
+
+	if(cr)
+		std::cout << "\t  CR:" << count_cr << std::endl;
+
+	if(pr)
+		std::cout << "\t  PR:" << count_pr << std::endl;
+}
+
 // third-party library for parsing JSON
 using json = nlohmann::json;
 
@@ -183,6 +216,18 @@ std::vector<std::string> index2player(const Input &input, PropertyType property,
 
 
 bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, unsigned player, bool weaker, bool consider_prob_groups) {
+
+	if(weaker) {
+		if(!node->checked_weri) {
+			count_weri++;
+			node->checked_weri = true;
+		}
+	} else {
+		if(!node->checked_wi) {
+			count_wi++;
+			node->checked_wi = true;
+		}
+	}
 
 
 	if (node->is_leaf()) {
@@ -396,6 +441,11 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 } 
 
 bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, std::bitset<Input::MAX_PLAYERS> group, Utility honest_total, unsigned players, uint64_t group_nr, bool consider_prob_groups) {
+	
+	if(!node->checked_cr) {
+		count_cr++;
+		node->checked_cr = true;
+	}
 	
 	if (node->is_leaf()) {
 		const auto &leaf = node->leaf();
@@ -665,6 +715,11 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 bool practicality_rec_old(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far, bool consider_prob_groups) {
 
+	if(!node->checked_pr) {
+		count_pr++;
+		node->checked_pr = true;
+	}
+	
 	if (node->is_leaf()) {
 		return true;
 	} else if (node->is_subtree()) {
@@ -1967,6 +2022,11 @@ void analyse_properties(const Options &options, const Input &input) {
 	/* iterate over all honest histories and check the properties for each of them */
 	for (size_t history = 0; history < input.honest.size(); history++) { 
 
+		if(options.count_nodes) {
+			reset_global_counters(true, true, true, true);
+			input.root->reset_count_check(true, true, true, true);
+		}
+
 		std::cout << std::endl;
 		std::cout << std::endl;
 		std::cout << "Checking history " << input.honest[history] << std::endl; 
@@ -1997,9 +2057,21 @@ void analyse_properties(const Options &options, const Input &input) {
 				property(options, input, property_types[i], history);
 			}
 		}
+
+		if(options.count_nodes) {
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Number of checked nodes for history: " << input.honest[history] << std::endl;
+			print_global_counters(true, true, true, true);
+		}
 	}
 
 	if(input.honest_utilities.size() != 0) {
+
+		if(options.count_nodes) {
+			reset_global_counters(true, true, false, true);
+			input.root->reset_count_check(true, true, false, true);
+		}
 
 		input.root->reset_honest();
 
@@ -2029,9 +2101,22 @@ void analyse_properties(const Options &options, const Input &input) {
 			}
 		}
 
+		if(options.count_nodes) {
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Number of checked nodes for no hohest history: " << std::endl;
+			print_global_counters(true, true, false, true);
+		}
+
 		if(options.collusion_resilience) {
 
 			for(unsigned honest_utility = 0; honest_utility < input.honest_utilities.size(); honest_utility++) {
+
+				if(options.count_nodes) {
+					reset_global_counters(false, false, true, false);
+					input.root->reset_count_check(false, false, true, false);
+				}
+
 				std::cout << std::endl;
 				std::cout << std::endl;
 				std::cout << "Checking honest utility " << input.honest_utilities[honest_utility].leaf << std::endl; 
@@ -2052,6 +2137,13 @@ void analyse_properties(const Options &options, const Input &input) {
 				// input.honest.size() + honest_utility means we are running a subree in default mode
 				// and we consider collusion resilience for the honest utility
 				property(options, input, PropertyType::CollusionResilience, input.honest.size() + honest_utility);
+
+				if(options.count_nodes) {
+					std::cout << std::endl;
+					std::cout << std::endl;
+					std::cout << "Number of checked nodes for honest utility: " << input.honest_utilities[honest_utility].leaf << std::endl;
+					print_global_counters(false, false, true, false);
+				}
 
 			}
 
@@ -2075,6 +2167,11 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 	/* iterate over all honest histories and check the properties for each of them */
 	for (size_t history = 0; history < input.honest.size(); history++) { 
+
+		if(options.count_nodes) {
+			reset_global_counters(true, true, true, true);
+			input.root->reset_count_check(true, true, true, true);
+		}
 
 		std::cout << std::endl;
 		std::cout << std::endl;
@@ -2113,6 +2210,13 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			}
 		}
 
+		if(options.count_nodes) {
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Number of checked nodes for history: " << input.honest[history] << std::endl;
+			print_global_counters(true, true, true, true);
+		}
+
 		std::string file_name = "subtree_result_history" + std::to_string(history) + ".txt";
         print_subtree_result_to_file(input, file_name, subtree);
 		
@@ -2121,6 +2225,11 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 	// iterate over all honest utilities (only for cr) and check the properties for each of them 
 	// compute w(er)i and pr results
 	if (input.honest_utilities.size()>0) {
+
+		if(options.count_nodes) {
+			reset_global_counters(true, true, false, true);
+			input.root->reset_count_check(true, true, false, true);
+		}
 		
 		std::cout << std::endl;
 		std::cout << std::endl;
@@ -2157,8 +2266,20 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			}
 		}
 
+		if(options.count_nodes) {
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Number of checked nodes for no hohest history: " << std::endl;
+			print_global_counters(true, true, false, true);
+		}
+
 		// for cr iterate over all honest utilities
 		for (unsigned utility = 0; utility < input.honest_utilities.size(); utility++) { 
+
+			if(options.count_nodes) {
+				reset_global_counters(false, false, true, false);
+				input.root->reset_count_check(false, false, true, false);
+			}
 
 			std::cout << std::endl;
 			std::cout << std::endl;
@@ -2184,6 +2305,13 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				input.root->reset_problematic_group(true); 
 				input.reset_reset_point();
 				property_subtree_utility(options, input, PropertyType::CollusionResilience, input.honest_utilities[utility].leaf, subtree);
+			}
+
+			if(options.count_nodes) {
+				std::cout << std::endl;
+				std::cout << std::endl;
+				std::cout << "Number of checked nodes for honest utility: " << input.honest_utilities[utility].leaf << std::endl;
+				print_global_counters(false, false, true, false);
 			}
 
 			// create one file for this utility

@@ -130,6 +130,11 @@ inline bool are_compatible_cases(const std::vector<z3::Bool> _case1, const std::
 class Node {
 public:
 	virtual NodeType type() const = 0;
+	mutable bool checked_wi = false;
+	mutable bool checked_weri = false;
+	mutable bool checked_cr = false;
+	mutable bool checked_pr = false;
+
 
 	// convenience functions
 	bool is_leaf() const { return type() == NodeType::LEAF; }
@@ -201,6 +206,8 @@ public:
 	void restore_violation_cr(std::vector<std::vector<bool>> &violation) const;
 
 	void add_violation_cr() const;
+
+	void reset_count_check(bool wi, bool weri, bool cr, bool pr) const;
 
 };
 

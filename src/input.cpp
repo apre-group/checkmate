@@ -1308,3 +1308,24 @@ void Node::restore_violation_cr(std::vector<std::vector<bool>> &violation) const
 
 	return;
 }
+
+void Node::reset_count_check(bool wi, bool weri, bool cr, bool pr) const {
+	if(wi)
+		checked_wi = false;
+
+	if(weri)
+		checked_weri = false;
+	
+	if(cr)
+		checked_cr = false;
+
+	if(pr)
+		checked_pr = false;
+
+	if(this->is_branch()) {
+		const auto &branch = this->branch();
+		for(auto &child : branch.choices) {
+			child.node.get()->reset_count_check(wi, weri, cr, pr);
+		}
+	}
+}

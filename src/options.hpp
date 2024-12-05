@@ -34,6 +34,9 @@ struct Options {
 	bool subtree = false;
 	// reason over a supertree, contains leaves that are property results of a subtree
 	bool supertree = false;
+
+	// used for experiments
+	bool count_nodes = false;
 };
 
 #endif

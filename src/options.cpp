@@ -16,6 +16,7 @@ const char *USAGE = R"(usage: checkmate PATH
 	--strategies
 	--subtree
 	--supertree
+	--count_nodes
 )";
 
 // print a message, the usage information and exit with failure code
@@ -65,6 +66,8 @@ Options::Options(char **argv) {
 			subtree = true;
 		else if (!strcmp(*argv, "--supertree"))
 			supertree = true;
+		else if (!strcmp(*argv, "--count_nodes"))
+			count_nodes = true;
 		else
 			bail("unknown option");
 		argv++;
