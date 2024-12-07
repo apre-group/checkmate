@@ -68,6 +68,8 @@ Options::Options(char **argv) {
 			supertree = true;
 		else if (!strcmp(*argv, "--count_nodes"))
 			count_nodes = true;
+		else if (!strcmp(*argv, "--count_calls"))
+			count_calls = true;
 		else
 			bail("unknown option");
 		argv++;

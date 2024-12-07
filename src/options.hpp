@@ -37,6 +37,7 @@ struct Options {
 
 	// used for experiments
 	bool count_nodes = false;
+	bool count_calls = false;
 };
 
 #endif

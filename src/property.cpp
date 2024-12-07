@@ -29,6 +29,11 @@ int count_weri_repetitions = 0;
 int count_cr_repetitions = 0;
 int count_pr_repetitions = 0;
 
+int calls_wi = 0;
+int calls_weri = 0;
+int calls_cr = 0;
+int calls_pr = 0;
+
 void reset_global_counters(bool wi, bool weri, bool cr, bool pr) {
 	if(wi) {
 		count_wi = 0;
@@ -48,6 +53,24 @@ void reset_global_counters(bool wi, bool weri, bool cr, bool pr) {
 	if(pr){
 		count_pr = 0;
 		count_pr_repetitions = 0;
+	}
+}
+
+void reset_calls(bool wi, bool weri, bool cr, bool pr) {
+	if(wi) {
+		calls_wi = 0;
+	}
+
+	if(weri){
+		calls_weri = 0;
+	}
+	
+	if(cr){
+		calls_cr = 0;
+	}
+
+	if(pr){
+		calls_pr = 0;
 	}
 }
 
@@ -78,6 +101,21 @@ void print_global_counters(bool wi, bool weri, bool cr, bool pr) {
 
 	if(pr)
 		std::cout << "\t\t  PR:" << count_pr_repetitions << std::endl;
+}
+
+void print_calls_counters(bool wi, bool weri, bool cr, bool pr) {
+	if(wi)
+		std::cout << "\t\t  WI:" << calls_wi << std::endl;
+
+	if(weri)
+		std::cout << "\t\tWERI:" << calls_weri << std::endl;
+
+	if(cr)
+		std::cout << "\t\t  CR:" << calls_cr << std::endl;
+
+	if(pr)
+		std::cout << "\t\t  PR:" << calls_pr << std::endl;
+
 }
 
 // third-party library for parsing JSON
@@ -271,6 +309,9 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 		z3::Bool condition = weaker ? utility.real >= z3::Real::ZERO : utility >= Utility {z3::Real::ZERO, z3::Real::ZERO};
 
+		if(options.count_calls) {
+			weaker ? calls_weri++ : calls_wi++;
+		}
 		if (solver.solve({!condition}) == z3::Result::UNSAT) {
 			if (consider_prob_groups) {
 				leaf.problematic_group = player + 1;
@@ -278,6 +319,9 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			return true;
 		}
 		
+		if(options.count_calls) {
+			weaker ? calls_weri++ : calls_wi++;
+		}
 		if (solver.solve({condition}) == z3::Result::UNSAT) {
 			return false;
 		}
@@ -342,6 +386,9 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					disj_of_cases = z3::disjunction(cases_as_conjunctions);
 				}
 
+				if(options.count_calls) {
+					weaker ? calls_weri++ : calls_wi++;
+				}
 				z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
 				if (z3_result_implied == z3::Result::UNSAT) {
@@ -355,6 +402,9 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					// is it sat that init && wi && case && current_case?
 					// if no, then disjoint
 
+					if(options.count_calls) {
+						weaker ? calls_weri++ : calls_wi++;
+					}
 					z3::Result z3_result_disjoint = solver.solve({disj_of_cases});
 					
 					if (z3_result_disjoint == z3::Result::SAT) {
@@ -496,6 +546,9 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		// ..and compare it to the honest total
 		auto condition = honest_total >= group_utility;		
 		
+		if(options.count_calls) {
+			calls_cr++;
+		}
 		if (solver.solve({!condition}) == z3::Result::UNSAT) {
 			if (consider_prob_groups) {
 				leaf.problematic_group = group_nr + 1;
@@ -503,6 +556,9 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 			return true;
 		}
 
+		if(options.count_calls) {
+			calls_cr++;
+		}
 		if (solver.solve({condition}) == z3::Result::UNSAT) {
 
 			if(options.strategies) {
@@ -586,6 +642,9 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 						disj_of_cases = z3::disjunction(cases_as_conjunctions);
 					}
 					
+					if(options.count_calls) {
+						calls_cr++;
+					}
 					z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
 					if (z3_result_implied == z3::Result::UNSAT) {
@@ -599,6 +658,9 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 						// is it sat that init && wi && case && current_case?
 						// if no, then disjoint
 
+						if(options.count_calls) {
+							calls_cr++;
+						}
 						z3::Result z3_result_disjoint = solver.solve({disj_of_cases});
 						
 						if (z3_result_disjoint == z3::Result::SAT) {
@@ -776,9 +838,15 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				subtree_case = z3::conjunction(subtree_result._case);
 			}
 
+			if(options.count_calls) {
+				calls_pr++;
+			}
 			z3::Result overlapping = solver.solve({subtree_case});
 
 			if (overlapping == z3::Result::SAT){
+				if(options.count_calls) {
+					calls_pr++;
+				}
 				z3::Result implied = solver.solve({!subtree_case});
 
 				if (implied == z3::Result::SAT){
@@ -918,7 +986,13 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 			for (const auto& utility : utilities) {
 				auto condition =   maximum < utility[branch.player];
+				if(options.count_calls) {
+					calls_pr++;
+				}
 				if (solver.solve({condition}) == z3::Result::SAT) {
+					if(options.count_calls) {
+						calls_pr++;
+					}
 					if (solver.solve({!condition}) == z3::Result::SAT) {
 						// might be maximal, just couldn't prove it
 						if (result){
@@ -1029,12 +1103,18 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				for (const auto& utility : utilities) {
 					auto dominator = utility[branch.player];
 					auto condition = dominator <= dominatee;
+					if(options.count_calls) {
+						calls_pr++;
+					}
 					if (solver.solve({condition}) == z3::Result::SAT) {
 						if (dominated){
 							candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
 						}
 						dominated = false;
 
+						if(options.count_calls) {
+							calls_pr++;
+						}
 						if (solver.solve({!condition}) == z3::Result::SAT) {
 							branch.reason = get_split_approx(solver, dominatee, dominator); 
 							input.set_reset_point(branch);
@@ -2061,6 +2141,10 @@ void analyse_properties(const Options &options, const Input &input) {
 			input.root->reset_count_check(true, true, true, true);
 		}
 
+		if(options.count_calls) {
+			reset_calls(true, true, true, true);
+		}
+
 		std::cout << std::endl;
 		std::cout << std::endl;
 		std::cout << "Checking history " << input.honest[history] << std::endl; 
@@ -2098,6 +2182,13 @@ void analyse_properties(const Options &options, const Input &input) {
 			std::cout << "Number of checked nodes for history: " << input.honest[history] << std::endl;
 			print_global_counters(true, true, true, true);
 		}
+
+		if(options.count_calls) {
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Number of SMT calls for history: " << input.honest[history] << std::endl;
+			print_calls_counters(true, true, true, true);
+		}
 	}
 
 	if(input.honest_utilities.size() != 0) {
@@ -2105,6 +2196,10 @@ void analyse_properties(const Options &options, const Input &input) {
 		if(options.count_nodes) {
 			reset_global_counters(true, true, false, true);
 			input.root->reset_count_check(true, true, false, true);
+		}
+
+		if(options.count_calls) {
+			reset_calls(true, true, false, true);
 		}
 
 		input.root->reset_honest();
@@ -2142,6 +2237,13 @@ void analyse_properties(const Options &options, const Input &input) {
 			print_global_counters(true, true, false, true);
 		}
 
+		if(options.count_calls) {
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Number of checked nodes for no hohest history: " << std::endl;
+			print_calls_counters(true, true, false, true);
+		}
+
 		if(options.collusion_resilience) {
 
 			for(unsigned honest_utility = 0; honest_utility < input.honest_utilities.size(); honest_utility++) {
@@ -2149,6 +2251,10 @@ void analyse_properties(const Options &options, const Input &input) {
 				if(options.count_nodes) {
 					reset_global_counters(false, false, true, false);
 					input.root->reset_count_check(false, false, true, false);
+				}
+
+				if(options.count_calls) {
+					reset_calls(false, false, true, false);
 				}
 
 				std::cout << std::endl;
@@ -2179,6 +2285,13 @@ void analyse_properties(const Options &options, const Input &input) {
 					print_global_counters(false, false, true, false);
 				}
 
+				if(options.count_calls) {
+					std::cout << std::endl;
+					std::cout << std::endl;
+					std::cout << "Number of checked nodes for honest utility: " << input.honest_utilities[honest_utility].leaf << std::endl;
+					print_calls_counters(false, false, true, false);
+				}
+
 			}
 
 		}
@@ -2207,6 +2320,10 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		if(options.count_nodes) {
 			reset_global_counters(true, true, true, true);
 			input.root->reset_count_check(true, true, true, true);
+		}
+
+		if(options.count_calls) {
+			reset_calls(true, true, true, true);
 		}
 
 		std::cout << std::endl;
@@ -2253,6 +2370,13 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			print_global_counters(true, true, true, true);
 		}
 
+		if(options.count_calls) {
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Number of checked nodes for history: " << input.honest[history] << std::endl;
+			print_calls_counters(true, true, true, true);
+		}
+
 		std::string file_name = "subtree_result_history" + std::to_string(history) + ".txt";
         print_subtree_result_to_file(input, file_name, subtree);
 		
@@ -2265,6 +2389,10 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		if(options.count_nodes) {
 			reset_global_counters(true, true, false, true);
 			input.root->reset_count_check(true, true, false, true);
+		}
+
+		if(options.count_calls) {
+			reset_calls(true, true, false, true);
 		}
 		
 		std::cout << std::endl;
@@ -2309,12 +2437,23 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			print_global_counters(true, true, false, true);
 		}
 
+		if(options.count_calls) {
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Number of checked nodes for no hohest history: " << std::endl;
+			print_calls_counters(true, true, false, true);
+		}
+
 		// for cr iterate over all honest utilities
 		for (unsigned utility = 0; utility < input.honest_utilities.size(); utility++) { 
 
 			if(options.count_nodes) {
 				reset_global_counters(false, false, true, false);
 				input.root->reset_count_check(false, false, true, false);
+			}
+
+			if(options.count_calls) {
+				reset_calls(false, false, true, false);
 			}
 
 			std::cout << std::endl;
@@ -2348,6 +2487,13 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				std::cout << std::endl;
 				std::cout << "Number of checked nodes for honest utility: " << input.honest_utilities[utility].leaf << std::endl;
 				print_global_counters(false, false, true, false);
+			}
+
+			if(options.count_calls) {
+				std::cout << std::endl;
+				std::cout << std::endl;
+				std::cout << "Number of checked nodes for honest utility: " << input.honest_utilities[utility].leaf << std::endl;
+				print_calls_counters(false, false, true, false);
 			}
 
 			// create one file for this utility
