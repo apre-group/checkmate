@@ -17,6 +17,7 @@ const char *USAGE = R"(usage: checkmate PATH
 	--subtree
 	--supertree
 	--count_nodes
+	--count_calls
 )";
 
 // print a message, the usage information and exit with failure code
