@@ -24,32 +24,60 @@ int count_weri = 0;
 int count_cr = 0;
 int count_pr = 0;
 
+int count_wi_repetitions = 0;
+int count_weri_repetitions = 0;
+int count_cr_repetitions = 0;
+int count_pr_repetitions = 0;
+
 void reset_global_counters(bool wi, bool weri, bool cr, bool pr) {
-	if(wi)
+	if(wi) {
 		count_wi = 0;
+		count_wi_repetitions = 0;
+	}
 
-	if(weri)
+	if(weri){
 		count_weri = 0;
+		count_weri_repetitions = 0;
+	}
 	
-	if(cr)
+	if(cr){
 		count_cr = 0;
+		count_cr_repetitions = 0;
+	}
 
-	if(pr)
+	if(pr){
 		count_pr = 0;
+		count_pr_repetitions = 0;
+	}
 }
 
 void print_global_counters(bool wi, bool weri, bool cr, bool pr) {
+	std::cout << "\t  Without repetitions:" << std::endl;
 	if(wi)
-		std::cout << "\t  WI:" << count_wi << std::endl;
+		std::cout << "\t\t  WI:" << count_wi << std::endl;
 
 	if(weri)
-		std::cout << "\tWERI:" << count_weri << std::endl;
+		std::cout << "\t\tWERI:" << count_weri << std::endl;
 
 	if(cr)
-		std::cout << "\t  CR:" << count_cr << std::endl;
+		std::cout << "\t\t  CR:" << count_cr << std::endl;
 
 	if(pr)
-		std::cout << "\t  PR:" << count_pr << std::endl;
+		std::cout << "\t\t  PR:" << count_pr << std::endl;
+	
+	std::cout << std::endl;
+	std::cout << "\t  With repetitions:" << std::endl;
+	if(wi)
+		std::cout << "\t\t  WI:" << count_wi_repetitions << std::endl;
+
+	if(weri)
+		std::cout << "\t\tWERI:" << count_weri_repetitions << std::endl;
+
+	if(cr)
+		std::cout << "\t\t  CR:" << count_cr_repetitions << std::endl;
+
+	if(pr)
+		std::cout << "\t\t  PR:" << count_pr_repetitions << std::endl;
 }
 
 // third-party library for parsing JSON
@@ -218,11 +246,13 @@ std::vector<std::string> index2player(const Input &input, PropertyType property,
 bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, unsigned player, bool weaker, bool consider_prob_groups) {
 
 	if(weaker) {
+		count_weri_repetitions++;
 		if(!node->checked_weri) {
 			count_weri++;
 			node->checked_weri = true;
 		}
 	} else {
+		count_wi_repetitions++;
 		if(!node->checked_wi) {
 			count_wi++;
 			node->checked_wi = true;
@@ -442,6 +472,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, std::bitset<Input::MAX_PLAYERS> group, Utility honest_total, unsigned players, uint64_t group_nr, bool consider_prob_groups) {
 	
+	count_cr_repetitions++;
 	if(!node->checked_cr) {
 		count_cr++;
 		node->checked_cr = true;
@@ -715,6 +746,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 bool practicality_rec_old(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far, bool consider_prob_groups) {
 
+	count_pr_repetitions++;
 	if(!node->checked_pr) {
 		count_pr++;
 		node->checked_pr = true;
