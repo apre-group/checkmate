@@ -8,6 +8,8 @@ int main(int, char **argv) {
 	Options options(argv);
 	Input input(options.input_path);
 
+	input.stop_logging();
+
 	if (options.weak_immunity)
 		weak_immunity<false>(options, input);
 	if (options.weaker_immunity)

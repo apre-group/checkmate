@@ -34,6 +34,11 @@ struct Node {
 
 	Node(Node &&) = default;
 
+	mutable bool checked_wi = false;
+	mutable bool checked_weri = false;
+	mutable bool checked_cr = false;
+	mutable bool checked_pr = false;
+
 	Node &operator=(Node &&) = default;
 
 	// ...but not copy them to avoid accidentally copying a whole tree
@@ -60,6 +65,8 @@ struct Node {
 
 	// the length of that history
 	size_t history_length() const;
+
+	void reset_count_check(bool wi, bool weri, bool cr, bool pr) const;
 };
 
 // a choice available at a branch
@@ -163,6 +170,14 @@ struct Input {
 	// maximum number of players currently supported
 	// no reason there couldn't be more, but convenient for implementation (cf collusion resilience)
 	static const size_t MAX_PLAYERS = 64;
+
+	mutable bool stop_log;
+
+	
+	void stop_logging() const {
+		stop_log = true;
+	}
+
 };
 
 #endif

@@ -16,6 +16,8 @@ const char *USAGE = R"(usage: checkmate PATH
 	--preconditions
 	--strategies
 	--max_unsat N
+	--count_nodes
+	--count_calls
 )";
 
 // print a message, the usage information and exit with failure code
@@ -69,6 +71,10 @@ Options::Options(char **argv) {
 				bail("max_unsat expects a positive integer");
 			}
 		}
+		else if (!strcmp(*argv, "--count_nodes"))
+			count_nodes = true;
+		else if (!strcmp(*argv, "--count_calls"))
+			count_calls = true;
 		else
 			bail("unknown option");
 		argv++;

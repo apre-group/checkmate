@@ -30,6 +30,10 @@ struct Options {
 	bool strategies = false;
 	// provide maximum interation for all counterexamples generation
 	unsigned int max_unsat = 10;
+
+	// used for experiments
+	bool count_nodes = false;
+	bool count_calls = false;
 };
 
 #endif

@@ -11,6 +11,69 @@
 using z3::Bool;
 using z3::Solver;
 
+int count_wi = 0;
+int count_weri = 0;
+int count_cr = 0;
+int count_pr = 0;
+
+int count_wi_repetitions = 0;
+int count_weri_repetitions = 0;
+int count_cr_repetitions = 0;
+int count_pr_repetitions = 0;
+
+int calls = 0;
+
+void reset_global_counters(bool wi, bool weri, bool cr, bool pr) {
+	if(wi) {
+		count_wi = 0;
+		count_wi_repetitions = 0;
+	}
+
+	if(weri){
+		count_weri = 0;
+		count_weri_repetitions = 0;
+	}
+	
+	if(cr){
+		count_cr = 0;
+		count_cr_repetitions = 0;
+	}
+
+	if(pr){
+		count_pr = 0;
+		count_pr_repetitions = 0;
+	}
+}
+
+void print_global_counters(bool wi, bool weri, bool cr, bool pr) {
+	std::cout << "\t  Without repetitions:" << std::endl;
+	if(wi)
+		std::cout << "\t\t  WI:" << count_wi << std::endl;
+
+	if(weri)
+		std::cout << "\t\tWERI:" << count_weri << std::endl;
+
+	if(cr)
+		std::cout << "\t\t  CR:" << count_cr << std::endl;
+
+	if(pr)
+		std::cout << "\t\t  PR:" << count_pr << std::endl;
+	
+	std::cout << std::endl;
+	std::cout << "\t  With repetitions:" << std::endl;
+	if(wi)
+		std::cout << "\t\t  WI:" << count_wi_repetitions << std::endl;
+
+	if(weri)
+		std::cout << "\t\tWERI:" << count_weri_repetitions << std::endl;
+
+	if(cr)
+		std::cout << "\t\t  CR:" << count_cr_repetitions << std::endl;
+
+	if(pr)
+		std::cout << "\t\t  PR:" << count_pr_repetitions << std::endl;
+}
+
 // helpers for labelling expressions
 template<typename Property>
 struct Labels {
@@ -159,11 +222,16 @@ struct SolvingHelper {
 		}
 
 		// actually do the work
+		calls++;
 		auto result = solver.solve(labels.counterexample_labels);
 
 		// solved the case immediately
 		if (result == z3::Result::SAT) {
-			std::cout << "\tCase " << case_ << " satisfies property." << std::endl;
+
+			if(!input.stop_log) {
+				std::cout << "\tCase " << case_ << " satisfies property." << std::endl;
+			}
+			
 			if (options.strategies) {
 				z3::Model model = solver.model();
 
@@ -182,7 +250,10 @@ struct SolvingHelper {
 		// didn't find anything worth splitting on
 		if (split.null()) {
 			if (!failed || options.all_cases) {
-				std::cout << "\tCase " << case_ << " violates property." << std::endl;
+
+				if(!input.stop_log) {
+					std::cout << "\tCase " << case_ << " violates property." << std::endl;
+				}
 
 				if (options.counterexamples) {
 					std::vector<typename Property::CounterExamplePart> counterexample;
@@ -224,7 +295,11 @@ struct SolvingHelper {
 		// remove the case triggers
 		solver.pop();
 		if (!failed || options.all_cases) {
-			std::cout << "\tRequire case split on " << split << std::endl;
+			
+			if(!input.stop_log) {
+				std::cout << "\tRequire case split on " << split << std::endl;
+			}
+			
 		}
 		size_t trigger = labels.expr2trigger.at(split);
 
@@ -406,6 +481,20 @@ struct WeakImmunity {
 	) : options(options), labels(labels), player(player) {}
 
 	z3::Bool compute(const Node &node) const {
+		weaker? count_weri_repetitions++ : count_wi_repetitions++;
+		if(weaker) {
+			if(!node.checked_weri) {
+				count_weri++;
+				node.checked_weri = true;
+			}
+		} else {
+			if(!node.checked_wi) {
+				count_wi++;
+				node.checked_wi = true;
+			}
+		}
+
+		
 		if (node.is_leaf()) {
 			const auto &leaf = node.leaf();
 			// known utility for us
@@ -472,6 +561,16 @@ void weak_immunity(const Options &options, const Input &input) {
 	std::cout << std::endl;
 	std::cout << (weaker ? "WEAKER IMMUNITY" : "WEAK IMMUNITY") << std::endl;
 
+	if(options.count_nodes) {
+		if(weaker) {
+			reset_global_counters(false, true, false, false);
+			input.root->reset_count_check(false, true, false, false);	
+		} else {
+			reset_global_counters(true, false, false, false);
+			input.root->reset_count_check(true, false, false, false);		
+		}		
+	}
+
 	Labels<WeakImmunity<weaker>> labels;
 	std::vector<Bool> conjuncts;
 	for (size_t player = 0; player < input.players.size(); player++)
@@ -479,6 +578,7 @@ void weak_immunity(const Options &options, const Input &input) {
 				WeakImmunity<weaker>(options, labels, player)
 						.compute(*input.root)
 		);
+
 	auto property = conjunction(conjuncts);
 
 	auto property_constraint = weaker
@@ -486,6 +586,9 @@ void weak_immunity(const Options &options, const Input &input) {
 							   : input.weak_immunity_constraint;
 	// property is the same for all honest histories
 	for (size_t history = 0; history < input.honest_histories.size(); history++) {
+
+		calls = 0;
+
 		std::cout << std::endl;
 		std::cout << "Is history " << input.readable_honest_histories[history] << (weaker ? " weaker immune?" : " weak immune?") << std::endl;
 		SolvingHelper<WeakImmunity<weaker>> helper(
@@ -580,6 +683,28 @@ void weak_immunity(const Options &options, const Input &input) {
 				std::cout << "Weakest Precondition: " << std::endl << "\t" << simpl_prec << std::endl;
 			}
 		}
+
+		
+		if(options.count_calls) {
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Number of SMT calls for history: " << input.readable_honest_histories[history] << std::endl;
+			std::cout << "\t Calls: " << calls << std::endl;
+		}
+	
+	}
+
+	if(options.count_nodes) {
+		std::cout << std::endl;
+		std::cout << std::endl;
+		std::cout << "Number of checked nodes (done once, same for all histories) " << std::endl;
+		
+		if(weaker) {
+			print_global_counters(false, true, false, false);
+		} else {
+			print_global_counters(true, false, false, false);
+		}
+		
 	}
 }
 
@@ -617,6 +742,13 @@ struct CollusionResilience {
 	}
 
 	z3::Bool compute(const Node &node) const {
+
+		count_cr_repetitions++;
+		if(!node.checked_cr) {
+			count_cr++;
+			node.checked_cr = true;
+		}
+
 		if (node.is_leaf()) {
 			const auto &leaf = node.leaf();
 
@@ -665,6 +797,13 @@ void collusion_resilience(const Options &options, const Input &input) {
 
 	// property is different for each honest history
 	for (size_t history = 0; history < input.honest_histories.size(); history++) {
+		if(options.count_nodes) {
+			reset_global_counters(false, false, true, false);
+			input.root->reset_count_check(false, false, true, false);		
+		}
+
+		calls = 0;
+
 		Labels<CollusionResilience> labels;
 		// lookup the leaf for this history
 		const Leaf &honest_leaf = input.honest_history_leaves[history];
@@ -777,6 +916,19 @@ void collusion_resilience(const Options &options, const Input &input) {
 
 		}
 
+		if(options.count_nodes) {
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Number of checked nodes for history: " << input.readable_honest_histories[history] << std::endl;
+			print_global_counters(false, false, true, false);
+		}
+
+		if(options.count_calls) {
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Number of SMT calls for history: " << input.readable_honest_histories[history] << std::endl;
+			std::cout << "\t Calls: " << calls << std::endl;
+		}
 
 	}
 }
@@ -802,6 +954,12 @@ struct Practicality {
 	// the map gives a single boolean condition for "player p gets utility u starting from this subtree"
 	// also, add constraints to `conjuncts` as we go
 	PlayerUtilities utilities(const Node &node) {
+		count_pr_repetitions++;
+		if(!node.checked_pr) {
+			count_pr++;
+			node.checked_pr = true;
+		}
+
 		PlayerUtilities result(players);
 		if (node.is_leaf()) {
 			const auto &leaf = node.leaf();
@@ -886,11 +1044,18 @@ void practicality(const Options &options, const Input &input) {
 	std::cout << std::endl;
 	std::cout << "PRACTICALITY" << std::endl;
 
+	if(options.count_nodes) {
+		reset_global_counters(false, false, false, true);
+		input.root->reset_count_check(false, false, false, true);			
+	}
+
 	// property is the same for all honest histories
 	Labels<Practicality> labels;
 	auto property = Practicality(options, labels, input.players.size()).compute(*input.root);
 
 	for (unsigned history = 0; history < input.honest_histories.size(); history++) {
+		calls = 0;
+
 		std::cout << std::endl;
 		std::cout << "Is history " << input.readable_honest_histories[history] << " practical?" << std::endl;
 		SolvingHelper<Practicality> helper(
@@ -1105,6 +1270,22 @@ void practicality(const Options &options, const Input &input) {
 			}
 
 		}
+
+		if(options.count_calls) {
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Number of SMT calls for history: " << input.readable_honest_histories[history] << std::endl;
+			std::cout << "\t Calls: " << calls << std::endl;
+		}
+
+	}
+
+	if(options.count_nodes) {
+		std::cout << std::endl;
+		std::cout << std::endl;
+		std::cout << "Number of checked nodes (done once, same for all histories) " << std::endl;
+		
+		print_global_counters(false, false, false, true);		
 	}
 }
 
