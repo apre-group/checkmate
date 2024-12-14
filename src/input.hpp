@@ -765,9 +765,11 @@ struct Input {
 	}
 
 	void print_counterexamples(const Options &options, bool is_wi, bool is_cr) const {
+		int no_counterexamples = 0;
 		if(is_wi || is_cr) {
 			std::cout << std::endl;
 			for (CeCase ce_case : counterexamples){
+				no_counterexamples++;
 				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
 				if(ce_case.counterexample.size() == 0) {
 					if(is_wi) {
@@ -809,6 +811,7 @@ struct Input {
 			}
 		} else {
 			for (CeCase ce_case : counterexamples){
+				no_counterexamples++;
 				if(ce_case.player_group.size() == 0) {
 					if(options.supertree) {
 						// user should check ce in subtree mode manually
@@ -837,6 +840,10 @@ struct Input {
 				}
 			}
 		}
+
+		std::cout << std::endl;
+		std::cout << std::endl;
+		std::cout << "----> Number of counterexamples found: " << no_counterexamples << std::endl;
 		
 	}
 
