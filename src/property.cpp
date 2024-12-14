@@ -619,7 +619,9 @@ void weak_immunity(const Options &options, const Input &input) {
 			if (options.counterexamples) {
 				std::cout << std::endl;
 			}
+			int no_counterexamples = 0;
 			for (const auto &counterexample: helper.counterexamples) {
+				no_counterexamples++;
 				std::cout << "Counterexample for " << counterexample.case_ << ":" << std::endl;
 				// the following is just 1 counterexample
 				const auto &part = counterexample.parts[0];
@@ -662,6 +664,10 @@ void weak_immunity(const Options &options, const Input &input) {
 					}
 				}
 			}
+
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "----> Number of counterexamples found: " << no_counterexamples << std::endl;
 
 			if (options.preconditions) {
 				std::cout << std::endl;
@@ -852,7 +858,9 @@ void collusion_resilience(const Options &options, const Input &input) {
 			if (options.counterexamples) {
 				std::cout << std::endl;
 			}
+			int no_counterexamples = 0;
 			for (const auto &counterexample: helper.counterexamples) {
+				no_counterexamples++;
 				std::cout << "Counterexample for " << counterexample.case_ << ":" << std::endl;
 
 				const auto &part = counterexample.parts[0];
@@ -895,6 +903,10 @@ void collusion_resilience(const Options &options, const Input &input) {
 					}
 				}
 			}
+			
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "----> Number of counterexamples found: " << no_counterexamples << std::endl;
 
 			if (options.preconditions) {
 				std::cout << std::endl;
@@ -1087,6 +1099,7 @@ void practicality(const Options &options, const Input &input) {
 				std::cout << std::endl;
 			}
 			bool stop_gen = false;
+			int no_counterexamples = 0;
 			//std::cout<<  helper.counterexamples.size() << std::endl;
 			for (size_t i = 0; i < helper.counterexamples.size(); i++) {
 				//std::cout << "check counterexample" << std::endl;
@@ -1191,6 +1204,7 @@ void practicality(const Options &options, const Input &input) {
 							auto result = actual_ce_solver.solve();
 							// only a deviation with better utility is an actual counterexample
 							if (result == z3::Result::UNSAT) {
+								no_counterexamples++;
 								std::cout << "Counterexample for " << counterexample.case_ << ":" << std::endl;
 								found_a_ce = true;
 								std::vector<std::string> dev_subhist;
@@ -1251,6 +1265,10 @@ void practicality(const Options &options, const Input &input) {
 					ce_helper.solver.pop();
 			}
 
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "----> Number of counterexamples found: " << no_counterexamples << std::endl;
+			
 			if (options.preconditions) {
 				std::cout << std::endl;
 				std::vector<z3::Bool> conjuncts;
