@@ -443,8 +443,8 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
                     #branch_actions[Action(action)] = dict()
                     tree = generate_routing_unlocking(ps[-1], new_state2, False, history + str(player) + f".{action};")
                     number_unlocking_trees += 1
-                    #print(f"unlocking phase number: {number_unlocking_trees}")
-                    #print(f"nodes so far: {nodes_counter}")
+                    print(f"unlocking phase number: {number_unlocking_trees}")
+                    print(f"nodes so far: {nodes_counter}")
                     honest_histories = []
                     honest_utilities = []
                     #new_history = history + str(player) + f".{action}"
@@ -522,8 +522,8 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
                 #branch_actions[Action(action)] = dict()
                 tree = generate_routing_unlocking(ps[-1], new_state1, False, history + str(player) + f".{action};")
                 number_unlocking_trees += 1
-                #print(f"unlocking phase number: {number_unlocking_trees}")
-                #print(f"nodes so far: {nodes_counter}")
+                print(f"unlocking phase number: {number_unlocking_trees}")
+                print(f"nodes so far: {nodes_counter}")
                 honest_histories = []
                 honest_utilities = []
                 #new_history = history + str(player) + f".{action}"
