@@ -1,9 +1,7 @@
 from dsl import *
 import itertools
-import re
 import subprocess
 import json
-import sys
 
 """
 This file generates a game model for Lightning's routing protocol. To set the number of intermediaries to n,
@@ -129,7 +127,7 @@ Call this script from the checkmate build folder.
 
 PRINT_HISTORIES = False
 
-ps = PLAYERS = players('A', 'I', 'B')
+ps = PLAYERS = players('A', 'I1', 'I2', 'B')
 S_H, U, J, I_L, I_U= ACTIONS = actions(
     'S_H', 'U', 'J', 'I_L', 'I_U')
 epsilon, rho = INFINITESIMALS = infinitesimals('epsilon', 'rho')
@@ -157,6 +155,8 @@ COLLUSION_RESILIENCE_CONSTRAINTS = []
 PRACTICALITY_CONSTRAINTS = []
 
 recursion_depth = 0
+nodes_counter = 0
+number_unlocking_trees = 0
 
 actions_for_sharing_secrets = set()
 actions_for_locking = set()
@@ -328,6 +328,8 @@ def generate_routing_unlocking(player: Player, state, B_sharing, history):
     # we can assume that current player p knows the secret.
     # initially B knows and always next player knows.
     global recursion_depth
+    global nodes_counter
+    nodes_counter = nodes_counter + 1
     depth = len(history.split(";"))
     if depth > recursion_depth:
         recursion_depth = depth
@@ -413,8 +415,12 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
     if PRINT_HISTORIES:
         print(history)
     branch_actions = {}
+    global nodes_counter
+    global number_unlocking_trees
+    nodes_counter = nodes_counter + 1
 
     def aux_locking(player, new_state, deviator, history):
+        global number_unlocking_trees
         # time orderings
         positions = [i for i in range(len(ps)) if state["time_orderings"][i] is None]
         for i in positions:
@@ -436,6 +442,9 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
                         new_state2["time_orderings"][position] = ps[-1]
                     #branch_actions[Action(action)] = dict()
                     tree = generate_routing_unlocking(ps[-1], new_state2, False, history + str(player) + f".{action};")
+                    number_unlocking_trees += 1
+                    #print(f"unlocking phase number: {number_unlocking_trees}")
+                    #print(f"nodes so far: {nodes_counter}")
                     honest_histories = []
                     honest_utilities = []
                     #new_history = history + str(player) + f".{action}"
@@ -480,6 +489,7 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
                     
 
                     ## call checkmate with this file in subtree mode 
+                    
                     subprocess.run(['./checkmate', filename, '--subtree'])
 
                     ## read produced file and put result of subtree back in supertree
@@ -510,7 +520,10 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
                     position = new_state1["time_orderings"].index(None)
                     new_state1["time_orderings"][position] = ps[-1]
                 #branch_actions[Action(action)] = dict()
-                tree = generate_routing_unlocking(ps[-1], new_state2, False, history + str(player) + f".{action};")
+                tree = generate_routing_unlocking(ps[-1], new_state1, False, history + str(player) + f".{action};")
+                number_unlocking_trees += 1
+                #print(f"unlocking phase number: {number_unlocking_trees}")
+                #print(f"nodes so far: {nodes_counter}")
                 honest_histories = []
                 honest_utilities = []
                 #new_history = history + str(player) + f".{action}"
@@ -557,6 +570,7 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
                 subprocess.run(['./checkmate', filename, '--subtree'])
 
                 ## read produced file and put result of subtree back in supertree
+                
                 with open(result_file, 'r') as result:
                     result_content = result.read()
                     try:
@@ -591,6 +605,7 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
     branch_actions[I_L] = leaf(ut)
     if PRINT_HISTORIES:
         print(history + str(player) + f".I_L;")
+    nodes_counter = nodes_counter + 1
     return branch(player, branch_actions)
 
 
@@ -624,7 +639,11 @@ HONEST_UTILITIES = [
           "value": "rho"
         },
         {
-          "player": "I",
+          "player": "I1",
+          "value": "f"
+        },
+        {
+          "player": "I2",
           "value": "f"
         },
         {
@@ -669,10 +688,12 @@ intermediate_state[ps[1]]["amount_to_unlock"] = m + f
 intermediate_state[ps[1]]["contract"] = "locked"
 align_secret_knowledge(intermediate_state)
 
-# unlocking_tree = generate_routing_unlocking(ps[-1], intermediate_state, "")
+#unlocking_tree = generate_routing_unlocking(ps[-1], intermediate_state, "")
 ### Debugging part finished
 
 TREE = routing_tree
+
+print("Number of nodes: ", nodes_counter)
 
 with open('routing_game-supertree.json', 'w') as f3:
     finish(
