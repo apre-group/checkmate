@@ -375,7 +375,7 @@ struct SolvingHelper {
 					} else {
 						rule1 = false;
 					}
-					if ((case_.size() == 1) | (other_case.size() == 1)) {
+					if ((case_.size() == 1) || (other_case.size() == 1)) {
 						// continue
 						std::vector<z3::Bool> singleton;
 						std::vector<z3::Bool> other;
@@ -427,6 +427,7 @@ struct SolvingHelper {
 			solver.assert_(!labels.triggers[i].second);
 		}
 
+		solver.solve();
 		// actually do the work
 		return solver.solve() == z3::Result::SAT ? solver.model() : z3::Model();
 	}
@@ -1129,7 +1130,7 @@ void practicality(const Options &options, const Input &input) {
 					//std::cout << "Case: " << counterexample.case_ << std::endl;
 					model = ce_helper.solve_for_counterexample();
 					if (!model) {
-						//std::cout << "no model!" << std::endl;
+						// std::cout << "no model!" << std::endl;
 						// case split necessary to get a counterexample
 						ce_helper.solver.push();
 						auto split = ce_helper.find_split();
