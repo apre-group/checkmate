@@ -1,7 +1,10 @@
 from dsl import *
+
+import asyncio
 import itertools
 import subprocess
 import json
+import tempfile
 
 """
 This file generates a game model for Lightning's routing protocol. To set the number of intermediaries to n,
@@ -411,18 +414,36 @@ def locking_action(deviator, slot, eq_class):
     return f"L_({deviator},{slot},{eq_class})"
 
 
-def generate_routing_locking(player, state, deviator, history, actions_so_far):
+async def generate_routing_locking(player, state, deviator, history, actions_so_far):
     if PRINT_HISTORIES:
-        print(history)
-    branch_actions = {}
+        print("XXX", history)
+    branch_actions = []
     global nodes_counter
     global number_unlocking_trees
     nodes_counter = nodes_counter + 1
 
-    def aux_locking(player, new_state, deviator, history):
+    async def run_checkmate(action, filename):
+        ## call checkmate with this file in subtree mode
+        #subprocess.run(['./checkmate', filename, '--subtree'])
+        process = await asyncio.create_subprocess_exec('./checkmate', filename, '--subtree')
+        await process.wait()
+
+        ## read produced file and put result of subtree back in supertree
+        result_file = filename + '.out'
+        with open(result_file, 'r') as result:
+            result_content = result.read()
+            try:
+                json_result = json.loads(result_content)
+                branch_actions.append((Action(action), json_result))
+            except json.JSONDecodeError as e:
+                print(f"Error decoding JSON from file {result_file}: {e}")
+
+
+    async def aux_locking(player, new_state, deviator, history):
         global number_unlocking_trees
         # time orderings
         positions = [i for i in range(len(ps)) if state["time_orderings"][i] is None]
+        tasks = []
         for i in positions:
             new_state1 = copy_state(new_state)
             new_state1["time_orderings"][i] = player
@@ -448,7 +469,6 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
                     honest_histories = []
                     honest_utilities = []
                     #new_history = history + str(player) + f".{action}"
-                    result_file = 'subtree_result_history0.txt'
 
                     along_honest = True
                     updated_actions = actions_so_far + [Action(action)]
@@ -464,13 +484,11 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
                     if along_honest:
                         honest_histories = [HONEST_HISTORIES[0][len(updated_actions):]] 
                     else:
-                        result_file = 'subtree_result_utility0.txt'
-                        honest_utilities = HONEST_UTILITIES 
+                        honest_utilities = HONEST_UTILITIES
 
                     #filename = 'routing_game-subtree-' + new_history + '.json'         
-                    filename = 'subtree.json'
 
-                    with open(filename, 'w') as f1:
+                    with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
                         finish(
                             PLAYERS,
                             ACTIONS,
@@ -484,27 +502,12 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
                             honest_histories,
                             honest_utilities,
                             tree,
-                            f1
+                            f
                         )
-                    
-
-                    ## call checkmate with this file in subtree mode 
-                    
-                    subprocess.run(['./checkmate', filename, '--subtree'])
-
-                    ## read produced file and put result of subtree back in supertree
-                    with open(result_file, 'r') as result:
-                        result_content = result.read()
-                        try:
-                            json_result = json.loads(result_content)
-                            branch_actions[Action(action)] = json_result
-                        except json.JSONDecodeError as e:
-                            print(f"Error decoding JSON from file {result_file}: {e}")
-
-                    
+                    tasks.append(run_checkmate(action, f.name))
 
                 else:
-                    branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state2, deviator, history + str(player) + f".{action};", actions_so_far + [Action(action)])
+                    branch_actions.append((Action(action), await generate_routing_locking(player_plus_one(player), new_state2, deviator, history + str(player) + f".{action};", actions_so_far + [Action(action)])))
             # I am my own eq class therefore I know my own secret
             new_state1["eq_secrets"].append([player])
             new_state1[player]["secrets"][player] = True
@@ -527,7 +530,6 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
                 honest_histories = []
                 honest_utilities = []
                 #new_history = history + str(player) + f".{action}"
-                result_file = 'subtree_result_history0.txt'
                 
                 along_honest = True
                 updated_actions = actions_so_far + [Action(action)]
@@ -543,13 +545,11 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
                 if along_honest:
                     honest_histories = [HONEST_HISTORIES[0][len(updated_actions):]] 
                 else:
-                    result_file = 'subtree_result_utility0.txt'
-                    honest_utilities = HONEST_UTILITIES   
+                    honest_utilities = HONEST_UTILITIES
 
                 #filename = 'routing_game-subtree-' + new_history + '.json'         
-                filename = 'subtree.json'          
 
-                with open(filename, 'w') as f2:
+                with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
                     finish(
                         PLAYERS,
                         ACTIONS,
@@ -563,38 +563,28 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
                         honest_histories,
                         honest_utilities,
                         tree,
-                        f2
+                        f
                     )
+                tasks.append(run_checkmate(action, f.name))
 
-                ## call checkmate with this file in subtree mode 
-                subprocess.run(['./checkmate', filename, '--subtree'])
-
-                ## read produced file and put result of subtree back in supertree
-                
-                with open(result_file, 'r') as result:
-                    result_content = result.read()
-                    try:
-                        json_result = json.loads(result_content)
-                        branch_actions[Action(action)] = json_result
-                    except json.JSONDecodeError as e:
-                        print(f"Error decoding JSON from file {result_file}: {e}")
-                    
             else:
-                branch_actions[Action(action)] = generate_routing_locking(player_plus_one(player), new_state1, deviator, history + str(player) + f".{action};", actions_so_far + [Action(action)])
+                branch_actions.append((Action(action), await generate_routing_locking(player_plus_one(player), new_state1, deviator, history + str(player) + f".{action};", actions_so_far + [Action(action)])))
+
+        await asyncio.gather(*tasks)
 
     if deviator is None:
         # case honest amount
         state1 = copy_state(state)
         i = ps.index(player)
         state1[ps[i+1]]["amount_to_unlock"] = m + (len(ps) - 2 - i) * f
-        aux_locking(player, state1, deviator, history)
+        await aux_locking(player, state1, deviator, history)
         deviator = player
     # case dishonest amount
     state2 = copy_state(state)
     i = ps.index(player)
     state2[ps[i+1]]["amount_to_unlock"] = NameExpr(f"a_{deviator}_{player}")
     constants_for_wrong_amounts.add(f"a_{deviator}_{player}")
-    aux_locking(player, state2, deviator, history)
+    await aux_locking(player, state2, deviator, history)
     # case ignore locking
     ut = {}
     for j in range(len(ps)):
@@ -602,11 +592,11 @@ def generate_routing_locking(player, state, deviator, history, actions_so_far):
             ut[ps[j]] = - epsilon
         else:
             ut[ps[j]] = 0
-    branch_actions[I_L] = leaf(ut)
+    branch_actions.append((I_L, leaf(ut)))
     if PRINT_HISTORIES:
         print(history + str(player) + f".I_L;")
     nodes_counter = nodes_counter + 1
-    return branch(player, branch_actions)
+    return branch(player, dict(sorted(branch_actions, key=lambda x: x[0].value)))
 
 
 initial_state = {
@@ -660,7 +650,7 @@ for act in actions_for_sharing_secrets:
 for act in actions_for_locking:
     ACTIONS.append(Action(act))
 
-locking_tree = generate_routing_locking(ps[0], initial_state, None, "", [Action('S_H')])
+locking_tree = asyncio.run(generate_routing_locking(ps[0], initial_state, None, "", [Action('S_H')]))
 
 #for const in constants_for_wrong_amounts:
     #CONSTANTS.append(NameExpr(const))

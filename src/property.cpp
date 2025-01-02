@@ -2377,7 +2377,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			print_calls_counters(true, true, true, true);
 		}
 
-		std::string file_name = "subtree_result_history" + std::to_string(history) + ".txt";
+		std::string file_name = options.input_path + std::string(".out");
         print_subtree_result_to_file(input, file_name, subtree);
 		
 	}
@@ -2502,7 +2502,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			// wi, weri, pr always the same, only cr changes
 			subtree.honest_utility = input.honest_utilities[utility].leaf;
 
-			std::string file_name = "subtree_result_utility" + std::to_string(utility) + ".txt";
+			std::string file_name = options.input_path + std::string(".out");
         	print_subtree_result_to_file(input, file_name, subtree);
 			
 		}
