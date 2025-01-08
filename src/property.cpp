@@ -1135,7 +1135,8 @@ void practicality(const Options &options, const Input &input) {
 						ce_helper.solver.push();
 						auto split = ce_helper.find_split();
 						ce_helper.solver.pop();
-						assert(!split.null());
+						if(split.null())
+							continue;
 						// append positive and negative case splits
 						std::vector<z3::Bool> pos_case;
 						std::vector<z3::Bool> neg_case;
