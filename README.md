@@ -1,6 +1,6 @@
 # CheckMate
 
-CheckMate automatically checks security properties of games modeling off-chain (blockchain) protocols.
+CheckMate automatically checks security properties of games.
 It can analyze the following properties:
 
 * weak immunity
@@ -17,7 +17,7 @@ Examples for such instances can be found in the `examples` folder, alongside scr
 
 ## Input
 
-We support the original CheckMate input format, i.e. a dictionary with the following keys:
+We support an extension of the original CheckMate input format, i.e. a dictionary with the following keys:
 1. `players`: expects the list of all players in the game.
 2. `actions`: expects the list of all possible actions throughout the game.
 3. `infinitesimals`: lists all symbolic values occurring in the utilities that are supposed to be treated as inferior to the other symbolic values.
@@ -25,13 +25,14 @@ We support the original CheckMate input format, i.e. a dictionary with the follo
 5. `initial_constraints`: CheckMate allows users to specify initial constraints enforced on the otherwise unconstrained symbolic values in the utilities.
 6. `property_constraints`: The user also has the opportunity to define further initial constraints, which will be only assumed for a specific security property, hence the name. This feature allows the user to specify the weakest possible assumptions for each property.
 7. `honest_histories`: Users are required to provide at least one terminal history as the honest history, which is (one of) the desired course(s) of actions of the game. This is the behavior CheckMate (dis-)proves game-theoretic security for. If more than one honest history is listed, CheckMate analyzes one after the other.
-8. `tree`:  The tree defines the structure of the game. Each node in the game tree is either an internal node, a leaf, or a subtree. Each **internal node** is represented by a dictionary containing the keys
+8. `honest_utilities`: in a subtree *off* the honest history, then we may need to know the honest utility from the parent tree
+9. `tree`:  The tree defines the structure of the game. Each node in the game tree is either an internal node, a leaf, or a subtree. Each **internal node** is represented by a dictionary containing the keys
     * `player`: the name of the player whose turn it is, and
     * `children`: the list of branches the player can choose from. Each branch is encoded as yet another dictionary with the two keys `action` and `child`. The `action` key provides the action that the player has to take to reach the chosen branch of the tree. The other key `child` finally contains another tree node.
 Each **leaf node** is encoded as a dictionary with the only key `utility`. As a leaf node represents one way of terminating the game, it contains the pay-off information for each player in this scenario. Hence, `utility` is a list containing the players' utilities. Therefore, each element is a dictionary with the two following keys:
     * `player`: the name of the player whose utility it specified, and
     * `value`: the utility for the player. This can be any term over an infinitesimal occurring in `infinitesimals`, a constant contained in `constants`, and reals.
-Each **subtree** is a dictionary with exactly one key `subtree`. A subtree represents the *result* of analysing a subtree in the game, and is thus usually generated automatically. The value is another dictionary with values `honest_utilities` (identical to the honest leaf node in the subtree), and property results `weak_immunity`, `weaker_immunity`, `collusion_resilience` and `practicality`. Practicality results are a list of cases and utilities for each case. Other security properties are a list of player groups together with utility requirements for that player group to conform with the property.
+Each **subtree** is a dictionary with exactly one key `subtree`. A subtree represents the *result* of analysing a subtree in the game, and is thus usually generated automatically. The value is another dictionary with values `honest_utilities` (the honest utilities, only relevant for the honest subtree), and property results `weak_immunity`, `weaker_immunity`, `collusion_resilience` and `practicality`. Practicality results are a list of cases and utilities for each case. Other security properties are a list of player groups together with utility requirements for that player group to conform with the property.
 
 All **expressions** throughout the input support the following symbols in infix notation: `+`, `-`, `*`
 (only if not both multiplicators are infinitesimal), `=`, `!=` (inequality), `<`, `>`, `<=` , `>=`, `|` (or).
@@ -74,7 +75,6 @@ There are several options:
 * `--strategies`: If a property is satisfied, provide a witness strategy.
 * If not all security properties should be analyzed, users can specify properties individually with some combination of `--weak_immunity`, `--weaker_immunity`, `--collusion_resilience`, and `--practicality`.
 * `--subtree` should be used if the input is intended as part of a larger tree.
-* `--supertree` should be used if the input is intended as the root of a game tree and contains subtrees.
 
 For instance, to run a security analysis on the Closing Game [1] with counterexample generation, but only considering weak immunity and collusion resilience, execute the following:
 
@@ -88,6 +88,7 @@ Smaller examples are provided directly as JSON files, such as `market_entry_game
 Others, such as the auction benchmark, are provided in forms of scripts that generate the benchmark - this may be more involved for extremely large games that generate temporary subtrees for analysis.
 
 Important benchmarks include `closing_game.py` that models the Closing Game proposed in [1] for the closing phase of the [Bitcoin Lightning protocol](https://lightning.network/lightning-network-paper.pdf) as well as `routing_three.py`, which models the routing module of the Lightning protocol [1] for three users.
+`routing_game-subtree-supertree.py` generates (compositionally, over several hours and with intermediate files) a supertree for four users, included for reference as `routing_game-four-supertree.json`.
 
 ## Relevant Publications
 
