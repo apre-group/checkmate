@@ -38,98 +38,107 @@ static std::string print_history(const HonestNode *history)
 // third-party library for parsing JSON
 using json = nlohmann::json;
 
-// json parse_sat_case(std::vector<z3::Bool> sat_case) {
-//     json arr_case = json::array();
-//     if(sat_case.size() == 0) {
-//         arr_case.push_back("true");
-//     } else {
-//         for(auto &case_entry: sat_case) {
-//             std::stringstream ss;
-//             ss << case_entry;
-//             arr_case.push_back(ss.str());
-//         }
-//     }
-// 	return arr_case;
-// }
+json parse_sat_case(std::vector<z3::Bool> sat_case) {
+    json arr_case = json::array();
+    if(sat_case.size() == 0) {
+        arr_case.push_back("true");
+    } else {
+        for(auto &case_entry: sat_case) {
+            std::stringstream ss;
+            ss << case_entry;
+            arr_case.push_back(ss.str());
+        }
+    }
+	return arr_case;
+}
 
-// json parse_utility(const Input &input, std::vector<Utility> utility_to_parse) {
-//     json utility = json::array();
-//     unsigned player_index = 0;
-//     for(auto &u : utility_to_parse) {
-//         json obj = {{"player", input.players[player_index]}};
-//         std::stringstream ss;
-//         ss << u;
-//         std::string utility_string = ss.str();
-//         obj["value"] = utility_string;
-//         utility.push_back(obj);
-//         player_index++;
-//     }
-//     return utility;
-// }
+json parse_utility(const Input &input, std::vector<Utility> utility_to_parse) {
+    json utility = json::array();
+    unsigned player_index = 0;
+    for(auto &u : utility_to_parse) {
+        json obj = {{"player", input.players[player_index]}};
+        std::stringstream ss;
+        ss << u;
+        std::string utility_string = ss.str();
+        obj["value"] = utility_string;
+        utility.push_back(obj);
+        player_index++;
+    }
+    return utility;
+}
 
-// json parse_property_to_json(std::vector<SubtreeResult> property_result) {
+json parse_property_to_json(std::vector<SubtreeResult> property_result) {
 
-//     json arr_res = json::array();
+    json arr_res = json::array();
 
-//     for(auto &subtree_result : property_result) {
-//         // parse satisfied_in_case
-//         json arr_cases = json::array();
-//         for(auto &sat_case: subtree_result.satisfied_in_case) {
-//             json arr_case = parse_sat_case(sat_case);
-//             arr_cases.push_back(arr_case);
-//         }
+    for(auto &subtree_result : property_result) {
+        // parse satisfied_in_case
+        json arr_cases = json::array();
+        for(auto &sat_case: subtree_result.satisfied_in_case) {
+            json arr_case = parse_sat_case(sat_case);
+            arr_cases.push_back(arr_case);
+        }
 
-//         json obj = {{"player_group", subtree_result.player_group}, {"satisfied_in_case", arr_cases}};
-//         arr_res.push_back(obj);
-//     }
-//     return arr_res;
-// }
+        json obj = {{"player_group", subtree_result.player_group}, {"satisfied_in_case", arr_cases}};
+        arr_res.push_back(obj);
+    }
+    return arr_res;
+}
 
-// json parse_practicality_property_to_json(const Input &input, std::vector<PracticalitySubtreeResult> property_result) {
-//     json arr_pr = json::array();
-//     for(auto &subtree_result : property_result) {
-//         // parse case
-//         json arr_case = parse_sat_case(subtree_result._case);
-//         // parse utilities
-//         json utilities = json::array();
-//         for(auto &utility_list : subtree_result.utilities) {
-//             // parse utility
-//             json utility = parse_utility(input, utility_list);
-//             utilities.push_back(utility);
-//         }
+json parse_practicality_property_to_json(const Input &input, std::vector<PracticalitySubtreeResult> property_result) {
+    json arr_pr = json::array();
+    for(auto &subtree_result : property_result) {
+        // parse case
+        json arr_case = parse_sat_case(subtree_result._case);
+        // parse utilities
+        json utilities = json::array();
+        for(auto &utility_list : subtree_result.utilities) {
+            // parse utility
+            json utility = parse_utility(input, utility_list);
+            utilities.push_back(utility);
+        }
 
-//         json obj = {{"case", arr_case}, {"utilities", utilities}};
-//         arr_pr.push_back(obj);
-//     }
-//     return arr_pr;
-// }
+        json obj = {{"case", arr_case}, {"utilities", utilities}};
+        arr_pr.push_back(obj);
+    }
+    return arr_pr;
+}
 
-// void print_subtree_result_to_file(const Input &input, std::string file_name, Subtree &subtree) {
-//     std::ofstream outputFile(file_name);
-//     if (outputFile.is_open()) {
-//         // Convert the subtree object to JSON
-//         json subtree_json;
+void print_subtree_result_to_file(const Input &input, std::string file_name, Subtree &subtree) {
+    std::ofstream outputFile(file_name);
+    if (outputFile.is_open()) {
+        // Convert the subtree object to JSON
+        json subtree_json;
 
-//         json arr_wi = parse_property_to_json(subtree.weak_immunity);
-//         json arr_weri = parse_property_to_json(subtree.weaker_immunity);
-//         json arr_cr = parse_property_to_json(subtree.collusion_resilience);
-//         json arr_pr = parse_practicality_property_to_json(input, subtree.practicality);
-//         json arr_honest_utility = parse_utility(input, subtree.honest_utility);
+        json arr_wi = parse_property_to_json(subtree.weak_immunity);
+        json arr_weri = parse_property_to_json(subtree.weaker_immunity);
+        json arr_cr = parse_property_to_json(subtree.collusion_resilience);
+        json arr_pr = parse_practicality_property_to_json(input, subtree.practicality);
+        json arr_honest_utility = json::array();
 
-//         subtree_json["subtree"]["weak_immunity"] = arr_wi;
-//         subtree_json["subtree"]["weaker_immunity"] = arr_weri;
-//         subtree_json["subtree"]["collusion_resilience"] = arr_cr;
-//         subtree_json["subtree"]["practicality"] = arr_pr;
-//         subtree_json["subtree"]["honest_utility"] = arr_honest_utility;
 
-//         // Print the JSON representation
-//         outputFile << subtree_json.dump(4); // Pretty print with 4 spaces
-//         outputFile.close();
+		for(auto pair: subtree.honest_utility) {
+			json condition = parse_sat_case(pair.conditional_actions);
+			json utility = parse_utility(input, pair.utility);
+			json obj = {{"conditional_actions", condition}, {"utility", utility}};
+			arr_honest_utility.push_back(obj);
+		} 
 
-//     } else {
-//         std::cerr << "Failed to create the file." << std::endl;
-//     }
-// }
+        subtree_json["subtree"]["weak_immunity"] = arr_wi;
+        subtree_json["subtree"]["weaker_immunity"] = arr_weri;
+        subtree_json["subtree"]["collusion_resilience"] = arr_cr;
+        subtree_json["subtree"]["practicality"] = arr_pr;
+        subtree_json["subtree"]["honest_utility"] = arr_honest_utility;
+		subtree_json["subtree"]["solved_for_weak_conditional_actions"] = subtree.solved_weak_cond_actions;
+
+        // Print the JSON representation
+        outputFile << subtree_json.dump(4); // Pretty print with 4 spaces
+        outputFile.close();
+
+    } else {
+        std::cerr << "Failed to create the file." << std::endl;
+    }
+}
 
 z3::Bool get_split_approx(z3::Solver &solver, Utility a, Utility b)
 {
@@ -189,18 +198,18 @@ bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2)
 	return false;
 }
 
-// std::vector<std::string> index2player(const Input &input, unsigned index) {
-// 	std::bitset<Input::MAX_PLAYERS> group = index;
-// 	std::vector<std::string> players;
+std::vector<std::string> index2player(const Input &input, unsigned index) {
+	std::bitset<Input::MAX_PLAYERS> group = index;
+	std::vector<std::string> players;
 
-// 	for (size_t player = 0; player < input.players.size(); player++) {
-// 		if (group[player]) {
-// 			players.push_back(input.players[player]);
-// 		}
-// 	}
+	for (size_t player = 0; player < input.players.size(); player++) {
+		if (group[player]) {
+			players.push_back(input.players[player]);
+		}
+	}
 
-// 	return players;
-// }
+	return players;
+}
 
 bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, unsigned player, bool weaker, bool consider_prob_groups)
 {
@@ -241,76 +250,81 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		return false;
 	}
 
-	// else if (node->is_subtree()){
+	else if (node->is_subtree()){
 
-	// 	const auto &subtree = node->subtree();
+		const auto &subtree = node->subtree();
 
-	// 	// look up current player:
-	// 	// 		if disj_of_cases (in satisfied_for_case) is equivalent to current case or weaker we return true
-	// 	//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
-	// 	//				 since a>b => a+1>b, we conclude satisfied for a>b (i.e. return true)
-	// 	// 		else if disj_of_cases not disjoint from current case --> need case split (set the first of these not disjoint ones to be reason)
-	// 	//			e.g. satisfied for case [a>b], current_case is a>0;
-	// 	//  			hence whether satisfied or not depends on b, so we add a>b as the reason
-	// 	// 		else return false
-	// 	//			e.g. satisfied for case [a>b], current case a < b, then for sure not satisfied, make sure reason is empty and return false
+		if(subtree.solved_weak_cond_actions && options.strong_conditional_actions) {
+			std::cerr << "checkmate: subtree is solved for weak conditional actions. Thus, supertree cannot be solved for strong conditional actions... " << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
 
-	// 	// search for SubtreeResult in weak(er)_immunity that corresponds to the current player
+		// look up current player:
+		// 		if disj_of_cases (in satisfied_for_case) is equivalent to current case or weaker we return true
+		//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
+		//				 since a>b => a+1>b, we conclude satisfied for a>b (i.e. return true)
+		// 		else if disj_of_cases not disjoint from current case --> need case split (set the first of these not disjoint ones to be reason)
+		//			e.g. satisfied for case [a>b], current_case is a>0;
+		//  			hence whether satisfied or not depends on b, so we add a>b as the reason
+		// 		else return false
+		//			e.g. satisfied for case [a>b], current case a < b, then for sure not satisfied, make sure reason is empty and return false
 
-	// 	const std::vector<SubtreeResult> &subtree_results = weaker ? subtree.weaker_immunity : subtree.weak_immunity;
+		// search for SubtreeResult in weak(er)_immunity that corresponds to the current player
 
-	// 	std::string player_name = input.players[player];
+		const std::vector<SubtreeResult> &subtree_results = weaker ? subtree.weaker_immunity : subtree.weak_immunity;
 
-	// 	for (const SubtreeResult &subtree_result : subtree_results) {
+		std::string player_name = input.players[player];
 
-	// 		assert(subtree_result.player_group.size() == 1);
-	// 		if (subtree_result.player_group[0] == player_name) {
+		for (const SubtreeResult &subtree_result : subtree_results) {
 
-	// 			// (init_cons && wi_cons && curent_case) => disj_of_cases VALID
-	// 			// ! (init_cons && wi_cons && current_case) || disj_of_cases VALID
-	// 			// (init_cons && wi_cons && current_case) && !disj_of_cases UNSAT
-	// 			// init_cons && wi_cons && current_case    && !disj_of_cased UNSAT
+			assert(subtree_result.player_group.size() == 1);
+			if (subtree_result.player_group[0] == player_name) {
 
-	// 			std::vector<z3::Bool> cases_as_conjunctions = {};
+				// (init_cons && wi_cons && curent_case) => disj_of_cases VALID
+				// ! (init_cons && wi_cons && current_case) || disj_of_cases VALID
+				// (init_cons && wi_cons && current_case) && !disj_of_cases UNSAT
+				// init_cons && wi_cons && current_case    && !disj_of_cased UNSAT
 
-	// 			for (auto _case: subtree_result.satisfied_in_case) {
-	// 				// try to optimize: if only 1 -> no need for conjunction
-	// 				if(_case.size() == 1) {
-	// 					cases_as_conjunctions.push_back(_case[0]);
-	// 				} else {
-	// 					cases_as_conjunctions.push_back(z3::conjunction(_case));
-	// 				}
-	// 			}
+				std::vector<z3::Bool> cases_as_conjunctions = {};
 
-	// 			z3::Bool disj_of_cases = z3::disjunction(cases_as_conjunctions);
+				for (auto _case: subtree_result.satisfied_in_case) {
+					// try to optimize: if only 1 -> no need for conjunction
+					if(_case.size() == 1) {
+						cases_as_conjunctions.push_back(_case[0]);
+					} else {
+						cases_as_conjunctions.push_back(z3::conjunction(_case));
+					}
+				}
 
-	// 			if(cases_as_conjunctions.size() == 1) {
-	// 				disj_of_cases = cases_as_conjunctions[0];
-	// 			} else {
-	// 				disj_of_cases = z3::disjunction(cases_as_conjunctions);
-	// 			}
+				z3::Bool disj_of_cases = z3::disjunction(cases_as_conjunctions);
 
-	// 			z3::Result z3_result_implied = solver.solve({!disj_of_cases});
+				if(cases_as_conjunctions.size() == 1) {
+					disj_of_cases = cases_as_conjunctions[0];
+				} else {
+					disj_of_cases = z3::disjunction(cases_as_conjunctions);
+				}
 
-	// 			if (z3_result_implied == z3::Result::UNSAT) {
-	// 				return true;
-	// 			} else {
+				z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
-	// 				// compute if current_case and case are disjoint:
-	// 				// is it sat that init && wi && case && current_case?
-	// 				// if no, then disjoint
+				if (z3_result_implied == z3::Result::UNSAT) {
+					return true;
+				} else {
 
-	// 				z3::Result z3_result_disjoint = solver.solve({disj_of_cases});
+					// compute if current_case and case are disjoint:
+					// is it sat that init && wi && case && current_case?
+					// if no, then disjoint
 
-	// 				if (z3_result_disjoint == z3::Result::SAT) {
-	// 					// set reason
-	// 					subtree.reason = disj_of_cases;
-	// 				}
-	// 				return false;
-	// 			}
-	// 		}
-	// 	}
-	// }
+					z3::Result z3_result_disjoint = solver.solve({disj_of_cases});
+
+					if (z3_result_disjoint == z3::Result::SAT) {
+						// set reason
+						subtree.reason = disj_of_cases;
+					}
+					return false;
+				}
+			}
+		}
+	}
 
 	const auto &branch = node->branch();
 
@@ -614,90 +628,90 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		return can_decide_for_all;
 	}
 
-	// } else if (node->is_subtree()){
+	else if (node->is_subtree()){
 
-	// 	const auto &subtree = node->subtree();
+		const auto &subtree = node->subtree();
 
-	// 	// look up current player_group:
-	// 	// 		if disj_of_cases (in satisfied_for_case) that is equivalent to current case or weaker we return true
-	// 	//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
-	// 	//				 since a>b => a+1>b, we conclude satisfied for a>b (i.e. return true)
-	// 	// 		else if disj_of_cases not disjoint from current case --> need case split (set the first of these not disjoint ones to be reason)
-	// 	//			e.g. satisfied for case [a>b], current_case is a>0;
-	// 	//  			hence whether satisfied or not depends on b, so we add a>b as the reason
-	// 	// 		else return false
-	// 	//			e.g. satisfied for case [a>b], current case a < b, then for sure not satisfied, make sure reason is empty and return false
+		// look up current player_group:
+		// 		if disj_of_cases (in satisfied_for_case) that is equivalent to current case or weaker we return true
+		//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
+		//				 since a>b => a+1>b, we conclude satisfied for a>b (i.e. return true)
+		// 		else if disj_of_cases not disjoint from current case --> need case split (set the first of these not disjoint ones to be reason)
+		//			e.g. satisfied for case [a>b], current_case is a>0;
+		//  			hence whether satisfied or not depends on b, so we add a>b as the reason
+		// 		else return false
+		//			e.g. satisfied for case [a>b], current case a < b, then for sure not satisfied, make sure reason is empty and return false
 
-	// 	// search for SubtreeResult in weak(er)_immunity that corresponds to the current player
+		// search for SubtreeResult in weak(er)_immunity that corresponds to the current player
 
-	// 	const std::vector<SubtreeResult> &subtree_results = subtree.collusion_resilience;
-	// 	std::vector<std::string> player_names = index2player(input, group_nr);
+		const std::vector<SubtreeResult> &subtree_results = subtree.collusion_resilience;
+		std::vector<std::string> player_names = index2player(input, group_nr);
 
-	// 	for (const SubtreeResult &subtree_result : subtree_results) {
-	// 		// find the correct subtree_result
-	// 		bool correct_subtree = true;
-	// 		if (subtree_result.player_group.size() != player_names.size()){
-	// 			correct_subtree = false;
-	// 		} else {
-	// 			for (const std::string &subtree_player : subtree_result.player_group){
-	// 				int counted = 0;
-	// 				for (const auto &name : player_names){
-	// 					if(name == subtree_player){
-	// 						counted++;
-	// 					}
-	// 				}
-	// 				if (counted == 0 ) {
-	// 					correct_subtree = false;
-	// 					break;
-	// 				}
-	// 			}
-	// 			if (correct_subtree){
+		for (const SubtreeResult &subtree_result : subtree_results) {
+			// find the correct subtree_result
+			bool correct_subtree = true;
+			if (subtree_result.player_group.size() != player_names.size()){
+				correct_subtree = false;
+			} else {
+				for (const std::string &subtree_player : subtree_result.player_group){
+					int counted = 0;
+					for (const auto &name : player_names){
+						if(name == subtree_player){
+							counted++;
+						}
+					}
+					if (counted == 0 ) {
+						correct_subtree = false;
+						break;
+					}
+				}
+				if (correct_subtree){
 
-	// 				// (init_cons && wi_cons && curent_case) => disj_of_cases VALID
-	// 				// ! (init_cons && wi_cons && current_case) || disj_of_cases VALID
-	// 				// (init_cons && wi_cons && current_case) && !disj_of_cases UNSAT
-	// 				// init_cons && wi_cons && current_case    && !disj_of_cased UNSAT
+					// (init_cons && wi_cons && curent_case) => disj_of_cases VALID
+					// ! (init_cons && wi_cons && current_case) || disj_of_cases VALID
+					// (init_cons && wi_cons && current_case) && !disj_of_cases UNSAT
+					// init_cons && wi_cons && current_case    && !disj_of_cased UNSAT
 
-	// 				std::vector<z3::Bool> cases_as_conjunctions = {};
+					std::vector<z3::Bool> cases_as_conjunctions = {};
 
-	// 				for (auto _case: subtree_result.satisfied_in_case) {
-	// 					// try to optimize: if only 1 -> no need for conjunction
-	// 					if(_case.size() == 1) {
-	// 						cases_as_conjunctions.push_back(_case[0]);
-	// 					} else {
-	// 						cases_as_conjunctions.push_back(z3::conjunction(_case));
-	// 					}
-	// 				}
-	// 				z3::Bool disj_of_cases;
+					for (auto _case: subtree_result.satisfied_in_case) {
+						// try to optimize: if only 1 -> no need for conjunction
+						if(_case.size() == 1) {
+							cases_as_conjunctions.push_back(_case[0]);
+						} else {
+							cases_as_conjunctions.push_back(z3::conjunction(_case));
+						}
+					}
+					z3::Bool disj_of_cases;
 
-	// 				if(cases_as_conjunctions.size() == 1) {
-	// 					disj_of_cases = cases_as_conjunctions[0];
-	// 				} else {
-	// 					disj_of_cases = z3::disjunction(cases_as_conjunctions);
-	// 				}
+					if(cases_as_conjunctions.size() == 1) {
+						disj_of_cases = cases_as_conjunctions[0];
+					} else {
+						disj_of_cases = z3::disjunction(cases_as_conjunctions);
+					}
 
-	// 				z3::Result z3_result_implied = solver.solve({!disj_of_cases});
+					z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
-	// 				if (z3_result_implied == z3::Result::UNSAT) {
-	// 					return true;
-	// 				} else {
+					if (z3_result_implied == z3::Result::UNSAT) {
+						return true;
+					} else {
 
-	// 					// compute if current_case and case are disjoint:
-	// 					// is it sat that init && wi && case && current_case?
-	// 					// if no, then disjoint
+						// compute if current_case and case are disjoint:
+						// is it sat that init && wi && case && current_case?
+						// if no, then disjoint
 
-	// 					z3::Result z3_result_disjoint = solver.solve({disj_of_cases});
+						z3::Result z3_result_disjoint = solver.solve({disj_of_cases});
 
-	// 					if (z3_result_disjoint == z3::Result::SAT) {
-	// 						// set reason
-	// 						subtree.reason = disj_of_cases;
-	// 					}
-	// 					return false;
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-	// }
+						if (z3_result_disjoint == z3::Result::SAT) {
+							// set reason
+							subtree.reason = disj_of_cases;
+						}
+						return false;
+					}
+				}
+			}
+		}
+	}
 
 	const auto &branch = node->branch();
 
@@ -1465,7 +1479,7 @@ void compute_conditional_actions_honest_utility_pairs(const Input &input, std::v
 	if (node->is_leaf())
 	{
 		CondActionsUtilityPair pair;
-		pair.conditional_actions = z3::conjunction(cond_actions_so_far);
+		pair.conditional_actions.insert(pair.conditional_actions.begin(), cond_actions_so_far.begin(), cond_actions_so_far.end());
 		pair.utility.insert(pair.utility.begin(), node->leaf().utilities.begin(), node->leaf().utilities.end());
 		input.cond_actions_honest_utility_pairs.push_back(pair);
 		return;
@@ -1811,261 +1825,248 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	return result;
 }
 
-// bool property_rec_subtree(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, size_t history, unsigned group_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case) {
-// 	/*
-// 		only called for weak(er) immunity and collusion resilience
-// 		actual case splitting engine
-// 		determine if the input has some property for the current honest history, splitting recursively
-// 	*/
+bool property_rec_subtree(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, size_t history, unsigned group_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case) {
+	/*
+		only called for weak(er) immunity and collusion resilience
+		actual case splitting engine
+		determine if the input has some property for the current honest history, splitting recursively
+	*/
 
-// 	bool property_result;
-// 	std::bitset<Input::MAX_PLAYERS> group;
-// 	Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
+	bool property_result;
+	std::bitset<Input::MAX_PLAYERS> group;
 
-// 	if(property == PropertyType::CollusionResilience){
-// 		const Node &honest_leaf_pre = get_honest_leaf(input.root.get(), input.honest[history], 0);
-// 		// in subtree mode there cannot be subtrees in the input;
-// 		const Leaf &honest_leaf = honest_leaf_pre.leaf();
-// 		group = group_nr;
+	if(property == PropertyType::CollusionResilience) {
+		property_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, input.players.size(), group_nr, false);
+	} else {
+		assert(property != PropertyType::Practicality);
+		assert(group_nr > 0); // set to i+1 in previous fct
+		property_result = weak_immunity_rec(input, solver, options, input.root.get(), group_nr-1, property == PropertyType::WeakerImmunity, false);
+	}
 
-// 		// compute the honest total for the current group
-// 		for (size_t player = 0; player < input.players.size(); player++) {
-// 			if (group[player]) {
-// 				honest_total = honest_total + honest_leaf.utilities[player];
-// 			}
-// 		}
-// 		property_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), group_nr, false);
-// 	} else {
-// 		assert(property != PropertyType::Practicality);
-// 		assert(group_nr > 0); // set to i+1 in previous fct
-// 		property_result = weak_immunity_rec(input, solver, options, input.root.get(), group_nr-1, property == PropertyType::WeakerImmunity, false);
-// 	}
+	// property holds under current split
+	if (property_result) {
+		if (!input.stop_log){
+			std::cout << "\tProperty satisfied for case: " << current_case << std::endl;
+		}
 
-// 	// property holds under current split
-// 	if (property_result) {
-// 		if (!input.stop_log){
-// 			std::cout << "\tProperty satisfied for case: " << current_case << std::endl;
-// 		}
+		satisfied_in_case.push_back(current_case);
+		return true;
+	}
 
-// 		satisfied_in_case.push_back(current_case);
-// 		return true;
-// 	}
+	// otherwise consider case split
+	z3::Bool split = input.root->reason;
+	// there is no case split
+	if (split.null()) {
+		if (!input.stop_log){
+			std::cout << "\tProperty violated in case: " << current_case << std::endl;
+		}
 
-// 	// otherwise consider case split
-// 	z3::Bool split = input.root->reason;
-// 	// there is no case split
-// 	if (split.null()) {
-// 		if (!input.stop_log){
-// 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
-// 		}
+		return false;
+	}
+	if (!input.stop_log){
+		std::cout << "\tSplitting on: " << split << std::endl;
+	}
 
-// 		return false;
-// 	}
-// 	if (!input.stop_log){
-// 		std::cout << "\tSplitting on: " << split << std::endl;
-// 	}
+	auto &current_reset_point = input.reset_point;
 
-// 	auto &current_reset_point = input.reset_point;
+	bool result = true;
 
-// 	bool result = true;
+	// both cr and w(er)i need all cases for soundness
+	for (const z3::Bool& condition : {split, split.invert()}) {
+		// reset reason and strategy
+		// ? should be the same point of reset
+		input.root->reset_reason();
+		// if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
+		// 	auto &current_reset_branch = current_reset_point->branch();
+		// 	current_reset_branch.reset_strategy();
+		// }
 
-// 	// both cr and w(er)i need all cases for soundness
-// 	for (const z3::Bool& condition : {split, split.invert()}) {
-// 		// reset reason and strategy
-// 		// ? should be the same point of reset
-// 		input.root->reset_reason();
-// 		if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
-// 			auto &current_reset_branch = current_reset_point->branch();
-// 			current_reset_branch.reset_strategy();
-// 		}
+		solver.push();
 
-// 		solver.push();
+		solver.assert_(condition);
+		assert (solver.solve() != z3::Result::UNSAT);
+		std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
+		new_current_case.push_back(condition);
 
-// 		solver.assert_(condition);
-// 		assert (solver.solve() != z3::Result::UNSAT);
-// 		std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
-// 		new_current_case.push_back(condition);
+		bool attempt = property_rec_subtree(solver, options, input, property, new_current_case, history, group_nr, satisfied_in_case);
 
-// 		bool attempt = property_rec_subtree(solver, options, input, property, new_current_case, history, group_nr, satisfied_in_case);
+		solver.pop();
 
-// 		solver.pop();
+		if (!attempt){
+			result = false;
+		}
+	}
+	return result;
+}
 
-// 		if (!attempt){
-// 			result = false;
-// 		}
-// 	}
-// 	return result;
-// }
+bool property_rec_utility(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, std::vector<Utility> honest_utility, unsigned group_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case) {
+	/*
+		only called for collusion resilience
+		actual case splitting engine
+		determine if the input has some property for the current honest history, splitting recursively
+	*/
 
-// bool property_rec_utility(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, std::vector<Utility> honest_utility, unsigned group_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case) {
-// 	/*
-// 		only called for collusion resilience
-// 		actual case splitting engine
-// 		determine if the input has some property for the current honest history, splitting recursively
-// 	*/
+	bool property_result;
+	std::bitset<Input::MAX_PLAYERS> group = group_nr;
+	Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
 
-// 	bool property_result;
-// 	std::bitset<Input::MAX_PLAYERS> group = group_nr;
-// 	Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
+	// compute the honest total for the current group
+	for (size_t player = 0; player < input.players.size(); player++) {
+		if (group[player]) {
+			honest_total = honest_total + honest_utility[player];
+		}
+	}
+	property_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, input.players.size(), group_nr, false);
 
-// 	// compute the honest total for the current group
-// 	for (size_t player = 0; player < input.players.size(); player++) {
-// 		if (group[player]) {
-// 			honest_total = honest_total + honest_utility[player];
-// 		}
-// 	}
-// 	property_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), group_nr, false);
+	// property holds under current split
+	if (property_result) {
+		if (!input.stop_log){
+			std::cout << "\tProperty satisfied for case: " << current_case << std::endl;
+		}
 
-// 	// property holds under current split
-// 	if (property_result) {
-// 		if (!input.stop_log){
-// 			std::cout << "\tProperty satisfied for case: " << current_case << std::endl;
-// 		}
+		satisfied_in_case.push_back(current_case);
+		return true;
+	}
 
-// 		satisfied_in_case.push_back(current_case);
-// 		return true;
-// 	}
+	// otherwise consider case split
+	z3::Bool split = input.root->reason;
+	// there is no case split
+	if (split.null()) {
+		if (!input.stop_log){
+			std::cout << "\tProperty violated in case: " << current_case << std::endl;
+		}
 
-// 	// otherwise consider case split
-// 	z3::Bool split = input.root->reason;
-// 	// there is no case split
-// 	if (split.null()) {
-// 		if (!input.stop_log){
-// 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
-// 		}
+		return false;
+	}
+	if (!input.stop_log){
+		std::cout << "\tSplitting on: " << split << std::endl;
+	}
 
-// 		return false;
-// 	}
-// 	if (!input.stop_log){
-// 		std::cout << "\tSplitting on: " << split << std::endl;
-// 	}
+	auto &current_reset_point = input.reset_point;
 
-// 	auto &current_reset_point = input.reset_point;
+	bool result = true;
 
-// 	bool result = true;
+	for (const z3::Bool& condition : {split, split.invert()}) {
+		// reset reason and strategy
+		// ? should be the same point of reset
+		input.root->reset_reason();
+		// if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
+		// 	auto &current_reset_branch = current_reset_point->branch();
+		// 	current_reset_branch.reset_strategy();
+		// }
 
-// 	for (const z3::Bool& condition : {split, split.invert()}) {
-// 		// reset reason and strategy
-// 		// ? should be the same point of reset
-// 		input.root->reset_reason();
-// 		if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
-// 			auto &current_reset_branch = current_reset_point->branch();
-// 			current_reset_branch.reset_strategy();
-// 		}
+		solver.push();
 
-// 		solver.push();
+		solver.assert_(condition);
+		assert (solver.solve() != z3::Result::UNSAT);
+		std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
+		new_current_case.push_back(condition);
 
-// 		solver.assert_(condition);
-// 		assert (solver.solve() != z3::Result::UNSAT);
-// 		std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
-// 		new_current_case.push_back(condition);
+		bool attempt = property_rec_utility(solver, options, input, property, new_current_case, honest_utility, group_nr, satisfied_in_case);
 
-// 		bool attempt = property_rec_utility(solver, options, input, property, new_current_case, honest_utility, group_nr, satisfied_in_case);
+		solver.pop();
 
-// 		solver.pop();
+		if (!attempt){
+			result = false;
+		}
+	}
+	return result;
+}
 
-// 		if (!attempt){
-// 			result = false;
-// 		}
-// 	}
-// 	return result;
-// }
+bool property_rec_nohistory(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, unsigned player_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case, std::vector<PracticalitySubtreeResult> &subtree_results_pr) {
 
-// bool property_rec_nohistory(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, unsigned player_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case, std::vector<PracticalitySubtreeResult> &subtree_results_pr) {
+	/*
+		only called for w(er)i and practicality
+		actual case splitting engine
+		determine if the input has some property for the current honest history, splitting recursively
+	*/
 
-// 	/*
-// 		only called for w(er)i and practicality
-// 		actual case splitting engine
-// 		determine if the input has some property for the current honest history, splitting recursively
-// 	*/
+	assert(property != PropertyType::CollusionResilience);
 
-// 	assert(property != PropertyType::CollusionResilience);
+	bool property_result;
+	if(property == PropertyType::WeakImmunity) {
+		property_result = weak_immunity_rec(input, solver, options, input.root.get(), player_nr, false, false);
+	} else if (property == PropertyType::WeakerImmunity) {
+		property_result = weak_immunity_rec(input, solver, options, input.root.get(), player_nr, true, false);
+	} else if (property == PropertyType::Practicality) {
+		property_result = practicality_rec_old(input, options, solver, input.root.get(),{}, false);
+	}
 
-// 	bool property_result;
-// 	if(property == PropertyType::WeakImmunity) {
-// 		property_result = weak_immunity_rec(input, solver, options, input.root.get(), player_nr, false, false);
-// 	} else if (property == PropertyType::WeakerImmunity) {
-// 		property_result = weak_immunity_rec(input, solver, options, input.root.get(), player_nr, true, false);
-// 	} else if (property == PropertyType::Practicality) {
-// 		property_result = practicality_rec_old(input, options, solver, input.root.get(),{}, false);
-// 	}
+	// property holds under current split
+	if (property_result) {
+		if (!input.stop_log){
+			std::cout << "\tProperty satisfied for case: " << current_case << std::endl;
+		}
 
-// 	// property holds under current split
-// 	if (property_result) {
-// 		if (!input.stop_log){
-// 			std::cout << "\tProperty satisfied for case: " << current_case << std::endl;
-// 		}
+		if(options.subtree && property == PropertyType::Practicality) {
+			// PracticalitySubtreeResult subtree_result_pr;
+			// subtree_result_pr._case = current_case;
+			// subtree_result_pr.utilities = {};
+			// for (auto elem: input.root->branch().practical_utilities) {
+			// 	subtree_result_pr.utilities.push_back(elem.leaf);
+			// }
+			// subtree_results_pr.push_back(subtree_result_pr);
+		} else if (property != PropertyType::Practicality) {
+			satisfied_in_case.push_back(current_case);
+		}
 
-// 		if(options.subtree && property == PropertyType::Practicality) {
-// 			PracticalitySubtreeResult subtree_result_pr;
-// 			subtree_result_pr._case = current_case;
-// 			subtree_result_pr.utilities = {};
-// 			for (auto elem: input.root->branch().practical_utilities) {
-// 				subtree_result_pr.utilities.push_back(elem.leaf);
-// 			}
-// 			subtree_results_pr.push_back(subtree_result_pr);
-// 		} else if (property != PropertyType::Practicality) {
-// 			satisfied_in_case.push_back(current_case);
-// 		}
+		// if(property == PropertyType::Practicality) {
+		// 	UtilityCase utilityCase;
+		// 	utilityCase._case = current_case;
+		// 	for(auto practical_utility : input.root.get()->practical_utilities) {
+		// 		utilityCase.utilities.push_back(practical_utility.leaf);
+		// 	}
 
-// 		//if(property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
-// 		if(property == PropertyType::Practicality) {
-// 			UtilityCase utilityCase;
-// 			utilityCase._case = current_case;
-// 			for(auto practical_utility : input.root.get()->practical_utilities) {
-// 				utilityCase.utilities.push_back(practical_utility.leaf);
-// 			}
+		// 	input.utilities_pr_nohistory.push_back(utilityCase);
+		// }
 
-// 			input.utilities_pr_nohistory.push_back(utilityCase);
-// 		}
+		return true;
+	}
 
-// 		return true;
-// 	}
+	// otherwise consider case split
+	z3::Bool split = input.root->reason;
+	// there is no case split
+	if (split.null()) {
+		if (!input.stop_log){
+			std::cout << "\tProperty violated in case: " << current_case << std::endl;
+		}
 
-// 	// otherwise consider case split
-// 	z3::Bool split = input.root->reason;
-// 	// there is no case split
-// 	if (split.null()) {
-// 		if (!input.stop_log){
-// 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
-// 		}
+		return false;
+	}
+	if (!input.stop_log){
+		std::cout << "\tSplitting on: " << split << std::endl;
+	}
 
-// 		return false;
-// 	}
-// 	if (!input.stop_log){
-// 		std::cout << "\tSplitting on: " << split << std::endl;
-// 	}
+	auto &current_reset_point = input.reset_point;
 
-// 	auto &current_reset_point = input.reset_point;
+	bool result = true;
 
-// 	bool result = true;
+	for (const z3::Bool& condition : {split, split.invert()}) {
+		// reset reason and strategy
+		// ? should be the same point of reset
+		input.root->reset_reason();
+		// if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
+		// 	auto &current_reset_branch = current_reset_point->branch();
+		// 	current_reset_branch.reset_strategy();
+		// }
 
-// 	for (const z3::Bool& condition : {split, split.invert()}) {
-// 		// reset reason and strategy
-// 		// ? should be the same point of reset
-// 		input.root->reset_reason();
-// 		if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
-// 			auto &current_reset_branch = current_reset_point->branch();
-// 			current_reset_branch.reset_strategy();
-// 		}
+		solver.push();
 
-// 		solver.push();
+		solver.assert_(condition);
+		assert (solver.solve() != z3::Result::UNSAT);
+		std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
+		new_current_case.push_back(condition);
 
-// 		solver.assert_(condition);
-// 		assert (solver.solve() != z3::Result::UNSAT);
-// 		std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
-// 		new_current_case.push_back(condition);
+		bool attempt = property_rec_nohistory(solver, options, input, property, new_current_case, player_nr, satisfied_in_case, subtree_results_pr);
 
-// 		bool attempt = property_rec_nohistory(solver, options, input, property, new_current_case, player_nr, satisfied_in_case, subtree_results_pr);
+		solver.pop();
 
-// 		solver.pop();
-
-// 		if (!attempt){
-// 			result = false;
-// 		}
-// 	}
-// 	return result;
-// }
+		if (!attempt){
+			result = false;
+		}
+	}
+	return result;
+}
 
 void property(const Options &options, const Input &input, PropertyType property, size_t history)
 {
@@ -2101,18 +2102,18 @@ void property(const Options &options, const Input &input, PropertyType property,
 	{
 		std::cout << "Is history " << print_history(input.honest[history]) << " " << prop_name << "?" << std::endl;
 	}
-	// else {
-	// 	if(property == PropertyType::Practicality) {
-	// 		std::cout << "Computing practical histories/strategies." << std::endl;
-	// 	} else if (property == PropertyType::CollusionResilience) {
-	// 		// see comment in analyze properties
-	// 		// if history >= input.honest.size() then we are running subtree in default mode
-	// 		// and are considering an honest utility, not an honest history
-	// 		std::cout << "Is the subtree " << prop_name << " for honest utility " << input.honest_utilities[history - input.honest.size()].leaf << "?" << std::endl;
-	// 	} else {
-	// 		std::cout << "Is the subtree " << prop_name << "?" << std::endl;
-	// 	}
-	// }
+	else {
+		if(property == PropertyType::Practicality) {
+			std::cout << "Computing practical histories/strategies." << std::endl;
+		} else if (property == PropertyType::CollusionResilience) {
+			// see comment in analyze properties
+			// if history >= input.honest.size() then we are running subtree in default mode
+			// and are considering an honest utility, not an honest history
+			std::cout << "Is the subtree " << prop_name << " for honest utility " << input.honest_utilities[history - input.honest.size()].utility << "?" << std::endl;
+		} else {
+			std::cout << "Is the subtree " << prop_name << "?" << std::endl;
+		}
+	}
 
 	assert(solver.solve() == z3::Result::SAT);
 
@@ -2190,293 +2191,294 @@ void property(const Options &options, const Input &input, PropertyType property,
 	// }
 }
 
-// void property_subtree(const Options &options, const Input &input, PropertyType property, size_t history, Subtree &subtree) {
+void property_subtree(const Options &options, const Input &input, PropertyType property, size_t history, Subtree &subtree) {
 
-// 	/* determine if the input has some property for the current honest history */
-// 	Solver solver;
-// 	solver.assert_(input.initial_constraint);
-// 	std::string prop_name;
+	/* determine if the input has some property for the current honest history */
+	Solver solver;
+	solver.assert_(input.initial_constraint);
+	std::string prop_name;
 
-// 	switch (property)
-// 	{
-// 		case  PropertyType::WeakImmunity:
-// 			solver.assert_(input.weak_immunity_constraint);
-// 			prop_name = "weak immune";
-// 			break;
-// 		case  PropertyType::WeakerImmunity:
-// 			solver.assert_(input.weaker_immunity_constraint);
-// 			prop_name = "weaker immune";
-// 			break;
-// 		case  PropertyType::CollusionResilience:
-// 			solver.assert_(input.collusion_resilience_constraint);
-// 			prop_name = "collusion resilient";
-// 			break;
-// 		case  PropertyType::Practicality:
-// 			solver.assert_(input.practicality_constraint);
-// 			prop_name = "practical";
-// 			break;
-// 	}
+	switch (property)
+	{
+		case  PropertyType::WeakImmunity:
+			solver.assert_(input.weak_immunity_constraint);
+			prop_name = "weak immune";
+			break;
+		case  PropertyType::WeakerImmunity:
+			solver.assert_(input.weaker_immunity_constraint);
+			prop_name = "weaker immune";
+			break;
+		case  PropertyType::CollusionResilience:
+			solver.assert_(input.collusion_resilience_constraint);
+			prop_name = "collusion resilient";
+			break;
+		case  PropertyType::Practicality:
+			solver.assert_(input.practicality_constraint);
+			prop_name = "practical";
+			break;
+	}
 
-// 	std::cout << std::endl;
-// 	std::cout << std::endl;
-// 	std::cout << "Is history " << input.honest[history] << " " << prop_name << "?" << std::endl;
+	std::cout << std::endl;
+	std::cout << std::endl;
+	std::cout << "Is history " << print_history(input.honest[history]) << " " << prop_name << "?" << std::endl;
 
-// 	assert(solver.solve() == z3::Result::SAT);
+	assert(solver.solve() == z3::Result::SAT);
 
-// 	if (property == PropertyType::Practicality) {
-// 		input.reset_practical_utilities();
+	if (property == PropertyType::Practicality) {
+		/*
+		input.reset_practical_utilities();
 
-// 		std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
+		std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
 
-// 		bool pr_result = property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, subtree_results_pr);
+		bool pr_result = property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, subtree_results_pr);
 
-// 		if (pr_result) {
-// 			assert(input.root->branch().practical_utilities.size() == 1);
-// 			std::vector<Utility> honest_utility;
-// 			for (auto elem: input.root->branch().practical_utilities) {
-// 				honest_utility = elem.leaf;
-// 			}
-// 			std::cout << "YES, it is " << prop_name << ", the honest practical utility is "<<  honest_utility << "." << std::endl;
-// 		} else {
-// 			//assert( input.root->branch().practical_utilities.size() == 0);
-// 			// removed this assertion bacause it was failing
-// 			// practical utilites is always at least once - we always set it
-// 			// even though when it is not correct because we needed this for an
-// 			// additional feature (it was either the counterexamples, or strategies or all cases)
+		if (pr_result) {
+			assert(input.root->branch().practical_utilities.size() == 1);
+			std::vector<Utility> honest_utility;
+			for (auto elem: input.root->branch().practical_utilities) {
+				honest_utility = elem.leaf;
+			}
+			std::cout << "YES, it is " << prop_name << ", the honest practical utility is "<<  honest_utility << "." << std::endl;
+		} else {
+			//assert( input.root->branch().practical_utilities.size() == 0);
+			// removed this assertion bacause it was failing
+			// practical utilites is always at least once - we always set it
+			// even though when it is not correct because we needed this for an
+			// additional feature (it was either the counterexamples, or strategies or all cases)
 
-// 			std::cout << "NO, it is not " << prop_name << ", hence there is no honest practical utility." << std::endl;
-// 		}
+			std::cout << "NO, it is not " << prop_name << ", hence there is no honest practical utility." << std::endl;
+		}
 
-// 		subtree.practicality.insert(subtree.practicality.end(), subtree_results_pr.begin(), subtree_results_pr.end());
+		subtree.practicality.insert(subtree.practicality.end(), subtree_results_pr.begin(), subtree_results_pr.end());
+		*/
+	} else {
+		size_t number_groups = property == PropertyType::CollusionResilience ? pow(2,input.players.size())-2 : input.players.size();
 
-// 	} else {
-// 		size_t number_groups = property == PropertyType::CollusionResilience ? pow(2,input.players.size())-2 : input.players.size();
+		std::string output_text = property == PropertyType::CollusionResilience ? " against group " : " for player ";
 
-// 		std::string output_text = property == PropertyType::CollusionResilience ? " against group " : " for player ";
+		std::vector<SubtreeResult> subtree_results;
 
-// 		std::vector<SubtreeResult> subtree_results;
+		for (unsigned i = 0; i < number_groups; i++){
+			input.reset_reset_point();
+			input.root.get()->reset_reason();
 
-// 		for (unsigned i = 0; i < number_groups; i++){
-// 			input.reset_reset_point();
-// 			input.root.get()->reset_reason();
+			std::vector<std::string> players;
 
-// 			std::vector<std::string> players;
+            if(property == PropertyType::CollusionResilience) {
+                players = index2player(input, i+1);
+            } else if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
+                players = { input.players[i] };
+            }
 
-//             if(property == PropertyType::CollusionResilience) {
-//                 players = index2player(input, i+1);
-//             } else if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
-//                 players = { input.players[i] };
-//             }
+			SubtreeResult subtree_result_player;
+			subtree_result_player.player_group = players;
+			subtree_result_player.satisfied_in_case = {};
 
-// 			SubtreeResult subtree_result_player;
-// 			subtree_result_player.player_group = players;
-// 			subtree_result_player.satisfied_in_case = {};
+			if (property_rec_subtree(solver, options, input, property, std::vector<z3::Bool>(), history, i+1, subtree_result_player.satisfied_in_case)){
+				std::cout << "YES, it is " << prop_name << output_text << players << "."  << std::endl;
+			} else {
+				std::cout << "NO, it is not " << prop_name << output_text << players << "." << std::endl;
+			}
 
-// 			if (property_rec_subtree(solver, options, input, property, std::vector<z3::Bool>(), history, i+1, subtree_result_player.satisfied_in_case)){
-// 				std::cout << "YES, it is " << prop_name << output_text << players << "."  << std::endl;
-// 			} else {
-// 				std::cout << "NO, it is not " << prop_name << output_text << players << "." << std::endl;
-// 			}
+			// check whether we already have a SubtreeResult for this player
+			// if yes: append sat cases
+			// if not: pushback
+			bool found = false;
+			for(auto &subtree_result : subtree_results) {
+				if(subtree_result.player_group.size() == subtree_result_player.player_group.size()) {
+					if(std::equal(subtree_result.player_group.begin(), subtree_result.player_group.end(),subtree_result_player.player_group.begin())) {
+						found = true;
+						subtree_result.satisfied_in_case.insert(subtree_result.satisfied_in_case.end(), subtree_result_player.satisfied_in_case.begin(), subtree_result_player.satisfied_in_case.end());
+						break;
+					}
+				}
+			}
+			if(!found) {
+				subtree_results.push_back(subtree_result_player);
+			}
+		}
 
-// 			// check whether we already have a SubtreeResult for this player
-// 			// if yes: append sat cases
-// 			// if not: pushback
-// 			bool found = false;
-// 			for(auto &subtree_result : subtree_results) {
-// 				if(subtree_result.player_group.size() == subtree_result_player.player_group.size()) {
-// 					if(std::equal(subtree_result.player_group.begin(), subtree_result.player_group.end(),subtree_result_player.player_group.begin())) {
-// 						found = true;
-// 						subtree_result.satisfied_in_case.insert(subtree_result.satisfied_in_case.end(), subtree_result_player.satisfied_in_case.begin(), subtree_result_player.satisfied_in_case.end());
-// 						break;
-// 					}
-// 				}
-// 			}
-// 			if(!found) {
-// 				subtree_results.push_back(subtree_result_player);
-// 			}
-// 		}
+		if(property == PropertyType::WeakImmunity) {
+			subtree.weak_immunity.insert(subtree.weak_immunity.end(), subtree_results.begin(), subtree_results.end());
+		} else if (property == PropertyType::WeakerImmunity) {
+			subtree.weaker_immunity.insert(subtree.weaker_immunity.end(), subtree_results.begin(), subtree_results.end());
+		} else if (property == PropertyType::CollusionResilience) {
+			subtree.collusion_resilience.insert(subtree.collusion_resilience.end(), subtree_results.begin(), subtree_results.end());
+		}
 
-// 		if(property == PropertyType::WeakImmunity) {
-// 			subtree.weak_immunity.insert(subtree.weak_immunity.end(), subtree_results.begin(), subtree_results.end());
-// 		} else if (property == PropertyType::WeakerImmunity) {
-// 			subtree.weaker_immunity.insert(subtree.weaker_immunity.end(), subtree_results.begin(), subtree_results.end());
-// 		} else if (property == PropertyType::CollusionResilience) {
-// 			subtree.collusion_resilience.insert(subtree.collusion_resilience.end(), subtree_results.begin(), subtree_results.end());
-// 		}
+	}
 
-// 	}
+	return;
+}
 
-// 	return;
-// }
+void property_subtree_utility(const Options &options, const Input &input, PropertyType property, std::vector<Utility> honest_utility, Subtree &subtree) {
+	/* determine if the input has some property for the current honest history */
 
-// void property_subtree_utility(const Options &options, const Input &input, PropertyType property, std::vector<Utility> honest_utility, Subtree &subtree) {
-// 	/* determine if the input has some property for the current honest history */
+	assert(property == PropertyType::CollusionResilience);
 
-// 	assert(property == PropertyType::CollusionResilience);
+	Solver solver;
+	solver.assert_(input.initial_constraint);
 
-// 	Solver solver;
-// 	solver.assert_(input.initial_constraint);
+	solver.assert_(input.collusion_resilience_constraint);
 
-// 	solver.assert_(input.collusion_resilience_constraint);
+	std::cout << std::endl;
+	std::cout << std::endl;
+	std::cout << "Is utility " << honest_utility << " collusion resilient?" << std::endl;
 
-// 	std::cout << std::endl;
-// 	std::cout << std::endl;
-// 	std::cout << "Is utility " << honest_utility << " collusion resilient?" << std::endl;
+	assert(solver.solve() == z3::Result::SAT);
 
-// 	assert(solver.solve() == z3::Result::SAT);
+	size_t number_groups = pow(2,input.players.size())-2;
+	std::vector<SubtreeResult> subtree_results;
 
-// 	size_t number_groups = pow(2,input.players.size())-2;
-// 	std::vector<SubtreeResult> subtree_results;
+	for (unsigned i = 0; i < number_groups; i++){
+		input.reset_reset_point();
+		input.root.get()->reset_reason();
+		std::vector<std::string> players = index2player(input, i+1);
 
-// 	for (unsigned i = 0; i < number_groups; i++){
-// 		input.reset_reset_point();
-// 		input.root.get()->reset_reason();
-// 		std::vector<std::string> players = index2player(input, i+1);
+		SubtreeResult subtree_result_player;
+		subtree_result_player.player_group = players;
+		subtree_result_player.satisfied_in_case = {};
 
-// 		SubtreeResult subtree_result_player;
-// 		subtree_result_player.player_group = players;
-// 		subtree_result_player.satisfied_in_case = {};
+		if (property_rec_utility(solver, options, input, property, std::vector<z3::Bool>(), honest_utility, i+1, subtree_result_player.satisfied_in_case)){
+			std::cout << "YES, it is collusion resilient against group " <<  players << "."  << std::endl;
+		} else {
+			std::cout << "NO, it is not  collusion resilient against group " << players << "." << std::endl;
+		}
 
-// 		if (property_rec_utility(solver, options, input, property, std::vector<z3::Bool>(), honest_utility, i+1, subtree_result_player.satisfied_in_case)){
-// 			std::cout << "YES, it is collusion resilient against group " <<  players << "."  << std::endl;
-// 		} else {
-// 			std::cout << "NO, it is not  collusion resilient against group " << players << "." << std::endl;
-// 		}
+		// check whether we already have a SubtreeResult for this player
+		// if yes: append sat cases
+		// if not: pushback
+		bool found = false;
+		for(auto &subtree_result : subtree_results) {
+			if(subtree_result.player_group.size() == subtree_result_player.player_group.size()) {
+				if(std::equal(subtree_result.player_group.begin(), subtree_result.player_group.end(),subtree_result_player.player_group.begin())) {
+					found = true;
+					subtree_result.satisfied_in_case.insert(subtree_result.satisfied_in_case.end(), subtree_result_player.satisfied_in_case.begin(), subtree_result_player.satisfied_in_case.end());
+					break;
+				}
+			}
+		}
+		if(!found) {
+			subtree_results.push_back(subtree_result_player);
+		}
 
-// 		// check whether we already have a SubtreeResult for this player
-// 		// if yes: append sat cases
-// 		// if not: pushback
-// 		bool found = false;
-// 		for(auto &subtree_result : subtree_results) {
-// 			if(subtree_result.player_group.size() == subtree_result_player.player_group.size()) {
-// 				if(std::equal(subtree_result.player_group.begin(), subtree_result.player_group.end(),subtree_result_player.player_group.begin())) {
-// 					found = true;
-// 					subtree_result.satisfied_in_case.insert(subtree_result.satisfied_in_case.end(), subtree_result_player.satisfied_in_case.begin(), subtree_result_player.satisfied_in_case.end());
-// 					break;
-// 				}
-// 			}
-// 		}
-// 		if(!found) {
-// 			subtree_results.push_back(subtree_result_player);
-// 		}
+	}
 
-// 	}
+	subtree.collusion_resilience.insert(subtree.collusion_resilience.end(), subtree_results.begin(), subtree_results.end());
 
-// 	subtree.collusion_resilience.insert(subtree.collusion_resilience.end(), subtree_results.begin(), subtree_results.end());
+	return;
+}
 
-// 	return;
-// }
+void property_subtree_nohistory(const Options &options, const Input &input, PropertyType property, Subtree &subtree) {
 
-// void property_subtree_nohistory(const Options &options, const Input &input, PropertyType property, Subtree &subtree) {
+	Solver solver;
+	solver.assert_(input.initial_constraint);
+	std::string prop_name;
 
-// 	Solver solver;
-// 	solver.assert_(input.initial_constraint);
-// 	std::string prop_name;
+	switch (property)
+	{
+		case  PropertyType::WeakImmunity:
+			solver.assert_(input.weak_immunity_constraint);
+			prop_name = "weak immune";
+			break;
+		case  PropertyType::WeakerImmunity:
+			solver.assert_(input.weaker_immunity_constraint);
+			prop_name = "weaker immune";
+			break;
+		case  PropertyType::Practicality:
+			solver.assert_(input.practicality_constraint);
+			prop_name = "practical";
+			break;
+		case PropertyType::CollusionResilience:
+			std::cerr << "checkmate: fct property_subtree_nohistory should not be called for Collusion Resilience" << std::endl;
+			std::exit(EXIT_FAILURE);
+			break;
+	}
 
-// 	switch (property)
-// 	{
-// 		case  PropertyType::WeakImmunity:
-// 			solver.assert_(input.weak_immunity_constraint);
-// 			prop_name = "weak immune";
-// 			break;
-// 		case  PropertyType::WeakerImmunity:
-// 			solver.assert_(input.weaker_immunity_constraint);
-// 			prop_name = "weaker immune";
-// 			break;
-// 		case  PropertyType::Practicality:
-// 			solver.assert_(input.practicality_constraint);
-// 			prop_name = "practical";
-// 			break;
-// 		case PropertyType::CollusionResilience:
-// 			std::cerr << "checkmate: fct property_subtree_nohistory should not be called for Collusion Resilience" << std::endl;
-// 			std::exit(EXIT_FAILURE);
-// 			break;
-// 	}
+	std::cout << std::endl;
+	std::cout << std::endl;
 
-// 	std::cout << std::endl;
-// 	std::cout << std::endl;
+	assert(solver.solve() == z3::Result::SAT);
 
-// 	assert(solver.solve() == z3::Result::SAT);
+	if (property == PropertyType::Practicality){
+		// input.reset_practical_utilities();
 
-// 	if (property == PropertyType::Practicality){
-// 		input.reset_practical_utilities();
+		// std::vector<std::vector<z3::Bool>> satisfied_in_case;
+		// std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
 
-// 		std::vector<std::vector<z3::Bool>> satisfied_in_case;
-// 		std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
+		// std::cout << "What are the subtree's practical utilities?" << std::endl;
+		// bool pr_result = property_rec_nohistory(solver, options, input, property, std::vector<z3::Bool>(), 0, satisfied_in_case, subtree_results_pr);
 
-// 		std::cout << "What are the subtree's practical utilities?" << std::endl;
-// 		bool pr_result = property_rec_nohistory(solver, options, input, property, std::vector<z3::Bool>(), 0, satisfied_in_case, subtree_results_pr);
+		// assert(pr_result);
 
-// 		assert(pr_result);
+		// assert(input.root.get()->practical_utilities.size()>0);
+		// // ATTENTION THINK ABOUT HOW LATER (IN SUPERTREE) CASE SPLITS MAY IMPACT THE RESULT
+		// // we need to print the corresponding utilities for each case
+		// // kind of "all cases" for practicality_subtree
+		// // since in property_rec_nohistory we are not along honest, we consider all cases implicitly
+		// // it suffices to have a new data structure where we store <case, utulities> information and print them below
+		// //std::cout << "print utilities" << std::endl;
 
-// 		assert(input.root.get()->practical_utilities.size()>0);
-// 		// ATTENTION THINK ABOUT HOW LATER (IN SUPERTREE) CASE SPLITS MAY IMPACT THE RESULT
-// 		// we need to print the corresponding utilities for each case
-// 		// kind of "all cases" for practicality_subtree
-// 		// since in property_rec_nohistory we are not along honest, we consider all cases implicitly
-// 		// it suffices to have a new data structure where we store <case, utulities> information and print them below
-// 		//std::cout << "print utilities" << std::endl;
+		// for(auto &utilityCase : input.utilities_pr_nohistory) {
+		// 	std::cout << "Case: " << utilityCase._case << std::endl;
+		// 	for(auto utility : utilityCase.utilities) {
+		// 		std::cout << "\t" << utility << std::endl;
+		// 	}
+		// }
 
-// 		for(auto &utilityCase : input.utilities_pr_nohistory) {
-// 			std::cout << "Case: " << utilityCase._case << std::endl;
-// 			for(auto utility : utilityCase.utilities) {
-// 				std::cout << "\t" << utility << std::endl;
-// 			}
-// 		}
+		// subtree.practicality.insert(subtree.practicality.end(), subtree_results_pr.begin(), subtree_results_pr.end());
+	} else {
+		size_t number_groups = input.players.size();
 
-// 		subtree.practicality.insert(subtree.practicality.end(), subtree_results_pr.begin(), subtree_results_pr.end());
-// 	} else {
-// 		size_t number_groups = input.players.size();
+		std::cout << "Is this subtree " << prop_name << "?" << std::endl;
+		std::vector<SubtreeResult> subtree_results;
 
-// 		std::cout << "Is this subtree " << prop_name << "?" << std::endl;
-// 		std::vector<SubtreeResult> subtree_results;
+		for (unsigned i = 0; i < number_groups; i++){
+			input.reset_reset_point();
+			input.root.get()->reset_reason();
+			std::vector<std::string> players = index2player(input, i+1);
 
-// 		for (unsigned i = 0; i < number_groups; i++){
-// 			input.reset_reset_point();
-// 			input.root.get()->reset_reason();
-// 			std::vector<std::string> players = index2player(input, i+1);
+			SubtreeResult subtree_result_player;
+			subtree_result_player.player_group = players;
+			subtree_result_player.satisfied_in_case = {};
 
-// 			SubtreeResult subtree_result_player;
-// 			subtree_result_player.player_group = players;
-// 			subtree_result_player.satisfied_in_case = {};
+			std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
 
-// 			std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
+			// i+1 in index2player while i in property_rec_nohistory is on purpose
+			if (property_rec_nohistory(solver, options, input, property, std::vector<z3::Bool>(), i, subtree_result_player.satisfied_in_case, subtree_results_pr)){
+				std::cout << "YES, it is " << prop_name << " for player " <<  players << "."  << std::endl;
+			} else {
+				std::cout << "NO, it is not " << prop_name << " for player " << players << "." << std::endl;
+			}
 
-// 			// i+1 in index2player while i in property_rec_nohistory is on purpose
-// 			if (property_rec_nohistory(solver, options, input, property, std::vector<z3::Bool>(), i, subtree_result_player.satisfied_in_case, subtree_results_pr)){
-// 				std::cout << "YES, it is " << prop_name << " for player " <<  players << "."  << std::endl;
-// 			} else {
-// 				std::cout << "NO, it is not " << prop_name << " for player " << players << "." << std::endl;
-// 			}
+			// check whether we already have a SubtreeResult for this player
+			// if yes: append sat cases
+			// if not: pushback
+			bool found = false;
+			for(auto &subtree_result : subtree_results) {
+				if(subtree_result.player_group.size() == subtree_result_player.player_group.size()) {
+					if(std::equal(subtree_result.player_group.begin(), subtree_result.player_group.end(),subtree_result_player.player_group.begin())) {
+						found = true;
+						subtree_result.satisfied_in_case.insert(subtree_result.satisfied_in_case.end(), subtree_result_player.satisfied_in_case.begin(), subtree_result_player.satisfied_in_case.end());
+						break;
+					}
+				}
+			}
+			if(!found) {
+				subtree_results.push_back(subtree_result_player);
+			}
+		}
 
-// 			// check whether we already have a SubtreeResult for this player
-// 			// if yes: append sat cases
-// 			// if not: pushback
-// 			bool found = false;
-// 			for(auto &subtree_result : subtree_results) {
-// 				if(subtree_result.player_group.size() == subtree_result_player.player_group.size()) {
-// 					if(std::equal(subtree_result.player_group.begin(), subtree_result.player_group.end(),subtree_result_player.player_group.begin())) {
-// 						found = true;
-// 						subtree_result.satisfied_in_case.insert(subtree_result.satisfied_in_case.end(), subtree_result_player.satisfied_in_case.begin(), subtree_result_player.satisfied_in_case.end());
-// 						break;
-// 					}
-// 				}
-// 			}
-// 			if(!found) {
-// 				subtree_results.push_back(subtree_result_player);
-// 			}
-// 		}
+		if(property == PropertyType::WeakImmunity) {
+			subtree.weak_immunity.insert(subtree.weak_immunity.end(), subtree_results.begin(), subtree_results.end());
+		} else if (property == PropertyType::WeakerImmunity) {
+			subtree.weaker_immunity.insert(subtree.weaker_immunity.end(), subtree_results.begin(), subtree_results.end());
+		}
 
-// 		if(property == PropertyType::WeakImmunity) {
-// 			subtree.weak_immunity.insert(subtree.weak_immunity.end(), subtree_results.begin(), subtree_results.end());
-// 		} else if (property == PropertyType::WeakerImmunity) {
-// 			subtree.weaker_immunity.insert(subtree.weaker_immunity.end(), subtree_results.begin(), subtree_results.end());
-// 		}
+	}
 
-// 	}
-
-// 	return;
-// }
+	return;
+}
 
 void analyse_properties(const Options &options, const Input &input)
 {
@@ -2525,9 +2527,7 @@ void analyse_properties(const Options &options, const Input &input)
 		}
 	}
 
-	// THIS IS FOR THE COMPOSITIONALITY (SUBTREE/SUPERTREE) FEATURE
-	// TO BE CONSIDERED LATER
-	/*if(input.honest_utilities.size() != 0) {
+	if(input.honest_utilities.size() != 0) {
 
 		input.root->reset_honest();
 
@@ -2544,15 +2544,15 @@ void analyse_properties(const Options &options, const Input &input)
 
 		for (size_t i=0; i<property_chosen.size(); i++) {
 			if(property_chosen[i]) {
-				input.reset_counterexamples();
-				input.root.get()->reset_counterexample_choices();
-				input.reset_logging();
-				input.reset_unsat_cases();
+				// input.reset_counterexamples();
+				// input.root.get()->reset_counterexample_choices();
+				// input.reset_logging();
+				// input.reset_unsat_cases();
 				input.root->reset_reason();
-				input.root->reset_strategy();
-				input.reset_strategies();
-				input.root->reset_problematic_group(false);
-				input.reset_reset_point();
+				// input.root->reset_strategy();
+				// input.reset_strategies();
+				// input.root->reset_problematic_group(false);
+				// input.reset_reset_point();
 				property(options, input, property_types[i], input.honest.size());
 			}
 		}
@@ -2562,21 +2562,21 @@ void analyse_properties(const Options &options, const Input &input)
 			for(unsigned honest_utility = 0; honest_utility < input.honest_utilities.size(); honest_utility++) {
 				std::cout << std::endl;
 				std::cout << std::endl;
-				std::cout << "Checking honest utility " << input.honest_utilities[honest_utility].leaf << std::endl;
+				std::cout << "Checking honest utility " << input.honest_utilities[honest_utility].utility << std::endl;
 
-				if(options.strategies) {
-					input.root->reset_violation_cr();
-				}
+				// if(options.strategies) {
+				// 	input.root->reset_violation_cr();
+				// }
 
-				input.reset_counterexamples();
-				input.root.get()->reset_counterexample_choices();
-				input.reset_logging();
-				input.reset_unsat_cases();
+				// input.reset_counterexamples();
+				// input.root.get()->reset_counterexample_choices();
+				// input.reset_logging();
+				// input.reset_unsat_cases();
 				input.root->reset_reason();
-				input.root->reset_strategy();
-				input.reset_strategies();
-				input.root->reset_problematic_group(true);
-				input.reset_reset_point();
+				// input.root->reset_strategy();
+				// input.reset_strategies();
+				// input.root->reset_problematic_group(true);
+				// input.reset_reset_point();
 				// input.honest.size() + honest_utility means we are running a subree in default mode
 				// and we consider collusion resilience for the honest utility
 				property(options, input, PropertyType::CollusionResilience, input.honest.size() + honest_utility);
@@ -2585,147 +2585,159 @@ void analyse_properties(const Options &options, const Input &input)
 
 		}
 
-	}*/
+	}
 }
 
-// THIS IS FOR THE COMPOSITIONALITY (SUBTREE/SUPERTREE) FEATURE
-// TO BE CONSIDERED LATER
-// void analyse_properties_subtree(const Options &options, const Input &input) {
-// 	// analysis for a subtree:
-// 	// i.e. we might be along the honest history or not
-// 	// if we are not along honest, we need the honest utility as comparison value (for collusion resilience)--> probably an input parameter
+void analyse_properties_subtree(const Options &options, const Input &input) {
 
-// 	// in any case we want to return...
-// 	//     ...for w(er)i: for which players the subtree is w(er)i
-// 	//     ...for cr: against which groups of players the subtree is cr
-// 	//     ...for pr: all practical utilities
+	// analysis for a subtree:
+	// i.e. we might be along the honest history or not
+	// if we are not along honest, we need the honest utility as comparison value (for collusion resilience)--> probably an input parameter
 
-// 	// input needs: honest utility vector (std::vector<UtilityTuple>)
+	// in any case we want to return...
+	//     ...for w(er)i: for which players the subtree is w(er)i
+	//     ...for cr: against which groups of players the subtree is cr
+	//     ...for pr: all practical utilities
 
-// 	/* iterate over all honest histories and check the properties for each of them */
-// 	for (size_t history = 0; history < input.honest.size(); history++) {
+	// input needs: honest utility vector (std::vector<UtilityTuple>)
 
-// 		std::cout << std::endl;
-// 		std::cout << std::endl;
-// 		std::cout << "Checking history " << input.honest[history] << std::endl;
+	/* iterate over all honest histories and check the properties for each of them */
+	for (size_t history = 0; history < input.honest.size(); history++) {
 
-// 		input.root->reset_honest();
-// 		input.root->mark_honest(input.honest[history]);
-// 		input.root->reset_practical_utilities();
+		std::cout << std::endl;
+		std::cout << std::endl;
+		std::cout << "Checking history " << print_history(input.honest[history]) << std::endl;
 
-// 		if(options.strategies) {
-// 			input.root->reset_violation_cr();
-// 		}
+		input.root->reset_honest();
+		input.root->mark_honest(input.honest[history]);
+		//input.root->reset_practical_utilities();
+		input.cond_actions_honest_utility_pairs = {};
 
-// 		std::vector<bool> property_chosen = {options.weak_immunity, options.weaker_immunity, options.collusion_resilience, options.practicality};
-// 		std::vector<PropertyType> property_types = {PropertyType::WeakImmunity, PropertyType::WeakerImmunity, PropertyType::CollusionResilience, PropertyType::Practicality};
+		if(options.collusion_resilience) {
+			compute_conditional_actions_honest_utility_pairs(input, {}, input.root.get());
+		}
 
-// 		assert(property_chosen.size() == property_types.size());
+		// if(options.strategies) {
+		// 	input.root->reset_violation_cr();
+		// }
 
-// 		Subtree st({}, {}, {}, {}, {});
-// 		Subtree &subtree = st;
-// 		const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
-// 		subtree.honest_utility = honest_leaf.leaf().utilities;
+		std::vector<bool> property_chosen = {options.weak_immunity, options.weaker_immunity, options.collusion_resilience, options.practicality};
+		std::vector<PropertyType> property_types = {PropertyType::WeakImmunity, PropertyType::WeakerImmunity, PropertyType::CollusionResilience, PropertyType::Practicality};
 
-// 		for (size_t i=0; i<property_chosen.size(); i++) {
-// 			if(property_chosen[i]) {
-// 				input.reset_counterexamples();
-// 				input.root.get()->reset_counterexample_choices();
-// 				input.reset_logging();
-// 				input.reset_unsat_cases();
-// 				input.root->reset_reason();
-// 				input.root->reset_strategy();
-// 				input.reset_strategies();
-// 				input.root->reset_problematic_group(i==2);
-// 				input.reset_reset_point();
-// 				property_subtree(options, input, property_types[i], history, subtree);
-// 			}
-// 		}
+		assert(property_chosen.size() == property_types.size());
 
-// 		std::string file_name = "subtree_result_history" + std::to_string(history) + ".txt";
-//         print_subtree_result_to_file(input, file_name, subtree);
+		Subtree st({}, {}, {}, {}, {});
+		Subtree &subtree = st;
+		subtree.honest_utility = input.cond_actions_honest_utility_pairs;
 
-// 	}
+		for (size_t i=0; i<property_chosen.size(); i++) {
+			if(property_chosen[i]) {
+				// input.reset_counterexamples();
+				// input.root.get()->reset_counterexample_choices();
+				// input.reset_logging();
+				// input.reset_unsat_cases();
+				input.root->reset_reason();
+				// input.root->reset_strategy();
+				// input.reset_strategies();
+				// input.root->reset_problematic_group(i==2);
+				// input.reset_reset_point();
+				property_subtree(options, input, property_types[i], history, subtree);
+			}
+		}
 
-// 	// iterate over all honest utilities (only for cr) and check the properties for each of them
-// 	// compute w(er)i and pr results
-// 	if (input.honest_utilities.size()>0) {
+		std::string file_name = "subtree_result_history" + std::to_string(history) + ".txt";
+		if(options.weak_conditional_actions) {
+			subtree.solved_weak_cond_actions = true;
+		} else {
+			subtree.solved_weak_cond_actions = false;
+		}
+        print_subtree_result_to_file(input, file_name, subtree);
 
-// 		std::cout << std::endl;
-// 		std::cout << std::endl;
-// 		std::cout << "Checking no honest history " << std::endl;
+	}
 
-// 		input.root->reset_honest();
-// 		input.root->reset_practical_utilities();
+	// iterate over all honest utilities (only for cr) and check the properties for each of them
+	// compute w(er)i and pr results
+	if (input.honest_utilities.size()>0) {
 
-// 		// possibly comment out
-// 		if(options.strategies) {
-// 			input.root->reset_violation_cr();
-// 		}
+		std::cout << std::endl;
+		std::cout << std::endl;
+		std::cout << "Checking no honest history " << std::endl;
 
-// 		Subtree st({}, {}, {}, {}, {});
-// 		Subtree &subtree = st;
+		input.root->reset_honest();
+		input.root->reset_practical_utilities();
 
-// 		// cr handled below
-// 		std::vector<bool> property_chosen = {options.weak_immunity, options.weaker_immunity, options.practicality};
-// 		std::vector<PropertyType> property_types = {PropertyType::WeakImmunity, PropertyType::WeakerImmunity, PropertyType::Practicality};
+		// possibly comment out
+		// if(options.strategies) {
+		// 	input.root->reset_violation_cr();
+		// }
 
-// 		assert(property_chosen.size() == property_types.size());
+		Subtree st({}, {}, {}, {}, {});
+		Subtree &subtree = st;
 
-// 		for (size_t i=0; i<property_chosen.size(); i++) {
-// 			if(property_chosen[i]) {
-// 				input.reset_counterexamples();
-// 				input.root.get()->reset_counterexample_choices();
-// 				input.reset_logging();
-// 				input.reset_unsat_cases();
-// 				input.root->reset_reason();
-// 				input.root->reset_strategy();
-// 				input.reset_strategies();
-// 				input.reset_reset_point();
-// 				property_subtree_nohistory(options, input, property_types[i], subtree);
-// 			}
-// 		}
+		// cr handled below
+		std::vector<bool> property_chosen = {options.weak_immunity, options.weaker_immunity, options.practicality};
+		std::vector<PropertyType> property_types = {PropertyType::WeakImmunity, PropertyType::WeakerImmunity, PropertyType::Practicality};
 
-// 		// for cr iterate over all honest utilities
-// 		for (unsigned utility = 0; utility < input.honest_utilities.size(); utility++) {
+		assert(property_chosen.size() == property_types.size());
 
-// 			std::cout << std::endl;
-// 			std::cout << std::endl;
-// 			std::cout << "Checking utility " << input.honest_utilities[utility].leaf << std::endl;
+		for (size_t i=0; i<property_chosen.size(); i++) {
+			if(property_chosen[i]) {
+				// input.reset_counterexamples();
+				// input.root.get()->reset_counterexample_choices();
+				// input.reset_logging();
+				// input.reset_unsat_cases();
+				input.root->reset_reason();
+				// input.root->reset_strategy();
+				// input.reset_strategies();
+				// input.reset_reset_point();
+				property_subtree_nohistory(options, input, property_types[i], subtree);
+			}
+		}
 
-// 			input.root->reset_honest();
+		// for cr iterate over all honest utilities
+		for (unsigned utility = 0; utility < input.honest_utilities.size(); utility++) {
 
-// 			// possible comment out?
-// 			if(options.strategies) {
-// 				input.root->reset_violation_cr();
-// 			}
+			std::cout << std::endl;
+			std::cout << std::endl;
+			std::cout << "Checking utility " << input.honest_utilities[utility].utility << std::endl;
 
-// 			subtree.collusion_resilience = {};
+			input.root->reset_honest();
 
-// 			if(options.collusion_resilience) {
-// 				input.reset_counterexamples();
-// 				input.root.get()->reset_counterexample_choices();
-// 				input.reset_logging();
-// 				input.reset_unsat_cases();
-// 				input.root->reset_reason();
-// 				input.root->reset_strategy();
-// 				input.reset_strategies();
-// 				input.root->reset_problematic_group(true);
-// 				input.reset_reset_point();
-// 				property_subtree_utility(options, input, PropertyType::CollusionResilience, input.honest_utilities[utility].leaf, subtree);
-// 			}
+			// possible comment out?
+			// if(options.strategies) {
+			// 	input.root->reset_violation_cr();
+			// }
 
-// 			// create one file for this utility
-// 			// set honest utility to this utility
-// 			// set wi, weri, cr, pr subtree results
-// 			// wi, weri, pr always the same, only cr changes
-// 			subtree.honest_utility = input.honest_utilities[utility].leaf;
+			subtree.collusion_resilience = {};
 
-// 			std::string file_name = "subtree_result_utility" + std::to_string(utility) + ".txt";
-//         	print_subtree_result_to_file(input, file_name, subtree);
+			if(options.collusion_resilience) {
+				// input.reset_counterexamples();
+				// input.root.get()->reset_counterexample_choices();
+				// input.reset_logging();
+				// input.reset_unsat_cases();
+				input.root->reset_reason();
+				// input.root->reset_strategy();
+				// input.reset_strategies();
+				// input.root->reset_problematic_group(true);
+				// input.reset_reset_point();
+				property_subtree_utility(options, input, PropertyType::CollusionResilience, input.honest_utilities[utility].utility, subtree);
+			}
 
-// 		}
+			// create one file for this utility
+			// set honest utility to this utility
+			// set wi, weri, cr, pr subtree results
+			// wi, weri, pr always the same, only cr changes
+			subtree.honest_utility = input.honest_utilities;
 
-// 	}
+			std::string file_name = "subtree_result_utility" + std::to_string(utility) + ".txt";
+			if(options.weak_conditional_actions) {
+				subtree.solved_weak_cond_actions = true;
+			} else {
+				subtree.solved_weak_cond_actions = false;
+			}
+        	print_subtree_result_to_file(input, file_name, subtree);
 
-// }
+		}
+
+	}
+}

@@ -5,9 +5,11 @@
 #include "input.hpp"
 
 // lexical analysis for expressions
-struct Lexer {
+struct Lexer
+{
 	// possible tokens in expressions
-	enum class Token {
+	enum class Token
+	{
 		NUMERAL,
 		IDENTIFIER,
 		LPAREN,
@@ -36,23 +38,28 @@ struct Lexer {
 	std::string buffer;
 
 	// start analysis of the NUL-terminated expression `start`
-	void start(const char *start) {
+	void start(const char *start)
+	{
 		unary = true;
 		current = start;
 		remaining = start;
 	}
 
 	// check if there are any more tokens, possibly advancing `remaining` past whitespace
-	bool has_more() {
-		while (std::isspace(*remaining)) remaining++;
+	bool has_more()
+	{
+		while (std::isspace(*remaining))
+			remaining++;
 		return *remaining;
 	}
 
 	// get the next token or exit with failure
-	Token next() {
+	Token next()
+	{
 		buffer.clear();
 		// a variable name
-		if (std::isalpha(*remaining)) {
+		if (std::isalpha(*remaining))
+		{
 			buffer.push_back(*remaining++);
 			while (std::isalnum(*remaining) || *remaining == '_')
 				buffer.push_back(*remaining++);
@@ -60,74 +67,97 @@ struct Lexer {
 			return Token::IDENTIFIER;
 		}
 		// number
-		else if (std::isdigit(*remaining)) {
+		else if (std::isdigit(*remaining))
+		{
 			buffer.push_back(*remaining++);
 			while (std::isdigit(*remaining) || *remaining == '.')
 				buffer.push_back(*remaining++);
 			unary = false;
 			return Token::NUMERAL;
 		}
-		else if(*remaining == '(') {
+		else if (*remaining == '(')
+		{
 			remaining++;
 			unary = true;
 			return Token::LPAREN;
 		}
-		else if(*remaining == ')') {
+		else if (*remaining == ')')
+		{
 			remaining++;
 			unary = false;
 			return Token::RPAREN;
 		}
 		// operators
-		else if (*remaining == '+') {
+		else if (*remaining == '+')
+		{
 			remaining++;
 			unary = true;
 			return Token::PLUS;
-		} else if (*remaining == '-') {
+		}
+		else if (*remaining == '-')
+		{
 			remaining++;
 			if (unary)
 				return Token::NEGATE;
 			unary = true;
 			return Token::MINUS;
-		} else if (*remaining == '*') {
+		}
+		else if (*remaining == '*')
+		{
 			remaining++;
 			unary = true;
 			return Token::MULTIPLY;
-		} else if (*remaining == '=') {
+		}
+		else if (*remaining == '=')
+		{
 			remaining++;
 			unary = true;
 			return Token::EQ;
-		} else if (*remaining == '!' && remaining[1] == '=') {
+		}
+		else if (*remaining == '!' && remaining[1] == '=')
+		{
 			remaining += 2;
 			unary = true;
 			return Token::NE;
-		} else if (*remaining == '>') {
+		}
+		else if (*remaining == '>')
+		{
 			remaining++;
-			if (*remaining == '=') {
+			if (*remaining == '=')
+			{
 				remaining++;
 				unary = true;
 				return Token::GE;
 			}
 			unary = true;
 			return Token::GT;
-		} else if (*remaining == '<') {
+		}
+		else if (*remaining == '<')
+		{
 			remaining++;
-			if (*remaining == '=') {
+			if (*remaining == '=')
+			{
 				remaining++;
 				unary = true;
 				return Token::LE;
 			}
 			unary = true;
 			return Token::LT;
-		} else if (*remaining == '|') {
+		}
+		else if (*remaining == '|')
+		{
 			remaining++;
 			unary = true;
 			return Token::OR;
-		} else if (*remaining == '&') {
+		}
+		else if (*remaining == '&')
+		{
 			remaining++;
 			unary = true;
 			return Token::AND;
 		}
-		else {
+		else
+		{
 			std::cerr << "checkmate: unexpected character '" << *remaining << "' in expression " << current << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
@@ -135,9 +165,11 @@ struct Lexer {
 };
 
 // parsing for expressions based on the "shunting-yard" algorithm
-struct Parser {
+struct Parser
+{
 	// possible operators to apply to the stack
-	enum class Operation {
+	enum class Operation
+	{
 		PAREN,
 		PLUS,
 		MINUS,
@@ -154,7 +186,8 @@ struct Parser {
 	};
 
 	// operator precedence classes, binding from loosest to tightest
-	enum class Precedence {
+	enum class Precedence
+	{
 		PAREN,
 		AND,
 		OR,
@@ -165,29 +198,31 @@ struct Parser {
 	};
 
 	// the precedence class of an operator
-	static Precedence precedence(Operation operation) {
-		switch (operation) {
-			case Operation::PAREN:
-				return Precedence::PAREN;
-			case Operation::PLUS:
-			case Operation::MINUS:
-				return Precedence::PLUSMINUS;
-			case Operation::MULTIPLY:
-				return Precedence::MULTIPLY;
-			case Operation::NEGATE:
-				return Precedence::NEGATE;
-			case Operation::EQ:
-			case Operation::NE:
-			case Operation::GT:
-			case Operation::GE:
-				return Precedence::COMPARISON;
-			case Operation::LT:
-			case Operation::LE:
-				return Precedence::COMPARISON;
-			case Operation::OR:
-				return Precedence::OR;
-			case Operation::AND:
-				return Precedence::AND;
+	static Precedence precedence(Operation operation)
+	{
+		switch (operation)
+		{
+		case Operation::PAREN:
+			return Precedence::PAREN;
+		case Operation::PLUS:
+		case Operation::MINUS:
+			return Precedence::PLUSMINUS;
+		case Operation::MULTIPLY:
+			return Precedence::MULTIPLY;
+		case Operation::NEGATE:
+			return Precedence::NEGATE;
+		case Operation::EQ:
+		case Operation::NE:
+		case Operation::GT:
+		case Operation::GE:
+			return Precedence::COMPARISON;
+		case Operation::LT:
+		case Operation::LE:
+			return Precedence::COMPARISON;
+		case Operation::OR:
+			return Precedence::OR;
+		case Operation::AND:
+			return Precedence::AND;
 		}
 		assert(false);
 		UNREACHABLE;
@@ -209,20 +244,23 @@ struct Parser {
 	std::vector<z3::Bool> constraint_stack;
 
 	// bail out from a malformed expression
-	[[noreturn]] void error() {
+	[[noreturn]] void error()
+	{
 		std::cerr << "checkmate: could not parse expression " << lexer.current << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 
 	// pop an operation from the stack
-	Operation pop_operation() {
+	Operation pop_operation()
+	{
 		auto operation = operation_stack.back();
 		operation_stack.pop_back();
 		return operation;
 	}
 
 	// pop a utility from the stack
-	Utility pop_utility() {
+	Utility pop_utility()
+	{
 		if (utility_stack.empty())
 			error();
 		auto utility = utility_stack.back();
@@ -231,7 +269,8 @@ struct Parser {
 	}
 
 	// pop a Boolean from the stack
-	z3::Bool pop_constraint() {
+	z3::Bool pop_constraint()
+	{
 		if (constraint_stack.empty())
 			error();
 		auto constraint = constraint_stack.back();
@@ -240,156 +279,180 @@ struct Parser {
 	}
 
 	// once we know we have to apply an operation, commit to it
-	void commit(Operation operation) {
-		switch (operation) {
-			case Operation::PAREN:
-				// nothing to do
-				break;
-			case Operation::PLUS: {
-				auto right = pop_utility();
-				auto left = pop_utility();
-				utility_stack.push_back(left + right);
-				break;
-			}
-			case Operation::MINUS: {
-				auto right = pop_utility();
-				auto left = pop_utility();
-				utility_stack.push_back(left - right);
-				break;
-			}
-			case Operation::MULTIPLY: {
-				auto right = pop_utility();
-				auto left = pop_utility();
-				utility_stack.push_back(left * right);
-				break;
-			}
-			case Operation::NEGATE: {
-				auto negate = pop_utility();
-				utility_stack.push_back(-negate);
-				break;
-			}
-			case Operation::EQ: {
-				auto right = pop_utility();
-				auto left = pop_utility();
-				constraint_stack.push_back(left == right);
-				break;
-			}
-			case Operation::NE: {
-				auto right = pop_utility();
-				auto left = pop_utility();
-				constraint_stack.push_back(left != right);
-				break;
-			}
-			case Operation::GT: {
-				auto right = pop_utility();
-				auto left = pop_utility();
-				constraint_stack.push_back(left > right);
-				break;
-			}
-			case Operation::GE: {
-				auto right = pop_utility();
-				auto left = pop_utility();
-				constraint_stack.push_back(left >= right);
-				break;
-			}
-			case Operation::LT: {
-				auto right = pop_utility();
-				auto left = pop_utility();
-				constraint_stack.push_back(left < right);
-				break;
-			}
-			case Operation::LE: {
-				auto right = pop_utility();
-				auto left = pop_utility();
-				constraint_stack.push_back(left <= right);
-				break;
-			}
-			case Operation::OR: {
-				auto right = pop_constraint();
-				auto left = pop_constraint();
-				constraint_stack.push_back(left || right);
-				break;
-			}
-			case Operation::AND:
-				auto right = pop_constraint();
-				auto left = pop_constraint();
-				constraint_stack.push_back(left && right);
-				break;
+	void commit(Operation operation)
+	{
+		switch (operation)
+		{
+		case Operation::PAREN:
+			// nothing to do
+			break;
+		case Operation::PLUS:
+		{
+			auto right = pop_utility();
+			auto left = pop_utility();
+			utility_stack.push_back(left + right);
+			break;
+		}
+		case Operation::MINUS:
+		{
+			auto right = pop_utility();
+			auto left = pop_utility();
+			utility_stack.push_back(left - right);
+			break;
+		}
+		case Operation::MULTIPLY:
+		{
+			auto right = pop_utility();
+			auto left = pop_utility();
+			utility_stack.push_back(left * right);
+			break;
+		}
+		case Operation::NEGATE:
+		{
+			auto negate = pop_utility();
+			utility_stack.push_back(-negate);
+			break;
+		}
+		case Operation::EQ:
+		{
+			auto right = pop_utility();
+			auto left = pop_utility();
+			constraint_stack.push_back(left == right);
+			break;
+		}
+		case Operation::NE:
+		{
+			auto right = pop_utility();
+			auto left = pop_utility();
+			constraint_stack.push_back(left != right);
+			break;
+		}
+		case Operation::GT:
+		{
+			auto right = pop_utility();
+			auto left = pop_utility();
+			constraint_stack.push_back(left > right);
+			break;
+		}
+		case Operation::GE:
+		{
+			auto right = pop_utility();
+			auto left = pop_utility();
+			constraint_stack.push_back(left >= right);
+			break;
+		}
+		case Operation::LT:
+		{
+			auto right = pop_utility();
+			auto left = pop_utility();
+			constraint_stack.push_back(left < right);
+			break;
+		}
+		case Operation::LE:
+		{
+			auto right = pop_utility();
+			auto left = pop_utility();
+			constraint_stack.push_back(left <= right);
+			break;
+		}
+		case Operation::OR:
+		{
+			auto right = pop_constraint();
+			auto left = pop_constraint();
+			constraint_stack.push_back(left || right);
+			break;
+		}
+		case Operation::AND:
+			auto right = pop_constraint();
+			auto left = pop_constraint();
+			constraint_stack.push_back(left && right);
+			break;
 		}
 	}
 
 	// handle a new `operation`, committing higher-precedence operations and then pushing it on `operation_stack`
-	void operation(Operation operation) {
+	void operation(Operation operation)
+	{
 		while (!operation_stack.empty() && precedence(operation_stack.back()) >= precedence(operation))
 			commit(pop_operation());
 		operation_stack.push_back(operation);
 	}
 
 	// parse either a utility term or a Boolean expression, leaving it in the stack
-	void parse(const char *start) {
+	void parse(const char *start)
+	{
 		lexer.start(start);
-		while (lexer.has_more()) {
+		while (lexer.has_more())
+		{
 			Lexer::Token token = lexer.next();
-			switch (token) {
-				case Lexer::Token::NUMERAL:
-					utility_stack.push_back({z3::Real::value(lexer.buffer), z3::Real::ZERO});
-					break;
-				case Lexer::Token::IDENTIFIER: {
-					Utility utility;
-					try {
-						utility = identifiers.at(lexer.buffer);
-					}
-					catch (const std::out_of_range &) {
-						std::cerr << "checkmate: undeclared constant " << lexer.buffer << std::endl;
-						std::exit(EXIT_FAILURE);
-					}
-					utility_stack.push_back(utility);
-					break;
+			switch (token)
+			{
+			case Lexer::Token::NUMERAL:
+				utility_stack.push_back({z3::Real::value(lexer.buffer), z3::Real::ZERO});
+				break;
+			case Lexer::Token::IDENTIFIER:
+			{
+				Utility utility;
+				try
+				{
+					utility = identifiers.at(lexer.buffer);
 				}
-				case Lexer::Token::LPAREN: {
-					operation_stack.push_back(Operation::PAREN);
-					break;
+				catch (const std::out_of_range &)
+				{
+					std::cerr << "checkmate: undeclared constant " << lexer.buffer << std::endl;
+					std::exit(EXIT_FAILURE);
 				}
-				case Lexer::Token::RPAREN: {
-					while (!operation_stack.empty() && operation_stack.back() != Operation::PAREN)
-						commit(pop_operation());
-					pop_operation();
-					break;
-				}
-				case Lexer::Token::PLUS:
-					operation(Operation::PLUS);
-					break;
-				case Lexer::Token::MINUS:
-					operation(Operation::MINUS);
-					break;
-				case Lexer::Token::MULTIPLY:
-					operation(Operation::MULTIPLY);
-					break;
-				case Lexer::Token::NEGATE:
-					operation(Operation::NEGATE);
-					break;
-				case Lexer::Token::EQ:
-					operation(Operation::EQ);
-					break;
-				case Lexer::Token::NE:
-					operation(Operation::NE);
-					break;
-				case Lexer::Token::GT:
-					operation(Operation::GT);
-					break;
-				case Lexer::Token::GE:
-					operation(Operation::GE);
-					break;
-				case Lexer::Token::LT:
-					operation(Operation::LT);
-					break;
-				case Lexer::Token::LE:
-					operation(Operation::LE);
-					break;
-				case Lexer::Token::OR:
-					operation(Operation::OR);
-				case Lexer::Token::AND:
-					operation(Operation::AND);
+				utility_stack.push_back(utility);
+				break;
+			}
+			case Lexer::Token::LPAREN:
+			{
+				operation_stack.push_back(Operation::PAREN);
+				break;
+			}
+			case Lexer::Token::RPAREN:
+			{
+				while (!operation_stack.empty() && operation_stack.back() != Operation::PAREN)
+					commit(pop_operation());
+				pop_operation();
+				break;
+			}
+			case Lexer::Token::PLUS:
+				operation(Operation::PLUS);
+				break;
+			case Lexer::Token::MINUS:
+				operation(Operation::MINUS);
+				break;
+			case Lexer::Token::MULTIPLY:
+				operation(Operation::MULTIPLY);
+				break;
+			case Lexer::Token::NEGATE:
+				operation(Operation::NEGATE);
+				break;
+			case Lexer::Token::EQ:
+				operation(Operation::EQ);
+				break;
+			case Lexer::Token::NE:
+				operation(Operation::NE);
+				break;
+			case Lexer::Token::GT:
+				operation(Operation::GT);
+				break;
+			case Lexer::Token::GE:
+				operation(Operation::GE);
+				break;
+			case Lexer::Token::LT:
+				operation(Operation::LT);
+				break;
+			case Lexer::Token::LE:
+				operation(Operation::LE);
+				break;
+			case Lexer::Token::OR:
+				operation(Operation::OR);
+				break;
+			case Lexer::Token::AND:
+				operation(Operation::AND);
+				break;
 			}
 		}
 		// when there is no more input, we know all the operators have to be committed
@@ -398,7 +461,8 @@ struct Parser {
 	}
 
 	// parse a utility term, popping it out from the stack
-	Utility parse_utility(const char *start) {
+	Utility parse_utility(const char *start)
+	{
 		parse(start);
 		if (!constraint_stack.empty() || utility_stack.size() != 1)
 			error();
@@ -408,7 +472,8 @@ struct Parser {
 	}
 
 	// parse a Boolean term, popping it out from the stack
-	z3::Bool parse_constraint(const char *start) {
+	z3::Bool parse_constraint(const char *start)
+	{
 		parse(start);
 		if (!utility_stack.empty() || constraint_stack.size() != 1)
 			error();
@@ -421,8 +486,9 @@ struct Parser {
 // third-party library for parsing JSON
 using json = nlohmann::json;
 
-static z3::Bool parse_case(Parser &parser, const std::string &_case) {
-	if(_case == "true")
+static z3::Bool parse_case(Parser &parser, const std::string &_case)
+{
+	if (_case == "true")
 		return true;
 
 	return parser.parse_constraint(_case.c_str());
@@ -436,9 +502,11 @@ static z3::Bool parse_case(Parser &parser, const std::string &_case) {
  * TODO does not check all aspects
  * (hoping to have new input format based on s-expressions, which would be much easier to parse)
  */
-static Node* load_tree(const Input &input, Parser &parser, const json &node, bool supertree) {
+static Node *load_tree(const Input &input, Parser &parser, const json &node, bool supertree)
+{
 	// branch
-	if (node.contains("children")) {
+	if (node.contains("children"))
+	{
 		// do linear-time lookup for the index of the node's player in the input player list
 		unsigned player;
 		for (player = 0; player < input.players.size(); player++)
@@ -448,15 +516,18 @@ static Node* load_tree(const Input &input, Parser &parser, const json &node, boo
 			throw std::logic_error("undeclared player in the input");
 
 		std::vector<Condition> conditions = {};
-		if (node["children"][0].contains("condition")){
-			for (const json &condition_node: node["children"]) {
+		if (node["children"][0].contains("condition"))
+		{
+			for (const json &condition_node : node["children"])
+			{
 				const json &condition_json = condition_node["condition"];
 				z3::Bool condition = parse_case(parser, condition_json);
 
 				Condition cond;
 				cond.condition = condition;
 				// iterate over the actions and populate the cond.children
-				for (const json &child: condition_node["actions"]){
+				for (const json &child : condition_node["actions"])
+				{
 					auto loaded = load_tree(input, parser, child["child"], supertree);
 					Choice c;
 					c.action = child["action"];
@@ -466,11 +537,13 @@ static Node* load_tree(const Input &input, Parser &parser, const json &node, boo
 				conditions.push_back(cond);
 			}
 		}
-		else{
+		else
+		{
 			Condition cond;
 			z3::Bool bool_obj;
 			cond.condition = bool_obj.True();
-			for (const json &child: node["children"]) {
+			for (const json &child : node["children"])
+			{
 				auto loaded = load_tree(input, parser, child["child"], supertree);
 				cond.children.push_back({child["action"], std::move(loaded)});
 			}
@@ -481,31 +554,32 @@ static Node* load_tree(const Input &input, Parser &parser, const json &node, boo
 		return branch;
 	}
 
-	// leaf 
-	if (node.contains("utility")) {
+	// leaf
+	if (node.contains("utility"))
+	{
 		// (player, utility) pairs
 		using PlayerUtility = std::pair<std::string, Utility>;
 		std::vector<PlayerUtility> player_utilities;
-		for (const json &utility: node["utility"]) {
+		for (const json &utility : node["utility"])
+		{
 			const json &value = utility["value"];
 			// parse a utility expression
-			if (value.is_string()) {
+			if (value.is_string())
+			{
 				const std::string &string = value;
-				player_utilities.push_back({
-												   utility["player"],
-												   parser.parse_utility(string.c_str())
-										   });
+				player_utilities.push_back({utility["player"],
+											parser.parse_utility(string.c_str())});
 			}
-				// numeric utility, assumed real
-			else if (value.is_number_unsigned()) {
+			// numeric utility, assumed real
+			else if (value.is_number_unsigned())
+			{
 				unsigned number = value;
-				player_utilities.push_back({
-												   utility["player"],
-												   {z3::Real::value(number), z3::Real::ZERO}
-										   });
+				player_utilities.push_back({utility["player"],
+											{z3::Real::value(number), z3::Real::ZERO}});
 			}
-				// foreign object, bail
-			else {
+			// foreign object, bail
+			else
+			{
 				std::cerr << "checkmate: unsupported utility value " << value << std::endl;
 				std::exit(EXIT_FAILURE);
 			}
@@ -513,21 +587,23 @@ static Node* load_tree(const Input &input, Parser &parser, const json &node, boo
 
 		// sort (player, utility) pairs alphabetically by player
 		sort(
-				player_utilities.begin(),
-				player_utilities.end(),
-				[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
-		);
+			player_utilities.begin(),
+			player_utilities.end(),
+			[](const PlayerUtility &left, const PlayerUtility &right)
+			{ return left.first < right.first; });
 
 		Leaf *leaf(new Leaf);
-		for (auto &player_utility: player_utilities)
+		for (auto &player_utility : player_utilities)
 			leaf->utilities.push_back(player_utility.second);
 		return leaf;
 	}
 
 	// subtree summary
-	if (node.contains("subtree")) {
+	if (node.contains("subtree"))
+	{
 
-		if (!supertree) {
+		if (!supertree)
+		{
 			// subtree nodes can only occur in supertree mode!
 			std::cerr << "checkmate: unexpected subtree node; call in --supertree mode " << node << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -538,15 +614,20 @@ static Node* load_tree(const Input &input, Parser &parser, const json &node, boo
 		std::vector<SubtreeResult> collusion_resilience = {};
 		std::vector<PracticalitySubtreeResult> practicality = {};
 
-
-		if (node["subtree"].contains("weak_immunity")){
-			for (const json &wi: node["subtree"]["weak_immunity"]) {
+		if (node["subtree"].contains("weak_immunity"))
+		{
+			for (const json &wi : node["subtree"]["weak_immunity"])
+			{
 				const json &players_json = wi["player_group"];
 				std::vector<std::string> player_group;
-				for (const auto &player : players_json){
-					if (player.is_string()){
+				for (const auto &player : players_json)
+				{
+					if (player.is_string())
+					{
 						player_group.push_back(player);
-					} else {
+					}
+					else
+					{
 						std::cerr << "checkmate: unsupported player value " << player << std::endl;
 						std::exit(EXIT_FAILURE);
 					}
@@ -554,30 +635,39 @@ static Node* load_tree(const Input &input, Parser &parser, const json &node, boo
 				std::vector<std::vector<z3::Bool>> satisfied_in_case = {};
 
 				const json &cases = wi["satisfied_in_case"];
-				for (const json &json_case: cases) {
+				for (const json &json_case : cases)
+				{
 					std::vector<z3::Bool> _case = {};
-					for (const json &_case_entry: json_case) {
-						if(_case_entry != "true") {
+					for (const json &_case_entry : json_case)
+					{
+						if (_case_entry != "true")
+						{
 							const std::string &_case_e = _case_entry;
 							_case.push_back(parse_case(parser, _case_e));
 						}
 					}
-					satisfied_in_case.push_back(_case);					
+					satisfied_in_case.push_back(_case);
 				}
 
-				SubtreeResult wi_result { player_group, satisfied_in_case };
+				SubtreeResult wi_result{player_group, satisfied_in_case};
 				weak_immunity.push_back(wi_result);
 			}
 		}
 
-		if (node["subtree"].contains("weaker_immunity")){
-			for (const json &weri: node["subtree"]["weaker_immunity"]) {
+		if (node["subtree"].contains("weaker_immunity"))
+		{
+			for (const json &weri : node["subtree"]["weaker_immunity"])
+			{
 				const json &players_json = weri["player_group"];
 				std::vector<std::string> player_group = {};
-				for (const auto &player : players_json){
-					if (player.is_string()){
+				for (const auto &player : players_json)
+				{
+					if (player.is_string())
+					{
 						player_group.push_back(player);
-					} else {
+					}
+					else
+					{
 						std::cerr << "checkmate: unsupported player value " << player << std::endl;
 						std::exit(EXIT_FAILURE);
 					}
@@ -585,30 +675,39 @@ static Node* load_tree(const Input &input, Parser &parser, const json &node, boo
 				std::vector<std::vector<z3::Bool>> satisfied_in_case = {};
 
 				const json &cases = weri["satisfied_in_case"];
-				for (const json &json_case: cases) {
+				for (const json &json_case : cases)
+				{
 					std::vector<z3::Bool> _case = {};
-					for (const json &_case_entry: json_case) {
-						if(_case_entry != "true") {
+					for (const json &_case_entry : json_case)
+					{
+						if (_case_entry != "true")
+						{
 							const std::string &_case_e = _case_entry;
 							_case.push_back(parse_case(parser, _case_e));
 						}
 					}
-					satisfied_in_case.push_back(_case);					
+					satisfied_in_case.push_back(_case);
 				}
 
-				SubtreeResult weri_result { player_group, satisfied_in_case };
+				SubtreeResult weri_result{player_group, satisfied_in_case};
 				weaker_immunity.push_back(weri_result);
 			}
 		}
 
-		if (node["subtree"].contains("collusion_resilience")){
-			for (const json &cr: node["subtree"]["collusion_resilience"]) {
+		if (node["subtree"].contains("collusion_resilience"))
+		{
+			for (const json &cr : node["subtree"]["collusion_resilience"])
+			{
 				const json &players_json = cr["player_group"];
 				std::vector<std::string> player_group = {};
-				for (const auto &player : players_json){
-					if (player.is_string()){
+				for (const auto &player : players_json)
+				{
+					if (player.is_string())
+					{
 						player_group.push_back(player);
-					} else {
+					}
+					else
+					{
 						std::cerr << "checkmate: unsupported player value " << player << std::endl;
 						std::exit(EXIT_FAILURE);
 					}
@@ -616,58 +715,66 @@ static Node* load_tree(const Input &input, Parser &parser, const json &node, boo
 				std::vector<std::vector<z3::Bool>> satisfied_in_case = {};
 
 				const json &cases = cr["satisfied_in_case"];
-				for (const json &json_case: cases) {
+				for (const json &json_case : cases)
+				{
 					std::vector<z3::Bool> _case = {};
-					for (const json &_case_entry: json_case) {
-						if(_case_entry != "true") {
+					for (const json &_case_entry : json_case)
+					{
+						if (_case_entry != "true")
+						{
 							const std::string &_case_e = _case_entry;
 							_case.push_back(parse_case(parser, _case_e));
 						}
 					}
-					satisfied_in_case.push_back(_case);					
+					satisfied_in_case.push_back(_case);
 				}
 
-				SubtreeResult cr_result { player_group, satisfied_in_case };
+				SubtreeResult cr_result{player_group, satisfied_in_case};
 				collusion_resilience.push_back(cr_result);
 			}
 		}
 
-		if (node["subtree"].contains("practicality")) {
-			
-			for (const json &pr: node["subtree"]["practicality"]) {
+		if (node["subtree"].contains("practicality"))
+		{
+
+			for (const json &pr : node["subtree"]["practicality"])
+			{
 				const json &_case_pr = pr["case"];
 				std::vector<z3::Bool> _case = {};
-				for (const json &_case_entry: _case_pr) {
-					if(_case_entry != "true") {
+				for (const json &_case_entry : _case_pr)
+				{
+					if (_case_entry != "true")
+					{
 						const std::string &_case_e = _case_entry;
 						_case.push_back(parse_case(parser, _case_e));
 					}
 				}
 				std::vector<std::vector<Utility>> utilities = {};
 
-				for (const json& utility_tuple: pr["utilities"]) {
+				for (const json &utility_tuple : pr["utilities"])
+				{
 					using PlayerUtility = std::pair<std::string, Utility>;
 					std::vector<PlayerUtility> player_utilities;
-					for (const json &utility: utility_tuple) {
+					for (const json &utility : utility_tuple)
+					{
 						const json &value = utility["value"];
 						// parse a utility expression
-						if (value.is_string()) {
+						if (value.is_string())
+						{
 							const std::string &string = value;
-							player_utilities.push_back({
-															utility["player"],
-															parser.parse_utility(string.c_str())
-													});
+							player_utilities.push_back({utility["player"],
+														parser.parse_utility(string.c_str())});
 						}
-							// numeric utility, assumed real
-						else if (value.is_number_unsigned()) {
+						// numeric utility, assumed real
+						else if (value.is_number_unsigned())
+						{
 							unsigned number = value;
-							player_utilities.push_back({
-															utility["player"],
-															{z3::Real::value(number), z3::Real::ZERO}
-													});
+							player_utilities.push_back({utility["player"],
+														{z3::Real::value(number), z3::Real::ZERO}});
 						}
-							// foreign object, bail
-						else {
+						// foreign object, bail
+						else
+						{
 							std::cerr << "checkmate: unsupported utility value " << value << std::endl;
 							std::exit(EXIT_FAILURE);
 						}
@@ -675,69 +782,96 @@ static Node* load_tree(const Input &input, Parser &parser, const json &node, boo
 
 					// sort (player, utility) pairs alphabetically by player
 					sort(
-							player_utilities.begin(),
-							player_utilities.end(),
-							[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
-					);
+						player_utilities.begin(),
+						player_utilities.end(),
+						[](const PlayerUtility &left, const PlayerUtility &right)
+						{ return left.first < right.first; });
 
 					std::vector<Utility> pr_utility = {};
-					for (auto &player_utility: player_utilities)
+					for (auto &player_utility : player_utilities)
 						pr_utility.push_back(player_utility.second);
 
-					//std::cout << pr_utility << std::endl;
+					// std::cout << pr_utility << std::endl;
 					utilities.push_back(pr_utility);
 				}
 
-				PracticalitySubtreeResult pr_sub_result { _case, utilities };
+				PracticalitySubtreeResult pr_sub_result{_case, utilities};
 
 				practicality.push_back(pr_sub_result);
 			}
 		}
 
-		std::vector<Utility> honest_utility;
-		if (node["subtree"].contains("honest_utility")) {
-			using PlayerUtility = std::pair<std::string, Utility>;
-			std::vector<PlayerUtility> player_utilities;
-			for (const json &utility: node["subtree"]["honest_utility"]) {
-				const json &value = utility["value"];
-				// parse a utility expression
-				if (value.is_string()) {
-					const std::string &string = value;
-					player_utilities.push_back({
-													utility["player"],
-													parser.parse_utility(string.c_str())
-											});
-				}
-					// numeric utility, assumed real
-				else if (value.is_number_unsigned()) {
-					unsigned number = value;
-					player_utilities.push_back({
-													utility["player"],
-													{z3::Real::value(number), z3::Real::ZERO}
-											});
-				}
-					// foreign object, bail
-				else {
-					std::cerr << "checkmate: unsupported utility value " << value << std::endl;
-					std::exit(EXIT_FAILURE);
-				}
-			}
+		
+		std::vector<CondActionsUtilityPair> cond_actions_honest_utility_pairs;
+		/*if (node["subtree"].contains("honest_utility"))
+		{
 
-			// sort (player, utility) pairs alphabetically by player
-			sort(
+			for (const json &pair : node["subree"]["honest_utility"])
+			{
+				const json &_conditional_actions = pair["conditional_actions"];
+				std::vector<z3::Bool> _cond_actions = {};
+				for (const json &_action_entry : _conditional_actions)
+				{
+					if (_action_entry != "true")
+					{
+						const std::string &_case_e = _action_entry;
+						_cond_actions.push_back(parse_case(parser, _case_e));
+					}
+				}
+
+				using PlayerUtility = std::pair<std::string, Utility>;
+				std::vector<PlayerUtility> player_utilities;
+				for (const json &utility : pair["utility"])
+				{
+					const json &value = utility["value"];
+					// parse a utility expression
+					if (value.is_string())
+					{
+						const std::string &string = value;
+						player_utilities.push_back({utility["player"],
+													parser.parse_utility(string.c_str())});
+					}
+					// numeric utility, assumed real
+					else if (value.is_number_unsigned())
+					{
+						unsigned number = value;
+						player_utilities.push_back({utility["player"],
+													{z3::Real::value(number), z3::Real::ZERO}});
+					}
+					// foreign object, bail
+					else
+					{
+						std::cerr << "checkmate: unsupported utility value " << value << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
+				}
+
+				// sort (player, utility) pairs alphabetically by player
+				sort(
 					player_utilities.begin(),
 					player_utilities.end(),
-					[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
-			);
+					[](const PlayerUtility &left, const PlayerUtility &right)
+					{ return left.first < right.first; });
 
-			for (auto &player_utility: player_utilities)
-				honest_utility.push_back(player_utility.second);
 
+				std::vector<Utility> hon_utility = {};
+				for (auto &player_utility : player_utilities)
+					hon_utility.push_back(player_utility.second);
+
+				CondActionsUtilityPair new_pair;
+				new_pair.conditional_actions.insert(new_pair.conditional_actions.begin(), _cond_actions.begin(), _cond_actions.end());				
+				new_pair.utility.insert(new_pair.utility.begin(), hon_utility.begin(), hon_utility.end()); 
+				cond_actions_honest_utility_pairs.push_back(new_pair);
+			}
+		}*/
+
+		bool type_cond_actions = false;
+		if (node["subtree"].contains("solved_for_weak_conditional_actions")) {
+			type_cond_actions = node["subtree"]["solved_for_weak_conditional_actions"];
 		}
-
-
-		Subtree *subtree(new Subtree(weak_immunity, weaker_immunity, collusion_resilience, practicality, honest_utility));
-
+		
+		Subtree *subtree(new Subtree(weak_immunity, weaker_immunity, collusion_resilience, practicality, cond_actions_honest_utility_pairs));
+		subtree->solved_weak_cond_actions = type_cond_actions;
 		return subtree;
 	}
 
@@ -746,118 +880,146 @@ static Node* load_tree(const Input &input, Parser &parser, const json &node, boo
 	std::exit(EXIT_FAILURE);
 }
 
-static HonestNode* load_honest_history_conditional_actions(const json &honest_node) {
+static HonestNode *load_honest_history_conditional_actions(const json &honest_node)
+{
 
 	std::string act = honest_node["action"];
-	std::vector<HonestNode*> children; 
+	std::vector<HonestNode *> children;
 
-	for (const json &child: honest_node["children"]) {
+	for (const json &child : honest_node["children"])
+	{
 		children.push_back(load_honest_history_conditional_actions(child));
 	}
 
 	return new HonestNode(act, children);
 }
 
-static HonestNode* load_honest_history_no_conditional_actions(const json &actions) {
+static HonestNode *load_honest_history_no_conditional_actions(const json &actions)
+{
 
-	assert (!actions.empty());
+	assert(!actions.empty());
 
-    HonestNode* root = nullptr;
+	HonestNode *root = nullptr;
 
-    for (auto it = actions.rbegin(); it != actions.rend(); ++it) {
-        root = new HonestNode(*it, root ? std::vector<HonestNode*>{root} : std::vector<HonestNode*>{});
-    }
-    return  new HonestNode("", {root});
+	for (auto it = actions.rbegin(); it != actions.rend(); ++it)
+	{
+		root = new HonestNode(*it, root ? std::vector<HonestNode *>{root} : std::vector<HonestNode *>{});
+	}
+	return new HonestNode("", {root});
 }
 
-static HonestNode* load_honest_history(const json &honest_node) {
+static HonestNode *load_honest_history(const json &honest_node)
+{
 
-	if (honest_node.is_array()) {
+	if (honest_node.is_array())
+	{
 		return load_honest_history_no_conditional_actions(honest_node);
-	} else {
+	}
+	else
+	{
 		return load_honest_history_conditional_actions(honest_node);
 	}
 }
 
-Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , stop_log(false) {
+Input::Input(const char *path, bool supertree) : unsat_cases(), strategies(), stop_log(false)
+{
 	// parse a JSON document from `path`
 	std::ifstream input(path);
 	json document;
 	Parser parser(utilities);
-	try {
+	try
+	{
 		input.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 		document = json::parse(input);
 	}
-	catch (const std::ifstream::failure &fail) {
+	catch (const std::ifstream::failure &fail)
+	{
 		std::cerr << "checkmate: " << std::strerror(errno) << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
-	catch (const json::exception &err) {
+	catch (const json::exception &err)
+	{
 		std::cerr << "checkmate: " << err.what() << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 
-	if (document["players"].size() > MAX_PLAYERS) {
+	if (document["players"].size() > MAX_PLAYERS)
+	{
 		std::cerr << "checkmate: more than 64 players not supported - are you sure you want this many?!" << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 
 	// load list of players and sort alphabetically
-	for (const json &player: document["players"])
+	for (const json &player : document["players"])
 		players.push_back(std::string(player));
 	sort(players.begin(), players.end());
 
-	// load honest histories 
-	for (const json &honest_history_json : document["honest_histories"]){
+	// load honest histories
+	for (const json &honest_history_json : document["honest_histories"])
+	{
 		auto *h = load_honest_history(honest_history_json);
 		honest.push_back(h);
 	}
 
 	// load real/infinitesimal identifiers
-	for (const json &real: document["constants"]) {
+	for (const json &real : document["constants"])
+	{
 		const std::string &name = real;
 		auto constant = z3::Real::constant(name);
 		utilities.insert({name, {constant, z3::Real::ZERO}});
 	}
-	for (const json &infinitesimal: document["infinitesimals"]) {
+	for (const json &infinitesimal : document["infinitesimals"])
+	{
 		const std::string &name = infinitesimal;
 		auto constant = z3::Real::constant(name);
 		utilities.insert({name, {z3::Real::ZERO, constant}});
 	}
 
-	if(document["honest_utilities"].size() > 0 && supertree) {
+	if (document["honest_utilities"].size() > 0 && supertree)
+	{
 		std::cerr << "checkmate: honest utility should not be specified in supertree mode " << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 
 	// load honest utilities
-	for (auto utility_dict : document["honest_utilities"]) {
-
+	for (auto utility_dict : document["honest_utilities"])
+	{
 		// terrible code for now, @Ivana: please clean up
+
+		std::vector<z3::Bool> _cond_actions = {};
+		for (const json &_action_entry : utility_dict["conditional_actions"])
+		{
+			if (_action_entry != "true")
+				{
+					const std::string &_case_e = _action_entry;
+					_cond_actions.push_back(parse_case(parser, _case_e));
+				}
+		}
+
 
 		// (player, utility) pairs
 		using PlayerUtility = std::pair<std::string, Utility>;
 		std::vector<PlayerUtility> player_utilities;
-		for (const json &utility: utility_dict["utility"]) {
+		for (const json &utility : utility_dict["utility"])
+		{
 			const json &value = utility["value"];
 			// parse a utility expression
-			if (value.is_string()) {
+			if (value.is_string())
+			{
 				const std::string &string = value;
-				player_utilities.push_back({
-												   utility["player"],
-												   parser.parse_utility(string.c_str())
-										   });
+				player_utilities.push_back({utility["player"],
+											parser.parse_utility(string.c_str())});
 			}
-				// numeric utility, assumed real
-			else if (value.is_number_unsigned()) {
+			// numeric utility, assumed real
+			else if (value.is_number_unsigned())
+			{
 				unsigned number = value;
-				player_utilities.push_back({
-												   utility["player"],
-												   {z3::Real::value(number), z3::Real::ZERO}
-										   });
+				player_utilities.push_back({utility["player"],
+											{z3::Real::value(number), z3::Real::ZERO}});
 			}
-				// foreign object, bail
-			else {
+			// foreign object, bail
+			else
+			{
 				std::cerr << "checkmate: unsupported utility value " << value << std::endl;
 				std::exit(EXIT_FAILURE);
 			}
@@ -865,28 +1027,31 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 		// sort (player, utility) pairs alphabetically by player
 		sort(
-				player_utilities.begin(),
-				player_utilities.end(),
-				[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
-		);
+			player_utilities.begin(),
+			player_utilities.end(),
+			[](const PlayerUtility &left, const PlayerUtility &right)
+			{ return left.first < right.first; });
 
 		// leaked on purpose (honest_utilities utilities are also references but do not refer to a leaf in the tree)
-		std::vector<Utility> *leaf = new std::vector<Utility>;
-		for (auto &player_utility: player_utilities) {
-			leaf->push_back(player_utility.second);
+		std::vector<Utility> hon_utility = {};
+		for (auto &player_utility : player_utilities)
+		{
+			hon_utility.push_back(player_utility.second);
 		}
 
-		UtilityTuple utilityTuple(*leaf);
-		
-		honest_utilities.push_back(utilityTuple);
-	}
+		CondActionsUtilityPair new_pair;
+		new_pair.conditional_actions.insert(new_pair.conditional_actions.begin(), _cond_actions.begin(), _cond_actions.end());				
+		new_pair.utility.insert(new_pair.utility.begin(), hon_utility.begin(), hon_utility.end()); 
 
+		honest_utilities.push_back(new_pair);
+	}
 
 	// reusable buffer for constraint conjuncts
 	std::vector<z3::Bool> conjuncts;
 
 	// initial constraints
-	for (const json &initial_constraint: document["initial_constraints"]) {
+	for (const json &initial_constraint : document["initial_constraints"])
+	{
 		const std::string &constraint = initial_constraint;
 		conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
 	}
@@ -894,7 +1059,8 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 	// weak immunity constraints
 	conjuncts.clear();
-	for (const json &weak_immunity_constraint: document["property_constraints"]["weak_immunity"]) {
+	for (const json &weak_immunity_constraint : document["property_constraints"]["weak_immunity"])
+	{
 		const std::string &constraint = weak_immunity_constraint;
 		conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
 	}
@@ -902,7 +1068,8 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 	// weaker immunity constraints
 	conjuncts.clear();
-	for (const json &weaker_immunity_constraint: document["property_constraints"]["weaker_immunity"]) {
+	for (const json &weaker_immunity_constraint : document["property_constraints"]["weaker_immunity"])
+	{
 		const std::string &constraint = weaker_immunity_constraint;
 		conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
 	}
@@ -910,7 +1077,8 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 	// collusion resilience constraints
 	conjuncts.clear();
-	for (const json &collusion_resilience_constraint: document["property_constraints"]["collusion_resilience"]) {
+	for (const json &collusion_resilience_constraint : document["property_constraints"]["collusion_resilience"])
+	{
 		const std::string &constraint = collusion_resilience_constraint;
 		conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
 	}
@@ -918,23 +1086,23 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 	// practicality constraints
 	conjuncts.clear();
-	for (const json &practicality_constraint: document["property_constraints"]["practicality"]) {
+	for (const json &practicality_constraint : document["property_constraints"]["practicality"])
+	{
 		const std::string &constraint = practicality_constraint;
 		conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
 	}
 	practicality_constraint = conjunction(conjuncts);
 
-
 	// load the game tree and leak it so we can downcast to Branch
 	Node *node = load_tree(*this, parser, document["tree"], supertree);
 
-	if (node->is_leaf() || node->is_subtree()) {
+	if (node->is_leaf() || node->is_subtree())
+	{
 		std::cerr << "checkmate: root node is a leaf or a subtree (?!) - exiting" << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 	// un-leaked and downcasted here
 	root = std::unique_ptr<Branch>(static_cast<Branch *>(node));
-
 }
 
 // std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const {
@@ -952,7 +1120,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 // 			strategy.push_back(hist_choice);
 // 		}
-		
+
 // 		for (const Choice &choice: this->branch().choices) {
 // 	 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
 // 	 		updated_actions.push_back(choice.action);
@@ -987,7 +1155,6 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 // 	return bit_reps;
 // }
 
-
 // bool Node::cr_against_supergroups_of(std::vector<uint> deviating_players) const {
 
 // 	for(uint64_t i=0; i < violates_cr.size(); i++) {
@@ -1002,7 +1169,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 // 				if(!bin_rep[player-1]) {
 // 					all_deviating_deviate = false;
 // 				}
-// 			}			
+// 			}
 // 		}
 
 // 		if(all_deviating_deviate && violates_cr[i]) {
@@ -1070,7 +1237,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 // 			}
 // 			assert(have_found_cr);
 // 		}
-		
+
 // 		for (const Choice &choice: this->branch().choices) {
 // 			std::vector<uint> new_deviating_players;
 // 			new_deviating_players.insert(new_deviating_players.end(), deviating_players.begin(), deviating_players.end());
@@ -1083,7 +1250,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 // 	 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
 // 	 		updated_actions.push_back(choice.action);
 
-// 	 		std::vector<HistoryChoice> child_strategy = choice.node->compute_cr_strategy(players, updated_actions, new_deviating_players); 
+// 	 		std::vector<HistoryChoice> child_strategy = choice.node->compute_cr_strategy(players, updated_actions, new_deviating_players);
 // 			strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
 // 	 	}
 // 		return strategy;
@@ -1106,7 +1273,6 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 // 		strategy.push_back(hist_choice);
 
-		
 // 		for (const Choice &choice: this->branch().choices) {
 // 	 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
 // 	 		updated_actions.push_back(choice.action);
@@ -1175,7 +1341,6 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 // 		assert(player_group.size() >= 1);
 
-
 // 		int cnt = std::count(player_group.begin(), player_group.end(), this->branch().player);
 // 		if (cnt == 0) {
 // 			if (honest){
@@ -1218,9 +1383,8 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 // 		return counterexample;
 // 	}
 
-
 // CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::string current_action, UtilityTuplesSet practical_utilities) const {
-	
+
 // 	// regular case (called from branch)
 // 	if(current_player < players.size()) {
 // 		CeCase cecase;
@@ -1244,15 +1408,15 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 // 		CeChoice deviation;
 // 		deviation.history = actions_so_far;
 // 		cecase.counterexample = {deviation};
-	
+
 // 		return cecase;
 
 // 	}
 // }
 
 // const Node* Node::compute_deviation_node(std::vector<std::string> actions_so_far) const {
-	
-// 	if(actions_so_far.size() > 0) { 
+
+// 	if(actions_so_far.size() > 0) {
 // 		assert(!this->is_leaf());
 // 		assert(!this->is_subtree());
 // 		for (const auto &child: this->branch().choices){
@@ -1278,15 +1442,15 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 // 		cechoice.player = "";
 
 // 		cechoice.choices = {};
-		
+
 // 		std::vector<std::string> result_hist = strat2hist(utility.strategy_vector);
 // 		cechoice.choices.insert(cechoice.choices.end(), result_hist.begin(), result_hist.end());
-		
+
 // 		std::vector<std::string> updated_history;
 // 		updated_history.insert(updated_history.end(), actions_so_far.begin(), actions_so_far.end());
 // 		updated_history.push_back(current_action);
 // 		cechoice.history = updated_history;
-// 		cechoices.push_back(cechoice);		
+// 		cechoices.push_back(cechoice);
 
 // 	}
 
@@ -1294,7 +1458,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 // }
 
 // std::vector<std::string> Node::strat2hist(std::vector<std::string> &strategy) const {
-	
+
 // 	if(this->is_leaf()) {
 // 		return {};
 // 	} else if (this->is_subtree()) {
@@ -1305,7 +1469,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 // 	std::vector<std::string> strategy_copy;
 // 	strategy_copy.insert(strategy_copy.begin(), strategy.begin(), strategy.end());
-	
+
 // 	std::vector<std::string> hist_player_pairs;
 // 	std::string first_action = strategy_copy[0];
 // 	strategy_copy.erase(strategy_copy.begin());
@@ -1324,7 +1488,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 // 	}
 
 // 	assert(found);
- 	
+
 // 	return hist_player_pairs;
 
 // }
@@ -1333,7 +1497,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 // 	if(this->is_leaf() || this->is_subtree()) {
 // 		return;
-// 	} 
+// 	}
 
 // 	assert(strategy.size() > 0);
 // 	strategy.erase(strategy.begin());
@@ -1364,7 +1528,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 // 			std::vector<std::vector<bool>> child_violation = child.node->store_violation_cr();
 // 			violation.insert(violation.end(), child_violation.begin(), child_violation.end());
 // 		}
-// 	} 
+// 	}
 // 	return violation;
 // }
 

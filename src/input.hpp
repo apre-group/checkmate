@@ -248,6 +248,12 @@ struct SubtreeResult {
 	std::vector<std::vector<z3::Bool>> satisfied_in_case;
 };
 
+struct CondActionsUtilityPair {
+	std::vector<z3::Bool> conditional_actions;
+	std::vector<Utility> utility;
+
+};
+
 struct PracticalitySubtreeResult {
 	std::vector<z3::Bool> _case;
 	std::vector<std::vector<Utility>> utilities;
@@ -260,6 +266,7 @@ class Subtree : public Node {
 	public:
 	mutable uint64_t problematic_group = 0;
 	mutable std::vector<std::vector<Utility>> utilities;
+	mutable bool solved_weak_cond_actions = false;
 
 	NodeType type() const override { return NodeType::SUBTREE; }
 
@@ -268,13 +275,13 @@ class Subtree : public Node {
 	std::vector<SubtreeResult> collusion_resilience;
 	std::vector<PracticalitySubtreeResult> practicality;
 	// honest utility needed in case the honest history ends in this subtree
-	std::vector<Utility> honest_utility;
+	std::vector<CondActionsUtilityPair> honest_utility;
 
 	Subtree(std::vector<SubtreeResult> _weak_immunity,
         std::vector<SubtreeResult> _weaker_immunity,
         std::vector<SubtreeResult> _collusion_resilience,
         std::vector<PracticalitySubtreeResult> _practicality,
-        std::vector<Utility> _honest_utility)
+        std::vector<CondActionsUtilityPair> _honest_utility)
     : weak_immunity(_weak_immunity),
       weaker_immunity(_weaker_immunity),
       collusion_resilience(_collusion_resilience),
@@ -621,12 +628,6 @@ struct Action {
 	}
 };
 
-struct CondActionsUtilityPair {
-	z3::Bool conditional_actions;
-	std::vector<Utility> utility;
-
-};
-
 struct Input {
 	// parse an input from `path`, exiting if malformed
 	Input(const char *path, bool supertree);
@@ -636,7 +637,7 @@ struct Input {
 	// list of honest histories
 	std::vector<HonestNode*> honest;
 	// list of honest utilities - for the subtree option
-	std::vector<UtilityTuple> honest_utilities;
+	std::vector<CondActionsUtilityPair> honest_utilities;
 
 	// a real or infinitesimal utility for each string
 	std::unordered_map<std::string, Utility> utilities;
