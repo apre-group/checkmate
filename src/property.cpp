@@ -2127,8 +2127,6 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 
 void analyse_properties(const Options &options, const Input &input) {
 
-	input.stop_logging();
-
 	if(input.honest_utilities.size() != 0) {
 		std::cout << "INFO: This file is a subtree, but CheckMate is running in default mode" << std::endl;
 	}
@@ -2165,7 +2163,7 @@ void analyse_properties(const Options &options, const Input &input) {
 			if(property_chosen[i]) {
 				input.reset_counterexamples();
 				input.root.get()->reset_counterexample_choices();
-				//input.reset_logging();
+				input.reset_logging();
 				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.root->reset_strategy();
@@ -2219,7 +2217,7 @@ void analyse_properties(const Options &options, const Input &input) {
 			if(property_chosen[i]) {
 				input.reset_counterexamples();
 				input.root.get()->reset_counterexample_choices();
-				//input.reset_logging();
+				input.reset_logging();
 				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.root->reset_strategy();
@@ -2267,7 +2265,7 @@ void analyse_properties(const Options &options, const Input &input) {
 
 				input.reset_counterexamples();
 				input.root.get()->reset_counterexample_choices();
-				//input.reset_logging();
+				input.reset_logging();
 				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.root->reset_strategy();
@@ -2300,7 +2298,6 @@ void analyse_properties(const Options &options, const Input &input) {
 }
 
 void analyse_properties_subtree(const Options &options, const Input &input) {
-	input.stop_logging();
 
 	// analysis for a subtree:
 	// i.e. we might be along the honest history or not
@@ -2352,7 +2349,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			if(property_chosen[i]) {
 				input.reset_counterexamples();
 				input.root.get()->reset_counterexample_choices();
-				//input.reset_logging();
+				input.reset_logging();
 				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.root->reset_strategy();
@@ -2420,7 +2417,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			if(property_chosen[i]) {
 				input.reset_counterexamples();
 				input.root.get()->reset_counterexample_choices();
-				//input.reset_logging();
+				input.reset_logging();
 				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.root->reset_strategy();
@@ -2472,7 +2469,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			if(options.collusion_resilience) {
 				input.reset_counterexamples();
 				input.root.get()->reset_counterexample_choices();
-				//input.reset_logging();
+				input.reset_logging();
 				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.root->reset_strategy();
