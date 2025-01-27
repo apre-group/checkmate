@@ -801,27 +801,76 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 			}
 		}
 
-		
 		std::vector<CondActionsUtilityPair> cond_actions_honest_utility_pairs;
-		/*if (node["subtree"].contains("honest_utility"))
+		if (node["subtree"].contains("honest_utility"))
 		{
-
-			for (const json &pair : node["subree"]["honest_utility"])
+			if (node["subtree"]["honest_utility"][0].contains("conditional_actions"))
 			{
-				const json &_conditional_actions = pair["conditional_actions"];
-				std::vector<z3::Bool> _cond_actions = {};
-				for (const json &_action_entry : _conditional_actions)
-				{
-					if (_action_entry != "true")
-					{
-						const std::string &_case_e = _action_entry;
-						_cond_actions.push_back(parse_case(parser, _case_e));
-					}
-				}
 
+				for (const json &pair : node["subtree"]["honest_utility"])
+				{
+
+					std::vector<z3::Bool> _cond_actions = {};
+					const json &_conditional_actions = pair["conditional_actions"];
+
+					for (const json &_action_entry : _conditional_actions)
+					{
+						if (_action_entry != "true")
+						{
+							const std::string &_case_e = _action_entry;
+							_cond_actions.push_back(parse_case(parser, _case_e));
+						}
+					}
+
+					using PlayerUtility = std::pair<std::string, Utility>;
+					std::vector<PlayerUtility> player_utilities;
+					for (const json &utility : pair["utility"])
+					{
+						const json &value = utility["value"];
+						// parse a utility expression
+						if (value.is_string())
+						{
+							const std::string &string = value;
+							player_utilities.push_back({utility["player"],
+														parser.parse_utility(string.c_str())});
+						}
+						// numeric utility, assumed real
+						else if (value.is_number_unsigned())
+						{
+							unsigned number = value;
+							player_utilities.push_back({utility["player"],
+														{z3::Real::value(number), z3::Real::ZERO}});
+						}
+						// foreign object, bail
+						else
+						{
+							std::cerr << "checkmate: unsupported utility value " << value << std::endl;
+							std::exit(EXIT_FAILURE);
+						}
+					}
+
+					// sort (player, utility) pairs alphabetically by player
+					sort(
+						player_utilities.begin(),
+						player_utilities.end(),
+						[](const PlayerUtility &left, const PlayerUtility &right)
+						{ return left.first < right.first; });
+
+					std::vector<Utility> hon_utility = {};
+					for (auto &player_utility : player_utilities)
+						hon_utility.push_back(player_utility.second);
+
+					CondActionsUtilityPair new_pair;
+					new_pair.conditional_actions.insert(new_pair.conditional_actions.begin(), _cond_actions.begin(), _cond_actions.end());
+					new_pair.utility.insert(new_pair.utility.begin(), hon_utility.begin(), hon_utility.end());
+					cond_actions_honest_utility_pairs.push_back(new_pair);
+				}
+			}
+			else
+			{
 				using PlayerUtility = std::pair<std::string, Utility>;
 				std::vector<PlayerUtility> player_utilities;
-				for (const json &utility : pair["utility"])
+				for (const json &utility : node["subtree"]["honest_utility"])
 				{
 					const json &value = utility["value"];
 					// parse a utility expression
@@ -853,31 +902,35 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 					[](const PlayerUtility &left, const PlayerUtility &right)
 					{ return left.first < right.first; });
 
-
 				std::vector<Utility> hon_utility = {};
 				for (auto &player_utility : player_utilities)
 					hon_utility.push_back(player_utility.second);
+			
 
-				CondActionsUtilityPair new_pair;
-				new_pair.conditional_actions.insert(new_pair.conditional_actions.begin(), _cond_actions.begin(), _cond_actions.end());				
-				new_pair.utility.insert(new_pair.utility.begin(), hon_utility.begin(), hon_utility.end()); 
-				cond_actions_honest_utility_pairs.push_back(new_pair);
+			CondActionsUtilityPair new_pair;
+			new_pair.conditional_actions = {};
+			new_pair.utility.insert(new_pair.utility.begin(), hon_utility.begin(), hon_utility.end());
+			cond_actions_honest_utility_pairs.push_back(new_pair);
+
 			}
-		}*/
+		}
 
 		bool type_cond_actions = false;
-		if (node["subtree"].contains("solved_for_weak_conditional_actions")) {
+		if (node["subtree"].contains("solved_for_weak_conditional_actions"))
+		{
 			type_cond_actions = node["subtree"]["solved_for_weak_conditional_actions"];
 		}
-		
+
 		Subtree *subtree(new Subtree(weak_immunity, weaker_immunity, collusion_resilience, practicality, cond_actions_honest_utility_pairs));
 		subtree->solved_weak_cond_actions = type_cond_actions;
 		return subtree;
 	}
 
+
 	// foreign object, bail
 	std::cerr << "checkmate: unexpected object in tree position " << node << std::endl;
 	std::exit(EXIT_FAILURE);
+
 }
 
 static HonestNode *load_honest_history_conditional_actions(const json &honest_node)
@@ -990,12 +1043,11 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies(), st
 		for (const json &_action_entry : utility_dict["conditional_actions"])
 		{
 			if (_action_entry != "true")
-				{
-					const std::string &_case_e = _action_entry;
-					_cond_actions.push_back(parse_case(parser, _case_e));
-				}
+			{
+				const std::string &_case_e = _action_entry;
+				_cond_actions.push_back(parse_case(parser, _case_e));
+			}
 		}
-
 
 		// (player, utility) pairs
 		using PlayerUtility = std::pair<std::string, Utility>;
@@ -1040,8 +1092,8 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies(), st
 		}
 
 		CondActionsUtilityPair new_pair;
-		new_pair.conditional_actions.insert(new_pair.conditional_actions.begin(), _cond_actions.begin(), _cond_actions.end());				
-		new_pair.utility.insert(new_pair.utility.begin(), hon_utility.begin(), hon_utility.end()); 
+		new_pair.conditional_actions.insert(new_pair.conditional_actions.begin(), _cond_actions.begin(), _cond_actions.end());
+		new_pair.utility.insert(new_pair.utility.begin(), hon_utility.begin(), hon_utility.end());
 
 		honest_utilities.push_back(new_pair);
 	}

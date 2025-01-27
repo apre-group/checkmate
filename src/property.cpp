@@ -320,6 +320,12 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 						// set reason
 						subtree.reason = disj_of_cases;
 					}
+
+					// if (consider_prob_groups) {
+					// 	subtree.problematic_group = player;
+					// }
+					// input.set_reset_point(subtree);
+
 					return false;
 				}
 			}
@@ -632,6 +638,10 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 		const auto &subtree = node->subtree();
 
+		// if  ((group_nr < subtree.problematic_group) && consider_prob_groups){
+		// 	return true;
+		// }
+
 		// look up current player_group:
 		// 		if disj_of_cases (in satisfied_for_case) that is equivalent to current case or weaker we return true
 		//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
@@ -693,6 +703,9 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
 					if (z3_result_implied == z3::Result::UNSAT) {
+						// if (consider_prob_groups) {
+						// 	subtree.problematic_group = group_nr + 1;
+						// }
 						return true;
 					} else {
 
@@ -706,12 +719,18 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 							// set reason
 							subtree.reason = disj_of_cases;
 						}
+
+						// if (consider_prob_groups) {
+						// 	subtree.problematic_group = group_nr;
+						// }
+						// input.set_reset_point(subtree);
 						return false;
 					}
 				}
 			}
 		}
 	}
+
 
 	const auto &branch = node->branch();
 
@@ -1483,6 +1502,17 @@ void compute_conditional_actions_honest_utility_pairs(const Input &input, std::v
 		pair.utility.insert(pair.utility.begin(), node->leaf().utilities.begin(), node->leaf().utilities.end());
 		input.cond_actions_honest_utility_pairs.push_back(pair);
 		return;
+	} else if (node->is_subtree()) {
+
+		for (auto pair : node->subtree().honest_utility)
+		{
+			CondActionsUtilityPair new_pair;
+			new_pair.conditional_actions.insert(new_pair.conditional_actions.begin(), cond_actions_so_far.begin(), cond_actions_so_far.end());
+			new_pair.conditional_actions.insert(new_pair.conditional_actions.begin(), pair.conditional_actions.begin(), pair.conditional_actions.end());
+			new_pair.utility.insert(new_pair.utility.begin(), pair.utility.begin(), pair.utility.end());
+			input.cond_actions_honest_utility_pairs.push_back(new_pair);
+		}
+
 	}
 	else
 	{
@@ -2252,6 +2282,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 		subtree.practicality.insert(subtree.practicality.end(), subtree_results_pr.begin(), subtree_results_pr.end());
 		*/
 	} else {
+
 		size_t number_groups = property == PropertyType::CollusionResilience ? pow(2,input.players.size())-2 : input.players.size();
 
 		std::string output_text = property == PropertyType::CollusionResilience ? " against group " : " for player ";
