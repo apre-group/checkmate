@@ -1,0 +1,117 @@
+{
+    "players": [
+        "N",
+        "E"
+    ],
+    "actions": [
+        "i",
+        "s",
+        "i'",
+        "s'"
+    ],
+    "infinitesimals": [],
+    "constants": [
+        "a",
+        "p"
+    ],
+    "initial_constraints": [
+        "a > 0",
+        "p > 0"
+    ],
+    "property_constraints": {
+        "weak_immunity": [],
+        "weaker_immunity": [],
+        "collusion_resilience": [],
+        "practicality": []
+    },
+    "honest_histories": [
+        {
+            "action": "",
+            "children": [
+                {
+                    "action": "i",
+                    "children": []
+                },
+                {
+                    "action": "s",
+                    "children": []
+                }
+            ]
+        }
+    ],
+    "tree": {
+        "player": "E",
+        "children": [
+            {
+                "condition": "p <= 2 * a",
+                "actions": [
+                    {
+                        "action": "i",
+                        "child": {
+                            "utility": [
+                                {
+                                    "player": "N",
+                                    "value": "p"
+                                },
+                                {
+                                    "player": "E",
+                                    "value": "p"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "action": "s'",
+                        "child": {
+                            "utility": [
+                                {
+                                    "player": "N",
+                                    "value": "-a"
+                                },
+                                {
+                                    "player": "E",
+                                    "value": "-a"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            },
+            {
+                "condition": "p > 2 * a",
+                "actions": [
+                    {
+                        "action": "i'",
+                        "child": {
+                            "utility": [
+                                {
+                                    "player": "N",
+                                    "value": "p"
+                                },
+                                {
+                                    "player": "E",
+                                    "value": "p"
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "action": "s",
+                        "child": {
+                            "utility": [
+                                {
+                                    "player": "N",
+                                    "value": "-a"
+                                },
+                                {
+                                    "player": "E",
+                                    "value": "-a"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}

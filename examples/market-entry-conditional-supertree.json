@@ -1,0 +1,134 @@
+{
+    "players": [
+        "N",
+        "E"
+    ],
+    "actions": [
+        "o",
+        "e"
+    ],
+    "infinitesimals": [],
+    "constants": [
+        "a",
+        "p"
+    ],
+    "initial_constraints": [
+        "a > 0",
+        "p > 0"
+    ],
+    "property_constraints": {
+        "weak_immunity": [],
+        "weaker_immunity": [],
+        "collusion_resilience": [],
+        "practicality": []
+    },
+    "honest_histories": [
+        {
+            "action": "",
+            "children": [
+                {
+                    "action": "e",
+                    "children": []
+                }
+            ]
+        }
+    ],
+    "tree": {
+        "player": "N",
+        "children": [
+            {
+                "action": "o",
+                "child": {
+                    "utility": [
+                        {
+                            "player": "N",
+                            "value": 0
+                        },
+                        {
+                            "player": "E",
+                            "value": "2 * p"
+                        }
+                    ]
+                }
+            },
+            {
+                "action": "e",
+                "child": {
+                    "subtree": {
+                        "collusion_resilience": [
+                            {
+                                "player_group": [
+                                    "E"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "true"
+                                    ]
+                                ]
+                            },
+                            {
+                                "player_group": [
+                                    "N"
+                                ],
+                                "satisfied_in_case": [
+                                    [
+                                        "true"
+                                    ]
+                                ]
+                            }
+                        ],
+                        "honest_utility": [
+                            {
+                                "conditional_actions": [
+                                    "(p <= (2.0 * a))"
+                                ],
+                                "utility": [
+                                    {
+                                        "player": "E",
+                                        "value": "p + 0.0"
+                                    },
+                                    {
+                                        "player": "N",
+                                        "value": "p + 0.0"
+                                    }
+                                ]
+                            },
+                            {
+                                "conditional_actions": [
+                                    "(p > (2.0 * a))"
+                                ],
+                                "utility": [
+                                    {
+                                        "player": "E",
+                                        "value": "(- a) + 0.0"
+                                    },
+                                    {
+                                        "player": "N",
+                                        "value": "(- a) + 0.0"
+                                    }
+                                ]
+                            }
+                        ],
+                        "practicality": [],
+                        "solved_for_weak_conditional_actions": false,
+                        "weak_immunity": [
+                            {
+                                "player_group": [
+                                    "E"
+                                ],
+                                "satisfied_in_case": []
+                            },
+                            {
+                                "player_group": [
+                                    "N"
+                                ],
+                                "satisfied_in_case": []
+                            }
+                        ],
+                        "weaker_immunity": []
+                    }
+                }
+            }
+        ]
+    }
+}
