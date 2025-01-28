@@ -198,7 +198,12 @@ bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2)
 	return false;
 }
 
-std::vector<std::string> index2player(const Input &input, unsigned index) {
+std::vector<std::string> index2player(const Input &input, PropertyType property, unsigned index) {
+
+	if(property==PropertyType::WeakImmunity || property==PropertyType::WeakerImmunity) {
+		return {input.players[index]};
+	}
+
 	std::bitset<Input::MAX_PLAYERS> group = index;
 	std::vector<std::string> players;
 
@@ -254,6 +259,10 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 		const auto &subtree = node->subtree();
 
+		/*if ((player < subtree.problematic_group) && consider_prob_groups){
+			return true;
+		}*/
+
 		if(subtree.solved_weak_cond_actions && options.strong_conditional_actions) {
 			std::cerr << "checkmate: subtree is solved for weak conditional actions. Thus, supertree cannot be solved for strong conditional actions... " << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -307,6 +316,9 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
 				if (z3_result_implied == z3::Result::UNSAT) {
+					/*if (consider_prob_groups) {
+						subtree.problematic_group = player + 1;
+					}*/
 					return true;
 				} else {
 
@@ -642,6 +654,11 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		// 	return true;
 		// }
 
+		if(subtree.solved_weak_cond_actions && options.strong_conditional_actions) {
+			std::cerr << "checkmate: subtree is solved for weak conditional actions. Thus, supertree cannot be solved for strong conditional actions... " << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
 		// look up current player_group:
 		// 		if disj_of_cases (in satisfied_for_case) that is equivalent to current case or weaker we return true
 		//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
@@ -655,7 +672,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		// search for SubtreeResult in weak(er)_immunity that corresponds to the current player
 
 		const std::vector<SubtreeResult> &subtree_results = subtree.collusion_resilience;
-		std::vector<std::string> player_names = index2player(input, group_nr);
+		std::vector<std::string> player_names = index2player(input, PropertyType::CollusionResilience, group_nr);
 
 		for (const SubtreeResult &subtree_result : subtree_results) {
 			// find the correct subtree_result
@@ -989,7 +1006,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 	// 					}
 	// 					return false;
 	// 				}
-	// 				subtree.utilities.insert(subtree.utilities.end(), subtree_result.utilities.begin(), subtree_result.utilities.end());
+	// 				subtree.utilities = subtree_result.utilities;
 	// 				return true;
 	// 			}
 	// 		}
@@ -2296,7 +2313,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 			std::vector<std::string> players;
 
             if(property == PropertyType::CollusionResilience) {
-                players = index2player(input, i+1);
+                players = index2player(input, property, i+1);
             } else if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
                 players = { input.players[i] };
             }
@@ -2364,7 +2381,7 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 	for (unsigned i = 0; i < number_groups; i++){
 		input.reset_reset_point();
 		input.root.get()->reset_reason();
-		std::vector<std::string> players = index2player(input, i+1);
+		std::vector<std::string> players = index2player(input, property, i+1);
 
 		SubtreeResult subtree_result_player;
 		subtree_result_player.player_group = players;
@@ -2464,10 +2481,12 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 		std::cout << "Is this subtree " << prop_name << "?" << std::endl;
 		std::vector<SubtreeResult> subtree_results;
 
-		for (unsigned i = 0; i < number_groups; i++){
+		for (size_t i = 0; i < number_groups; i++){
 			input.reset_reset_point();
 			input.root.get()->reset_reason();
-			std::vector<std::string> players = index2player(input, i+1);
+
+			size_t value = options.collusion_resilience ? i+1 : i;
+			std::vector<std::string> players = index2player(input, property, value);
 
 			SubtreeResult subtree_result_player;
 			subtree_result_player.player_group = players;

@@ -602,12 +602,14 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 	if (node.contains("subtree"))
 	{
 
+		// Remove the check below for the purpose of allowing nesting of subtrees in subtress 
+		/*
 		if (!supertree)
 		{
 			// subtree nodes can only occur in supertree mode!
 			std::cerr << "checkmate: unexpected subtree node; call in --supertree mode " << node << std::endl;
 			std::exit(EXIT_FAILURE);
-		}
+		}*/
 
 		std::vector<SubtreeResult> weak_immunity = {};
 		std::vector<SubtreeResult> weaker_immunity = {};
