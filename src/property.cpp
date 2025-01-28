@@ -666,9 +666,11 @@ void weak_immunity(const Options &options, const Input &input) {
 				}
 			}
 
+			/*
 			std::cout << std::endl;
 			std::cout << std::endl;
 			std::cout << "----> Number of counterexamples found: " << no_counterexamples << std::endl;
+			*/
 
 			if (options.preconditions) {
 				std::cout << std::endl;
@@ -905,9 +907,11 @@ void collusion_resilience(const Options &options, const Input &input) {
 				}
 			}
 			
+			/*
 			std::cout << std::endl;
 			std::cout << std::endl;
 			std::cout << "----> Number of counterexamples found: " << no_counterexamples << std::endl;
+			*/
 
 			if (options.preconditions) {
 				std::cout << std::endl;
@@ -1267,9 +1271,11 @@ void practicality(const Options &options, const Input &input) {
 					ce_helper.solver.pop();
 			}
 
+			/*
 			std::cout << std::endl;
 			std::cout << std::endl;
 			std::cout << "----> Number of counterexamples found: " << no_counterexamples << std::endl;
+			*/
 			
 			if (options.preconditions) {
 				std::cout << std::endl;
