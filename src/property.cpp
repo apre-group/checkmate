@@ -268,6 +268,11 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			std::exit(EXIT_FAILURE);
 		}
 
+		if(!subtree.solved_weak_cond_actions && options.weak_conditional_actions) {
+			std::cerr << "checkmate: subtree is solved for strong conditional actions. Thus, supertree cannot be solved for weak conditional actions... " << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
 		// look up current player:
 		// 		if disj_of_cases (in satisfied_for_case) is equivalent to current case or weaker we return true
 		//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
@@ -656,6 +661,11 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 		if(subtree.solved_weak_cond_actions && options.strong_conditional_actions) {
 			std::cerr << "checkmate: subtree is solved for weak conditional actions. Thus, supertree cannot be solved for strong conditional actions... " << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		if(!subtree.solved_weak_cond_actions && options.weak_conditional_actions) {
+			std::cerr << "checkmate: subtree is solved for strong conditional actions. Thus, supertree cannot be solved for weak conditional actions... " << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 
