@@ -739,67 +739,127 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 		if (node["subtree"].contains("practicality"))
 		{
 
-			for (const json &pr : node["subtree"]["practicality"])
+			if (node["subtree"]["practicality"][0].contains("conditional_utilities"))
 			{
-				const json &_case_pr = pr["case"];
-				std::vector<z3::Bool> _case = {};
-				for (const json &_case_entry : _case_pr)
-				{
-					if (_case_entry != "true")
-					{
-						const std::string &_case_e = _case_entry;
-						_case.push_back(parse_case(parser, _case_e));
-					}
-				}
-				std::vector<std::vector<Utility>> utilities = {};
+				std::cout << "+++ TODO" << std::endl;
+			} else {
 
-				for (const json &utility_tuple : pr["utilities"])
+				std::cout << "Start parsing practicality..." << std::endl;
+
+				for (const json &pr : node["subtree"]["practicality"])
 				{
-					using PlayerUtility = std::pair<std::string, Utility>;
-					std::vector<PlayerUtility> player_utilities;
-					for (const json &utility : utility_tuple)
+					std::cout << "Entry in subtree practicality..." << std::endl;
+
+					const json &_case_pr = pr["case"];
+					std::vector<z3::Bool> _case = {};
+					for (const json &_case_entry : _case_pr)
 					{
-						const json &value = utility["value"];
-						// parse a utility expression
-						if (value.is_string())
+						if (_case_entry != "true")
 						{
-							const std::string &string = value;
-							player_utilities.push_back({utility["player"],
-														parser.parse_utility(string.c_str())});
-						}
-						// numeric utility, assumed real
-						else if (value.is_number_unsigned())
-						{
-							unsigned number = value;
-							player_utilities.push_back({utility["player"],
-														{z3::Real::value(number), z3::Real::ZERO}});
-						}
-						// foreign object, bail
-						else
-						{
-							std::cerr << "checkmate: unsupported utility value " << value << std::endl;
-							std::exit(EXIT_FAILURE);
+							const std::string &_case_e = _case_entry;
+							_case.push_back(parse_case(parser, _case_e));
 						}
 					}
 
-					// sort (player, utility) pairs alphabetically by player
-					sort(
-						player_utilities.begin(),
-						player_utilities.end(),
-						[](const PlayerUtility &left, const PlayerUtility &right)
-						{ return left.first < right.first; });
+					std::cout << "->Case: " << _case << std::endl;
 
-					std::vector<Utility> pr_utility = {};
-					for (auto &player_utility : player_utilities)
-						pr_utility.push_back(player_utility.second);
+					std::vector<std::vector<Utility>> utilities = {};
 
-					// std::cout << pr_utility << std::endl;
-					utilities.push_back(pr_utility);
+					for (const json &utility_tuple : pr["utilities"])
+					{
+						std::cout << "Entry in utilities" << utility_tuple << std::endl;
+
+						using PlayerUtility = std::pair<std::string, Utility>;
+						std::vector<PlayerUtility> player_utilities;
+						for (const json &utility : utility_tuple)
+						{
+							std::cout << "Entry in utility tuple " << utility << std::endl;
+							
+							const json &value = utility["value"];
+							// parse a utility expression
+							if (value.is_string())
+							{
+								const std::string &string = value;
+								player_utilities.push_back({utility["player"],
+															parser.parse_utility(string.c_str())});
+							}
+							// numeric utility, assumed real
+							else if (value.is_number_unsigned())
+							{
+								unsigned number = value;
+								player_utilities.push_back({utility["player"],
+															{z3::Real::value(number), z3::Real::ZERO}});
+							}
+							// foreign object, bail
+							else
+							{
+								std::cerr << "checkmate: unsupported utility value " << value << std::endl;
+								std::exit(EXIT_FAILURE);
+							}
+						}
+
+						// sort (player, utility) pairs alphabetically by player
+						sort(
+							player_utilities.begin(),
+							player_utilities.end(),
+							[](const PlayerUtility &left, const PlayerUtility &right)
+							{ return left.first < right.first; });
+
+						std::vector<Utility> pr_utility = {};
+						for (auto &player_utility : player_utilities)
+							pr_utility.push_back(player_utility.second);
+
+						// std::cout << pr_utility << std::endl;
+						utilities.push_back(pr_utility);
+					}
+
+					ConditionalUtilities cu;
+					cu.condition.push_back(z3::conjunction({}));
+					UtilityTuplesSet utilities_set = {};
+					for(auto const &util : utilities) {
+						UtilityTuple ut(util);
+						utilities_set.insert(ut);
+					}
+
+					cu.utilities.push_back(utilities_set);
+					PracticalitySubtreeResult pr_sub_result{_case, cu};
+
+					practicality.push_back(pr_sub_result);
+
+					// std::cout << "HERE HERE HERE " << std::endl;
+
+					// std::cout << "++ APPLE -> practicality " << std::endl;
+					// for(auto pr_subtree_res : practicality) {
+					// 	std::cout << "Case: " << pr_subtree_res._case << std::endl;
+					// 	std::cout << "Sizes: " << pr_subtree_res.utilities.condition.size() << " " << pr_subtree_res.utilities.utilities.size() << std::endl;
+					// 	for(size_t i=0; i<pr_subtree_res.utilities.utilities.size(); i++) { 
+					// 		std::cout << "Condition: " << pr_subtree_res.utilities.condition[i] << std::endl;
+					// 		// std::cout << "++ chestnut " << pr_subtree_res.utilities.utilities[i].size()<< std::endl;
+					// 		// UtilityTuplesSet uts = pr_subtree_res.utilities.utilities[i];
+					// 		// for(UtilityTuple util: uts) {
+					// 		// 	std::cout << "++ TTTTTTTTTEEEEEEEEESSSSSSTtt " << std::endl;
+					// 		// 	std::cout << "\tUtility: " << util.leaf << std::endl;
+
+					// 		// }
+					// 	}
+					// }
 				}
+			}
+		}
 
-				PracticalitySubtreeResult pr_sub_result{_case, utilities};
+		std::cout << "++ PRINT -> practicality " << std::endl;
+		for(auto pr_subtree_res : practicality) {
+			std::cout << "Case: " << pr_subtree_res._case << std::endl;
+			std::cout << "Sizes: " << pr_subtree_res.utilities.condition.size() << " " << pr_subtree_res.utilities.utilities.size() << std::endl;
+			for(size_t i=0; i<pr_subtree_res.utilities.utilities.size(); i++) { 
+				std::cout << "Condition: " << pr_subtree_res.utilities.condition[i] << std::endl;
+				std::cout << "++ size utilities " << pr_subtree_res.utilities.utilities[i].size()<< std::endl;
+				UtilityTuplesSet uts = pr_subtree_res.utilities.utilities[i];
+				for(UtilityTuple util: uts) {
+					std::cout << "++ TTEESSTT " << std::endl;
+					std::cout << "\tUtility: " << util.leaf << std::endl;
 
-				practicality.push_back(pr_sub_result);
+				}
 			}
 		}
 

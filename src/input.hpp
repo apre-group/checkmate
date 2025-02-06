@@ -35,7 +35,7 @@ enum class NodeType {
 struct UtilityTuple {
 	const std::vector<Utility> &leaf;
 	mutable std::vector<std::string> strategy_vector;
-
+	
 	// GCC doesn't like copy-assign without explicit copy constructor
 	UtilityTuple(const UtilityTuple &other) = default;
 
@@ -110,7 +110,7 @@ struct CeCase {
 
 struct UtilityCase {
 	std::vector<z3::Bool> _case;
-	std::vector<std::vector<Utility>> utilities; 
+	ConditionalUtilities utilities; 
 };
 
 // TODO: make find() work for vector<z3::Bool> instead of using this function
@@ -256,7 +256,7 @@ struct CondActionsUtilityPair {
 
 struct PracticalitySubtreeResult {
 	std::vector<z3::Bool> _case;
-	std::vector<std::vector<Utility>> utilities;
+	ConditionalUtilities utilities;
 };
 
 
@@ -265,7 +265,7 @@ class Subtree : public Node {
 
 	public:
 	mutable uint64_t problematic_group = 0;
-	mutable std::vector<std::vector<Utility>> utilities;
+	mutable ConditionalUtilities utilities;
 	mutable bool solved_weak_cond_actions = false;
 
 	NodeType type() const override { return NodeType::SUBTREE; }
@@ -308,7 +308,8 @@ class Subtree : public Node {
 	}
 
 	void reset_practical_utilities() const {
-		utilities = {};
+		utilities.condition = {};
+		utilities.utilities = {};
 	}
 };
 

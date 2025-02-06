@@ -92,14 +92,32 @@ json parse_practicality_property_to_json(const Input &input, std::vector<Practic
         json arr_case = parse_sat_case(subtree_result._case);
         // parse utilities
         json utilities = json::array();
-        for(auto &utility_list : subtree_result.utilities) {
-            // parse utility
-            json utility = parse_utility(input, utility_list);
-            utilities.push_back(utility);
-        }
 
-        json obj = {{"case", arr_case}, {"utilities", utilities}};
-        arr_pr.push_back(obj);
+		for(size_t i = 0; i < subtree_result.utilities.condition.size(); i++) {
+			// parse condition
+			json condition = parse_sat_case({subtree_result.utilities.condition[i]});
+			assert(condition.size() == 1);
+
+			json arr_cond_utils = json::array();
+
+			for(const auto &util_tuple : subtree_result.utilities.utilities[i]) {
+				json parsed_utility = parse_utility(input, util_tuple.leaf);
+				arr_cond_utils.push_back(parsed_utility);
+			}
+
+			json cond_util_obj = {{"conditional_actions", condition[0]}, {"utilities", arr_cond_utils}};
+			utilities.push_back(cond_util_obj);
+		}
+
+        // for(auto &utility_list : subtree_result.utilities) {
+        //     // parse utility
+        //     json utility = parse_utility(input, utility_list);
+        //     utilities.push_back(utility);
+        // }
+
+        json obj = {{"case", arr_case}, {"conditional_utilities", utilities}};
+        
+		arr_pr.push_back(obj);
     }
     return arr_pr;
 }
@@ -973,61 +991,71 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 bool practicality_rec_old(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far, bool consider_prob_groups)
 {
-
 	if (node->is_leaf())
 	{
 		return true;
 	}
-	// else if (node->is_subtree()) {
-	// 	// we again have to consider how the current case relates to the PracticalitySubtreeResult cases
-	// 	// note that those cases are disjoint and span the whole universe
+	else if (node->is_subtree()) {
+		// we again have to consider how the current case relates to the PracticalitySubtreeResult cases
+		// note that those cases are disjoint and span the whole universe
 
-	// 	// iterate over all PracticalitySubtreeResult
-	// 	// 		ask whether case and current_case is satisfiable
-	// 	//			if yes: ask whether current_case and not case is satisfiable
-	// 	//				if yes: case split on case (i.e. set reason to case, return false)
-	// 	//				if no: set practical_utilities for this node to the set of utilities in PracticalitySubtreeResult
-	// 	//			if no: proceed to next PracticalitySubtreeResult
+		// iterate over all PracticalitySubtreeResult
+		// 		ask whether case and current_case is satisfiable
+		//			if yes: ask whether current_case and not case is satisfiable
+		//				if yes: case split on case (i.e. set reason to case, return false)
+		//				if no: set practical_utilities for this node to the set of utilities in PracticalitySubtreeResult
+		//			if no: proceed to next PracticalitySubtreeResult
 
-	// 	const auto &subtree = node->subtree();
+		const auto &subtree = node->subtree();
+	
+		for (const PracticalitySubtreeResult &subtree_result: subtree.practicality) {
+			z3::Bool subtree_case;
+			// try to optimize: if only 1 -> no need for conjunction
+			if(subtree_result._case.size() == 1) {
+				subtree_case = subtree_result._case[0];
+			} else {
+				subtree_case = z3::conjunction(subtree_result._case);
+			}
 
-	// 	for (const PracticalitySubtreeResult &subtree_result: subtree.practicality) {
-	// 		z3::Bool subtree_case;
-	// 		// try to optimize: if only 1 -> no need for conjunction
-	// 		if(subtree_result._case.size() == 1) {
-	// 			subtree_case = subtree_result._case[0];
-	// 		} else {
-	// 			subtree_case = z3::conjunction(subtree_result._case);
-	// 		}
+			z3::Result overlapping = solver.solve({subtree_case});
 
-	// 		z3::Result overlapping = solver.solve({subtree_case});
+			if (overlapping == z3::Result::SAT){
+				z3::Result implied = solver.solve({!subtree_case});
 
-	// 		if (overlapping == z3::Result::SAT){
-	// 			z3::Result implied = solver.solve({!subtree_case});
+				if (implied == z3::Result::SAT){
+					subtree.reason = subtree_case;
+					return false;
+				} else {
+					// bool one_pr = false;
+					// for(auto const &subtree_res : subtree_result.utilities.utilities) {
+					// 	if(subtree_res.size() == 0 && options.strong_conditional_actions) {
+					// 		return false;
+					// 	}
+					// }
+					// if(options.weak_conditional_actions && !one_pr) {
+					// 	return false;
+					// }
 
-	// 			if (implied == z3::Result::SAT){
-	// 				subtree.reason = subtree_case;
-	// 				return false;
-	// 			} else {
-	// 				if (subtree_result.utilities.size() == 0) {
-	// 					// we have to be along honest at this point, otw we would have had at least one pr utility
-	// 					if(options.counterexamples) {
-	// 						input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
-	// 					}
-	// 					return false;
-	// 				}
-	// 				subtree.utilities = subtree_result.utilities;
-	// 				return true;
-	// 			}
-	// 		}
-	// 	}
-	// 	// in case we have listed only cases where it is practical and they do not
-	// 	// span the whole universe, return false, because no corresponding case has been found
-	// 	if(options.counterexamples) {
-	// 		input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
-	// 	}
-	// 	return false;
-	// }
+					// if (subtree_result.utilities.size() == 0) {
+						// we have to be along honest at this point, otw we would have had at least one pr utility
+						
+						// if(options.counterexamples) {
+						// 	input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
+						// }
+					// 	return false;
+					// }
+					subtree.utilities = subtree_result.utilities;
+					return true;
+				}
+			}
+		}
+		// in case we have listed only cases where it is practical and they do not
+		// span the whole universe, return false, because no corresponding case has been found
+		// if(options.counterexamples) {
+		// 	input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
+		// }
+		return false;
+	}
 
 	// else we deal with a branch
 	const auto &branch = node->branch();
@@ -1750,19 +1778,24 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 			std::cout << "\tProperty satisfied for case: " << current_case << std::endl;
 		}
 
-		// if(options.subtree) {
-		// 	PracticalitySubtreeResult subtree_result_pr;
-		// 	subtree_result_pr._case = current_case;
-		// 	subtree_result_pr.utilities = {};
-		// 	std::vector<Utility> honest_utility;
-		// 	for (auto elem: input.root->branch().practical_utilities) {
-		// 		honest_utility = elem.leaf;
-		// 	}
-		// 	subtree_result_pr.utilities = {honest_utility};
-		// 	subtree_results_pr.push_back(subtree_result_pr);
-		// }
+		if(options.subtree) {
+			PracticalitySubtreeResult subtree_result_pr;
+			subtree_result_pr._case = current_case;
+			// subtree_result_pr.utilities = {};
+			// std::vector<Utility> honest_utility;
+			// for (auto elem: input.root->branch().practical_utilities) {
+			// 	honest_utility = elem.leaf;
+			// }
+			for (size_t i = 0; i < input.root->branch().practical_utilities.condition.size(); i++) {
+				subtree_result_pr.utilities.condition.push_back(input.root->branch().practical_utilities.condition[i]);
+				subtree_result_pr.utilities.utilities.push_back(input.root->branch().practical_utilities.utilities[i]);
+			}
+			// subtree_result_pr.utilities = {honest_utility};
+			subtree_results_pr.push_back(subtree_result_pr);
 
-		// if strategies, add a "potential case" to keep track of all strategies
+		}
+
+		// //if strategies, add a "potential case" to keep track of all strategies
 		// if (options.strategies){
 		// 	input.compute_strategy_case(current_case, property);
 
@@ -2056,26 +2089,35 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 		}
 
 		if(options.subtree && property == PropertyType::Practicality) {
-			// PracticalitySubtreeResult subtree_result_pr;
-			// subtree_result_pr._case = current_case;
+			PracticalitySubtreeResult subtree_result_pr;
+			subtree_result_pr._case = current_case;
 			// subtree_result_pr.utilities = {};
 			// for (auto elem: input.root->branch().practical_utilities) {
 			// 	subtree_result_pr.utilities.push_back(elem.leaf);
 			// }
-			// subtree_results_pr.push_back(subtree_result_pr);
+
+			for (size_t i = 0; i < input.root->branch().practical_utilities.condition.size(); i++) {
+				subtree_result_pr.utilities.condition.push_back(input.root->branch().practical_utilities.condition[i]);
+				subtree_result_pr.utilities.utilities.push_back(input.root->branch().practical_utilities.utilities[i]);
+			}
+			subtree_results_pr.push_back(subtree_result_pr);
 		} else if (property != PropertyType::Practicality) {
 			satisfied_in_case.push_back(current_case);
 		}
 
-		// if(property == PropertyType::Practicality) {
-		// 	UtilityCase utilityCase;
-		// 	utilityCase._case = current_case;
-		// 	for(auto practical_utility : input.root.get()->practical_utilities) {
-		// 		utilityCase.utilities.push_back(practical_utility.leaf);
-		// 	}
+		if(property == PropertyType::Practicality) {
+			UtilityCase utilityCase;
+			utilityCase._case = current_case;
+			// for(auto practical_utility : input.root.get()->practical_utilities) {
+			// 	utilityCase.utilities.push_back(practical_utility.leaf);
+			// }
+			for (size_t i = 0; i < input.root->branch().practical_utilities.condition.size(); i++) {
+				utilityCase.utilities.condition.push_back(input.root.get()->practical_utilities.condition[i]);
+				utilityCase.utilities.utilities.push_back(input.root.get()->practical_utilities.utilities[i]);
+			}
 
-		// 	input.utilities_pr_nohistory.push_back(utilityCase);
-		// }
+			input.utilities_pr_nohistory.push_back(utilityCase);
+		}
 
 		return true;
 	}
@@ -2282,7 +2324,6 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 	assert(solver.solve() == z3::Result::SAT);
 
 	if (property == PropertyType::Practicality) {
-		/*
 		input.reset_practical_utilities();
 
 		std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
@@ -2290,12 +2331,42 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 		bool pr_result = property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, subtree_results_pr);
 
 		if (pr_result) {
-			assert(input.root->branch().practical_utilities.size() == 1);
-			std::vector<Utility> honest_utility;
-			for (auto elem: input.root->branch().practical_utilities) {
-				honest_utility = elem.leaf;
+			// Removed this assertion because we do not have 1 pr utility any more,
+			// see new below
+			//assert(input.root->branch().practical_utilities.size() == 1);
+
+			// New assertion - one pr utility per condition
+			bool one_pr = false;
+			for (size_t i = 0; i < input.root->branch().practical_utilities.condition.size(); i++) {
+				if(options.strong_conditional_actions) {
+					assert(input.root->branch().practical_utilities.utilities[i].size() == 1);
+				} else {
+					if(input.root->branch().practical_utilities.utilities[i].size() == 1) {
+						one_pr = true;
+					}
+				}	
 			}
-			std::cout << "YES, it is " << prop_name << ", the honest practical utility is "<<  honest_utility << "." << std::endl;
+			if(options.weak_conditional_actions) {
+				assert(one_pr);
+			}
+			
+			
+			// std::vector<Utility> honest_utility;
+			// for (auto elem: input.root->branch().practical_utilities) {
+			// 	honest_utility = elem.leaf;
+			// }
+			//std::cout << "YES, it is " << prop_name << ", the honest practical utility is "<<  honest_utility << "." << std::endl;
+
+			std::cout << "YES, it is " << prop_name << ", the honest practical utility is as follows: " << std::endl;
+			for (size_t i = 0; i < input.root->branch().practical_utilities.condition.size(); i++) {
+
+				std::cout << "\tConditions: " << input.root->branch().practical_utilities.condition[i] << std::endl;
+				std::cout << "\tUtilities: " << std::endl;
+				for(const auto &pr_utility : input.root->branch().practical_utilities.utilities[i]) {
+					std::cout << "\t\tUtility: " << pr_utility.leaf << std::endl;
+				}	 
+			}			
+		
 		} else {
 			//assert( input.root->branch().practical_utilities.size() == 0);
 			// removed this assertion bacause it was failing
@@ -2307,7 +2378,6 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 		}
 
 		subtree.practicality.insert(subtree.practicality.end(), subtree_results_pr.begin(), subtree_results_pr.end());
-		*/
 	} else {
 
 		size_t number_groups = property == PropertyType::CollusionResilience ? pow(2,input.players.size())-2 : input.players.size();
@@ -2459,32 +2529,41 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 	assert(solver.solve() == z3::Result::SAT);
 
 	if (property == PropertyType::Practicality){
-		// input.reset_practical_utilities();
+		input.reset_practical_utilities();
 
-		// std::vector<std::vector<z3::Bool>> satisfied_in_case;
-		// std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
+		std::vector<std::vector<z3::Bool>> satisfied_in_case;
+		std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
 
-		// std::cout << "What are the subtree's practical utilities?" << std::endl;
-		// bool pr_result = property_rec_nohistory(solver, options, input, property, std::vector<z3::Bool>(), 0, satisfied_in_case, subtree_results_pr);
+		std::cout << "What are the subtree's practical utilities?" << std::endl;
+		bool pr_result = property_rec_nohistory(solver, options, input, property, std::vector<z3::Bool>(), 0, satisfied_in_case, subtree_results_pr);
 
-		// assert(pr_result);
+		assert(pr_result);
 
-		// assert(input.root.get()->practical_utilities.size()>0);
-		// // ATTENTION THINK ABOUT HOW LATER (IN SUPERTREE) CASE SPLITS MAY IMPACT THE RESULT
-		// // we need to print the corresponding utilities for each case
-		// // kind of "all cases" for practicality_subtree
-		// // since in property_rec_nohistory we are not along honest, we consider all cases implicitly
-		// // it suffices to have a new data structure where we store <case, utulities> information and print them below
-		// //std::cout << "print utilities" << std::endl;
+		// removed for conditional actions - new assertion below
+		//assert(input.root.get()->practical_utilities.size()>0);
+		for (size_t i = 0; i < input.root->branch().practical_utilities.condition.size(); i++) {
+			assert(input.root->branch().practical_utilities.utilities[i].size() > 0);	
+		}
 
-		// for(auto &utilityCase : input.utilities_pr_nohistory) {
-		// 	std::cout << "Case: " << utilityCase._case << std::endl;
-		// 	for(auto utility : utilityCase.utilities) {
-		// 		std::cout << "\t" << utility << std::endl;
-		// 	}
-		// }
+		// ATTENTION THINK ABOUT HOW LATER (IN SUPERTREE) CASE SPLITS MAY IMPACT THE RESULT
+		// we need to print the corresponding utilities for each case
+		// kind of "all cases" for practicality_subtree
+		// since in property_rec_nohistory we are not along honest, we consider all cases implicitly
+		// it suffices to have a new data structure where we store <case, utulities> information and print them below
+		//std::cout << "print utilities" << std::endl;
 
-		// subtree.practicality.insert(subtree.practicality.end(), subtree_results_pr.begin(), subtree_results_pr.end());
+		for(auto &utilityCase : input.utilities_pr_nohistory) {
+			std::cout << "Case: " << utilityCase._case << std::endl;
+			for(size_t i=0; i<utilityCase.utilities.condition.size(); i++) {
+				std::cout << "\tConditions: " << utilityCase.utilities.condition[i] << std::endl;
+				std::cout << "\tUtilities: " << std::endl;
+				for(const auto &pr_utility : utilityCase.utilities.utilities[i]) {
+					std::cout << "\t\tUtility: " << pr_utility.leaf << std::endl;
+				}
+			}
+		}
+
+		subtree.practicality.insert(subtree.practicality.end(), subtree_results_pr.begin(), subtree_results_pr.end());
 	} else {
 		size_t number_groups = input.players.size();
 
@@ -2495,7 +2574,7 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 			input.reset_reset_point();
 			input.root.get()->reset_reason();
 
-			size_t value = options.collusion_resilience ? i+1 : i;
+			size_t value = property == PropertyType::CollusionResilience ? i+1 : i;
 			std::vector<std::string> players = index2player(input, property, value);
 
 			SubtreeResult subtree_result_player;
