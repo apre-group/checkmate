@@ -18,6 +18,12 @@
 using z3::Bool;
 using z3::Solver;
 
+// Need global copy due to issue with dangling references in load_tree
+// Alternatively, we can wrap UtilityTuple s.t. it creates a copy and does not just use the reference
+extern std::vector<std::vector<std::vector<Utility>>> utilities_storage;
+std::vector<PracticalitySubtreeResult> storage_pr_subtree_result;
+size_t index_storage_pr_subtree_result = 0;
+
 static std::string print_history(const HonestNode *history)
 {
 
@@ -87,7 +93,9 @@ json parse_property_to_json(std::vector<SubtreeResult> property_result) {
 
 json parse_practicality_property_to_json(const Input &input, std::vector<PracticalitySubtreeResult> property_result) {
     json arr_pr = json::array();
+	std::cout << "Print pr to file" << std::endl;
     for(auto &subtree_result : property_result) {
+		std::cout << "...subtree result" << std::endl;
         // parse case
         json arr_case = parse_sat_case(subtree_result._case);
         // parse utilities
@@ -95,8 +103,21 @@ json parse_practicality_property_to_json(const Input &input, std::vector<Practic
 
 		for(size_t i = 0; i < subtree_result.utilities.condition.size(); i++) {
 			// parse condition
-			json condition = parse_sat_case({subtree_result.utilities.condition[i]});
-			assert(condition.size() == 1);
+
+			json condition;
+
+			// optimization for benchmarks with no conditional actions
+			// if condition is "true & true & true" just print "true"
+			z3::Solver solver_check_validity;
+			if(solver_check_validity.solve({!subtree_result.utilities.condition[i]}) == z3::Result::UNSAT) {
+				condition = "true";
+			} 
+
+			else {
+				json condition_res = parse_sat_case({subtree_result.utilities.condition[i]});
+				assert(condition_res.size() == 1);
+				condition = condition_res[0];
+			}
 
 			json arr_cond_utils = json::array();
 
@@ -105,7 +126,7 @@ json parse_practicality_property_to_json(const Input &input, std::vector<Practic
 				arr_cond_utils.push_back(parsed_utility);
 			}
 
-			json cond_util_obj = {{"conditional_actions", condition[0]}, {"utilities", arr_cond_utils}};
+			json cond_util_obj = {{"conditional_actions", condition}, {"utilities", arr_cond_utils}};
 			utilities.push_back(cond_util_obj);
 		}
 
@@ -996,6 +1017,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		return true;
 	}
 	else if (node->is_subtree()) {
+		std::cout << " --- Enter for subtree" << std::endl;
 		// we again have to consider how the current case relates to the PracticalitySubtreeResult cases
 		// note that those cases are disjoint and span the whole universe
 
@@ -1007,8 +1029,21 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		//			if no: proceed to next PracticalitySubtreeResult
 
 		const auto &subtree = node->subtree();
+
+		if(subtree.solved_weak_cond_actions && options.strong_conditional_actions) {
+			std::cerr << "checkmate: subtree is solved for weak conditional actions. Thus, supertree cannot be solved for strong conditional actions... " << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		if(!subtree.solved_weak_cond_actions && options.weak_conditional_actions) {
+			std::cerr << "checkmate: subtree is solved for strong conditional actions. Thus, supertree cannot be solved for weak conditional actions... " << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
 	
-		for (const PracticalitySubtreeResult &subtree_result: subtree.practicality) {
+		for (size_t i = 0; i < subtree.practicality.size(); i++) {
+
+			PracticalitySubtreeResult subtree_result = subtree.practicality[i];
+
 			z3::Bool subtree_case;
 			// try to optimize: if only 1 -> no need for conjunction
 			if(subtree_result._case.size() == 1) {
@@ -1024,17 +1059,20 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 				if (implied == z3::Result::SAT){
 					subtree.reason = subtree_case;
+					std::cout << " --- Exit 1 for subtree" << std::endl;
 					return false;
 				} else {
-					// bool one_pr = false;
-					// for(auto const &subtree_res : subtree_result.utilities.utilities) {
-					// 	if(subtree_res.size() == 0 && options.strong_conditional_actions) {
-					// 		return false;
-					// 	}
-					// }
-					// if(options.weak_conditional_actions && !one_pr) {
-					// 	return false;
-					// }
+					bool one_pr = false;
+					for(auto const &subtree_res : subtree_result.utilities.utilities) {
+						if(subtree_res.size() == 0 && options.strong_conditional_actions) {
+							std::cout << " --- Exit 2 for subtree" << std::endl;
+							return false;
+						}
+					}
+					if(options.weak_conditional_actions && !one_pr) {
+						std::cout << " --- Exit 3 for subtree" << std::endl;
+						return false;
+					}
 
 					// if (subtree_result.utilities.size() == 0) {
 						// we have to be along honest at this point, otw we would have had at least one pr utility
@@ -1044,7 +1082,46 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 						// }
 					// 	return false;
 					// }
-					subtree.utilities = subtree_result.utilities;
+					storage_pr_subtree_result.push_back(subtree_result);
+					subtree.utilities = storage_pr_subtree_result[index_storage_pr_subtree_result].utilities;
+					index_storage_pr_subtree_result++;
+
+					// for(size_t i=0; i<subtree_result.utilities.utilities.size(); i++) { 
+					// 	subtree.utilities.condition.push_back(subtree_result.utilities.condition[i]);
+					// 	subtree.utilities.utilities.push_back(subtree_result.utilities.utilities[i]);
+
+					// }
+
+					std::cout << " --- Exit 4 for subtree" << std::endl;
+					std::cout << "++ PRINT -> practicality SUBTREE res " << std::endl;
+					for(size_t i=0; i<subtree_result.utilities.utilities.size(); i++) { 
+							std::cout << "Condition: " << subtree_result.utilities.condition[i] << std::endl;
+							std::cout << "++ size utilities " << subtree_result.utilities.utilities[i].size()<< std::endl;
+							UtilityTuplesSet uts = subtree_result.utilities.utilities[i];
+							for(UtilityTuple util: uts) {
+								std::cout << "++ TTEESSTT " << std::endl;
+								std::cout << "\tUtility: " << util.leaf << std::endl;
+
+							}
+					}
+					std::cout << "++ PRINT -> practicality DONE " << std::endl;
+
+
+					std::cout << " --- Exit 4 for subtree" << std::endl;
+					std::cout << "++ PRINT -> practicality " << std::endl;
+					std::cout << "++ case " << subtree_case << std::endl;
+					for(size_t i=0; i<subtree.utilities.utilities.size(); i++) { 
+							std::cout << "Condition: " << subtree.utilities.condition[i] << std::endl;
+							std::cout << "++ size utilities " << subtree.utilities.utilities[i].size()<< std::endl;
+							UtilityTuplesSet uts = subtree.utilities.utilities[i];
+							for(UtilityTuple util: uts) {
+								std::cout << "++ TTEESSTT " << std::endl;
+								std::cout << "\tUtility: " << util.leaf << std::endl;
+
+							}
+					}
+					std::cout << "++ PRINT -> practicality DONE " << std::endl;
+
 					return true;
 				}
 			}
@@ -1094,8 +1171,13 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
 				updated_actions.push_back(choice.action);
 
-				if (!practicality_rec_old(input, options, solver, choice.node, updated_actions, consider_prob_groups))
+
+				std::cout << "+++++++ Before res 2 " << std::endl;
+				bool res_2 = practicality_rec_old(input, options, solver, choice.node, updated_actions, consider_prob_groups);
+				std::cout << "+++++++ After res 2 " << std::endl;
+				if (!res_2)
 				{
+					std::cout << "+++++++ MUSHROOM0" << std::endl;
 					if (result)
 					{
 						branch.reason = choice.node->reason;
@@ -1109,6 +1191,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					// }
 					if (!branch.reason.null() || options.strong_conditional_actions)
 					{
+						std::cout << "+++++++ MUSHROOM1" << std::endl;
 						return result;
 					}
 				}
@@ -1117,14 +1200,17 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					any_honest_practical = true;
 				}
 
+				std::cout << "+++++++ MUSHROOM2" << std::endl;
 				if (choice.node->get_utilities().utilities.size() > 0)
 				{
+					std::cout << "+++++++ MUSHROOM" << std::endl;
 					ConditionalUtilities honest_utilities_per_condition = choice.node->get_utilities();
 					for (int k = 0; k < honest_utilities_per_condition.condition.size(); k++)
 					{
 						honest_utilities_per_condition.condition[k] = (z3::conjunction({honest_utilities_per_condition.condition[k], branch.conditions[j].condition}));
 					}
 					honest_utilities.push_back(honest_utilities_per_condition);
+					std::cout << "+++++++ DONE MUSHROOM " << std::endl;
 				}
 				honest_choice.push_back(choice.action);
 				// branch.strategy = choice.action; // choose the honest action along the honest history
@@ -1769,10 +1855,15 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		actual case splitting engine
 		determine if the input has some property for the current honest history, splitting recursively
 	*/
+	std::cout << " --- Enter property rec" << std::endl;
 
 	// property holds under current split
-	if (property_under_split(solver, input, options, property, history))
+	std::cout << " --- Apple 0" << std::endl;
+	bool res = property_under_split(solver, input, options, property, history);
+	std::cout << " --- Apple 0.1" << std::endl;
+	if (res)
 	{
+		std::cout << " --- Apple 1" << std::endl;
 		if (!input.stop_log)
 		{
 			std::cout << "\tProperty satisfied for case: " << current_case << std::endl;
@@ -1808,8 +1899,11 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		// 	input.add_case2ce(current_case);
 		// }
 
+		std::cout << " --- Exit1 property rec" << std::endl;
 		return true;
 	}
+
+	std::cout << " --- Apple2 property rec" << std::endl;
 
 	// otherwise consider case split
 	z3::Bool split = input.root->reason;
@@ -1832,6 +1926,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		// 	input.root->reset_violation_cr();
 		// }
 
+		std::cout << " --- Exit2 property rec" << std::endl;
 		return false;
 	}
 	if (!input.stop_log)
@@ -1900,6 +1995,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		{
 			if ((!options.preconditions) && (!options.all_cases))
 			{
+				std::cout << " --- Exit3 property rec" << std::endl;
 				return false;
 			}
 			else
@@ -1912,6 +2008,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 			}
 		}
 	}
+	std::cout << " --- Exit4 property rec" << std::endl;
 	return result;
 }
 
@@ -2218,6 +2315,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 
 	if (property == PropertyType::Practicality)
 	{
+		std::cout << " --- Enter property" << std::endl;
 		input.reset_practical_utilities();
 		std::vector<PracticalitySubtreeResult> satisfied_in_case = {};
 		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, satisfied_in_case))
@@ -2233,6 +2331,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 			std::cout << "NO, it is not " << prop_name << "." << std::endl;
 			prop_holds = false;
 		}
+		std::cout << " --- Exit property" << std::endl;
 	}
 	else
 	{
@@ -2324,6 +2423,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 	assert(solver.solve() == z3::Result::SAT);
 
 	if (property == PropertyType::Practicality) {
+		std::cout << "--- property subtree " << std::endl;
 		input.reset_practical_utilities();
 
 		std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
@@ -2359,7 +2459,6 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 
 			std::cout << "YES, it is " << prop_name << ", the honest practical utility is as follows: " << std::endl;
 			for (size_t i = 0; i < input.root->branch().practical_utilities.condition.size(); i++) {
-
 				std::cout << "\tConditions: " << input.root->branch().practical_utilities.condition[i] << std::endl;
 				std::cout << "\tUtilities: " << std::endl;
 				for(const auto &pr_utility : input.root->branch().practical_utilities.utilities[i]) {
@@ -2790,6 +2889,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		} else {
 			subtree.solved_weak_cond_actions = false;
 		}
+		std::cout << "Print to file..." << std::endl;
         print_subtree_result_to_file(input, file_name, subtree);
 
 	}

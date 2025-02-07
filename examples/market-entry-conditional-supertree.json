@@ -125,7 +125,20 @@
                                 "satisfied_in_case": []
                             }
                         ],
-                        "weaker_immunity": []
+                        "weaker_immunity": [
+                            {
+                                "player_group": [
+                                    "E"
+                                ],
+                                "satisfied_in_case": []
+                            },
+                            {
+                                "player_group": [
+                                    "N"
+                                ],
+                                "satisfied_in_case": []
+                            }
+                        ]
                     }
                 }
             }
