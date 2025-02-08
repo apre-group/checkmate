@@ -298,13 +298,13 @@ class Subtree : public Node {
 
 	virtual ConditionalUtilities get_utilities() const override {
 		
-		ConditionalUtilities result;
+		// ConditionalUtilities result;
 
 		// for (const auto &utility_tuple: utilities){
 		// 	result.insert(result.end(), utility_tuple);
 		// }
 
-		return result; 
+		return utilities; 
 	}
 
 	void reset_practical_utilities() const {
