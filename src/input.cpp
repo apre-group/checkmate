@@ -825,8 +825,9 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 
 
 						UtilityTuplesSet utilities_set = {};
-						for(const auto &utility : utilities) {
-							utilities_set.insert(utility);
+						for(auto const &util : utilities_storage[index_utilities_storage]) {
+							UtilityTuple ut(util);
+							utilities_set.insert(ut);
 						}
 						cu.utilities.push_back(utilities_set);
 
