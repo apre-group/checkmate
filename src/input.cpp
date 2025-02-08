@@ -745,7 +745,7 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 		{
 
 			if(node["subtree"]["practicality"].size() == 0) {
-				std::cout << "HERE Orange" << std::endl;
+				// do nothing
 			}
 			else if (node["subtree"]["practicality"][0].contains("conditional_utilities"))
 			{
@@ -923,22 +923,6 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 					PracticalitySubtreeResult pr_sub_result{_case, cu};
 
 					practicality.push_back(pr_sub_result);
-
-				}
-			}
-		}
-
-		std::cout << "++ PRINT -> practicality " << std::endl;
-		for(auto pr_subtree_res : practicality) {
-			std::cout << "Case: " << pr_subtree_res._case << std::endl;
-			std::cout << "Sizes: " << pr_subtree_res.utilities.condition.size() << " " << pr_subtree_res.utilities.utilities.size() << std::endl;
-			for(size_t i=0; i<pr_subtree_res.utilities.utilities.size(); i++) { 
-				std::cout << "Condition: " << pr_subtree_res.utilities.condition[i] << std::endl;
-				std::cout << "++ size utilities " << pr_subtree_res.utilities.utilities[i].size()<< std::endl;
-				UtilityTuplesSet uts = pr_subtree_res.utilities.utilities[i];
-				for(UtilityTuple util: uts) {
-					std::cout << "++ TTEESSTT " << std::endl;
-					std::cout << "\tUtility: " << util.leaf << std::endl;
 
 				}
 			}
