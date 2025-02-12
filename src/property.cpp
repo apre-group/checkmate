@@ -106,6 +106,8 @@ json parse_practicality_property_to_json(const Input &input, std::vector<Practic
 
 			// optimization for benchmarks with no conditional actions
 			// if condition is "true & true & true" just print "true"
+			// TODO optimize this by passing the solver as parameter and not instantiating it with every call
+			// TODO do this in practicality_rec_old instead of here
 			z3::Solver solver_check_validity;
 			if(solver_check_validity.solve({!subtree_result.utilities.condition[i]}) == z3::Result::UNSAT) {
 				condition = "true";
