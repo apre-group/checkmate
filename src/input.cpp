@@ -607,7 +607,7 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 	if (node.contains("subtree"))
 	{
 
-		// Remove the check below for the purpose of allowing nesting of subtrees in subtress 
+		// Remove the check below for the purpose of allowing nesting of subtrees in subtress
 		/*
 		if (!supertree)
 		{
@@ -749,7 +749,7 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 			}
 			else if (node["subtree"]["practicality"][0].contains("conditional_utilities"))
 			{
-				
+
 				for (const json &pr : node["subtree"]["practicality"])
 				{
 					const json &_case_pr = pr["case"];
@@ -765,7 +765,7 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 					std::vector<std::vector<Utility>> utilities = {};
 
 					ConditionalUtilities cu;
-					for (const json &utility_tuple : pr["utilities"])
+					for (const json &utility_tuple : pr["conditional_utilities"])
 					{
 						const json &_cond_actions = utility_tuple["conditional_actions"];
 						z3::Bool _conditional_actions = {};
@@ -816,8 +816,8 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 								pr_utility.push_back(player_utility.second);
 
 							utilities.push_back(pr_utility);
-						}						
-						
+						}
+
 						utilities_storage.push_back({});
 						for (auto const util : utilities) {
 							utilities_storage[index_utilities_storage].push_back(util);
@@ -840,7 +840,6 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 					practicality.push_back(pr_sub_result);
 				}
 
-			
 			} else {
 
 				for (const json &pr : node["subtree"]["practicality"])
@@ -865,7 +864,7 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 						using PlayerUtility = std::pair<std::string, Utility>;
 						std::vector<PlayerUtility> player_utilities;
 						for (const json &utility : utility_tuple)
-						{							
+						{
 							const json &value = utility["value"];
 							// parse a utility expression
 							if (value.is_string())
@@ -1032,7 +1031,7 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 				std::vector<Utility> hon_utility = {};
 				for (auto &player_utility : player_utilities)
 					hon_utility.push_back(player_utility.second);
-			
+
 
 			CondActionsUtilityPair new_pair;
 			new_pair.conditional_actions = {};
