@@ -1,0 +1,248 @@
+{
+  "players": [
+    "N",
+    "E"
+  ],
+  "actions": [
+    "o",
+    "e",
+    "i",
+    "s"
+  ],
+  "infinitesimals": [],
+  "constants": [
+    "a",
+    "p"
+  ],
+  "initial_constraints": [
+    "a > 0",
+    "p > 0"
+  ],
+  "property_constraints": {
+    "weak_immunity": [],
+    "weaker_immunity": [],
+    "collusion_resilience": [],
+    "practicality": []
+  },
+  "honest_histories": [
+    {
+      "action": "",
+      "children": [
+        {
+          "action": "o",
+          "children": []
+        }
+      ]
+    }
+  ],
+  "tree": {
+    "player": "N",
+    "children": [
+      {
+        "action": "o",
+        "child": {
+          "utility": [
+            {
+              "player": "N",
+              "value": 0
+            },
+            {
+              "player": "E",
+              "value": "2 * p"
+            }
+          ]
+        }
+      },
+      {
+        "action": "e",
+        "child":
+        {
+            "subtree": {
+                "collusion_resilience": [],
+                "honest_utility": [
+                    {
+                        "conditional_actions": [
+                            "true"
+                        ],
+                        "utility": [
+                            {
+                                "player": "E",
+                                "value": "(2.0 * p) + 0.0"
+                            },
+                            {
+                                "player": "N",
+                                "value": "0.0 + 0.0"
+                            }
+                        ]
+                    }
+                ],
+                "practicality": [
+                    {
+                        "case": [
+                            "((- a) >= ((2.0 * a) - p))",
+                            "(((2.0 * a) - p) >= (- a))"
+                        ],
+                        "conditional_utilities": [
+                            {
+                                "conditional_actions": "((p <= (2.0 * a)))",
+                                "utilities": [
+                                    [
+                                        {
+                                            "player": "E",
+                                            "value": "p + 0.0"
+                                        },
+                                        {
+                                            "player": "N",
+                                            "value": "((p - (2.0 * a)) - 1.0) + 0.0"
+                                        }
+                                    ]
+                                ]
+                            },
+                            {
+                                "conditional_actions": "( (p <= (2.0 * a)))",
+                                "utilities": [
+                                    [
+                                        {
+                                            "player": "E",
+                                            "value": "(- a) + 0.0"
+                                        },
+                                        {
+                                            "player": "N",
+                                            "value": "(- a) + 0.0"
+                                        }
+                                    ]
+                                ]
+                            },
+                            {
+                                "conditional_actions": "( (p > (2.0 * a)))",
+                                "utilities": [
+                                    [
+                                        {
+                                            "player": "E",
+                                            "value": "(- a) + 0.0"
+                                        },
+                                        {
+                                            "player": "N",
+                                            "value": "(- a) + 0.0"
+                                        }
+                                    ]
+                                ]
+                            },
+                            {
+                                "conditional_actions": "( (p > (2.0 * a)))",
+                                "utilities": [
+                                    [
+                                        {
+                                            "player": "E",
+                                            "value": "((2.0 * a) - p) + 0.0"
+                                        },
+                                        {
+                                            "player": "N",
+                                            "value": "p + 0.0"
+                                        }
+                                    ]
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "case": [
+                            "((- a) >= ((2.0 * a) - p))",
+                            "(((2.0 * a) - p) < (- a))"
+                        ],
+                        "conditional_utilities": [
+                            {
+                                "conditional_actions": "( (p <= (2.0 * a)))",
+                                "utilities": [
+                                    [
+                                        {
+                                            "player": "E",
+                                            "value": "p + 0.0"
+                                        },
+                                        {
+                                            "player": "N",
+                                            "value": "((p - (2.0 * a)) - 1.0) + 0.0"
+                                        }
+                                    ]
+                                ]
+                            },
+                            {
+                                "conditional_actions": "( (p <= (2.0 * a)))",
+                                "utilities": [
+                                    [
+                                        {
+                                            "player": "E",
+                                            "value": "(- a) + 0.0"
+                                        },
+                                        {
+                                            "player": "N",
+                                            "value": "(- a) + 0.0"
+                                        }
+                                    ]
+                                ]
+                            },
+                            {
+                                "conditional_actions": "( (p > (2.0 * a)))",
+                                "utilities": [
+                                    [
+                                        {
+                                            "player": "E",
+                                            "value": "(- a) + 0.0"
+                                        },
+                                        {
+                                            "player": "N",
+                                            "value": "(- a) + 0.0"
+                                        }
+                                    ]
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "case": [
+                            "((- a) < ((2.0 * a) - p))"
+                        ],
+                        "conditional_utilities": [
+                            {
+                                "conditional_actions": "( (p <= (2.0 * a)))",
+                                "utilities": [
+                                    [
+                                        {
+                                            "player": "E",
+                                            "value": "p + 0.0"
+                                        },
+                                        {
+                                            "player": "N",
+                                            "value": "((p - (2.0 * a)) - 1.0) + 0.0"
+                                        }
+                                    ]
+                                ]
+                            },
+                            {
+                                "conditional_actions": "( (p > (2.0 * a)))",
+                                "utilities": [
+                                    [
+                                        {
+                                            "player": "E",
+                                            "value": "((2.0 * a) - p) + 0.0"
+                                        },
+                                        {
+                                            "player": "N",
+                                            "value": "p + 0.0"
+                                        }
+                                    ]
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "solved_for_weak_conditional_actions": false,
+                "weak_immunity": [],
+                "weaker_immunity": []
+            }
+        }
+
+      }
+    ]
+  }
+}
