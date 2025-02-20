@@ -21,8 +21,7 @@ using z3::Solver;
 // Need global copy due to issue with dangling references in load_tree
 // Alternatively, we can wrap UtilityTuple s.t. it creates a copy and does not just use the reference
 extern std::vector<std::vector<std::vector<Utility>>> utilities_storage;
-std::vector<PracticalitySubtreeResult> storage_pr_subtree_result;
-size_t index_storage_pr_subtree_result = 0;
+
 
 static std::string print_history(const HonestNode *history)
 {
@@ -111,7 +110,7 @@ json parse_practicality_property_to_json(const Input &input, std::vector<Practic
 			z3::Solver solver_check_validity;
 			if(solver_check_validity.solve({!subtree_result.utilities.condition[i]}) == z3::Result::UNSAT) {
 				condition = "true";
-			} 
+			}
 
 			else {
 				json condition_res = parse_sat_case({subtree_result.utilities.condition[i]});
@@ -137,7 +136,7 @@ json parse_practicality_property_to_json(const Input &input, std::vector<Practic
         // }
 
         json obj = {{"case", arr_case}, {"conditional_utilities", utilities}};
-        
+
 		arr_pr.push_back(obj);
     }
     return arr_pr;
@@ -161,7 +160,7 @@ void print_subtree_result_to_file(const Input &input, std::string file_name, Sub
 			json utility = parse_utility(input, pair.utility);
 			json obj = {{"conditional_actions", condition}, {"utility", utility}};
 			arr_honest_utility.push_back(obj);
-		} 
+		}
 
         subtree_json["subtree"]["weak_immunity"] = arr_wi;
         subtree_json["subtree"]["weaker_immunity"] = arr_weri;
@@ -1038,7 +1037,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			std::cerr << "checkmate: subtree is solved for strong conditional actions. Thus, supertree cannot be solved for weak conditional actions... " << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
-	
+
 		for (size_t i = 0; i < subtree.practicality.size(); i++) {
 
 			PracticalitySubtreeResult subtree_result = subtree.practicality[i];
@@ -1065,6 +1064,9 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 						if(subtree_res.size() == 0 && options.strong_conditional_actions) {
 							return false;
 						}
+						else if (subtree_res.size() != 0){
+							one_pr = true;
+						}
 					}
 					if(options.weak_conditional_actions && !one_pr) {
 						return false;
@@ -1072,16 +1074,14 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 					// if (subtree_result.utilities.size() == 0) {
 						// we have to be along honest at this point, otw we would have had at least one pr utility
-						
+
 						// if(options.counterexamples) {
 						// 	input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
 						// }
 					// 	return false;
 					// }
-					storage_pr_subtree_result.push_back(subtree_result);
-					subtree.utilities = storage_pr_subtree_result[index_storage_pr_subtree_result].utilities;
-					index_storage_pr_subtree_result++;
 
+					subtree.utilities = subtree_result.utilities;
 					return true;
 				}
 			}
@@ -2382,13 +2382,13 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 					if(input.root->branch().practical_utilities.utilities[i].size() == 1) {
 						one_pr = true;
 					}
-				}	
+				}
 			}
 			if(options.weak_conditional_actions) {
 				assert(one_pr);
 			}
-			
-			
+
+
 			// std::vector<Utility> honest_utility;
 			// for (auto elem: input.root->branch().practical_utilities) {
 			// 	honest_utility = elem.leaf;
@@ -2401,9 +2401,9 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 				std::cout << "\tUtilities: " << std::endl;
 				for(const auto &pr_utility : input.root->branch().practical_utilities.utilities[i]) {
 					std::cout << "\t\tUtility: " << pr_utility.leaf << std::endl;
-				}	 
-			}			
-		
+				}
+			}
+
 		} else {
 			//assert( input.root->branch().practical_utilities.size() == 0);
 			// removed this assertion bacause it was failing
@@ -2579,7 +2579,7 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 		// removed for conditional actions - new assertion below
 		//assert(input.root.get()->practical_utilities.size()>0);
 		for (size_t i = 0; i < input.root->branch().practical_utilities.condition.size(); i++) {
-			assert(input.root->branch().practical_utilities.utilities[i].size() > 0);	
+			assert(input.root->branch().practical_utilities.utilities[i].size() > 0);
 		}
 
 		// ATTENTION THINK ABOUT HOW LATER (IN SUPERTREE) CASE SPLITS MAY IMPACT THE RESULT
