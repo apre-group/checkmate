@@ -117,6 +117,10 @@ namespace z3 {
 			check_error();
 		}
 
+		Z3_ast get_ast() const {
+			return ast;
+		}
+
 		Bool operator!() const {
 			Z3_ast result = Z3_mk_not(CONTEXT, ast);
 			check_error();
@@ -234,7 +238,7 @@ namespace z3 {
 			Z3_ast ast_right = Z3_get_app_arg(CONTEXT, app, 1);
 			Z3_func_decl func_decl = Z3_get_app_decl(CONTEXT, app);
 			Z3_decl_kind decl_kind = Z3_get_decl_kind(CONTEXT, func_decl);
-			
+
 			Z3_app other_app = Z3_to_app(CONTEXT, other.ast);
 			Z3_ast other_ast_left = Z3_get_app_arg(CONTEXT, other_app, 0);
 			Z3_ast other_ast_right = Z3_get_app_arg(CONTEXT, other_app, 1);
@@ -411,6 +415,18 @@ namespace z3 {
 
 			Z3_ast args[2] = {ast, other.ast};
 			Z3_ast result = Z3_mk_mul(CONTEXT, 2, args);
+			check_error();
+			return result;
+		}
+
+		Real operator/(Real other) const {
+			if (other.is(ZERO))
+				assert(false);
+
+			if (is(ZERO))
+				return ZERO;
+
+			Z3_ast result = Z3_mk_div(CONTEXT,ast,other.ast);
 			check_error();
 			return result;
 		}

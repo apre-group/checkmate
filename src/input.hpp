@@ -35,7 +35,7 @@ enum class NodeType {
 struct UtilityTuple {
 	const std::vector<Utility> &leaf;
 	mutable std::vector<std::string> strategy_vector;
-	
+
 	// GCC doesn't like copy-assign without explicit copy constructor
 	UtilityTuple(const UtilityTuple &other) = default;
 
@@ -82,7 +82,7 @@ using UtilityTuplesSet = std::unordered_set<UtilityTuple>;
 
 struct ConditionalUtilities {
 	mutable std::vector<z3::Bool> condition;
-	mutable std::vector<UtilityTuplesSet> utilities; 
+	mutable std::vector<UtilityTuplesSet> utilities;
 };
 
 struct HistoryChoice{
@@ -99,18 +99,18 @@ struct CeChoice{
 
 struct StrategyCase {
 	std::vector<z3::Bool> _case;
-	std::vector<HistoryChoice> strategy; 
+	std::vector<HistoryChoice> strategy;
 };
 
 struct CeCase {
 	std::vector<z3::Bool> _case;
 	std::vector<std::string> player_group;
-	std::vector<CeChoice> counterexample; 
+	std::vector<CeChoice> counterexample;
 };
 
 struct UtilityCase {
 	std::vector<z3::Bool> _case;
-	ConditionalUtilities utilities; 
+	ConditionalUtilities utilities;
 };
 
 // TODO: make find() work for vector<z3::Bool> instead of using this function
@@ -202,7 +202,7 @@ public:
 	std::vector<std::string> strat2hist(std::vector<std::string> &strategy) const;
 
 	void prune_actions_from_strategy(std::vector<std::string> &strategy) const;
-	
+
 	void reset_violation_cr() const;
 
 	std::vector<std::vector<bool>> store_violation_cr() const;
@@ -297,14 +297,14 @@ class Subtree : public Node {
 	}
 
 	virtual ConditionalUtilities get_utilities() const override {
-		
+
 		// ConditionalUtilities result;
 
 		// for (const auto &utility_tuple: utilities){
 		// 	result.insert(result.end(), utility_tuple);
 		// }
 
-		return utilities; 
+		return utilities;
 	}
 
 	void reset_practical_utilities() const {
@@ -325,12 +325,12 @@ class Leaf final : public Node {
 
 	NodeType type() const override { return NodeType::LEAF; }
 
-	virtual ConditionalUtilities get_utilities() const override 
+	virtual ConditionalUtilities get_utilities() const override
 		{
-			ConditionalUtilities cu; 
-			cu.utilities.push_back({utilities}); 
-			z3::Bool bool_obj; cu.condition.push_back(bool_obj.True()); 
-			return cu; 
+			ConditionalUtilities cu;
+			cu.utilities.push_back({utilities});
+			z3::Bool bool_obj; cu.condition.push_back(bool_obj.True());
+			return cu;
 		}
 
 	void reset_reason() const {
@@ -368,7 +368,7 @@ class Branch final : public Node {
 
 	// do a linear-time lookup of `action` by name in the branch, which must be present
 	const Choice &get_choice(const std::string &action) const {
-		for (const Condition &condition: conditions) 
+		for (const Condition &condition: conditions)
 			for (const Choice &choice: condition.children)
 				if (choice.action == action)
 					return choice;
@@ -389,7 +389,7 @@ class Branch final : public Node {
 
 	const Choice &get_honest_child(size_t index) const {
 		assert(index < conditions.size());
-		
+
 		for (const Choice &choice: conditions[index].children)
 			if (choice.node->honest)
 				return choice;
@@ -537,16 +537,16 @@ class Branch final : public Node {
 		honest = true;
 		const Node *current = this;
 		for(auto &child : history->children) {
-			// find corresponding tree after action 
+			// find corresponding tree after action
 			// and call the function recursively for children of shistory entry
 			Node *subtree = current->branch().get_choice(child->action).node;
-			
+
 			if(subtree->is_branch()) {
 				subtree->branch().mark_honest(child);
 			} else {
 				subtree->honest = true;
 			}
-			
+
 		}
 	}
 
@@ -612,7 +612,7 @@ class Branch final : public Node {
 						choice.node->subtree().reset_practical_utilities(); // TODO still not correctly implemented
 					}
 				}
-			}	
+			}
 		}
 	}
 
@@ -644,7 +644,7 @@ struct Input {
 	std::unordered_map<std::string, Utility> utilities;
 
 	// global initial constraints
-	z3::Bool initial_constraint;
+	std::vector<z3::Bool> initial_constraints;
 	// weak immunity initial constraints
 	z3::Bool weak_immunity_constraint;
 	// weaker immunity initial constraints
@@ -686,7 +686,7 @@ struct Input {
 		for ( uint i = 0; i< number_groups; i++) {
 			solved_for_group.push_back(false);
 		}
-		
+
 	}
 
 	std::vector<bool> store_solved_for() const {
@@ -735,20 +735,20 @@ struct Input {
 	}
 
 	// void compute_strategy_case(std::vector<z3::Bool> _case, PropertyType property) const {
-		
+
 	// 	if (property == PropertyType::Practicality){
 	// 		if(root.get()->branch().honest) {
 	// 			// the honest one has to be the practical one
 	// 			// otw (if we call a subtree in default mode to obtain the strategies)
-	// 			//  there can be more than one pr strategy if the subtree is not along the 
-	// 			//  honest history 
+	// 			//  there can be more than one pr strategy if the subtree is not along the
+	// 			//  honest history
 	// 			assert(root.get()->practical_utilities.size()==1);
 	// 		}
 	// 		for (const auto& pr_utility: root.get()->practical_utilities){
 	// 			StrategyCase new_strat_case;
 	// 			new_strat_case._case = _case;
 	// 			std::vector<std::string> strategy_vector;
-	// 			strategy_vector.insert(strategy_vector.begin(), pr_utility.strategy_vector.begin(), pr_utility.strategy_vector.end()); 
+	// 			strategy_vector.insert(strategy_vector.begin(), pr_utility.strategy_vector.begin(), pr_utility.strategy_vector.end());
 	// 			new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector);
 	// 			strategies.push_back(new_strat_case);
 	// 		}
@@ -784,7 +784,7 @@ struct Input {
 	// 				<< std::endl;
 	// 		}
 	// 		if (is_wi) {
-	// 			std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
+	// 			std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;
 	// 		}
 	// 		if(options.supertree) {
 	// 			std::cout << "\tYou need to run subtrees in default mode with option strategies for complete strategies." << std::endl;
@@ -799,7 +799,7 @@ struct Input {
 	// 	for (auto player : player_group) {
 	// 		new_ce_case.player_group.push_back(players[player]);
 	// 	}
-		
+
 	// 	if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
 	// 		new_ce_case.counterexample = root.get()->compute_wi_ce(players, {}, player_group);
 	// 	} else if (property == PropertyType::CollusionResilience) {
@@ -860,7 +860,7 @@ struct Input {
 	// 					std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
 	// 				}
 	// 			}
-				
+
 	// 		}
 	// 	} else {
 	// 		for (CeCase ce_case : counterexamples){
@@ -873,7 +873,7 @@ struct Input {
 	// 					assert(!options.subtree);
 	// 					std::cout << "Practical histories that extend supertree counterexamples for case: " << ce_case._case <<  std::endl;
 	// 					for(auto history : ce_case.counterexample) {
-	// 						std::cout << history.choices << std::endl;	
+	// 						std::cout << history.choices << std::endl;
 	// 					}
 	// 				}
 	// 			} else {
@@ -884,7 +884,7 @@ struct Input {
 	// 					std::vector<std::string> history_to_print;
 	// 					history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
 	// 					history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
-	// 					std::cout << history_to_print << std::endl;	
+	// 					std::cout << history_to_print << std::endl;
 	// 				}
 	// 				if(options.supertree) {
 	// 					std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
@@ -892,7 +892,7 @@ struct Input {
 	// 			}
 	// 		}
 	// 	}
-		
+
 	// }
 
 	// void add_unsat_case(std::vector<z3::Bool> _case) const {

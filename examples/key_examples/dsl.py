@@ -45,10 +45,10 @@ class Expr:
 
     def __rmul__(self, other: LExpr) -> LExpr:
         return mul_expr(other, self)
-    
+
     def __truediv__(self, other: LExpr) -> LExpr:
         return div_expr(other, self)
-    
+
     def __rtruediv__(self, other: LExpr) -> LExpr:
         return div_expr(other, self)
 
@@ -63,16 +63,16 @@ class Expr:
 
     def __ge__(self, other: LExpr) -> Constraint:
         return DisequationConstraint('>=', self, other)
-    
+
     def __lt__(self, other: LExpr) -> Constraint:
         return DisequationConstraint('<', self, other)
 
     def __le__(self, other: LExpr) -> Constraint:
         return DisequationConstraint('<=', self, other)
-    
+
     def __eq__(self, other: LExpr) -> Constraint:
         return DisequationConstraint('=', self, other)
-    
+
 
     def json(self):
         return repr(self)
@@ -86,7 +86,7 @@ class NameExpr(Expr):
 
     def __repr__(self):
         return self.name
-    
+
     def __hash__(self) -> int:
         return self.name.__hash__()
 
@@ -223,7 +223,7 @@ class MultiplicationExpr(Expr):
         left = f"({self.left})" if isinstance(self.left, TermExpr) else f"{self.left}"
         right = f"({self.right})" if isinstance(self.right, TermExpr) else f"{self.right}"
         return f"{left} * {right}"
-    
+
     def __hash__(self) -> int:
         return f"{self.left} * {self.right}".__hash__()
 
@@ -243,7 +243,7 @@ def mul_expr(left: LExpr, right: LExpr) -> LExpr:
         return TermExpr.mul_constant(left, float(right))
 
     return MultiplicationExpr(left, right)
-    
+
 
 class DivisionExpr(Expr):
     left: LExpr
@@ -257,7 +257,7 @@ class DivisionExpr(Expr):
         left = f"({self.left})" if isinstance(self.left, TermExpr) else f"{self.left}"
         right = f"({self.right})" if isinstance(self.right, TermExpr) else f"{self.right}"
         return f"{left} / {right}"
-    
+
     def __hash__(self) -> int:
         return f"{self.left} * {self.right}".__hash__()
 
@@ -276,7 +276,7 @@ def div_expr(left: LExpr, right: LExpr) -> LExpr:
 class Constraint:
     def json(self):
         return repr(self)
-    
+
 class Truth(Constraint):
 
     def __init__(self) -> None:
@@ -312,13 +312,13 @@ class DisequationConstraint(Constraint):
 class Conjunction(Constraint):
     args: List[Constraint]
 
-    def __init__(self, args: List[Constraint]): 
+    def __init__(self, args: List[Constraint]):
         self.args = args
 
     def __repr__(self):
         result = f""
         for elem in self.args:
-            result = result + f" & {elem}" 
+            result = result + f" & {elem}"
         result = result[3:]
         return result
 
@@ -332,13 +332,13 @@ def conjunction(*args) -> Conjunction:
 class Disjunction(Constraint):
     args: List[Constraint]
 
-    def __init__(self, args: List[Constraint]): 
+    def __init__(self, args: List[Constraint]):
         self.args = args
 
     def __repr__(self):
         result = f""
         for elem in self.args:
-            result = result + f" || {elem}" 
+            result = result + f" | {elem}"
         result = result[3:]
         return result
 
@@ -459,18 +459,18 @@ def constants(*constants: str) -> List[Expr]:
 class Constraint:
     def json(self):
         return repr(self)
-    
+
 # CheckMate does currently not support the & symbol
 class Conjunction(Constraint):
     args: List[Constraint]
 
-    def __init__(self, args: List[Constraint]): 
+    def __init__(self, args: List[Constraint]):
         self.args = args
 
     def __repr__(self):
         result = f""
         for elem in self.args:
-            result = result + f" & {elem}" 
+            result = result + f" & {elem}"
         result = result[3:]
         return result
 
@@ -492,8 +492,10 @@ def finish(
         weaker_immunity_constraints: List[Constraint],
         collusion_resilience_constraints: List[Constraint],
         practicality_constraints: List[Constraint],
-        honest_histories: List[HistoryTree],
+        honest_histories: List[List[Action]],
+        honest_utilities: List,
         tree: Tree,
+        file = None
 ):
     import sys
     mode = sys.argv[1] if len(sys.argv) >= 2 else ''
@@ -501,6 +503,24 @@ def finish(
         print("digraph tree {")
         tree.graphviz()
         print("}")
+    elif file is None:
+        json.dump({
+            'players': players,
+            'actions': actions,
+            'infinitesimals': infinitesimals,
+            'constants': constants,
+            'initial_constraints': initial_constraints,
+            'property_constraints': {
+                'weak_immunity': weak_immunity_constraints,
+                'weaker_immunity': weaker_immunity_constraints,
+                'collusion_resilience': collusion_resilience_constraints,
+                'practicality': practicality_constraints
+            },
+            'honest_histories': honest_histories,
+            'honest_utilities': honest_utilities,
+            'tree': tree
+        }, default=lambda x: x.json(), fp=sys.stdout, indent=2)
+        sys.exit(0)
     else:
         json.dump({
             'players': players,
@@ -515,7 +535,6 @@ def finish(
                 'practicality': practicality_constraints
             },
             'honest_histories': honest_histories,
+            'honest_utilities': honest_utilities,
             'tree': tree
-        }, default=lambda x: x.json(), fp=sys.stdout, indent=2)
-
-    sys.exit(0)
+        }, default=lambda x: x.json(), fp=file, indent=2)

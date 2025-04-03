@@ -22,6 +22,7 @@ struct Lexer
 		PLUS,
 		MINUS,
 		MULTIPLY,
+		DIVIDE,
 		NEGATE,
 		EQ,
 		NE,
@@ -113,6 +114,12 @@ struct Lexer
 			unary = true;
 			return Token::MULTIPLY;
 		}
+		else if (*remaining == '/')
+		{
+			remaining++;
+			unary = true;
+			return Token::DIVIDE;
+		}
 		else if (*remaining == '=')
 		{
 			remaining++;
@@ -179,6 +186,7 @@ struct Parser
 		PLUS,
 		MINUS,
 		MULTIPLY,
+		DIVIDE,
 		NEGATE,
 		EQ,
 		NE,
@@ -199,6 +207,7 @@ struct Parser
 		COMPARISON,
 		PLUSMINUS,
 		MULTIPLY,
+		DIVIDE,
 		NEGATE,
 	};
 
@@ -214,6 +223,8 @@ struct Parser
 			return Precedence::PLUSMINUS;
 		case Operation::MULTIPLY:
 			return Precedence::MULTIPLY;
+		case Operation::DIVIDE:
+			return Precedence::DIVIDE;
 		case Operation::NEGATE:
 			return Precedence::NEGATE;
 		case Operation::EQ:
@@ -310,6 +321,13 @@ struct Parser
 			auto right = pop_utility();
 			auto left = pop_utility();
 			utility_stack.push_back(left * right);
+			break;
+		}
+		case Operation::DIVIDE:
+		{
+			auto right = pop_utility();
+			auto left = pop_utility();
+			utility_stack.push_back(left / right);
 			break;
 		}
 		case Operation::NEGATE:
@@ -430,6 +448,9 @@ struct Parser
 				break;
 			case Lexer::Token::MULTIPLY:
 				operation(Operation::MULTIPLY);
+				break;
+			case Lexer::Token::DIVIDE:
+				operation(Operation::DIVIDE);
 				break;
 			case Lexer::Token::NEGATE:
 				operation(Operation::NEGATE);
@@ -1226,14 +1247,15 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies(), st
 
 	// reusable buffer for constraint conjuncts
 	std::vector<z3::Bool> conjuncts;
+	std::vector<z3::Bool> initialconstrs;
 
 	// initial constraints
 	for (const json &initial_constraint : document["initial_constraints"])
 	{
 		const std::string &constraint = initial_constraint;
-		conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
+		initialconstrs.push_back(parser.parse_constraint(constraint.c_str()));
 	}
-	initial_constraint = z3::Bool::conjunction(conjuncts);
+	initial_constraints = initialconstrs;
 
 	// weak immunity constraints
 	conjuncts.clear();

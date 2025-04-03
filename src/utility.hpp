@@ -27,11 +27,19 @@ struct Utility {
 	}
 
 	Utility operator*(Utility other) const {
-		if (!(infinitesimal.is(z3::Real::ZERO)) && !(other.infinitesimal.is(z3::Real::ZERO))) {
-			std::cerr << "mulitplication of two infinitesimals not supported" << std::endl;
+		// if (!(infinitesimal.is(z3::Real::ZERO)) && !(other.infinitesimal.is(z3::Real::ZERO))) {
+		// 	std::cerr << "mulitplication of two infinitesimals not supported" << std::endl;
+		// 	std::exit(EXIT_FAILURE);
+		// }
+		return {real * other.real, infinitesimal * other.real + real * other.infinitesimal};
+	}
+
+	Utility operator/(Utility other) const {
+		if (other.real.is(z3::Real::ZERO)) {
+			std::cerr << "division by zero in the real part not defined" << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
-		return {real * other.real, infinitesimal * other.real + real * other.infinitesimal};
+		return {real / other.real, infinitesimal * other.real + real * other.infinitesimal};
 	}
 
 	Utility operator-() const {
