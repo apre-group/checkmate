@@ -7,7 +7,9 @@
     "o",
     "e",
     "i",
-    "s"
+    "s",
+    "ss",
+    "ii"
   ],
   "infinitesimals": [],
   "constants": [
@@ -138,7 +140,7 @@
                                         },
                                         {
                                             "player": "N",
-                                            "value": "p + 0.0"
+                                            "value": "((2.0 * a) - p) + 0.0"
                                         }
                                     ]
                                 ]
@@ -228,7 +230,7 @@
                                         },
                                         {
                                             "player": "N",
-                                            "value": "p + 0.0"
+                                            "value": "((2.0 * a) - p) + 0.0"
                                         }
                                     ]
                                 ]

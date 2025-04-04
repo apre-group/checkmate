@@ -5,8 +5,9 @@ We are considering whether and how the conditions in the subtree need to be prop
 
 ## Wi and Cr
 
-Currently the conditions in the subtree do not really affect the result of the supertree.
-The conditions in the supertree could be stored in the subtree as initial constraints, but if they are not,
+The conditions in the subtree do not affect the result of the supertree.
+
+Vice versa, the conditions in the supertree could be stored in the subtree as initial constraints, but if they are not,
 the subtree will make additional case splits if necessary and some of the cases will never be applicable due
 to further constraints in the conditions of the supertree.
 
