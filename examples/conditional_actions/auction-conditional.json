@@ -1,0 +1,1787 @@
+{
+    "players": [
+      "A",
+      "P1",
+      "P2",
+      "P3"
+    ],
+    "actions": [
+      "H",
+      "L",
+      "I",
+      "E"
+    ],
+    "infinitesimals": [
+      "alpha"
+    ],
+    "constants": [
+      "v",
+      "p_H",
+      "p_HH",
+      "p_HHH",
+      "p_HHHH",
+      "p_HHIH",
+      "p_HIH",
+      "p_HIHH",
+      "p_HIIH",
+      "p_L",
+      "p_LH",
+      "p_LHH",
+      "p_LHHH",
+      "p_LHIH",
+      "p_LL",
+      "p_LLH",
+      "p_LLHH",
+      "p_LLL",
+      "p_LLLH",
+      "p_LLLL",
+      "p_LLIH",
+      "p_LLIL",
+      "p_LLEH",
+      "p_LIH",
+      "p_LIHH",
+      "p_LIL",
+      "p_LILH",
+      "p_LILL",
+      "p_LIIH",
+      "p_LIIL",
+      "p_LIEH",
+      "p_LEH",
+      "p_LEHH",
+      "p_LEIH",
+      "p_EH",
+      "p_EHH",
+      "p_EHHH",
+      "p_EHIH",
+      "p_EIH",
+      "p_EIHH",
+      "p_EIIH",
+      "p_EIEH",
+      "p_EEH",
+      "p_EEHH",
+      "p_EEIH"
+    ],
+    "initial_constraints": [
+      "v > 0",
+      "alpha > 0",
+      "p_H >= 0",
+      "p_H > 0",
+      "p_H > v",
+      "p_HH >= 0",
+      "p_HH > p_H",
+      "p_HH > v",
+      "p_HHH >= 0",
+      "p_HHH > p_HH",
+      "p_HHH > v",
+      "p_HHHH >= 0",
+      "p_HHHH > p_HHH",
+      "p_HHHH > v",
+      "p_HHIH >= 0",
+      "p_HHIH > p_HH",
+      "p_HHIH > v",
+      "p_HIH >= 0",
+      "p_HIH > p_H",
+      "p_HIH > v",
+      "p_HIHH >= 0",
+      "p_HIHH > p_HIH",
+      "p_HIHH > v",
+      "p_HIIH >= 0",
+      "p_HIIH > p_H",
+      "p_HIIH > v",
+      "p_L >= 0",
+      "p_L > 0",
+      "v > p_L",
+      "p_LH >= 0",
+      "p_LH > p_L",
+      "p_LH > v",
+      "p_LHH >= 0",
+      "p_LHH > p_LH",
+      "p_LHH > v",
+      "p_LHHH >= 0",
+      "p_LHHH > p_LHH",
+      "p_LHHH > v",
+      "p_LHIH >= 0",
+      "p_LHIH > p_LH",
+      "p_LHIH > v",
+      "p_LL >= 0",
+      "p_LL > p_L",
+      "v > p_LL",
+      "p_LLH >= 0",
+      "p_LLH > p_LL",
+      "p_LLH > v",
+      "p_LLHH >= 0",
+      "p_LLHH > p_LLH",
+      "p_LLHH > v",
+      "p_LLL >= 0",
+      "p_LLL > p_LL",
+      "v > p_LLL",
+      "p_LLLH >= 0",
+      "p_LLLH > p_LLL",
+      "p_LLLH > v",
+      "p_LLLL >= 0",
+      "p_LLLL > p_LLL",
+      "v > p_LLLL",
+      "p_LLIH >= 0",
+      "p_LLIH > p_LL",
+      "p_LLIH > v",
+      "p_LLIL >= 0",
+      "p_LLIL > p_LL",
+      "v > p_LLIL",
+      "p_LLEH >= 0",
+      "p_LLEH > v",
+      "p_LLEH > v",
+      "p_LIH >= 0",
+      "p_LIH > p_L",
+      "p_LIH > v",
+      "p_LIHH >= 0",
+      "p_LIHH > p_LIH",
+      "p_LIHH > v",
+      "p_LIL >= 0",
+      "p_LIL > p_L",
+      "v > p_LIL",
+      "p_LILH >= 0",
+      "p_LILH > p_LIL",
+      "p_LILH > v",
+      "p_LILL >= 0",
+      "p_LILL > p_LIL",
+      "v > p_LILL",
+      "p_LIIH >= 0",
+      "p_LIIH > p_L",
+      "p_LIIH > v",
+      "p_LIIL >= 0",
+      "p_LIIL > p_L",
+      "v > p_LIIL",
+      "p_LIEH >= 0",
+      "p_LIEH > v",
+      "p_LIEH > v",
+      "p_LEH >= 0",
+      "p_LEH > v",
+      "p_LEH > v",
+      "p_LEHH >= 0",
+      "p_LEHH > p_LEH",
+      "p_LEHH > v",
+      "p_LEIH >= 0",
+      "p_LEIH > v",
+      "p_LEIH > v",
+      "p_EH >= 0",
+      "p_EH > v",
+      "p_EH > v",
+      "p_EHH >= 0",
+      "p_EHH > p_EH",
+      "p_EHH > v",
+      "p_EHHH >= 0",
+      "p_EHHH > p_EHH",
+      "p_EHHH > v",
+      "p_EHIH >= 0",
+      "p_EHIH > p_EH",
+      "p_EHIH > v",
+      "p_EIH >= 0",
+      "p_EIH > v",
+      "p_EIH > v",
+      "p_EIHH >= 0",
+      "p_EIHH > p_EIH",
+      "p_EIHH > v",
+      "p_EIIH >= 0",
+      "p_EIIH > v",
+      "p_EIIH > v",
+      "p_EIEH >= 0",
+      "p_EIEH > v",
+      "p_EIEH > v",
+      "p_EEH >= 0",
+      "p_EEH > v",
+      "p_EEH > v",
+      "p_EEHH >= 0",
+      "p_EEHH > p_EEH",
+      "p_EEHH > v",
+      "p_EEIH >= 0",
+      "p_EEIH > v",
+      "p_EEIH > v"
+    ],
+    "property_constraints": {
+      "weak_immunity": [],
+      "weaker_immunity": [],
+      "collusion_resilience": [],
+      "practicality": []
+    },
+    "honest_histories": [
+      [
+        "E",
+        "E",
+        "I",
+        "I"
+      ]
+    ],
+    "tree": {
+      "player": "A",
+      "children": [
+        {
+          "action": "H",
+          "child": {
+            "player": "P1",
+            "children": [
+              {
+                "action": "H",
+                "child": {
+                  "player": "P2",
+                  "children": [
+                    {
+                      "action": "H",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_HHHH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_HHHH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_HHH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "v + alpha - p_HHH"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "I",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_HHIH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_HHIH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_HH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "v + alpha - p_HH"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "action": "I",
+                "child": {
+                  "player": "P2",
+                  "children": [
+                    {
+                      "action": "H",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_HIHH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_HIHH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_HIH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "v + alpha - p_HIH"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "I",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_HIIH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_HIIH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "action": "L",
+          "child": {
+            "player": "P1",
+            "children": [
+              {
+                "action": "H",
+                "child": {
+                  "player": "P2",
+                  "children": [
+                    {
+                      "action": "H",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LHHH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LHHH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LHH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "v + alpha - p_LHH"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "I",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LHIH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LHIH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "v + alpha - p_LH"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "action": "L",
+                "child": {
+                  "player": "P2",
+                  "children": [
+                    {
+                      "action": "H",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LLHH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LLHH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LLH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "v + alpha - p_LLH"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "L",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LLLH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LLLH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "L",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LLLL + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LLLL"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LLL + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "v + alpha - p_LLL"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "E",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "I",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LLIH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LLIH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "L",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LLIL + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LLIL"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LL + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "v + alpha - p_LL"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "E",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "E",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LLEH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LLEH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "action": "I",
+                "child": {
+                  "player": "P2",
+                  "children": [
+                    {
+                      "action": "H",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LIHH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LIHH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LIH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "v + alpha - p_LIH"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "L",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LILH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LILH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "L",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LILL + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LILL"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LIL + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "v + alpha - p_LIL"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "E",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "I",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LIIH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LIIH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "L",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LIIL + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LIIL"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "E",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "E",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LIEH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LIEH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "action": "E",
+                "child": {
+                  "player": "P2",
+                  "children": [
+                    {
+                      "action": "H",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LEHH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LEHH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LEH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "v + alpha - p_LEH"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "I",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_LEIH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_LEIH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "action": "I",
+          "child": {
+            "utility": [
+              {
+                "player": "A",
+                "value": 0
+              },
+              {
+                "player": "P1",
+                "value": 0
+              },
+              {
+                "player": "P2",
+                "value": 0
+              },
+              {
+                "player": "P3",
+                "value": 0
+              }
+            ]
+          }
+        },
+        {
+          "action": "E",
+          "child": {
+            "player": "P1",
+            "children": [
+              {
+                "action": "H",
+                "child": {
+                  "player": "P2",
+                  "children": [
+                    {
+                      "action": "H",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_EHHH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_EHHH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_EHH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "v + alpha - p_EHH"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "I",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_EHIH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_EHIH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_EH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "v + alpha - p_EH"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "action": "I",
+                "child": {
+                  "player": "P2",
+                  "children": [
+                    {
+                      "action": "H",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_EIHH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_EIHH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_EIH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "v + alpha - p_EIH"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "I",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_EIIH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_EIIH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "E",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "E",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_EIEH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_EIEH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "action": "E",
+                "child": {
+                  "player": "P2",
+                  "children": [
+                    {
+                      "action": "H",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_EEHH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_EEHH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_EEH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "v + alpha - p_EEH"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "I",
+                      "child": {
+                        "player": "P3",
+                        "children": [
+                          {
+                            "action": "H",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "p_EEIH + alpha - v"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "v + alpha - p_EEIH"
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "action": "I",
+                            "child": {
+                              "utility": [
+                                {
+                                  "player": "A",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P1",
+                                  "value": "alpha"
+                                },
+                                {
+                                  "player": "P2",
+                                  "value": "-alpha"
+                                },
+                                {
+                                  "player": "P3",
+                                  "value": "-alpha"
+                                }
+                              ]
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }

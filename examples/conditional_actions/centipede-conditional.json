@@ -1,0 +1,334 @@
+{
+  "players": [
+    "A",
+    "B"
+  ],
+  "actions": [
+    "C1",
+    "E1",
+    "C2",
+    "E2",
+    "C3",
+    "E3",
+    "C4",
+    "E4",
+    "C5",
+    "E5",
+    "C6",
+    "E6",
+    "C7",
+    "E7",
+    "C8",
+    "E8"
+  ],
+  "infinitesimals": [],
+  "constants": [
+    "inc",
+    "a0",
+    "b0",
+    "plus",
+    "minus",
+    "g"
+  ],
+  "initial_constraints": [
+    "inc >= 0",
+    "a0 >= 0",
+    "b0 >= 0",
+    "plus >= 0",
+    "minus >= 0",
+    "g >= 0"
+  ],
+  "property_constraints": {
+    "weak_immunity": [],
+    "weaker_immunity": [],
+    "collusion_resilience": [],
+    "practicality": []
+  },
+  "honest_histories": [
+    {
+      "action": "",
+      "children": [
+        {
+          "action": "C1",
+          "children": [
+            {
+              "action": "C2",
+              "children": [
+                {
+                  "action": "C3",
+                  "children": []
+                },
+                {
+                  "action": "C4",
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "action": "E5",
+          "children": []
+        }
+      ]
+    }
+  ],
+  "honest_utilities": [],
+  "tree": {
+    "player": "A",
+    "children": [
+      {
+        "condition": "g < 70",
+        "actions": [
+          {
+            "action": "E1",
+            "child": {
+              "utility": [
+                {
+                  "player": "A",
+                  "value": "a0"
+                },
+                {
+                  "player": "B",
+                  "value": "b0"
+                }
+              ]
+            }
+          },
+          {
+            "action": "C1",
+            "child": {
+              "player": "B",
+              "children": [
+                {
+                  "condition": "true",
+                  "actions": [
+                    {
+                      "action": "E2",
+                      "child": {
+                        "utility": [
+                          {
+                            "player": "A",
+                            "value": "a0 - minus"
+                          },
+                          {
+                            "player": "B",
+                            "value": "b0 + plus"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "C2",
+                      "child": {
+                        "player": "A",
+                        "children": [
+                          {
+                            "condition": "g < 50",
+                            "actions": [
+                              {
+                                "action": "E3",
+                                "child": {
+                                  "utility": [
+                                    {
+                                      "player": "A",
+                                      "value": "a0 - minus + plus"
+                                    },
+                                    {
+                                      "player": "B",
+                                      "value": "b0 - minus"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "action": "C3",
+                                "child": {
+                                  "utility": [
+                                    {
+                                      "player": "A",
+                                      "value": "a0 + 2 * plus"
+                                    },
+                                    {
+                                      "player": "B",
+                                      "value": "b0 + 2 * plus"
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "condition": "g >= 50",
+                            "actions": [
+                              {
+                                "action": "E4",
+                                "child": {
+                                  "utility": [
+                                    {
+                                      "player": "A",
+                                      "value": "a0 - minus + plus"
+                                    },
+                                    {
+                                      "player": "B",
+                                      "value": "b0 - minus"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "action": "C4",
+                                "child": {
+                                  "utility": [
+                                    {
+                                      "player": "A",
+                                      "value": "a0 + 2 * plus"
+                                    },
+                                    {
+                                      "player": "B",
+                                      "value": "b0 + 2 * plus"
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "condition": "g >= 70",
+        "actions": [
+          {
+            "action": "E5",
+            "child": {
+              "utility": [
+                {
+                  "player": "A",
+                  "value": "a0"
+                },
+                {
+                  "player": "B",
+                  "value": "b0"
+                }
+              ]
+            }
+          },
+          {
+            "action": "C5",
+            "child": {
+              "player": "B",
+              "children": [
+                {
+                  "condition": "true",
+                  "actions": [
+                    {
+                      "action": "E6",
+                      "child": {
+                        "utility": [
+                          {
+                            "player": "A",
+                            "value": "a0 - minus"
+                          },
+                          {
+                            "player": "B",
+                            "value": "b0 + plus"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "action": "C6",
+                      "child": {
+                        "player": "A",
+                        "children": [
+                          {
+                            "condition": "g < 90",
+                            "actions": [
+                              {
+                                "action": "E7",
+                                "child": {
+                                  "utility": [
+                                    {
+                                      "player": "A",
+                                      "value": "a0 - minus + plus"
+                                    },
+                                    {
+                                      "player": "B",
+                                      "value": "b0 - minus"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "action": "C7",
+                                "child": {
+                                  "utility": [
+                                    {
+                                      "player": "A",
+                                      "value": "a0 + 2 * plus"
+                                    },
+                                    {
+                                      "player": "B",
+                                      "value": "b0 + 2 * plus"
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "condition": "g >= 95",
+                            "actions": [
+                              {
+                                "action": "E8",
+                                "child": {
+                                  "utility": [
+                                    {
+                                      "player": "A",
+                                      "value": "a0 - minus + plus"
+                                    },
+                                    {
+                                      "player": "B",
+                                      "value": "b0 - minus"
+                                    }
+                                  ]
+                                }
+                              },
+                              {
+                                "action": "C8",
+                                "child": {
+                                  "utility": [
+                                    {
+                                      "player": "A",
+                                      "value": "a0 + 2 * plus"
+                                    },
+                                    {
+                                      "player": "B",
+                                      "value": "b0 + 2 * plus"
+                                    }
+                                  ]
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
