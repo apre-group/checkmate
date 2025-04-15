@@ -2468,7 +2468,12 @@ void property(const Options &options, const Input &input, PropertyType property,
 		}
 	}
 
-	assert(solver.solve() == z3::Result::SAT);
+
+	if (solver.solve() == z3::Result::UNSAT){
+		// report unsat initial constraints
+		std::cout << "unsat initial constraints" << std::endl;
+		return;
+	}
 
 	if (property == PropertyType::Practicality)
 	{
@@ -2577,7 +2582,12 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 	std::cout << std::endl;
 	std::cout << "Is history " << print_history(input.honest[history]) << " " << prop_name << "?" << std::endl;
 
-	assert(solver.solve() == z3::Result::SAT);
+
+	if (solver.solve() == z3::Result::UNSAT){
+		// report unsat initial constraints
+		std::cout << "unsat initial constraints" << std::endl;
+		return;
+		}
 
 	if (property == PropertyType::Practicality) {
 		input.reset_practical_utilities();
@@ -2710,7 +2720,11 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 	std::cout << std::endl;
 	std::cout << "Is utility " << honest_utility << " collusion resilient?" << std::endl;
 
-	assert(solver.solve() == z3::Result::SAT);
+	if (solver.solve() == z3::Result::UNSAT){
+		// report unsat initial constraints
+		std::cout << "unsat initial constraints" << std::endl;
+		return;
+		}
 
 	size_t number_groups = pow(2,input.players.size())-2;
 	std::vector<SubtreeResult> subtree_results;
@@ -2788,23 +2802,19 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 	auto result = solver.solve();
 
     if (result == z3::Result::UNSAT){
-		Z3_solver new_solver = Z3_mk_simple_solver(z3::CONTEXT);
-		Z3_solver_inc_ref(z3::CONTEXT, new_solver);
-		// for (z3::Bool constraint : input.initial_constraints) {
-		//  Z3_solver_assert(z3::CONTEXT, new_solver, constraint.get_ast());
-		// }
-		// auto asrts = Z3_solver_get_assertions(z3::CONTEXT, new_solver);
-		// std::cout << Z3_ast_vector_to_string(z3::CONTEXT, asrts) << std::endl;
-		auto result1 = Z3_solver_check_assumptions(z3::CONTEXT, new_solver,input.initial_constraints.size(), reinterpret_cast<Z3_ast*>(const_cast<z3::Bool*>(input.initial_constraints.data())));
-		std::cout << result1 << std::endl;
-		// Z3_ast const *foo = input.initial_constraint.ast;
-		// Z3_solver_check_assumptions(z3::CONTEXT, new_solver, 1, foo);
-		auto core = Z3_solver_get_unsat_core(z3::CONTEXT, new_solver);
-		Z3_ast_vector_inc_ref(z3::CONTEXT,core);
-		std::cout << Z3_ast_vector_to_string (z3::CONTEXT,core) << std::endl;
+		// Z3_solver new_solver = Z3_mk_simple_solver(z3::CONTEXT);
+		// Z3_solver_inc_ref(z3::CONTEXT, new_solver);
+		// auto result1 = Z3_solver_check_assumptions(z3::CONTEXT, new_solver,input.initial_constraints.size(), reinterpret_cast<Z3_ast*>(const_cast<z3::Bool*>(input.initial_constraints.data())));
+		// auto core = Z3_solver_get_unsat_core(z3::CONTEXT, new_solver);
+		// Z3_ast_vector_inc_ref(z3::CONTEXT,core);
+		// std::cout << Z3_ast_vector_to_string (z3::CONTEXT,core) << std::endl;
+
+		// report unsat initial constraints
+		std::cout << "unsat initial constraints" << std::endl;
+		return;
 		}
-    std::cout << result << std::endl;
-    assert(solver.solve() == z3::Result::SAT);
+    // std::cout << result << std::endl;
+    // assert(solver.solve() == z3::Result::SAT);
 
 
 
@@ -3161,21 +3171,9 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			}
 		}
 
-		if(options.count_nodes) {
-			std::cout << std::endl;
-			std::cout << std::endl;
-			std::cout << "Number of checked nodes for history: " << print_history(input.honest[history]) << std::endl;
-			print_global_counters(true, true, true, true);
-		}
 
-		if(options.count_calls) {
-			std::cout << std::endl;
-			std::cout << std::endl;
-			std::cout << "Number of checked nodes for history: " << print_history(input.honest[history]) << std::endl;
-			print_calls_counters(true, true, true, true);
-		}
 
-		std::string file_name = "subtree_result_history" + std::to_string(history) + ".txt";
+		
 		if(options.weak_conditional_actions) {
 			subtree.solved_weak_cond_actions = true;
 		} else {
@@ -3306,7 +3304,9 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			// wi, weri, pr always the same, only cr changes
 			subtree.honest_utility = input.honest_utilities;
 
-			std::string file_name = "subtree_result_utility" + std::to_string(utility) + ".txt";
+
+
+			std::string file_name = options.input_path + std::string(".out");
 			if(options.weak_conditional_actions) {
 				subtree.solved_weak_cond_actions = true;
 			} else {
