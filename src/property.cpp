@@ -2573,12 +2573,13 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 	std::cout << std::endl;
 
 	auto result = solver.solve();
-	if (result == z3::Result::UNSAT){
+
+    if (result == z3::Result::UNSAT){
 		Z3_solver new_solver = Z3_mk_simple_solver(z3::CONTEXT);
 		Z3_solver_inc_ref(z3::CONTEXT, new_solver);
-		for (z3::Bool constraint : input.initial_constraints) {
-			Z3_solver_assert(z3::CONTEXT, new_solver, constraint.get_ast());
-		}
+		// for (z3::Bool constraint : input.initial_constraints) {
+		//  Z3_solver_assert(z3::CONTEXT, new_solver, constraint.get_ast());
+		// }
 		// auto asrts = Z3_solver_get_assertions(z3::CONTEXT, new_solver);
 		// std::cout << Z3_ast_vector_to_string(z3::CONTEXT, asrts) << std::endl;
 		auto result1 = Z3_solver_check_assumptions(z3::CONTEXT, new_solver,input.initial_constraints.size(), reinterpret_cast<Z3_ast*>(const_cast<z3::Bool*>(input.initial_constraints.data())));
@@ -2587,10 +2588,32 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 		// Z3_solver_check_assumptions(z3::CONTEXT, new_solver, 1, foo);
 		auto core = Z3_solver_get_unsat_core(z3::CONTEXT, new_solver);
 		Z3_ast_vector_inc_ref(z3::CONTEXT,core);
-		std::cout << Z3_ast_vector_size (z3::CONTEXT,core) << std::endl;
-	}
-	std::cout << result << std::endl;
-	assert(solver.solve() == z3::Result::SAT);
+		std::cout << Z3_ast_vector_to_string (z3::CONTEXT,core) << std::endl;
+		}
+    std::cout << result << std::endl;
+    assert(solver.solve() == z3::Result::SAT);
+
+
+
+
+	// if (result == z3::Result::UNSAT){
+	// 	Z3_solver new_solver = Z3_mk_simple_solver(z3::CONTEXT);
+	// 	Z3_solver_inc_ref(z3::CONTEXT, new_solver);
+	// 	for (z3::Bool constraint : input.initial_constraints) {
+	// 		Z3_solver_assert(z3::CONTEXT, new_solver, constraint.get_ast());
+	// 	}
+	// 	// auto asrts = Z3_solver_get_assertions(z3::CONTEXT, new_solver);
+	// 	// std::cout << Z3_ast_vector_to_string(z3::CONTEXT, asrts) << std::endl;
+	// 	auto result1 = Z3_solver_check_assumptions(z3::CONTEXT, new_solver,input.initial_constraints.size(), reinterpret_cast<Z3_ast*>(const_cast<z3::Bool*>(input.initial_constraints.data())));
+	// 	std::cout << result1 << std::endl;
+	// 	// Z3_ast const *foo = input.initial_constraint.ast;
+	// 	// Z3_solver_check_assumptions(z3::CONTEXT, new_solver, 1, foo);
+	// 	auto core = Z3_solver_get_unsat_core(z3::CONTEXT, new_solver);
+	// 	Z3_ast_vector_inc_ref(z3::CONTEXT,core);
+	// 	std::cout << Z3_ast_vector_size (z3::CONTEXT,core) << std::endl;
+	// }
+	// std::cout << result << std::endl;
+	// assert(solver.solve() == z3::Result::SAT);
 
 	if (property == PropertyType::Practicality){
 		input.reset_practical_utilities();
