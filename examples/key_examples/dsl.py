@@ -308,7 +308,6 @@ class DisequationConstraint(Constraint):
         return f"{self.left} {self.op} {self.right}"
 
 
-# CheckMate does currently not support the & symbol
 class Conjunction(Constraint):
     args: List[Constraint]
 
@@ -328,7 +327,7 @@ def conjunction(*args) -> Conjunction:
         arg_list.append(elem)
     return Conjunction(arg_list)
 
-# CheckMate does currently not support the || symbol
+
 class Disjunction(Constraint):
     args: List[Constraint]
 
@@ -402,7 +401,7 @@ class Leaf(Tree):
 def leaf(utilities: Dict[Player, LExpr], condition:Constraint=Truth()) -> Leaf:
     return Leaf(utilities, condition)
 
-# CheckMate currently does not support conditions
+
 class Branch(Tree):
     def __init__(self, player: Player, actions: Dict[Action, Tree], condition: Constraint=Truth()):
         self.player = player
@@ -456,29 +455,6 @@ def constants(*constants: str) -> List[Expr]:
     return [NameExpr(constant) for constant in constants]
 
 
-class Constraint:
-    def json(self):
-        return repr(self)
-
-# CheckMate does currently not support the & symbol
-class Conjunction(Constraint):
-    args: List[Constraint]
-
-    def __init__(self, args: List[Constraint]):
-        self.args = args
-
-    def __repr__(self):
-        result = f""
-        for elem in self.args:
-            result = result + f" & {elem}"
-        result = result[3:]
-        return result
-
-def conjunction(*args) -> Conjunction:
-    arg_list = []
-    for elem in args:
-        arg_list.append(elem)
-    return Conjunction(arg_list)
 
 
 
