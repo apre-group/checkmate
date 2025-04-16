@@ -1366,7 +1366,9 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			i++;
 		}
 	}
-	if (!any_honest_practical && options.weak_conditional_actions)
+	// Important fix: add branch.honest to the condition
+	// Because we can only return if this is along the honest history
+	if (!any_honest_practical && options.weak_conditional_actions && branch.honest)
 	{
 		return false;
 	}
