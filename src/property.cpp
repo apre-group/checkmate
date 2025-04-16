@@ -2921,8 +2921,6 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 
 void analyse_properties(const Options &options, const Input &input)
 {
-	input.stop_logging();
-
 	if (input.honest_utilities.size() != 0)
 	{
 		std::cout << "INFO: This file is a subtree, but CheckMate is running in default mode" << std::endl;
