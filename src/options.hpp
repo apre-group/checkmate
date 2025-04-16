@@ -38,6 +38,10 @@ struct Options {
 	// options for conditional actions
 	bool weak_conditional_actions = false;
 	bool strong_conditional_actions = false;
+
+	// used for experiments
+	bool count_nodes = false;
+	bool count_calls = false;
 };
 
 #endif

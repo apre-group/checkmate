@@ -18,6 +18,8 @@ const char *USAGE = R"(usage: checkmate PATH
 	--supertree
 	--weak_conditional_actions
 	--strong_conditional_actions
+	--count_nodes
+	--count_calls
 )";
 
 // print a message, the usage information and exit with failure code
@@ -71,6 +73,10 @@ Options::Options(char **argv) {
 			weak_conditional_actions = true;
 		else if (!strcmp(*argv, "--strong_conditional_actions"))
 			strong_conditional_actions = true;
+		else if (!strcmp(*argv, "--count_nodes"))
+			count_nodes = true;
+		else if (!strcmp(*argv, "--count_calls"))
+			count_calls = true;
 		else
 			bail("unknown option");
 		argv++;

@@ -1747,3 +1747,26 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies(), st
 
 // 	return;
 // }
+
+void Node::reset_count_check(bool wi, bool weri, bool cr, bool pr) const {
+	if(wi)
+		checked_wi = false;
+
+	if(weri)
+		checked_weri = false;
+	
+	if(cr)
+		checked_cr = false;
+
+	if(pr)
+		checked_pr = false;
+
+	if(this->is_branch()) {
+		const auto &branch = this->branch();
+		for(auto &condition : branch.conditions) {
+			for (auto &child : condition.children) {
+				child.node->reset_count_check(wi,weri,cr,pr);
+			}
+		}
+	}
+}
