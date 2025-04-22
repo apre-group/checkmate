@@ -3173,7 +3173,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 
 
-		
+		std::string file_name = options.input_path + std::string(".out");
 		if(options.weak_conditional_actions) {
 			subtree.solved_weak_cond_actions = true;
 		} else {
