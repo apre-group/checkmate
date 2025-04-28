@@ -554,7 +554,7 @@ namespace z3 {
 	// wrapper around a Z3 solver object
 	class Solver {
 	public:
-		Solver() : solver(Z3_mk_simple_solver(CONTEXT)) {
+		Solver() : solver(Z3_mk_solver(CONTEXT)) {
 			check_error();
 			Z3_solver_inc_ref(CONTEXT, solver);
 			check_error();
