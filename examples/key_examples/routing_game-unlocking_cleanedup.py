@@ -176,6 +176,14 @@ def next_player(state):
             state1[p]["contract"] = "expired"
     return None, state1
 
+def powerset(share_secret_with: List) -> List:
+    if len(share_secret_with)>0:
+        powerset = [subset
+            for length in range(len(share_secret_with) + 1)
+            for subset in itertools.combinations(share_secret_with, length)]
+    else:
+        powerset = []
+    return powerset
 
 def generate_routing_unlocking(player: Player, state, history):
     if is_final(state):
@@ -190,32 +198,22 @@ def generate_routing_unlocking(player: Player, state, history):
             if not state[player]["ignoreshare"][share_with] and not state[share_with]["secret"]:
                 share_secret_with.append(share_with)
 
-        # sharing twice in a row is not allowed
-        if history:
-            prev_player, prev_action = history[:-1].split(";")[-1].split(".")
-        else:
-            prev_player = None
-            prev_action = None
-        # if sharing is allowed, iterate over all subsets of players to share the secret with
-        if prev_player != str(player) or "S_S" not in prev_action:
-            powerset = [subset
-                    for length in range(len(share_secret_with) + 1)
-                    for subset in itertools.combinations(share_secret_with, length)]
-            for subset in powerset:
-                state1 = copy_state(state)
-                if player == PLAYERS[-1] and subset != tuple():
-                    state1['B_shared'] = True
-                # when I could have shared the secret with so, but chose not to, I automatically ignore the sharing = "ignoreshare"
-                for p in share_secret_with:
-                    if p in subset:
-                        state1[p]["secret"] = True
-                    else:
-                        state1[player]["ignoreshare"][p] = True
+        # if sharing is still possible (i,e, if share_secret_with is not empty), iterate over all subsets of players to share the secret with
+        for subset in powerset(share_secret_with):
+            state1 = copy_state(state)
+            if player == PLAYERS[-1] and subset != tuple():
+                state1['B_shared'] = True
+            # when I could have shared the secret with so, but chose not to, I automatically ignore the sharing = "ignoreshare"
+            for p in share_secret_with:
+                if p in subset:
+                    state1[p]["secret"] = True
+                else:
+                    state1[player]["ignoreshare"][p] = True
 
-                next_p, state2 = next_player(state1)
-                ACTIONS.append(Action(f"S_S{subset}"))
-                branch_actions[Action(f"S_S{subset}")] = generate_routing_unlocking(next_p, state2, history + str(player) + "." + f"S_S{subset}" + ";")
-        
+            next_p, state2 = next_player(state1)
+            ACTIONS.append(Action(f"S_S{subset}"))
+            branch_actions[Action(f"S_S{subset}")] = generate_routing_unlocking(next_p, state2, history + str(player) + "." + f"S_S{subset}" + ";")
+
         if state[player]["contract"] == "locked" and state[player]["secret"]:
             # Action unlock
             state1 = copy_state(state)
@@ -236,8 +234,6 @@ def generate_routing_unlocking(player: Player, state, history):
             raise Exception("Empty branch, next player chosen wrong")
         
         return branch(player, branch_actions)
-
-
 
 
 
