@@ -1,0 +1,383 @@
+{
+  "players": [
+    "P0",
+    "P1"
+  ],
+  "actions": [
+    "A",
+    "H",
+    "empty_1",
+    "empty_2",
+    "empty_3"
+  ],
+  "infinitesimals": [],
+  "constants": [
+    "b_0",
+    "b_1",
+    "q_0",
+    "q_1",
+    "q",
+    "a"
+  ],
+  "initial_constraints": [
+    "q_1 >= 0"
+  ],
+  "property_constraints": {
+    "weak_immunity": [],
+    "weaker_immunity": [],
+    "collusion_resilience": [],
+    "practicality": []
+  },
+  "honest_histories": [
+    {
+      "action": "",
+      "children": [
+        {
+          "action": "H",
+          "children": [
+            {
+              "action": "H",
+              "children": [
+                {
+                  "action": "empty_1",
+                  "children": [
+                    {
+                      "action": "P0",
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "action": "empty_2",
+                  "children": [
+                    {
+                      "action": "P0",
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "action": "empty_3",
+                  "children": [
+                    {
+                      "action": "P0",
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tree": {
+    "player": "P0",
+    "condition": "1 = 1",
+    "children": [
+      {
+        "action": "H",
+        "child": {
+          "player": "P1",
+          "condition": "1 = 1",
+          "children": [
+            {
+              "action": "H",
+              "child": {
+                "player": "P0",
+                "children": [
+                  {
+                    "condition": "q <= q_0",
+                    "actions": [
+                      {
+                        "action": "empty_1",
+                        "child": {
+                          "condition": "1 = 1",
+                          "utility": [
+                            {
+                              "player": "P0",
+                              "value": "q * b_0"
+                            },
+                            {
+                              "player": "P1",
+                              "value": 0
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition": "q <= q_0 + q_1 & q > q_0",
+                    "actions": [
+                      {
+                        "action": "empty_2",
+                        "child": {
+                          "condition": "1 = 1",
+                          "utility": [
+                            {
+                              "player": "P0",
+                              "value": "q_0 * b_0"
+                            },
+                            {
+                              "player": "P1",
+                              "value": "q * b_1 - q_0 * b_1"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition": "q > q_0 + q_1",
+                    "actions": [
+                      {
+                        "action": "empty_3",
+                        "child": {
+                          "condition": "1 = 1",
+                          "utility": [
+                            {
+                              "player": "P0",
+                              "value": "q_0 * b_0"
+                            },
+                            {
+                              "player": "P1",
+                              "value": "q_1 * b_1"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "action": "A",
+              "child": {
+                "player": "P0",
+                "children": [
+                  {
+                    "condition": "q + a <= q_0",
+                    "actions": [
+                      {
+                        "action": "empty_1",
+                        "child": {
+                          "condition": "1 = 1",
+                          "utility": [
+                            {
+                              "player": "P0",
+                              "value": "q * b_0 + a * b_0"
+                            },
+                            {
+                              "player": "P1",
+                              "value": 0
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition": "q + a <= q_0 + q_1 & q + a > q_0",
+                    "actions": [
+                      {
+                        "action": "empty_2",
+                        "child": {
+                          "condition": "1 = 1",
+                          "utility": [
+                            {
+                              "player": "P0",
+                              "value": "q_0 * b_0"
+                            },
+                            {
+                              "player": "P1",
+                              "value": "q * b_1 + a * b_1 - q_0 * b_1"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition": "q + a > q_0 + q_1",
+                    "actions": [
+                      {
+                        "action": "empty_3",
+                        "child": {
+                          "condition": "1 = 1",
+                          "utility": [
+                            {
+                              "player": "P0",
+                              "value": "q_0 * b_0"
+                            },
+                            {
+                              "player": "P1",
+                              "value": "q_1 * b_1"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "action": "A",
+        "child": {
+          "player": "P1",
+          "condition": "1 = 1",
+          "children": [
+            {
+              "action": "H",
+              "child": {
+                "player": "P0",
+                "children": [
+                  {
+                    "condition": "q + a <= q_0",
+                    "actions": [
+                      {
+                        "action": "empty_1",
+                        "child": {
+                          "condition": "1 = 1",
+                          "utility": [
+                            {
+                              "player": "P0",
+                              "value": "q * b_0 + a * b_0"
+                            },
+                            {
+                              "player": "P1",
+                              "value": 0
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition": "q + a <= q_0 + q_1 & q + a > q_0",
+                    "actions": [
+                      {
+                        "action": "empty_2",
+                        "child": {
+                          "condition": "1 = 1",
+                          "utility": [
+                            {
+                              "player": "P0",
+                              "value": "q_0 * b_0"
+                            },
+                            {
+                              "player": "P1",
+                              "value": "q * b_1 + a * b_1 - q_0 * b_1"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition": "q + a > q_0 + q_1",
+                    "actions": [
+                      {
+                        "action": "empty_3",
+                        "child": {
+                          "condition": "1 = 1",
+                          "utility": [
+                            {
+                              "player": "P0",
+                              "value": "q_0 * b_0"
+                            },
+                            {
+                              "player": "P1",
+                              "value": "q_1 * b_1"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "action": "A",
+              "child": {
+                "player": "P0",
+                "children": [
+                  {
+                    "condition": "q + 2.0 * a <= q_0",
+                    "actions": [
+                      {
+                        "action": "empty_1",
+                        "child": {
+                          "condition": "1 = 1",
+                          "utility": [
+                            {
+                              "player": "P0",
+                              "value": "q * b_0 + 2.0 * a * b_0"
+                            },
+                            {
+                              "player": "P1",
+                              "value": 0
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition": "q + 2.0 * a <= q_0 + q_1 & q + 2.0 * a > q_0",
+                    "actions": [
+                      {
+                        "action": "empty_2",
+                        "child": {
+                          "condition": "1 = 1",
+                          "utility": [
+                            {
+                              "player": "P0",
+                              "value": "q_0 * b_0"
+                            },
+                            {
+                              "player": "P1",
+                              "value": "q * b_1 + 2.0 * a * b_1 - q_0 * b_1"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "condition": "q + 2.0 * a > q_0 + q_1",
+                    "actions": [
+                      {
+                        "action": "empty_3",
+                        "child": {
+                          "condition": "1 = 1",
+                          "utility": [
+                            {
+                              "player": "P0",
+                              "value": "q_0 * b_0"
+                            },
+                            {
+                              "player": "P1",
+                              "value": "q_1 * b_1"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
