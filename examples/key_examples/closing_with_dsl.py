@@ -31,10 +31,10 @@ INITIAL_CONSTRAINTS = [a > 0, b>0, d_A> 0, d_B>0, f>0, c_A>0, c_B>0, p_A >0, p_B
     b >= d_A, a >= p_B, b >= p_A, b >= c_A, a>= c_B, alpha > epsilon, epsilon > rho]
 
 # leave the following empty unless you want to debug the protocol
-WEAK_IMMUNITY_CONSTRAINTS = []
-WEAKER_IMMUNITY_CONSTRAINTS = []
-COLLUSION_RESILIENCE_CONSTRAINTS = []
-PRACTICALITY_CONSTRAINTS = []
+WEAK_IMMUNITY_CONSTRAINTS = [a >= f, b >= f]
+WEAKER_IMMUNITY_CONSTRAINTS = [a >= f, b >= f]
+COLLUSION_RESILIENCE_CONSTRAINTS = [a - p_B + d_A >= f, b - p_A + d_B >= f]
+PRACTICALITY_CONSTRAINTS = [a - p_B + d_A >= f, b - p_A + d_B >= f, c_A != p_A, c_B != p_B]
 
 #define the list of honest histories, as a list of lists of actions
 # e.g. one honest history: Action1, Action2, Action3
