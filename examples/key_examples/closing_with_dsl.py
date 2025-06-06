@@ -15,7 +15,7 @@ Precedence Choices
 """
 
 
-# define the players as strings, 
+# define the players as strings,
 # in this template there are players Player1 and Player2
 A, B = PLAYERS = players('A', 'B')
 
@@ -28,7 +28,7 @@ a, b,f,d_A,d_B,c_A,c_B,p_A,p_B = CONSTANTS = constants('a', 'b','f','d_A','d_B',
 # the following expressions are supported: +, -, *, /, real numbers, >, >=, <, <=, ==, != (inequality), disjunction(*args) (or)
 # e.g.
 INITIAL_CONSTRAINTS = [a > 0, b>0, d_A> 0, d_B>0, f>0, c_A>0, c_B>0, p_A >0, p_B>0, epsilon>0, alpha>0, rho>0, a >= d_B,
-    b >= d_A, a >= p_B, b >= p_A, b >= c_A, a>= c_B, alpha > epsilon, epsilon > rho] 
+    b >= d_A, a >= p_B, b >= p_A, b >= c_A, a>= c_B, alpha > epsilon, epsilon > rho]
 
 # leave the following empty unless you want to debug the protocol
 WEAK_IMMUNITY_CONSTRAINTS = []
@@ -59,7 +59,7 @@ for player in PLAYERS:
 
 initial_state[A]["balance"] = a
 initial_state[B]["balance"] = b
- 
+
 # to compute the last missing part, the game tree, the following functions have to be filled in
 
 
@@ -74,7 +74,7 @@ def copy_state(state : Dict) -> Dict:
     # copy the basic data of the state
     # e.g.:
     # state1["time_orderings"] = state["time_orderings"][:]
-    
+
     # copy the player-wise values (if applicable)
     for player in PLAYERS:
         state_copy[player] = {}
@@ -103,7 +103,7 @@ def compute_utility(state : Dict) -> Dict:
         # unilateral closing
         if not (state[player]["closed_unilaterally"] is None) and not state[other]["published_revocation"]:
             ut[player] = ut[player] + state[player]["closed_unilaterally"] + alpha - epsilon
-            ut[other] = ut[other] - state[player]["closed_unilaterally"] + alpha 
+            ut[other] = ut[other] - state[player]["closed_unilaterally"] + alpha
             return ut
 
         elif  not (state[player]["closed_unilaterally"] is None) and state[other]["published_revocation"]:
@@ -170,23 +170,23 @@ def compute_available_actions(player : Player, state : Dict, history : str) -> L
 
     if not state[other]["closed_unilaterally"] is None:
         return [P,NP]
-    
-   
+
+
     possible_actions.append(H)
     possible_actions.append(D)
 
-    if not state[player]["ignored_to_close"]: 
+    if not state[player]["ignored_to_close"]:
         possible_actions.append(I)
 
     if not (state[other]["collaborative_attempt"] is None):
         possible_actions.append(S)
-        if not (state[player]["proposed_update"] is None):
+        if state[player]["proposed_update"] is None:
             possible_actions.append(Uplus)
             possible_actions.append(Uminus)
-     
-    if not (state[other]["proposed_update"] is None):
+
+    if not (state[other]["proposed_update"] is None) and state[player]["agreed_to_update"] is None:
         possible_actions.append(AG)
-    
+
     if state[player]["collaborative_attempt"] is None:
         possible_actions.append(C_h)
         possible_actions.append(C_c)
@@ -234,23 +234,23 @@ def generate_tree(player: Player, state: Dict, history: str):
                 state1[player]["collaborative_attempt"] = (state1[A]["balance"], state1[B]["balance"])
             elif action == C_c:
                 state1[other]["ignored_to_close"] = False
-                state1[player]["collaborative_attempt"] = (state1[A]["balance"] + c_A, state1[B]["balance"] - c_A) if player == A else (state1[A]["balance"] - c_B, state1[B]["balance"] + c_B) 
+                state1[player]["collaborative_attempt"] = (state1[A]["balance"] + c_A, state1[B]["balance"] - c_A) if player == A else (state1[A]["balance"] - c_B, state1[B]["balance"] + c_B)
             elif action == S:
                 state1[player]["signed_collab_closing"] = True
             elif action == Uplus:
                 state1[other]["ignored_to_close"] = False
-                state1[player]["proposed_update"] = (state1[A]["balance"] + p_A, state1[B]["balance"] - p_A) 
+                state1[player]["proposed_update"] = (state1[A]["balance"] + p_A, state1[B]["balance"] - p_A)
             elif action == Uminus:
                 state1[other]["ignored_to_close"] = False
-                state1[player]["proposed_update"] = (state1[A]["balance"] - p_B, state1[B]["balance"] + p_B) 
+                state1[player]["proposed_update"] = (state1[A]["balance"] - p_B, state1[B]["balance"] + p_B)
             elif action == AG:
                 state1[other]["ignored_to_close"] = False
                 state1[player]["agreed_to_update"] = True
-                state1[A]["balance"] = state1[other]["propsed_update"][0]
-                state1[B]["balance"] = state1[other]["propsed_update"][1]
-             # add available action and tree to the dictionary 
+                state1[A]["balance"] = state1[other]["proposed_update"][0]
+                state1[B]["balance"] = state1[other]["proposed_update"][1]
+             # add available action and tree to the dictionary
             branch_actions[action] = generate_tree(other, state1, history + str(player) + "." + str(action) + ";")
-        
+
         return branch(player, branch_actions)
 
 
