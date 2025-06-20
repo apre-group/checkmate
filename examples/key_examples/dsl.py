@@ -46,6 +46,12 @@ class Expr:
     def __rmul__(self, other: LExpr) -> LExpr:
         return mul_expr(other, self)
 
+    def __truediv__(self, other: LExpr) -> LExpr:
+        return div_expr(other, self)
+
+    def __rtruediv__(self, other: LExpr) -> LExpr:
+        return div_expr(other, self)
+
     def __neg__(self) -> TermExpr:
         return neg_expr(self)
 
@@ -57,6 +63,16 @@ class Expr:
 
     def __ge__(self, other: LExpr) -> Constraint:
         return DisequationConstraint('>=', self, other)
+
+    def __lt__(self, other: LExpr) -> Constraint:
+        return DisequationConstraint('<', self, other)
+
+    def __le__(self, other: LExpr) -> Constraint:
+        return DisequationConstraint('<=', self, other)
+
+    def __eq__(self, other: LExpr) -> Constraint:
+        return DisequationConstraint('=', self, other)
+
 
     def json(self):
         return repr(self)
@@ -70,6 +86,9 @@ class NameExpr(Expr):
 
     def __repr__(self):
         return self.name
+
+    def __hash__(self) -> int:
+        return self.name.__hash__()
 
 
 LExpr = Union[Expr, float, int]
@@ -205,6 +224,9 @@ class MultiplicationExpr(Expr):
         right = f"({self.right})" if isinstance(self.right, TermExpr) else f"{self.right}"
         return f"{left} * {right}"
 
+    def __hash__(self) -> int:
+        return f"{self.left} * {self.right}".__hash__()
+
 
 def mul_expr(left: LExpr, right: LExpr) -> LExpr:
     if is_exactly(left, 0.0) or is_exactly(right, 0.0):
@@ -223,22 +245,151 @@ def mul_expr(left: LExpr, right: LExpr) -> LExpr:
     return MultiplicationExpr(left, right)
 
 
+class DivisionExpr(Expr):
+    left: LExpr
+    right: LExpr
+
+    def __init__(self, left: LExpr, right: LExpr):
+        self.left = left
+        self.right = right
+
+    def __repr__(self):
+        left = f"({self.left})" if isinstance(self.left, TermExpr) else f"{self.left}"
+        right = f"({self.right})" if isinstance(self.right, TermExpr) else f"{self.right}"
+        return f"{left} / {right}"
+
+    def __hash__(self) -> int:
+        return f"{self.left} * {self.right}".__hash__()
+
+
+def div_expr(left: LExpr, right: LExpr) -> LExpr:
+    if is_exactly(right, 0.0) or (isinstance(right, int) and is_exactly(right, 0)):
+        raise ZeroDivisionError
+    if is_exactly(left, 0.0) or (isinstance(left, int) and is_exactly(left, 0)):
+        return 0.0
+    elif is_exactly(right, 1.0) or (isinstance(right, int) and is_exactly(right, 1)):
+        return left
+
+    return DivisionExpr(left, right)
+
+
+class Constraint:
+    def json(self):
+        return repr(self)
+
+class Truth(Constraint):
+
+    def __init__(self) -> None:
+        pass
+
+    def __repr__(self) -> str:
+        return "True"
+
+class Falsehood(Constraint):
+
+    def __init__(self) -> None:
+        pass
+
+    def __repr__(self) -> str:
+        return "False"
+
+
+class DisequationConstraint(Constraint):
+    op: str
+    left: LExpr
+    right: LExpr
+
+    def __init__(self, op: str, left: LExpr, right: LExpr):
+        self.op = op
+        self.left = left
+        self.right = right
+
+    def __repr__(self):
+        return f"{self.left} {self.op} {self.right}"
+
+
+class Conjunction(Constraint):
+    args: List[Constraint]
+
+    def __init__(self, args: List[Constraint]):
+        self.args = args
+
+    def __repr__(self):
+        result = f""
+        for elem in self.args:
+            result = result + f" & {elem}"
+        result = result[3:]
+        return result
+
+def conjunction(*args) -> Conjunction:
+    arg_list = []
+    for elem in args:
+        arg_list.append(elem)
+    return Conjunction(arg_list)
+
+
+class Disjunction(Constraint):
+    args: List[Constraint]
+
+    def __init__(self, args: List[Constraint]):
+        self.args = args
+
+    def __repr__(self):
+        result = f""
+        for elem in self.args:
+            result = result + f" | {elem}"
+        result = result[3:]
+        return result
+
+def disjunction(*args) -> Disjunction:
+    arg_list = []
+    for elem in args:
+        arg_list.append(elem)
+    return Disjunction(arg_list)
+
+
+
+class HistoryTree:
+
+    def __init__(self, action_name: str, children: List[HistoryTree]):
+        self.action = action_name
+        self.children = children
+
+    def json(self):
+        return {
+            'action': self.action,
+            'children': [
+                ch.json() for ch in self.children
+            ]
+        }
+
+
 class Tree:
     def graphviz(self):
         raise NotImplementedError()
 
 
 class Leaf(Tree):
-    def __init__(self, utilities: Dict[Player, LExpr]):
+    def __init__(self, utilities: Dict[Player, LExpr], condition:Constraint=Truth()):
+        self.condition = condition
         self.utilities = utilities
 
     def json(self):
-        return {
-            'utility': [
-                {'player': player, 'value': utility}
-                for player, utility in self.utilities.items()
-            ]
-        }
+        if self.condition:
+            return {
+                'condition' : self.condition.json(),
+                'utility': [
+                    {'player': player, 'value': utility}
+                    for player, utility in self.utilities.items()
+                ]
+            }
+        else:
+            return {
+                'utility': [
+                    {'player': player, 'value': utility}
+                    for player, utility in self.utilities.items()
+                ]
+            }
 
     def graphviz(self):
         print(f'\tn{id(self)} [label="*"];')
@@ -247,20 +398,22 @@ class Leaf(Tree):
             print(f'\tn{id(self)} -> n{id(self)}_{player} [label="{player}"];')
 
 
-def leaf(utilities: Dict[Player, LExpr]) -> Leaf:
-    return Leaf(utilities)
+def leaf(utilities: Dict[Player, LExpr], condition:Constraint=Truth()) -> Leaf:
+    return Leaf(utilities, condition)
 
-# CheckMate currently does not support conditions
+
 class Branch(Tree):
-    def __init__(self, player: Player, actions: Dict[Action, Tree], condition: Union[None, bool] = None):
+    def __init__(self, player: Player, actions: Dict[Action, Tree], condition: Constraint=Truth()):
         self.player = player
+        self.condition = condition
         self.actions = actions
         self.condition = condition
 
     def json(self):
-        if self.condition == None:
+        if self.condition:
             return {
                 'player': self.player,
+                'condition' : self.condition.json(),
                 'children': [
                     {'action': action, 'child': child}
                     for action, child in self.actions.items()
@@ -272,8 +425,7 @@ class Branch(Tree):
                 'children': [
                     {'action': action, 'child': child}
                     for action, child in self.actions.items()
-                ],
-                'condition': self.condition
+                ]
             }
 
     def graphviz(self):
@@ -283,7 +435,7 @@ class Branch(Tree):
             print(f'\tn{id(self)} -> n{id(child)} [label="{action}"];')
 
 
-def branch(player: Player, actions: Dict[Action, Tree], condition: Union[None, bool] = None) -> Branch:
+def branch(player: Player, actions: Dict[Action, Tree], condition:Constraint=Truth()) -> Branch:
     return Branch(player, actions, condition)
 
 
@@ -303,42 +455,7 @@ def constants(*constants: str) -> List[Expr]:
     return [NameExpr(constant) for constant in constants]
 
 
-class Constraint:
-    def json(self):
-        return repr(self)
-    
-# CheckMate does currently not support the & symbol
-class Conjunction(Constraint):
-    args: List[Constraint]
 
-    def __init__(self, args: List[Constraint]): 
-        self.args = args
-
-    def __repr__(self):
-        result = f""
-        for elem in self.args:
-            result = result + f" & {elem}" 
-        result = result[3:]
-        return result
-
-def conjunction(*args) -> Conjunction:
-    arg_list = []
-    for elem in args:
-        arg_list.append(elem)
-    return Conjunction(arg_list)
-
-class DisequationConstraint(Constraint):
-    op: str
-    left: LExpr
-    right: LExpr
-
-    def __init__(self, op: str, left: LExpr, right: LExpr):
-        self.op = op
-        self.left = left
-        self.right = right
-
-    def __repr__(self):
-        return f"{self.left} {self.op} {self.right}"
 
 
 def finish(
@@ -380,7 +497,7 @@ def finish(
             'tree': tree
         }, default=lambda x: x.json(), fp=sys.stdout, indent=2)
         sys.exit(0)
-    else: 
+    else:
         json.dump({
             'players': players,
             'actions': actions,
@@ -397,5 +514,3 @@ def finish(
             'honest_utilities': honest_utilities,
             'tree': tree
         }, default=lambda x: x.json(), fp=file, indent=2)
-
-    
