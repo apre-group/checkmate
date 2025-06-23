@@ -54,6 +54,7 @@ RUN make -C build
 FROM debian:12.10-slim
 RUN apt-get update && apt-get install -y libz3-4
 COPY --from=builder /home/checkmate/build/checkmate /usr/bin/checkmate
+COPY --from=builder /home/checkmate/examples/key_examples/ /home/checkmate/examples/key_examples/
 ENV PATH=$PATH:/usr/bin/
 WORKDIR /home/checkmate
 ENTRYPOINT [ "checkmate" ]
