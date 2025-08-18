@@ -39,7 +39,7 @@ PRACTICALITY_CONSTRAINTS = []
 # e.g. one honest history: Action1, Action2, Action3
 HONEST_HISTORIES : List[List[Action]] = [[Action1, Action2, Action3]]
 
-# honest utilities can be listed, if modelin used in an interleaving way with CheckMate
+# honest utilities can be listed, if modeling used in an interleaving way with CheckMate
 HONEST_UTILITIES = [] 
 
 
@@ -67,13 +67,13 @@ def copy_state(state : Dict) -> Dict:
     state_copy : Dict = {}
     # copy the basic data of the state
     # e.g.:
-    # state1["time_orderings"] = state["time_orderings"][:]
+    # state_copy["time_orderings"] = state["time_orderings"][:]
     
     # copy the player-wise values (if applicable)
     for player in PLAYERS:
         state_copy[player] = {}
         # e.g.:
-        # state1[player]["amount_to_unlock"] = state[player]["amount_to_unlock"]
+        # state_copy[player]["amount_to_unlock"] = state[player]["amount_to_unlock"]
     return state_copy
 
 
@@ -145,7 +145,6 @@ def generate_tree(player: Player, state: Dict, history: str):
 
 # generate the game tree assuming the player listed first in PLAYERS has the first turn
 TREE = generate_tree(PLAYERS[0], initial_state, "")
-print(TREE)
 
 # produce the json model
 finish(
