@@ -18,6 +18,11 @@ class StringThing:
     def json(self):
         return repr(self)
 
+    def __eq__(self, other: StringThing):
+        return self.value == other.value
+
+    def __hash__(self):
+        return hash(self.value)
 
 class Action(StringThing):
     pass
