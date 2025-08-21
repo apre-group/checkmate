@@ -1,6 +1,5 @@
 from dsl import *
 import itertools
-import re
 
 """
 This file generates a game model for Lightning's routing protocol. To set the number of intermediaries to n,
@@ -110,7 +109,8 @@ WEAKER_IMMUNITY_CONSTRAINTS = []
 COLLUSION_RESILIENCE_CONSTRAINTS = []
 PRACTICALITY_CONSTRAINTS = []
 
-
+# to avoid having copies of the same actions in the list of actions
+actions_for_sharing_secrets = set()
 
 
 def is_final(state):
@@ -211,7 +211,7 @@ def generate_routing_unlocking(player: Player, state, history):
                     state1[player]["ignoreshare"][p] = True
 
             next_p, state2 = next_player(state1)
-            ACTIONS.append(Action(f"S_S{subset}"))
+            actions_for_sharing_secrets.add(f"S_S{subset}")
             branch_actions[Action(f"S_S{subset}")] = generate_routing_unlocking(next_p, state2, history + str(player) + "." + f"S_S{subset}" + ";")
 
         if state[player]["contract"] == "locked" and state[player]["secret"]:
@@ -236,8 +236,6 @@ def generate_routing_unlocking(player: Player, state, history):
         return branch(player, branch_actions)
 
 
-
-
 initial_state = {"B_shared": False}
 for player in PLAYERS:
     initial_state[player] = {}
@@ -252,6 +250,10 @@ initial_state[PLAYERS[0]]["amount_to_unlock"] = None
 TREE = generate_routing_unlocking(PLAYERS[-1], initial_state, "")
 
 HONEST_HISTORIES = [[U,U,U,U]]
+
+# adding the secret sharing actions to the list
+for act in actions_for_sharing_secrets:
+    ACTIONS.append(Action(act))
 
 finish(
     PLAYERS,
