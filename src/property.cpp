@@ -397,38 +397,79 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		// 	return true;
 		// }
 
-		// known utility for us
-		auto utility = leaf.utilities[player];
+		// NEW: Allow conditions in leaves
+		bool at_least_one_non_contradictory_condition = false;
 
-		z3::Bool condition = weaker ? utility.real >= z3::Real::ZERO : utility >= Utility{z3::Real::ZERO, z3::Real::ZERO};
+		for (size_t i = 0; i < leaf.conditions.size(); i++) {
 
-		if(options.count_calls) {
-			weaker ? calls_weri++ : calls_wi++;
-		}
-		if (solver.solve({!condition}) == z3::Result::UNSAT)
-		{
-			if (consider_prob_groups)
+			z3::Frame leafFrame(solver);
+			solver.assert_(leaf.conditions[i]);
+
+			if (solver.solve() != z3::Result::UNSAT)
 			{
-				leaf.problematic_group = player + 1;
+				at_least_one_non_contradictory_condition = true;
+
+				// known utility for us
+				auto utility = leaf.utilities[i][player];
+
+				z3::Bool condition = weaker ? utility.real >= z3::Real::ZERO : utility >= Utility{z3::Real::ZERO, z3::Real::ZERO};
+
+				if(options.count_calls) {
+					weaker ? calls_weri++ : calls_wi++;
+				}
+				if (solver.solve({!condition}) == z3::Result::UNSAT)
+				{
+					if (consider_prob_groups)
+					{
+						leaf.problematic_group = player + 1;
+					}
+
+					if(options.weak_conditional_actions) {
+						return true;
+					}
+				}
+
+				if(options.count_calls) {
+					weaker ? calls_weri++ : calls_wi++;
+				}
+				bool for_sure_insecure = false;
+				if (solver.solve({condition}) == z3::Result::UNSAT)
+				{
+					for_sure_insecure = true;
+					if(options.strong_conditional_actions) {
+						leaf.reset_reason();
+						return false;
+					}
+				}
+
+				// if (consider_prob_groups) {
+				// 	leaf.problematic_group = player;
+				// }
+				
+				// for weak conditional actions
+				if (options.weak_conditional_actions && leaf.reason.null() && !for_sure_insecure) {
+					leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, options, utility, Utility{z3::Real::ZERO, z3::Real::ZERO}, !weaker, weaker, false, false);
+				} else if (options.strong_conditional_actions) {
+					leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, options, utility, Utility{z3::Real::ZERO, z3::Real::ZERO}, !weaker, weaker, false, false);
+					return false;
+				}
+				
+				// input.set_reset_point(leaf);
+
 			}
-			return true;
 		}
 
-		if(options.count_calls) {
-			weaker ? calls_weri++ : calls_wi++;
-		}
-		if (solver.solve({condition}) == z3::Result::UNSAT)
-		{
-			return false;
-		}
+		// weak_conditional actions -> return false
+		// we've been through all conditions and never found 
+		// a condition for which the property is satisfied
 
-		// if (consider_prob_groups) {
-		// 	leaf.problematic_group = player;
-		// }
+		// strong_conditional actions -> return true
+		// we've been through all conditions and did not found
+		// a condition for which the property is violated
 
-		leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, options, utility, Utility{z3::Real::ZERO, z3::Real::ZERO}, !weaker, weaker, false, false);
-		// input.set_reset_point(leaf);
-		return false;
+		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
+
+		
 	}
 
 	else if (node->is_subtree()){
@@ -778,82 +819,115 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		// 	return true;
 		// }
 
-		// compute the total utility for the player group...
-		Utility group_utility{z3::Real::ZERO, z3::Real::ZERO};
+		// NEW: Allow conditions in leaves
+		bool at_least_one_non_contradictory_condition = false;
 
-		for (size_t player = 0; player < players; player++)
-			if (group[player])
-				group_utility = group_utility + leaf.utilities[player];
+		for (size_t i = 0; i < leaf.conditions.size(); i++) {
 
-		bool can_decide_for_all = true;
+			z3::Frame leafFrame(solver);
+			solver.assert_(leaf.conditions[i]);
 
-		// ..and compare it to all honest utilities that are "compatible"
-		for (auto pair : input.cond_actions_honest_utility_pairs)
-		{
-
-			if(options.count_calls) {
-				calls_cr++;
-			}
-			if (solver.solve({pair.conditional_actions}) == z3::Result::UNSAT)
+			if (solver.solve() != z3::Result::UNSAT)
 			{
-				// incompatible, no need to check anything
-				continue;
-			}
+				at_least_one_non_contradictory_condition = true;
 
-			// compute honest_total for this pair
-			Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
-			for (size_t player = 0; player < players; player++)
-				if (group[player])
-					honest_total = honest_total + pair.utility[player];
+				// compute the total utility for the player group...
+				Utility group_utility{z3::Real::ZERO, z3::Real::ZERO};
 
-			auto condition = honest_total >= group_utility;
+				for (size_t player = 0; player < players; player++)
+					if (group[player])
+						group_utility = group_utility + leaf.utilities[i][player];
 
-			if(options.count_calls) {
-				calls_cr++;
-			}
-			if (solver.solve({!condition}) == z3::Result::UNSAT)
-			{
-				// nothing to do in this case
-				//  we can continue
-				//  this "if" can be completely removed in future
-				continue;
-			}
+				bool can_decide_for_all = true;
+				bool insecure_for_sure_found = false;
 
-			if(options.count_calls) {
-				calls_cr++;
-			}
-			if (solver.solve({condition}) == z3::Result::UNSAT)
-			{
+				
+				// ..and compare it to all honest utilities that are "compatible"
+				for (auto pair : input.cond_actions_honest_utility_pairs)
+				{
 
-				// if(options.strategies) {
-				// 	node->violates_cr[group_nr - 1] = true;
+					if(options.count_calls) {
+						calls_cr++;
+					}
+					if (solver.solve({pair.conditional_actions}) == z3::Result::UNSAT)
+					{
+						// incompatible, no need to check anything
+						continue;
+					}
+
+					// compute honest_total for this pair
+					Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
+					for (size_t player = 0; player < players; player++)
+						if (group[player])
+							honest_total = honest_total + pair.utility[player];
+
+					auto condition = honest_total >= group_utility;
+
+					if(options.count_calls) {
+						calls_cr++;
+					}
+					if (solver.solve({!condition}) == z3::Result::UNSAT)
+					{
+						// nothing to do in this case
+						//  we can continue
+						//  this "if" can be completely removed in future
+						continue;
+					}
+
+					if(options.count_calls) {
+						calls_cr++;
+					}
+
+					bool for_sure_insecure = false;
+					if (solver.solve({condition}) == z3::Result::UNSAT)
+					{
+
+						// if(options.strategies) {
+						// 	node->violates_cr[group_nr - 1] = true;
+						// }
+						for_sure_insecure = true;
+						insecure_for_sure_found = true;
+						
+						if(options.strong_conditional_actions) {
+							// we need to reset the reason because it can be the case that the reason is set from
+							// a previous pair, and we want to return false with no reason (because we know that
+							// honest < group_utility so we do not want to split unnecessarily)
+							leaf.reason = ::new (&leaf.reason) z3::Bool();
+							return false;
+						}
+
+						break; // go to next condition
+						
+					}
+
+					can_decide_for_all = false;
+					if (options.weak_conditional_actions && leaf.reason.null() && !for_sure_insecure) {
+						leaf.reason = get_split_approx(solver, options, honest_total, group_utility, false, false, true, true);
+					} else if (options.strong_conditional_actions) {
+						leaf.reason = get_split_approx(solver, options, honest_total, group_utility, false, false, true, true);
+						return false;
+					}
+				}
+
+				if(options.weak_conditional_actions && can_decide_for_all && !insecure_for_sure_found) {
+					return true;
+				}				
+
+				// in the future we need to add a boolean which ensures that we only enter the
+				// first "if". If this is the case we can increment "solved_for_group".
+
+				// if (consider_prob_groups) {
+				// 	leaf.problematic_group = group_nr;
 				// }
 
-				// we need to reset the reason because it can be the case that the reason is set from
-				// a previous pair, and we want to return false with no reason (because we know that
-				// honest < group_utility so we do not want to split unnecessarily)
-				leaf.reason = ::new (&leaf.reason) z3::Bool();
-				return false;
+				// input.set_reset_point(leaf);
+
 			}
 
-			can_decide_for_all = false;
-
-			if (leaf.reason.null())
-			{
-				leaf.reason = get_split_approx(solver, options, honest_total, group_utility, false, false, true, true);
-			}
 		}
 
-		// in the future we need to add a boolean which ensures that we only enter the
-		// first "if". If this is the case we can increment "solved_for_group".
+		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
 
-		// if (consider_prob_groups) {
-		// 	leaf.problematic_group = group_nr;
-		// }
-
-		// input.set_reset_point(leaf);
-
-		return can_decide_for_all;
 	}
 
 	else if (node->is_subtree()){

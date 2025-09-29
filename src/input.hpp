@@ -324,8 +324,16 @@ class Subtree : public Node {
 class Leaf final : public Node {
 
 	public:
+	// new for conditional actions
+	std::vector<z3::Bool> conditions;
+	std::vector<UtilityTuple> utilities;
+
+	// condition[i] has a UtilityTuple utilities[i]
+
+	
+	// DEPRECATED
 	// utilities for each player: NB in lexicographic order of players!
-	std::vector<Utility> utilities;
+	//std::vector<Utility> utilities;
 
 	mutable uint64_t problematic_group;
 
@@ -334,8 +342,14 @@ class Leaf final : public Node {
 	virtual ConditionalUtilities get_utilities() const override
 		{
 			ConditionalUtilities cu;
-			cu.utilities.push_back({utilities});
-			z3::Bool bool_obj; cu.condition.push_back(bool_obj.True());
+			for(size_t i = 0; i < conditions.size(); i++) {
+				cu.condition.push_back(conditions[i]);
+				cu.utilities.push_back({utilities[i]});
+			}
+
+			// DEPRECATED
+			//cu.utilities.push_back({utilities});
+			//z3::Bool bool_obj; cu.condition.push_back(bool_obj.True());
 			return cu;
 		}
 
