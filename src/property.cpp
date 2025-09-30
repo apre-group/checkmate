@@ -408,6 +408,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			if (solver.solve() != z3::Result::UNSAT)
 			{
 				at_least_one_non_contradictory_condition = true;
+				bool for_sure_secure = false;
 
 				// known utility for us
 				auto utility = leaf.utilities[i].leaf[player];
@@ -419,6 +420,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				}
 				if (solver.solve({!condition}) == z3::Result::UNSAT)
 				{
+					for_sure_secure = true;
 					if (consider_prob_groups)
 					{
 						leaf.problematic_group = player + 1;
@@ -449,7 +451,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				// for weak conditional actions
 				if (options.weak_conditional_actions && leaf.reason.null() && !for_sure_insecure) {
 					leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, options, utility, Utility{z3::Real::ZERO, z3::Real::ZERO}, !weaker, weaker, false, false);
-				} else if (options.strong_conditional_actions) {
+				} else if (options.strong_conditional_actions && !for_sure_secure) {
 					leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, options, utility, Utility{z3::Real::ZERO, z3::Real::ZERO}, !weaker, weaker, false, false);
 					return false;
 				}
