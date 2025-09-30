@@ -812,7 +812,6 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 	if (node->is_leaf())
 	{
-		std::cout << "BANANA" << std::endl;
 		const auto &leaf = node->leaf();
 
 		// if  ((group_nr < leaf.problematic_group) && consider_prob_groups){
@@ -1877,28 +1876,16 @@ void compute_conditional_actions_honest_utility_pairs(const Input &input, std::v
 
 	if (node->is_leaf())
 	{
-		std::cout << "BANANA 9" << std::endl;
 		for (size_t i = 0; i < node->leaf().conditions.size(); i++) {
-			std::cout << "BANANA 10" << std::endl;
 
 			CondActionsUtilityPair pair;
-			std::cout << "BANANA X" << std::endl;
 			pair.conditional_actions.insert(pair.conditional_actions.begin(), cond_actions_so_far.begin(), cond_actions_so_far.end());
-			std::cout << "BANANA Y" << std::endl;
 			pair.conditional_actions.push_back(node->leaf().conditions[i]);
-
-			std::cout << "BANANA Z" << std::endl;
-			std::cout <<  node->leaf().conditions.size() << " " << node->leaf().utilities.size() << std::endl;
-			std::cout << node->leaf().utilities[i].leaf << std::endl;
 
 			pair.utility.insert(pair.utility.begin(), node->leaf().utilities[i].leaf.begin(), node->leaf().utilities[i].leaf.end());
 			
-			std::cout << "BANANA XY" << std::endl;
 			input.cond_actions_honest_utility_pairs.push_back(pair);
-			std::cout << "BANANA 11" << std::endl;
-
 		}
-		std::cout << "BANANA 12" << std::endl;
 		return;
 	} else if (node->is_subtree()) {
 
@@ -2013,11 +2000,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		// 	utility = input.honest_utilities[history - input.honest.size()].leaf;
 		// }
 
-		std::cout << "BANANA 7" << std::endl;
-
 		compute_conditional_actions_honest_utility_pairs(input, {}, input.root.get());
-
-		std::cout << "BANANA 8" << std::endl;
 
 		// sneaky hack follows: all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
 		// done this way more for concision than efficiency
@@ -2590,12 +2573,9 @@ void property(const Options &options, const Input &input, PropertyType property,
 	}
 	else
 	{
-		std::cout << "BANANA 2" << std::endl;
 		size_t number_groups = property == PropertyType::CollusionResilience ? pow(2, input.players.size()) - 1 : input.players.size();
-		std::cout << "BANANA 3" << std::endl;
 		input.init_solved_for_group(number_groups);
-		std::cout << "BANANA 4" << std::endl;
-
+		
 		std::vector<PracticalitySubtreeResult> satisfied_in_case = {};
 		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, satisfied_in_case))
 		{
@@ -2607,7 +2587,6 @@ void property(const Options &options, const Input &input, PropertyType property,
 			std::cout << "NO, it is not " << prop_name << "." << std::endl;
 			prop_holds = false;
 		}
-		std::cout << "BANANA 5" << std::endl;
 	}
 
 	// generate preconditions
