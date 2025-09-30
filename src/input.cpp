@@ -580,8 +580,8 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 		return branch;
 	}
 
-	// leaf
-	if (node.contains("utility"))
+	// leaf - no conditions
+	if (node.is_object() && node.contains("utility"))
 	{
 		// (player, utility) pairs
 		using PlayerUtility = std::pair<std::string, Utility>;
@@ -610,7 +610,7 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 				std::exit(EXIT_FAILURE);
 			}
 		}
-
+		
 		// sort (player, utility) pairs alphabetically by player
 		sort(
 			player_utilities.begin(),
@@ -618,12 +618,98 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 			[](const PlayerUtility &left, const PlayerUtility &right)
 			{ return left.first < right.first; });
 
+		
 		Leaf *leaf(new Leaf);
-		for (auto &player_utility : player_utilities)
-			leaf->utilities.push_back(player_utility.second);
+		z3::Bool bool_obj;
+		leaf->conditions.push_back(bool_obj.True());
+		std::vector<Utility> utility = {};
+		
+		for (auto &player_utility : player_utilities) {
+			utility.push_back(player_utility.second);
+			//leaf->utilities.push_back(player_utility.second);
+		}
+
+		utilities_storage.push_back({});
+
+		utilities_storage[index_utilities_storage].push_back(utility);
+
+		for(auto const &util : utilities_storage[index_utilities_storage]) {
+							UtilityTuple ut(util);
+							leaf->utilities.push_back(ut);
+							
+		}
+		index_utilities_storage++;
+
 		return leaf;
 	}
 
+	// leaf - with conditions
+	if (node.is_array() && node.size() > 0 && node[0].contains("utility"))
+	{
+		Leaf *leaf(new Leaf);
+
+		for (auto& condition_utility_pair : node) {
+
+			const json &condition_json = condition_utility_pair["condition"];
+			z3::Bool condition = parse_case(parser, condition_json);
+			leaf->conditions.push_back(condition);
+
+			// (player, utility) pairs
+			using PlayerUtility = std::pair<std::string, Utility>;
+			std::vector<PlayerUtility> player_utilities;
+			for (const json &utility : condition_utility_pair["utility"])
+			{
+				const json &value = utility["value"];
+				// parse a utility expression
+				if (value.is_string())
+				{
+					const std::string &string = value;
+					player_utilities.push_back({utility["player"],
+												parser.parse_utility(string.c_str())});
+				}
+				// numeric utility, assumed real
+				else if (value.is_number_unsigned())
+				{
+					unsigned number = value;
+					player_utilities.push_back({utility["player"],
+												{z3::Real::value(number), z3::Real::ZERO}});
+				}
+				// foreign object, bail
+				else
+				{
+					std::cerr << "checkmate: unsupported utility value " << value << std::endl;
+					std::exit(EXIT_FAILURE);
+				}
+			}
+
+			// sort (player, utility) pairs alphabetically by player
+			sort(
+				player_utilities.begin(),
+				player_utilities.end(),
+				[](const PlayerUtility &left, const PlayerUtility &right)
+				{ return left.first < right.first; });
+
+		
+			std::vector<Utility> utility = {};
+
+			for (auto &player_utility : player_utilities)
+				utility.push_back(player_utility.second);
+				//leaf->utilities.push_back(player_utility.second);
+
+
+			utilities_storage.push_back({});
+			utilities_storage[index_utilities_storage].push_back(utility);
+			for(auto const &util : utilities_storage[index_utilities_storage]) {
+							UtilityTuple ut(util);
+							leaf->utilities.push_back(ut);
+			}
+			index_utilities_storage++;
+		}
+
+		return leaf;
+	}
+
+	
 	// subtree summary
 	if (node.contains("subtree"))
 	{

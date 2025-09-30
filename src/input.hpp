@@ -49,6 +49,7 @@ struct UtilityTuple {
 	}
 
 	UtilityTuple(decltype(leaf) leaf) : leaf(leaf), strategy_vector() {}
+	
 	size_t size() const { return leaf.size(); }
 	const Utility &operator[](size_t index) const { return leaf[index]; }
 	std::vector<Utility>::const_iterator begin() const { return leaf.cbegin(); }
