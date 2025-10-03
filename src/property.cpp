@@ -757,7 +757,6 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 						} else {
 							if (result && reason.null()){
 								reason = choice.node->reason;
-								std::cout << reason << std::endl;
 								// reset_index = i;
 							}
 							result = false;
