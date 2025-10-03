@@ -456,7 +456,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					return false;
 				}
 				
-				// input.set_reset_point(leaf);
+				//input.set_reset_point(leaf);
 
 			}
 		}
@@ -565,7 +565,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					// if (consider_prob_groups) {
 					// 	subtree.problematic_group = player;
 					// }
-					// input.set_reset_point(subtree);
+					//input.set_reset_point(subtree);
 
 					return false;
 				}
@@ -611,7 +611,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					auto *subtree = honest_choice.node;
 
 					// set chosen action, needed for printing strategy
-					// branch.strategy = honest_choice.action;
+					branch.strategy[i] = honest_choice.action;
 
 					// the honest choice must be weak immune
 					if (weak_immunity_rec(input, solver, options, subtree, player, weaker, consider_prob_groups))
@@ -631,7 +631,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 						{
 							branch.reason = subtree->reason;
 						}
-						// input.set_reset_point(branch);
+						input.set_reset_point(branch);
 
 						if (options.strong_conditional_actions)
 						{
@@ -678,10 +678,12 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					if (weak_immunity_rec(input, solver, options, choice.node, player, weaker, consider_prob_groups))
 					{
 						// set chosen action, needed for printing strategy
-						// branch.strategy = choice.action;
+						branch.strategy[j] = choice.action;
+						
 						// if (consider_prob_groups) {
 						// 		branch.problematic_group = player + 1;
 						// }
+
 						secure_choice_found = true;
 						if (options.weak_conditional_actions)
 						{
@@ -2128,8 +2130,8 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		}
 
 		// //if strategies, add a "potential case" to keep track of all strategies
-		// if (options.strategies){
-		// 	input.compute_strategy_case(current_case, property);
+		if (options.strategies){
+			input.compute_strategy_case(current_case, property);
 
 		// 	if(options.all_cases && property == PropertyType::CollusionResilience) {
 		// 		input.root->reset_violation_cr();
@@ -2138,7 +2140,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 		// if(options.counterexamples && property == PropertyType::Practicality && !input.root->honest) {
 		// 	input.add_case2ce(current_case);
-		// }
+		}
 
 		return true;
 	}
@@ -2196,6 +2198,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		// reset reason and strategy
 		// ? should be the same point of reset
 		input.root->reset_reason();
+		input.root->reset_strategy();
 		// if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
 		// 	auto &current_reset_branch = current_reset_point->branch();
 		// 	current_reset_branch.reset_strategy();
@@ -2298,6 +2301,7 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 		// reset reason and strategy
 		// ? should be the same point of reset
 		input.root->reset_reason();
+		input.root->reset_strategy();
 		// if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
 		// 	auto &current_reset_branch = current_reset_point->branch();
 		// 	current_reset_branch.reset_strategy();
@@ -2372,6 +2376,7 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 		// reset reason and strategy
 		// ? should be the same point of reset
 		input.root->reset_reason();
+		input.root->reset_strategy();
 		// if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
 		// 	auto &current_reset_branch = current_reset_point->branch();
 		// 	current_reset_branch.reset_strategy();
@@ -2476,6 +2481,7 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 		// reset reason and strategy
 		// ? should be the same point of reset
 		input.root->reset_reason();
+		input.root->reset_strategy();
 		// if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
 		// 	auto &current_reset_branch = current_reset_point->branch();
 		// 	current_reset_branch.reset_strategy();
@@ -2612,11 +2618,11 @@ void property(const Options &options, const Input &input, PropertyType property,
 	// }
 
 	// generate strategies
-	// if (options.strategies && prop_holds){
-	// 	// for each case a strategy
-	// 	bool is_wi = (property == PropertyType::WeakerImmunity) || (property == PropertyType::WeakImmunity);
-	// 	input.print_strategies(options, is_wi);
-	// }
+	if (options.strategies && prop_holds){
+		// for each case a strategy
+		bool is_wi = (property == PropertyType::WeakerImmunity) || (property == PropertyType::WeakImmunity);
+		input.print_strategies(options, is_wi);
+	}
 
 	// if (options.counterexamples && !prop_holds){
 	// 	bool is_wi = (property == PropertyType::WeakerImmunity) || (property == PropertyType::WeakImmunity);
@@ -3054,8 +3060,8 @@ void analyse_properties(const Options &options, const Input &input)
 				// input.reset_logging();
 				// input.reset_unsat_cases();
 				input.root->reset_reason();
-				// input.root->reset_strategy();
-				// input.reset_strategies();
+				input.root->reset_strategy();
+				input.reset_strategies();
 				// input.root->reset_problematic_group(i==2);
 				// input.reset_reset_point();
 				property(options, input, property_types[i], history);
@@ -3108,8 +3114,8 @@ void analyse_properties(const Options &options, const Input &input)
 				// input.reset_logging();
 				// input.reset_unsat_cases();
 				input.root->reset_reason();
-				// input.root->reset_strategy();
-				// input.reset_strategies();
+				input.root->reset_strategy();
+				input.reset_strategies();
 				// input.root->reset_problematic_group(false);
 				// input.reset_reset_point();
 				property(options, input, property_types[i], input.honest.size());
@@ -3156,8 +3162,7 @@ void analyse_properties(const Options &options, const Input &input)
 				// input.reset_logging();
 				// input.reset_unsat_cases();
 				input.root->reset_reason();
-				// input.root->reset_strategy();
-				// input.reset_strategies();
+				input.reset_strategies();
 				// input.root->reset_problematic_group(true);
 				// input.reset_reset_point();
 				// input.honest.size() + honest_utility means we are running a subree in default mode
@@ -3243,8 +3248,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				// input.reset_logging();
 				// input.reset_unsat_cases();
 				input.root->reset_reason();
-				// input.root->reset_strategy();
-				// input.reset_strategies();
+				input.reset_strategies();
 				// input.root->reset_problematic_group(i==2);
 				// input.reset_reset_point();
 				property_subtree(options, input, property_types[i], history, subtree);
@@ -3305,8 +3309,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				// input.reset_logging();
 				// input.reset_unsat_cases();
 				input.root->reset_reason();
-				// input.root->reset_strategy();
-				// input.reset_strategies();
+				input.reset_strategies();
 				// input.reset_reset_point();
 				property_subtree_nohistory(options, input, property_types[i], subtree);
 			}
@@ -3357,8 +3360,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				// input.reset_logging();
 				// input.reset_unsat_cases();
 				input.root->reset_reason();
-				// input.root->reset_strategy();
-				// input.reset_strategies();
+				input.reset_strategies();
 				// input.root->reset_problematic_group(true);
 				// input.reset_reset_point();
 				property_subtree_utility(options, input, PropertyType::CollusionResilience, input.honest_utilities[utility].utility, subtree);
