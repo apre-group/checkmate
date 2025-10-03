@@ -447,7 +447,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				// if (consider_prob_groups) {
 				// 	leaf.problematic_group = player;
 				// }
-				
+
 				// for weak conditional actions
 				if (options.weak_conditional_actions && leaf.reason.null() && !for_sure_insecure) {
 					leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, options, utility, Utility{z3::Real::ZERO, z3::Real::ZERO}, !weaker, weaker, false, false);
@@ -690,6 +690,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 							return true;
 						}
 					}
+					
 					if ((!choice.node->reason.null()) && (reason.null()))
 					{
 						reason = choice.node->reason;
@@ -744,27 +745,33 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				{
 					if (!weak_immunity_rec(input, solver, options, choice.node, player, weaker, consider_prob_groups))
 					{
-						// if (choice.node->reason.null()){
-						// 	if (options.counterexamples) {
-						// 		branch.counterexample_choices.push_back(choice.action);
-						// 	 }
-						// 	if (!options.all_counterexamples){
-						// 	 	return false;
-						// 	} else {
-						// 		result = false;
-						// 	}
-						// } else {
-						// 	if (result && reason.null()){
-						// 		reason = choice.node->reason;
-						// 		reset_index = i;
-						// 	}
-						// 	result = false;
-						// }
+						if (choice.node->reason.null()){
+							// if (options.counterexamples) {
+							// 	branch.counterexample_choices.push_back(choice.action);
+							//  }
+							// if (!options.all_counterexamples){
+							//  	return false;
+							// } else {
+								result = false;
+							// }
+						} else {
+							if (result && reason.null()){
+								reason = choice.node->reason;
+								std::cout << reason << std::endl;
+								// reset_index = i;
+							}
+							result = false;
+						}
 						not_secure_choice_found = true;
 
 						// we have found one condition where not all choices are secure
 						if (options.strong_conditional_actions)
 						{
+							if (!reason.null())
+							{
+								branch.reason = reason;
+								// input.set_reset_point(*branch.choices[reset_index].node);
+							}
 							return false;
 						}
 					}
@@ -1216,27 +1223,32 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 				{
 					if (!collusion_resilience_rec(input, solver, options, choice.node, group, players, group_nr, consider_prob_groups))
 					{
-						// if (choice.node->reason.null()){
-						// 	if (options.counterexamples) {
-						// 		branch.counterexample_choices.push_back(choice.action);
-						// 	 }
-						// 	if (!options.all_counterexamples){
-						// 	 	return false;
-						// 	} else {
-						// 		result = false;
-						// 	}
-						// } else {
-						// 	if (result && reason.null()){
-						// 		reason = choice.node->reason;
-						// 		reset_index = i;
-						// 	}
-						// 	result = false;
-						// }
+						if (choice.node->reason.null()){
+							// if (options.counterexamples) {
+							// 	branch.counterexample_choices.push_back(choice.action);
+							//  }
+							// if (!options.all_counterexamples){
+							//  	return false;
+							// } else {
+								result = false;
+							// }
+						} else {
+							if (result && reason.null()){
+								reason = choice.node->reason;
+								//reset_index = i;
+							}
+							result = false;
+						}
 						not_secure_choice_found = true;
 
 						// we have found one condition where not all choices are secure
 						if (options.strong_conditional_actions)
 						{
+							if (!reason.null())
+							{
+								branch.reason = reason;
+								// input.set_reset_point(*branch.choices[reset_index].node);
+							}
 							return false;
 						}
 					}
@@ -1564,12 +1576,12 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 				// for all other children
 				unsigned int k = 0;
+				
 				for (const auto &utilities : children[j])
 				{
-
+		
 					for (size_t n = 0; n < utilities.condition.size(); n++)
-					{
-
+					{						
 						z3::Bool child_condition = utilities.condition[n];
 						UtilityTuplesSet &child_utilities_set = utilities.utilities[n];
 
@@ -1619,6 +1631,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 								break;
 							}
 						}
+
 						if (!found && utilities.utilities.size() > 0)
 						{ // !! utilities.utilities.size()>0 is always true -> discuss
 
@@ -1863,8 +1876,34 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				// it can be empty if we dropped/removed all of its elements previously
 				if (cond_util.utilities[m].size() > 0)
 				{
-					practical_utilities.condition.push_back(cond_util.condition[m]);
-					practical_utilities.utilities.push_back(cond_util.utilities[m]);
+					auto &condition_to_add = cond_util.condition[m];
+					auto &utilities_to_add = cond_util.utilities[m];
+
+					bool equivalent_condition_exists = false;
+
+					for(size_t ii=0; ii < practical_utilities.condition.size(); ii++) {
+						bool existing_implies_new = false;
+						bool new_implies_existing = false;
+
+						if(solver.solve({z3::conjunction({practical_utilities.condition[ii], !condition_to_add})}) == z3::Result::UNSAT)
+							existing_implies_new = true;
+
+						if(solver.solve({z3::conjunction({!practical_utilities.condition[ii], condition_to_add})}) == z3::Result::UNSAT)
+							new_implies_existing = true;
+
+						if(existing_implies_new && new_implies_existing) {
+							equivalent_condition_exists = true;
+							for(auto &util : utilities_to_add) {
+								practical_utilities.utilities[ii].insert(util);
+							}
+							break;
+						}
+					}
+
+					if(!equivalent_condition_exists) {
+						practical_utilities.condition.push_back(cond_util.condition[m]);
+						practical_utilities.utilities.push_back(cond_util.utilities[m]);
+					}
 				}
 			}
 		}
@@ -1939,7 +1978,6 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		bool is_unsat = false;
 		for (size_t player = 0; player < input.players.size(); player++)
 		{
-
 			// if (!input.solved_for_group[player]) {
 			// problematic groups are only considered when we haven't found a case split point yet
 
