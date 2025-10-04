@@ -890,7 +890,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					if (solver.solve({condition}) == z3::Result::UNSAT)
 					{
 						if(options.strategies) {
-							node->violates_cr[group_nr - 1] = true;
+							node->violates_cr[i][group_nr - 1] = true;
 						}
 
 						for_sure_insecure = true;
@@ -900,7 +900,6 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 							// we need to reset the reason because it can be the case that the reason is set from
 							// a previous pair, and we want to return false with no reason (because we know that
 							// honest < group_utility so we do not want to split unnecessarily)
-							
 							leaf.reset_reason(); 
 							//leaf.reason = ::new (&leaf.reason) z3::Bool();
 							return false;
@@ -909,7 +908,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 						break; // go to next condition
 						
 					}
-
+					
 					can_decide_for_all = false;
 					if (options.weak_conditional_actions && leaf.reason.null() && !for_sure_insecure) {
 						leaf.reason = get_split_approx(solver, options, honest_total, group_utility, false, false, true, true);
@@ -1173,8 +1172,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 							return true;
 						}
 					} else if (options.strategies && choice.node->reason.null()) {
-
-						choice.node->violates_cr[group_nr - 1] = true;
+						choice.node->violates_cr[j][group_nr - 1] = true;
 					}
 					
 					if ((!choice.node->reason.null()) && (reason.null()))
@@ -2068,8 +2066,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		bool is_unsat = false;
 		for (uint64_t binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++)
 		{
-
-			if (!input.solved_for_group[binary_counter]){
+			// if (!input.solved_for_group[binary_counter]){
 				if(options.strategies) {
 					input.root->add_violation_cr();
 				}
@@ -2103,12 +2100,12 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 					// }
 					result = false;
 					// } else {
-					// 	input.solved_for_group[binary_counter] = true;
+					//input.solved_for_group[binary_counter] = true;
 				}
 
 				// input.root.get()->reset_counterexample_choices();
-				// input.root->reset_reason();
-			}
+				//input.root->reset_reason();
+			//}
 		}
 		// if (!options.all_counterexamples) {
 		// 	if (!reason.null()){
@@ -2154,7 +2151,6 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		determine if the input has some property for the current honest history, splitting recursively
 	*/
 
-	
 	// property holds under current split
 	bool res = property_under_split(solver, input, options, property, history);
 	if (res)
@@ -2225,7 +2221,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		std::cout << "\tSplitting on: " << split << std::endl;
 	}
 
-	std::vector<std::vector<bool>> violation;
+	std::vector<std::vector<std::vector<bool>>> violation;
 	if (property == PropertyType::CollusionResilience && options.strategies){
 		violation = input.root->store_violation_cr();
 	}
@@ -2278,7 +2274,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		// }
 
 		if (property == PropertyType::CollusionResilience && options.strategies){
-			std::vector<std::vector<bool>> violation_copy;
+			std::vector<std::vector<std::vector<bool>>> violation_copy;
 			violation_copy.insert(violation_copy.end(), violation.begin(), violation.end());
 			input.root->restore_violation_cr(violation_copy);
 		}
@@ -3069,6 +3065,7 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 
 void analyse_properties(const Options &options, const Input &input)
 {
+
 	if (input.honest_utilities.size() != 0)
 	{
 		std::cout << "INFO: This file is a subtree, but CheckMate is running in default mode" << std::endl;
