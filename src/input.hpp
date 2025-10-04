@@ -191,7 +191,7 @@ public:
 
 	std::vector<HistoryChoice> compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
 
-	std::vector<HistoryChoice> compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players) const;
+	std::vector<HistoryChoice> compute_cr_strategy(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players) const;
 
 	std::vector<HistoryChoice> compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector) const;
 
@@ -764,7 +764,7 @@ struct Input {
 		root.get()->reset_practical_utilities();
 	}
 
-	void compute_strategy_case(std::vector<z3::Bool> _case, PropertyType property) const {
+	void compute_strategy_case(const Options &options, std::vector<z3::Bool> _case, PropertyType property) const {
 
 		// if (property == PropertyType::Practicality){
 		// 	if(root.get()->branch().honest) {
@@ -791,7 +791,7 @@ struct Input {
 			new_strat_case._case = _case;
 
 			if (property == PropertyType::CollusionResilience) {
-				//new_strat_case.strategy = root.get()->compute_cr_strategy(players, {}, {});
+				new_strat_case.strategy = root.get()->compute_cr_strategy(options, players, {}, {});
 			} else {
 				new_strat_case.strategy = root.get()->compute_strategy(players, {});
 			}
