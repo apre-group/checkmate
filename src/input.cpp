@@ -1580,31 +1580,32 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(const Options &options, std
 	return strategy;
 }
 
-// std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector) const {
+std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector, std::vector<z3::Bool>& strategy_condition) const {
+	
+		if (this -> is_leaf() || this->is_subtree()){
+			return {};
+		}
 
-// 		if (this -> is_leaf() || this->is_subtree()){
-// 			return {};
-// 		}
+		assert(strategy_vector.size()>0);
+		std::vector<HistoryChoice> strategy;
 
-// 		assert(strategy_vector.size()>0);
-// 		std::vector<HistoryChoice> strategy;
+		/* HistoryChoice hist_choice;
+		hist_choice.player = players[this->branch().player];
+		hist_choice.choice = strategy_vector[0];
+		strategy_vector.erase(strategy_vector.begin());
+		hist_choice.history = actions_so_far;
 
-// 		HistoryChoice hist_choice;
-// 		hist_choice.player = players[this->branch().player];
-// 		hist_choice.choice = strategy_vector[0];
-// 		strategy_vector.erase(strategy_vector.begin());
-// 		hist_choice.history = actions_so_far;
+		strategy.push_back(hist_choice);
 
-// 		strategy.push_back(hist_choice);
-
-// 		for (const Choice &choice: this->branch().choices) {
-// 	 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-// 	 		updated_actions.push_back(choice.action);
-// 	 		std::vector<HistoryChoice> child_strategy = choice.node->compute_pr_strategy(players, updated_actions, strategy_vector);
-// 			strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
-// 	 	}
-// 		return strategy;
-// 	}
+		//TODO123 do this for all choices in the correct condition (find out which one it is)
+		for (const Choice &choice: this->branch().choices) {
+	 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+	 		updated_actions.push_back(choice.action);
+	 		std::vector<HistoryChoice> child_strategy = choice.node->compute_pr_strategy(players, updated_actions, strategy_vector);
+			strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+	 	} */
+		return strategy;
+}
 
 // std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
 

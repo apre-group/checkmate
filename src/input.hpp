@@ -35,6 +35,7 @@ enum class NodeType {
 struct UtilityTuple {
 	const std::vector<Utility> &leaf;
 	mutable std::vector<std::string> strategy_vector;
+	mutable std::vector<z3::Bool> strategy_conditions;
 
 	// GCC doesn't like copy-assign without explicit copy constructor
 	UtilityTuple(const UtilityTuple &other) = default;
@@ -48,7 +49,7 @@ struct UtilityTuple {
 		return *this;
 	}
 
-	UtilityTuple(decltype(leaf) leaf) : leaf(leaf), strategy_vector() {}
+	UtilityTuple(decltype(leaf) leaf) : leaf(leaf), strategy_vector(), strategy_conditions() {}
 	
 	size_t size() const { return leaf.size(); }
 	const Utility &operator[](size_t index) const { return leaf[index]; }
@@ -193,7 +194,7 @@ public:
 
 	std::vector<HistoryChoice> compute_cr_strategy(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players) const;
 
-	std::vector<HistoryChoice> compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector) const;
+	std::vector<HistoryChoice> compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector, std::vector<z3::Bool>& strategy_condition) const;
 
 	std::vector<CeChoice> compute_wi_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
 
@@ -766,26 +767,45 @@ struct Input {
 
 	void compute_strategy_case(const Options &options, std::vector<z3::Bool> _case, PropertyType property) const {
 
-		// if (property == PropertyType::Practicality){
-		// 	if(root.get()->branch().honest) {
-		// 		// the honest one has to be the practical one
-		// 		// otw (if we call a subtree in default mode to obtain the strategies)
-		// 		//  there can be more than one pr strategy if the subtree is not along the
-		// 		//  honest history
-		// 		assert(root.get()->practical_utilities.size()==1);
-		// 	}
-		// 	for (const auto& pr_utility: root.get()->practical_utilities){
-		// 		StrategyCase new_strat_case;
-		// 		new_strat_case._case = _case;
-		// 		std::vector<std::string> strategy_vector;
-		// 		strategy_vector.insert(strategy_vector.begin(), pr_utility.strategy_vector.begin(), pr_utility.strategy_vector.end());
-		// 		new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector);
-		// 		strategies.push_back(new_strat_case);
-		// 	}
+		if (property == PropertyType::Practicality){
+			// if(root.get()->branch().honest) {
+			// 	// the honest one has to be the practical one
+			// 	// otw (if we call a subtree in default mode to obtain the strategies)
+			// 	//  there can be more than one pr strategy if the subtree is not along the
+			// 	//  honest history
+			// 	assert(root.get()->practical_utilities.utilities.size()==1); --> each set has to have cardinality one but there can be multiple for difference conditions
+			// }
 
-		// } 
+			ConditionalUtilities cu = root.get()->practical_utilities;
+
+			for(int i=0; i<cu.condition.size(); i++) {
+				std::cout<< "Hello!!" << std::endl;
+				std::cout << cu.condition[i] << std::endl;
+				for(auto tuple: cu.utilities[i]) {
+					std::cout << "Tuple: " << tuple.leaf << " " << tuple.strategy_vector << " " << tuple.strategy_conditions << std::endl;
+				}
+				std::cout<< "Bye!!" << std::endl;
+			}
+			
+			//for (const auto& pr_utility: root.get()->practical_utilities.uti){
+			for (size_t i=0; i < cu.condition.size(); i++) {
+				
+				StrategyCase new_strat_case;
+				new_strat_case._case = _case;
+				std::vector<std::string> strategy_vector;
+				std::vector<z3::Bool> strategy_condition;
+				UtilityTuple utility_tuple = *cu.utilities[i].begin();
+
+				strategy_vector.insert(strategy_vector.begin(), utility_tuple.strategy_vector.begin(), utility_tuple.strategy_vector.end());
+				strategy_condition.insert(strategy_condition.begin(), utility_tuple.strategy_conditions.begin(), utility_tuple.strategy_conditions.end());
+
+				new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector, strategy_condition); 
+				strategies.push_back(new_strat_case);
+			}
+
+		} 
 		
-		// else {
+		else {
 
 			StrategyCase new_strat_case;
 			new_strat_case._case = _case;
@@ -798,7 +818,7 @@ struct Input {
 
 			strategies.push_back(new_strat_case);
 
-		// }
+		}
 	}
 
 	void print_strategies(const Options &options, bool is_wi) const {

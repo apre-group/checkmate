@@ -1538,25 +1538,15 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 	if (branch.honest)
 	{
 		// if we are at an honest node, our strategy must be the honest strategy
+		// honest_utilities.size() == branch.conditions.size(), that is we have
+		// one ConditionalUtility in honest_utilities per condition
+		assert(honest_utilities.size() == branch.conditions.size());
 		for (const auto &conditional_hon_utility : honest_utilities)
 		{
 			for (const auto &hon_utility : conditional_hon_utility.utilities)
 				// the utility at the leaf of the honest subtree
 				assert(hon_utility.size() == 1); // the size of utilityTuplesSet needs to be 1
 		}
-		// std::vector<std::string> honest_strategy;
-		// std::vector<Utility> leaf;
-		// UtilityTuplesSet to_clear_strategy;
-		// for (const auto& hon_utility: honest_utilities){
-		//  	honest_strategy.insert(honest_strategy.end(), hon_utility.strategy_vector.begin(), hon_utility.strategy_vector.end());
-		// 	UtilityTuple cleared_strategy(hon_utility.leaf);
-		// 	to_clear_strategy.insert(cleared_strategy);
-		// }
-
-		// UtilityTuple honest_utility = *to_clear_strategy.begin();
-
-		// honest_utility.strategy_vector = {};
-		// honest_utility.strategy_vector.push_back(honest_choice);
 
 		ConditionalUtilities practical_utilities_for_branch;
 
@@ -1575,10 +1565,31 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			// check for weak conditional actions, that we can return true after finding one practical condition
 			bool every_honest_practical = true;
 
+			std::vector<UtilityTuplesSet> collected_honest_utility_tuple_sets;
+
 			for (size_t m = 0; m < honest_conditional_utility.condition.size(); m++)
 			{
 
 				z3::Bool condition_maximum_utility = honest_conditional_utility.condition[m];
+				
+				UtilityTuple honest_utility_storage = *honest_conditional_utility.utilities[m].begin();
+
+				std::vector<std::string> honest_strategy; 
+				std::vector<z3::Bool> honest_conditions;
+				std::vector<Utility> leaf;
+				UtilityTuplesSet to_clear_strategy;
+				honest_strategy.insert(honest_strategy.end(), honest_utility_storage.strategy_vector.begin(), honest_utility_storage.strategy_vector.end());
+				honest_conditions.insert(honest_conditions.end(), honest_utility_storage.strategy_conditions.begin(), honest_utility_storage.strategy_conditions.end());
+				UtilityTuple cleared_strategy(honest_utility_storage.leaf);
+				to_clear_strategy.insert(cleared_strategy);
+
+				UtilityTuple honest_utility = *to_clear_strategy.begin(); 
+
+				honest_utility.strategy_vector = {};
+				honest_utility.strategy_conditions = {};
+				honest_utility.strategy_vector.push_back(honest_choice[j]);
+				honest_utility.strategy_conditions.push_back(branch.conditions[j].condition);
+				
 				// this should be maximal against other players, so...
 				Utility maximum = honest_conditional_utility.utilities[m].begin()->leaf[branch.player];
 
@@ -1635,10 +1646,14 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							{
 								found = true;
 								// need to insert strategy after honest at right point in vector
-								// if (k == honest_index){
-								// 	honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
-								// }
-								// honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+								if (k == honest_index[j]){
+									//add both once insert strategy, once conditions
+									honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
+									honest_utility.strategy_conditions.insert(honest_utility.strategy_conditions.end(), honest_conditions.begin(), honest_conditions.end());
+								}
+								honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+								honest_utility.strategy_conditions.insert(honest_utility.strategy_conditions.end(), utility.strategy_conditions.begin(), utility.strategy_conditions.end());
+								
 								break;
 							}
 						}
@@ -1675,16 +1690,23 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 								return result; // false
 							}
 						}
-						// k++;
+						k++;
 
 						// pop the child_condition, done implicitly because the frame dies
 					}
-					// if(k == honest_index) {
-					// 	honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
-					// }
-				}
+
+					if(k == honest_index[j]) {
+						honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
+						honest_utility.strategy_conditions.insert(honest_utility.strategy_conditions.end(), honest_conditions.begin(), honest_conditions.end());
+					}
 
 				// pop the condition_maximum_utility, done implicitly because the frame dies
+				}
+
+				UtilityTuplesSet honest_set;
+				honest_set.insert(honest_utility);
+				collected_honest_utility_tuple_sets.push_back(honest_set);
+			
 			}
 
 			if (every_honest_practical)
@@ -1700,7 +1722,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				for (size_t i = 0; i < honest_conditional_utility.condition.size(); i++)
 				{
 					practical_utilities_for_branch.condition.push_back(honest_conditional_utility.condition[i]);
-					practical_utilities_for_branch.utilities.push_back(honest_conditional_utility.utilities[i]);
+					//practical_utilities_for_branch.utilities.push_back(honest_conditional_utility.utilities[i]);
+					practical_utilities_for_branch.utilities.push_back(collected_honest_utility_tuple_sets[i]);
 				}
 			}
 
@@ -1712,7 +1735,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			// }
 
 			// pop the branch_conditions[j], done implicitly because the frame dies
-		}
+		}	
 
 		// set the honest utilities for the branch
 		branch.practical_utilities = practical_utilities_for_branch;
@@ -1740,18 +1763,46 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 		// merge the conditional utilities for each condition
 		std::vector<ConditionalUtilities> practical_utilities_per_condition;
+		std::vector<ConditionalUtilities> practical_utilities_per_condition_storage;
 		for (size_t j = 0; j < branch.conditions.size(); j++)
 		{
 			ConditionalUtilities cu;
+			unsigned int k = 0;
 			for (const auto &child : children[j])
 			{
 				for (size_t i = 0; i < child.condition.size(); i++)
 				{
 					cu.condition.push_back(child.condition[i]);
-					cu.utilities.push_back(child.utilities[i]);
+					//cu.utilities.push_back(child.utilities[i]); --> removed this to add the code below, needed for strategies
+					UtilityTuplesSet ut_set;
+					for (auto &utility_tuple: child.utilities[i]) {
+						UtilityTuple to_insert(utility_tuple.leaf);
+						to_insert.strategy_vector.push_back(children_actions[j][k]);
+						to_insert.strategy_conditions.push_back(branch.conditions[j].condition);
+						ut_set.insert(to_insert);
+					}
+					cu.utilities.push_back(ut_set);
 				}
+				k++;
 			}
 			practical_utilities_per_condition.push_back(cu);
+
+
+			ConditionalUtilities cu1;
+			for (const auto &child : children[j])
+			{
+				for (size_t i = 0; i < child.condition.size(); i++)
+				{
+					cu1.condition.push_back(child.condition[i]);
+					UtilityTuplesSet ut_set;
+					for (auto &utility_tuple: child.utilities[i]) {
+						UtilityTuple to_insert(utility_tuple.leaf);
+						ut_set.insert(to_insert);
+					}
+					cu1.utilities.push_back(ut_set);
+				}
+			}
+			practical_utilities_per_condition_storage.push_back(cu1);
 		}
 
 		for (size_t j = 0; j < branch.conditions.size(); j++)
@@ -1786,7 +1837,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					// if any child has the property that all its utilities are bigger than `dominatee`
 					// it can be dropped
 
-					for (size_t m = 0; m < conditional_utilites_for_condition.condition.size(); m++)
+					//for (size_t m = 0; m < conditional_utilites_for_condition.condition.size(); m++)
+					for (size_t m = 0; m < practical_utilities_per_condition_storage[j].condition.size(); m++)
 					{
 
 						if(options.count_calls) {
@@ -1801,7 +1853,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 						z3::Frame f8(solver);
 						solver.assert_(conditional_utilites_for_condition.condition[m]);
 
-						UtilityTuplesSet &utilities = conditional_utilites_for_condition.utilities[m];
+						UtilityTuplesSet &utilities = practical_utilities_per_condition_storage[j].utilities[m];
 						// skip any where the cadidate is already contained
 
 						// this logic can be factored out in an external function
@@ -1811,7 +1863,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							if (utility_tuples_eq(utility, candidate))
 							{
 								contained = true;
-								// candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+								candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+								candidate.strategy_conditions.insert(candidate.strategy_conditions.end(), utility.strategy_conditions.begin(), utility.strategy_conditions.end());
 								break;
 							}
 						}
@@ -1833,9 +1886,10 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							}
 							if (solver.solve({condition}) == z3::Result::SAT)
 							{
-								// if (dominated){
-								// 	candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
-								// }
+								if (dominated){
+									candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+									candidate.strategy_conditions.insert(candidate.strategy_conditions.end(), utility.strategy_conditions.begin(), utility.strategy_conditions.end());
+								}
 								dominated = false;
 
 								if(options.count_calls) {
