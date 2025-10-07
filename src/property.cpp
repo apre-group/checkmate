@@ -1587,8 +1587,9 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 				honest_utility.strategy_vector = {};
 				honest_utility.strategy_conditions = {};
-				honest_utility.strategy_vector.push_back(honest_choice[j]);
-				honest_utility.strategy_conditions.push_back(branch.conditions[j].condition);
+				// This should be done later
+				//honest_utility.strategy_vector.push_back(honest_choice[j]);
+				//honest_utility.strategy_conditions.push_back(branch.conditions[j].condition);
 				
 				// this should be maximal against other players, so...
 				Utility maximum = honest_conditional_utility.utilities[m].begin()->leaf[branch.player];
@@ -1598,6 +1599,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 				// for all other children
 				unsigned int k = 0;
+				bool honest_added = false;
 				
 				for (const auto &utilities : children[j])
 				{
@@ -1646,11 +1648,17 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							{
 								found = true;
 								// need to insert strategy after honest at right point in vector
-								if (k == honest_index[j]){
+								if (k == honest_index[j] && !honest_added){
+									honest_added = true;
+									
+									honest_utility.strategy_vector.push_back(honest_choice[j]);
+									honest_utility.strategy_conditions.push_back(branch.conditions[j].condition);
+
 									//add both once insert strategy, once conditions
 									honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
 									honest_utility.strategy_conditions.insert(honest_utility.strategy_conditions.end(), honest_conditions.begin(), honest_conditions.end());
 								}
+								
 								honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
 								honest_utility.strategy_conditions.insert(honest_utility.strategy_conditions.end(), utility.strategy_conditions.begin(), utility.strategy_conditions.end());
 								
@@ -1690,17 +1698,23 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 								return result; // false
 							}
 						}
-						k++;
+
+						//k++; -> old. not correct anymore for conditions, should be later
 
 						// pop the child_condition, done implicitly because the frame dies
 					}
+					// pop the condition_maximum_utility, done implicitly because the frame dies
+					
+					k++;
+					
+				}
 
-					if(k == honest_index[j]) {
-						honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
-						honest_utility.strategy_conditions.insert(honest_utility.strategy_conditions.end(), honest_conditions.begin(), honest_conditions.end());
-					}
+				if(k == honest_index[j]) {
+					honest_utility.strategy_vector.push_back(honest_choice[j]);
+					honest_utility.strategy_conditions.push_back(branch.conditions[j].condition);
 
-				// pop the condition_maximum_utility, done implicitly because the frame dies
+					honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
+					honest_utility.strategy_conditions.insert(honest_utility.strategy_conditions.end(), honest_conditions.begin(), honest_conditions.end());
 				}
 
 				UtilityTuplesSet honest_set;
