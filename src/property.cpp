@@ -1649,6 +1649,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 								found = true;
 								// need to insert strategy after honest at right point in vector
 								if (k == honest_index[j] && !honest_added){
+
 									honest_added = true;
 									
 									honest_utility.strategy_vector.push_back(honest_choice[j]);
@@ -1709,6 +1710,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					
 				}
 
+				
 				if(k == honest_index[j]) {
 					honest_utility.strategy_vector.push_back(honest_choice[j]);
 					honest_utility.strategy_conditions.push_back(branch.conditions[j].condition);
@@ -1811,6 +1813,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					UtilityTuplesSet ut_set;
 					for (auto &utility_tuple: child.utilities[i]) {
 						UtilityTuple to_insert(utility_tuple.leaf);
+						to_insert.strategy_vector.insert(to_insert.strategy_vector.end(), utility_tuple.strategy_vector.begin(), utility_tuple.strategy_vector.end());
+						to_insert.strategy_conditions.insert(to_insert.strategy_conditions.end(), utility_tuple.strategy_conditions.begin(), utility_tuple.strategy_conditions.end());
 						ut_set.insert(to_insert);
 					}
 					cu1.utilities.push_back(ut_set);
