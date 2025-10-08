@@ -1793,8 +1793,10 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					UtilityTuplesSet ut_set;
 					for (auto &utility_tuple: child.utilities[i]) {
 						UtilityTuple to_insert(utility_tuple.leaf);
-						to_insert.strategy_vector.push_back(children_actions[j][k]);
-						to_insert.strategy_conditions.push_back(branch.conditions[j].condition);
+						 
+						// This is done later - here is not the correct point to do it 
+						//to_insert.strategy_vector.push_back(children_actions[j][k]);
+						//to_insert.strategy_conditions.push_back(branch.conditions[j].condition);
 						ut_set.insert(to_insert);
 					}
 					cu.utilities.push_back(ut_set);
@@ -1841,6 +1843,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			for (size_t k = 0; k < conditional_utilites_for_condition.condition.size(); k++)
 			{
 
+				bool action_added = false;
+
 				z3::Frame f7(solver);
 				solver.assert_(conditional_utilites_for_condition.condition[k]);
 
@@ -1881,6 +1885,13 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							if (utility_tuples_eq(utility, candidate))
 							{
 								contained = true;
+
+								if(!action_added) {
+									action_added = true;
+									candidate.strategy_vector.push_back(children_actions[j][k]);
+									candidate.strategy_conditions.push_back(branch.conditions[j].condition);
+								}
+
 								candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
 								candidate.strategy_conditions.insert(candidate.strategy_conditions.end(), utility.strategy_conditions.begin(), utility.strategy_conditions.end());
 								break;

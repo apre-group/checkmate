@@ -785,6 +785,7 @@ struct Input {
 			ConditionalUtilities cu = root.get()->practical_utilities;
 			StrategyCase new_strat_case;
 			new_strat_case._case = _case;
+
 			
 			//for (const auto& pr_utility: root.get()->practical_utilities.uti){
 			for (size_t i=0; i < cu.condition.size(); i++) {
