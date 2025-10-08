@@ -188,7 +188,7 @@ public:
 	// null if didn't fail or no case split would help
 	mutable z3::Bool reason;
 
-	mutable std::vector<std::vector<bool>> violates_cr; // set to true as soon as its not cr for one deviating group
+	mutable std::vector<bool> violates_cr; // set to true as soon as its not cr for one deviating group
 
 	virtual ConditionalUtilities get_utilities() const = 0;
 
@@ -214,13 +214,13 @@ public:
 
 	void reset_violation_cr() const;
 
-	std::vector<std::vector<std::vector<bool>>> store_violation_cr() const;
+	std::vector<std::vector<bool>> store_violation_cr() const;
 
-	bool cr_against_all(uint n) const;
+	bool cr_against_all() const;
 
-	bool cr_against_supergroups_of(std::vector<uint> deviating_players, uint n) const;
+	bool cr_against_supergroups_of(std::vector<uint> deviating_players) const;
 
-	void restore_violation_cr(std::vector<std::vector<std::vector<bool>>> &violation) const;
+	void restore_violation_cr(std::vector<std::vector<bool>> &violation) const;
 
 	void add_violation_cr() const;
 

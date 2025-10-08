@@ -1392,7 +1392,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies(), st
 }
 
 std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const {
-
+	
 	if (this -> is_leaf() || this->is_subtree()){
 		return {};
 	}
@@ -1424,10 +1424,10 @@ std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> playe
 	return strategy;
 }
 
-bool Node::cr_against_all(uint n) const {
+bool Node::cr_against_all() const {
 	bool cr_against_all = true;
 
-	for(auto violates_colluding_group : violates_cr[n]) {
+	for(auto violates_colluding_group : violates_cr) {
 
 		if(violates_colluding_group) {
 			cr_against_all = false;
@@ -1449,9 +1449,9 @@ std::vector<bool> convertToBinary(uint n)
 	return bit_reps;
 }
 
-bool Node::cr_against_supergroups_of(std::vector<uint> deviating_players, uint n) const {
+bool Node::cr_against_supergroups_of(std::vector<uint> deviating_players) const {
 
-	for(uint64_t i=0; i < violates_cr[n].size(); i++) {
+	for(uint64_t i=0; i < violates_cr.size(); i++) {
 		std::vector<bool> bin_rep = convertToBinary(i+1);
 
 		bool all_deviating_deviate = true;
@@ -1463,10 +1463,10 @@ bool Node::cr_against_supergroups_of(std::vector<uint> deviating_players, uint n
 				if(!bin_rep[player-1]) {
 					all_deviating_deviate = false;
 				}
-			}
+			}			
 		}
 
-		if(all_deviating_deviate && violates_cr[n][i]) {
+		if(all_deviating_deviate && violates_cr[i]) {
 			return false;
 		}
 
@@ -1477,13 +1477,12 @@ bool Node::cr_against_supergroups_of(std::vector<uint> deviating_players, uint n
 }
 
 void Node::add_violation_cr() const {
-
 	if(this->is_leaf() || this->is_branch()) {
 		size_t limit;
 		this->is_leaf() ? limit = this->leaf().conditions.size() : limit = this->branch().conditions.size();
 
 		for (size_t i = 0; i < limit; i++) {
-			violates_cr[i].push_back(false);
+			violates_cr.push_back(false);
 		}
 	}	
 
@@ -1512,7 +1511,6 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(const Options &options, std
 			for (const Choice &choice: this->branch().conditions[i].children) {
 
 				if (choice.node->honest) {
-					assert(choice.node->cr_against_all(i));
 					HistoryChoice hist_choice;
 					hist_choice.player = players[this->branch().player];
 					hist_choice.choice = choice.action;
@@ -1532,7 +1530,7 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(const Options &options, std
 			bool have_found_cr = false;
 			for (const Choice &choice: this->branch().conditions[i].children) {
 
-				if (choice.node->cr_against_supergroups_of(deviating_players, i)){
+				if (choice.node->cr_against_supergroups_of(deviating_players)){
 					if(!have_found_cr) {
 						have_found_cr = true;
 						HistoryChoice hist_choice;
@@ -1545,7 +1543,6 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(const Options &options, std
 						strategy.push_back(hist_choice);
 					}
 				}
-
 			}
 
 			if(have_found_cr)
@@ -1554,6 +1551,7 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(const Options &options, std
 			// assert this only for strong conditonal actions
 			if(options.strong_conditional_actions)
 				assert(have_found_cr);
+
 		}
 
 		assert(in_one_condition_found_cr);
@@ -1950,54 +1948,38 @@ std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> pl
 // }
 
 void Node::reset_violation_cr() const {
-	violates_cr = {};
+		violates_cr = {};
 
-	//if (!this->is_leaf() && !this->is_subtree()){
-	if (!this->is_subtree()){
+		if (!this->is_leaf() && !this->is_subtree()){
 
-		size_t limit;
-		this->is_leaf() ? limit = this->leaf().conditions.size() : limit = this->branch().conditions.size();
-
-		for (size_t i = 0; i < limit; i++) {
-			violates_cr.push_back({});
-			if(!this->is_leaf()) {
+			for (size_t i = 0; i < this->branch().conditions.size(); i++) {
 				for (const auto& child: this->branch().conditions[i].children){
 					child.node->reset_violation_cr();
 				}
 			}
 		}
-		
-	}
-	return;
+		return;
 }
 
-std::vector<std::vector<std::vector<bool>>> Node::store_violation_cr() const {
 
-	std::vector<std::vector<std::vector<bool>>> violation = {violates_cr};
+std::vector<std::vector<bool>> Node::store_violation_cr() const {
 
-	if (!this->is_leaf() && !this->is_subtree()){
+	std::vector<std::vector<bool>> violation = {violates_cr};
+
+	if (!this->is_leaf() && !this->is_subtree()) {
+
 		for (size_t i = 0; i < this->branch().conditions.size(); i++) {
 			for (const auto& child: this->branch().conditions[i].children){
-				std::vector<std::vector<std::vector<bool>>> child_violation = child.node->store_violation_cr();
+				std::vector<std::vector<bool>> child_violation = child.node->store_violation_cr();
 				violation.insert(violation.end(), child_violation.begin(), child_violation.end());
 			}
 		}
-	}
 
-	// DEPRATED (for games without condional actions)
-	// std::vector<std::vector<bool>> violation = {violates_cr};
-	// if (!this->is_leaf() && !this->is_subtree()){
-	// 	for (size_t i = 0; i < this->branch().conditions.size(); i++) {
-	// 		for (const auto& child: this->branch().conditions[i].children){
-	// 			std::vector<std::vector<bool>> child_violation = child.node->store_violation_cr();
-	// 			violation.insert(violation.end(), child_violation.begin(), child_violation.end());
-	// 		}
-	// 	}
-	// }
+	} 
 	return violation;
 }
 
-void Node::restore_violation_cr(std::vector<std::vector<std::vector<bool>>> &violation) const {
+void Node::restore_violation_cr(std::vector<std::vector<bool>> &violation) const {
 
 	assert(violation.size()>0);
 	violates_cr = violation[0];
@@ -2006,7 +1988,7 @@ void Node::restore_violation_cr(std::vector<std::vector<std::vector<bool>>> &vio
 	if (!this->is_leaf() && !this->is_subtree()){
 
 		for (size_t i = 0; i < this->branch().conditions.size(); i++) {
-			for (const auto& child:  this->branch().conditions[i].children){
+			for (const auto& child: this->branch().conditions[i].children){
 				child.node->restore_violation_cr(violation);
 			}
 		}

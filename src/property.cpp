@@ -890,7 +890,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					if (solver.solve({condition}) == z3::Result::UNSAT)
 					{
 						if(options.strategies) {
-							node->violates_cr[i][group_nr - 1] = true;
+							node->violates_cr[group_nr - 1] = true;
 						}
 
 						for_sure_insecure = true;
@@ -1172,7 +1172,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 							return true;
 						}
 					} else if (options.strategies && choice.node->reason.null()) {
-						choice.node->violates_cr[j][group_nr - 1] = true;
+						choice.node->violates_cr[group_nr - 1] = true;
 					}
 					
 					if ((!choice.node->reason.null()) && (reason.null()))
@@ -2260,6 +2260,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 		}
 
+
 		//if strategies, add a "potential case" to keep track of all strategies
 		if (options.strategies){
 			input.compute_strategy_case(options, current_case, property);
@@ -2304,7 +2305,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		std::cout << "\tSplitting on: " << split << std::endl;
 	}
 
-	std::vector<std::vector<std::vector<bool>>> violation;
+	std::vector<std::vector<bool>> violation;
 	if (property == PropertyType::CollusionResilience && options.strategies){
 		violation = input.root->store_violation_cr();
 	}
@@ -2357,7 +2358,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		// }
 
 		if (property == PropertyType::CollusionResilience && options.strategies){
-			std::vector<std::vector<std::vector<bool>>> violation_copy;
+			std::vector<std::vector<bool>> violation_copy;
 			violation_copy.insert(violation_copy.end(), violation.begin(), violation.end());
 			input.root->restore_violation_cr(violation_copy);
 		}
