@@ -514,8 +514,11 @@ using json = nlohmann::json;
 
 static z3::Bool parse_case(Parser &parser, const std::string &_case)
 {
-	if (_case == "true")
-		return true;
+	if (_case == "true") {
+		z3::Bool bool_obj;
+		return bool_obj.True();
+	}
+		//return true;
 
 	return parser.parse_constraint(_case.c_str());
 }
@@ -2019,3 +2022,18 @@ void Node::reset_count_check(bool wi, bool weri, bool cr, bool pr) const {
 		}
 	}
 }
+
+void Node::reset_violated_conditions() const {
+	violated_conditions = {};
+
+	if (!this->is_leaf() && !this->is_subtree()){
+		for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+			for (const auto& child: this->branch().conditions[i].children){
+				child.node->reset_violated_conditions();
+			}
+		}
+	}
+}
+
+
+

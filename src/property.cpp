@@ -400,6 +400,8 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		// NEW: Allow conditions in leaves
 		bool at_least_one_non_contradictory_condition = false;
 
+		bool result = true;
+
 		for (size_t i = 0; i < leaf.conditions.size(); i++) {
 
 			z3::Frame leafFrame(solver);
@@ -440,7 +442,13 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					for_sure_insecure = true;
 					if(options.strong_conditional_actions) {
 						leaf.reset_reason();
-						return false;
+
+						if(options.preconditions) {
+							result = false;
+							leaf.violated_conditions.push_back({leaf.conditions[i]});
+						} else {
+							return false;
+						}
 					}
 				}
 
@@ -452,13 +460,26 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				if (options.weak_conditional_actions && leaf.reason.null() && !for_sure_insecure) {
 					leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, options, utility, Utility{z3::Real::ZERO, z3::Real::ZERO}, !weaker, weaker, false, false);
 				} else if (options.strong_conditional_actions && !for_sure_secure) {
-					leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, options, utility, Utility{z3::Real::ZERO, z3::Real::ZERO}, !weaker, weaker, false, false);
-					return false;
+					if(!for_sure_insecure) {
+						leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, options, utility, Utility{z3::Real::ZERO, z3::Real::ZERO}, !weaker, weaker, false, false);
+					}
+					
+					
+					if(options.preconditions) {
+						result = false;
+						leaf.violated_conditions.push_back({leaf.conditions[i]});
+					} else {
+						return false;
+					}
 				}
 				
 				//input.set_reset_point(leaf);
 
 			}
+		}
+
+		if(options.strong_conditional_actions && options.preconditions) {
+			return result;
 		}
 
 		// weak_conditional actions -> return false
@@ -468,8 +489,8 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		// strong_conditional actions -> return true
 		// we've been through all conditions and did not found
 		// a condition for which the property is violated
-		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
 
+		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
 		
 	}
 
@@ -567,6 +588,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					// }
 					//input.set_reset_point(subtree);
 
+					subtree.violated_conditions.insert(subtree.violated_conditions.end(), subtree_result.preconditions_for_player_group.begin(), subtree_result.preconditions_for_player_group.end());
 					return false;
 				}
 			}
@@ -582,13 +604,13 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 	// else we deal with a branch
 	if (player == branch.player)
 	{
-
 		// player behaves honestly
 		if (branch.honest)
-		{
+		{			
 			// if we are along the honest history, we want to take an honest strategy
 
 			bool at_least_one_non_contradictory_condition = false;
+			bool result = true;
 
 			for (size_t i = 0; i < branch.conditions.size(); i++)
 			{
@@ -635,7 +657,17 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 						if (options.strong_conditional_actions)
 						{
-							return false;
+							if(options.preconditions) {
+								result = false;
+								for(auto &violated_cond : subtree->violated_conditions) {
+									std::vector<z3::Bool> updated_conds = {branch.conditions[i].condition};
+									updated_conds.insert(updated_conds.end(), violated_cond.begin(), violated_cond.end());
+									branch.violated_conditions.push_back(updated_conds);
+								}
+							} else {
+								return false;
+							}
+							
 						}
 					}
 				}
@@ -648,15 +680,22 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			// so if we reach the code after the loop, only one the following cases is possible
 			// mode weak_conditional_actions and no condition is secure -> return false
 			// mode strong_conditional_actions and all conditions are secure -> return true
+
+			if(options.strong_conditional_actions && options.preconditions) {
+				return result;
+			}
 			return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
 		}
+
 		// otherwise we can take any strategy we please as long as it's weak immune
 		// weak version of conditional actions: we need to have one such option for one condition
 		// strong version of conditional actions: we need to have one such option for each condition
 		bool at_least_one_non_contradictory_condition = false;
+		bool result = true;
 		for (size_t j = 0; j < branch.conditions.size(); j++)
 		{
-
+			
+			std::vector<z3::Bool> disjunctions;
 			z3::Frame f2(solver);
 			solver.assert_(branch.conditions[j].condition);
 
@@ -685,10 +724,18 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 						// }
 
 						secure_choice_found = true;
-						if (options.weak_conditional_actions)
-						{
+						if (options.weak_conditional_actions) {
 							return true;
+						} else if (options.strong_conditional_actions && !options.preconditions) {
+							break; // go to next condition
 						}
+
+					} else {
+						std::vector<z3::Bool> disjuncts;
+						for(auto &cond:choice.node->violated_conditions) {
+							disjuncts.push_back(z3::conjunction(cond));
+						}
+						disjunctions.push_back(z3::disjunction(disjuncts));
 					}
 					
 					if ((!choice.node->reason.null()) && (reason.null()))
@@ -706,11 +753,22 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 				if (options.strong_conditional_actions && !secure_choice_found)
 				{
-					return false;
+					if(options.preconditions) {
+						result = false;
+						std::vector<z3::Bool> precond = {branch.conditions[j].condition};
+						precond.insert(precond.end(), disjunctions.begin(), disjunctions.end());
+						branch.violated_conditions.push_back(precond);
+					} else {
+						return false;
+					}
 				}
 			}
 
 			// solver.pop(); , done implicitly because the frame dies
+		}
+
+		if(options.strong_conditional_actions && options.preconditions) {
+			return result;
 		}
 
 		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
@@ -722,6 +780,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		// weak version of conditional actions: we need to ensure this for one condition
 		// strong version of conditional actions: we need to ensure this for each condition
 		bool at_least_one_non_contradictory_condition = false;
+		bool result_top_level = true;
 		for (size_t j = 0; j < branch.conditions.size(); j++)
 		{
 			z3::Frame f3(solver);
@@ -771,7 +830,18 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 								branch.reason = reason;
 								// input.set_reset_point(*branch.choices[reset_index].node);
 							}
-							return false;
+
+							if(options.preconditions) {
+								result_top_level = false;
+								for(auto &cond: choice.node->violated_conditions) {
+									std::vector<z3::Bool> precond = {branch.conditions[j].condition};
+									precond.insert(precond.end(), cond.begin(), cond.end());
+									branch.violated_conditions.push_back(precond);
+								}
+							} else {
+								return false;
+							}
+							
 						}
 					}
 					i++;
@@ -794,6 +864,10 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			}
 
 			// solver.pop(); , done implicitly because the frame dies
+		}
+
+		if(options.strong_conditional_actions && options.preconditions) {
+			return result_top_level;
 		}
 
 		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
@@ -2070,14 +2144,23 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		std::vector<uint64_t> problematic_group_storage;
 		std::vector<z3::Bool> reason_storage;
 		bool is_unsat = false;
+
 		for (size_t player = 0; player < input.players.size(); player++)
 		{
+			if(options.preconditions && options.strong_conditional_actions) {
+				input.root->reset_violated_conditions();
+			}
+
 			// if (!input.solved_for_group[player]) {
 			// problematic groups are only considered when we haven't found a case split point yet
 
 			bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity, true);
+			
 			if (!weak_immune_for_player)
 			{
+				if(options.preconditions && options.strong_conditional_actions) {
+					input.violated_conditions_current_case.insert(input.violated_conditions_current_case.end(), input.root->violated_conditions.begin(), input.root->violated_conditions.end());
+				}
 
 				// if (options.counterexamples && input.root->reason.null()){
 				// 	is_unsat = true;
@@ -2085,7 +2168,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 				// 	input.compute_cecase(pl, property);
 				// 	input.root.get()->reset_counterexample_choices();
 				// }
-				if (!options.all_counterexamples && input.root->reason.null())
+				if (!options.all_counterexamples && input.root->reason.null() && !options.preconditions)
 				{
 					return false;
 				}
@@ -2149,6 +2232,10 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		bool is_unsat = false;
 		for (uint64_t binary_counter = 1; binary_counter < -1ull >> (64 - input.players.size()); binary_counter++)
 		{
+			if(options.preconditions && options.strong_conditional_actions) {
+				input.root->reset_violated_conditions();
+			}
+
 			// if (!input.solved_for_group[binary_counter]){
 				if(options.strategies) {
 					input.root->add_violation_cr();
@@ -2160,6 +2247,9 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 				bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, input.players.size(), binary_counter, true);
 				if (!collusion_resilient_for_group)
 				{
+					if(options.preconditions && options.strong_conditional_actions) {
+						input.violated_conditions_current_case.insert(input.violated_conditions_current_case.end(), input.root->violated_conditions.begin(), input.root->violated_conditions.end());
+					}
 
 					// if (options.counterexamples && input.root->reason.null()){
 					// 	is_unsat = true;
@@ -2286,10 +2376,19 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		{
 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
 		}
-		// if (options.preconditions){
-		// 	input.add_unsat_case(current_case);
-		// 	input.stop_logging();
-		// }
+		if (options.preconditions){
+			input.add_unsat_case(current_case);
+			input.stop_logging();
+
+			if(options.strong_conditional_actions) {
+				std::vector<z3::Bool> items;
+				for(auto &cond: input.violated_conditions_current_case) {
+					items.push_back(z3::conjunction(cond).simplify());
+				}
+				input.violated_conditions.push_back(items);
+			}
+		}
+
 		// if (options.counterexamples){
 		// 	input.add_case2ce(current_case);
 		// }
@@ -2335,6 +2434,10 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		// 	auto &current_reset_branch = current_reset_point->branch();
 		// 	current_reset_branch.reset_strategy();
 		// }
+
+		if(options.preconditions && options.strong_conditional_actions) {
+			input.reset_violated_conditions_current_case();
+		}
 
 		solver.push();
 
@@ -2729,25 +2832,66 @@ void property(const Options &options, const Input &input, PropertyType property,
 		}
 	}
 
-	// generate preconditions
-	// if (options.preconditions && !prop_holds) {
-	// 			std::cout << std::endl;
-	// 			std::vector<z3::Bool> conjuncts;
-	// 			std::vector<std::vector<z3::Bool>> simplified = input.precondition_simplify();
+	//generate preconditions
+	if (options.preconditions && !prop_holds) {
+		if(options.weak_conditional_actions) {
+			std::cout << std::endl;
+			std::vector<z3::Bool> conjuncts;
+			std::vector<std::vector<z3::Bool>> simplified = input.precondition_simplify();
 
-	// 			for (const auto &unsat_case: simplified) {
-	// 				// negate each case (by disjoining the negated elements), then conjunct all - voila weakest prec to be added to the init constr
-	// 				std::vector<z3::Bool> neg_case;
-	// 				for (const auto &elem: unsat_case) {
-	// 					neg_case.push_back(elem.invert());
-	// 				}
-	// 				z3::Bool disj = disjunction(neg_case);
-	// 				conjuncts.push_back(disj);
-	// 			}
-	// 			z3::Bool raw_prec = conjunction(conjuncts);
-	// 			z3::Bool simpl_prec = raw_prec.simplify();
-	// 			std::cout << "Weakest Precondition: " << std::endl << "\t" << simpl_prec << std::endl;
-	// }
+			for (const auto &unsat_case: simplified) {
+				// negate each case (by disjoining the negated elements), then conjunct all - voila weakest prec to be added to the init constr
+				std::vector<z3::Bool> neg_case;
+				for (const auto &elem: unsat_case) {
+					neg_case.push_back(elem.invert());
+				}
+				z3::Bool disj = disjunction(neg_case);
+				conjuncts.push_back(disj);
+			}
+			z3::Bool raw_prec = conjunction(conjuncts);
+			z3::Bool simpl_prec = raw_prec.simplify();
+			std::cout << "Weakest Precondition: " << std::endl << "\t" << simpl_prec << std::endl;
+		} else {
+			std::cout << std::endl;
+
+			// don't use simplify anymore, because afterwards the size of simplified_cases might not be the same, 
+			// so it might mess up the correspondence to the conditions
+			//std::vector<std::vector<z3::Bool>> simplified_cases = input.precondition_simplify();
+
+			std::cout << "The set of weakest preconditions includes: " << std::endl;
+
+			std::vector<z3::Bool> precondition_items;
+
+			for(size_t i=0; i<input.unsat_cases.size(); i++) {
+				// for each case we need in the precondition case => \neg conditions which is basically \neg case or \neg conditions
+				z3::Bool case_conj = z3::conjunction(input.unsat_cases[i]);
+
+				std::vector<z3::Bool> negated = {};
+				for(auto &cond : input.violated_conditions[i]) {
+					negated.push_back(!cond);
+				}
+
+				z3::Bool cond_conj = z3::conjunction(negated);
+
+				std::cout << "\t (" << case_conj << ") implies (" << cond_conj << ")" << std::endl;
+
+				precondition_items.push_back(z3::disjunction({!case_conj, cond_conj}));
+
+			}
+
+			z3::Bool raw_prec = z3::conjunction(precondition_items);
+			z3::Bool simpl_prec = raw_prec.simplify();
+
+			z3::Solver preconditions_solver;
+			preconditions_solver.assert_(simpl_prec);
+			if(preconditions_solver.solve() == z3::Result::UNSAT) {
+				std::cout << "Weakest Precondition: " << std::endl << "\t" << "false" << std::endl;
+			} else {
+				std::cout << "Weakest Precondition: " << std::endl << "\t" << simpl_prec << std::endl;
+			}
+		}
+		
+	}
 
 	// generate strategies
 	if (options.strategies && prop_holds){
@@ -3191,12 +3335,20 @@ void analyse_properties(const Options &options, const Input &input)
 				// input.reset_counterexamples();
 				// input.root.get()->reset_counterexample_choices();
 				// input.reset_logging();
-				// input.reset_unsat_cases();
+
+
+				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.root->reset_strategy();
 				input.reset_strategies();
 				// input.root->reset_problematic_group(i==2);
 				// input.reset_reset_point();
+
+				if(options.preconditions && options.strong_conditional_actions) {
+					input.reset_violated_conditions();
+					input.reset_violated_conditions_current_case();
+					input.root->reset_violated_conditions();
+				}
 				property(options, input, property_types[i], history);
 			}
 		}
@@ -3245,12 +3397,20 @@ void analyse_properties(const Options &options, const Input &input)
 				// input.reset_counterexamples();
 				// input.root.get()->reset_counterexample_choices();
 				// input.reset_logging();
-				// input.reset_unsat_cases();
+				
+				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.root->reset_strategy();
 				input.reset_strategies();
 				// input.root->reset_problematic_group(false);
 				// input.reset_reset_point();
+
+				if(options.preconditions && options.strong_conditional_actions) {
+					input.reset_violated_conditions();
+					input.reset_violated_conditions_current_case();
+					input.root->reset_violated_conditions();
+				}
+				
 				property(options, input, property_types[i], input.honest.size());
 			}
 		}
@@ -3293,13 +3453,21 @@ void analyse_properties(const Options &options, const Input &input)
 				// input.reset_counterexamples();
 				// input.root.get()->reset_counterexample_choices();
 				// input.reset_logging();
-				// input.reset_unsat_cases();
+				
+				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.reset_strategies();
 				// input.root->reset_problematic_group(true);
 				// input.reset_reset_point();
 				// input.honest.size() + honest_utility means we are running a subree in default mode
 				// and we consider collusion resilience for the honest utility
+				
+				if(options.preconditions && options.strong_conditional_actions) {
+					input.reset_violated_conditions();
+					input.reset_violated_conditions_current_case();
+					input.root->reset_violated_conditions();
+				}
+				
 				property(options, input, PropertyType::CollusionResilience, input.honest.size() + honest_utility);
 
 				if(options.count_nodes) {
@@ -3379,11 +3547,18 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				// input.reset_counterexamples();
 				// input.root.get()->reset_counterexample_choices();
 				// input.reset_logging();
-				// input.reset_unsat_cases();
+				
+				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.reset_strategies();
 				// input.root->reset_problematic_group(i==2);
 				// input.reset_reset_point();
+
+				if(options.preconditions && options.strong_conditional_actions) {
+					input.reset_violated_conditions();
+					input.reset_violated_conditions_current_case();
+					input.root->reset_violated_conditions();
+				}
 				property_subtree(options, input, property_types[i], history, subtree);
 			}
 		}
@@ -3440,10 +3615,17 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				// input.reset_counterexamples();
 				// input.root.get()->reset_counterexample_choices();
 				// input.reset_logging();
-				// input.reset_unsat_cases();
+				
+				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.reset_strategies();
 				// input.reset_reset_point();
+
+				if(options.preconditions && options.strong_conditional_actions) {
+					input.reset_violated_conditions();
+					input.reset_violated_conditions_current_case();
+					input.root->reset_violated_conditions();
+				}
 				property_subtree_nohistory(options, input, property_types[i], subtree);
 			}
 		}
@@ -3491,11 +3673,18 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				// input.reset_counterexamples();
 				// input.root.get()->reset_counterexample_choices();
 				// input.reset_logging();
-				// input.reset_unsat_cases();
+				
+				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.reset_strategies();
 				// input.root->reset_problematic_group(true);
 				// input.reset_reset_point();
+
+				if(options.preconditions && options.strong_conditional_actions) {
+					input.reset_violated_conditions();
+					input.reset_violated_conditions_current_case();
+					input.root->reset_violated_conditions();
+				}
 				property_subtree_utility(options, input, PropertyType::CollusionResilience, input.honest_utilities[utility].utility, subtree);
 			}
 
