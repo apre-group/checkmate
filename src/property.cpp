@@ -2380,9 +2380,11 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 			input.add_unsat_case(current_case);
 			input.stop_logging();
 
+			auto simplified = input.condition_simplify();
+
 			if(options.strong_conditional_actions) {
 				std::vector<z3::Bool> items;
-				for(auto &cond: input.violated_conditions_current_case) {
+				for(auto &cond: simplified) {
 					items.push_back(z3::conjunction(cond).simplify());
 				}
 				input.violated_conditions.push_back(items);

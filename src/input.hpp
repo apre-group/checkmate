@@ -18,6 +18,7 @@ struct Choice;
 class Node;
 struct Condition;
 
+
 struct HonestNode {
 	std::string action;
 	std::vector<HonestNode*> children;
@@ -974,10 +975,10 @@ struct Input {
 		unsat_cases.push_back(_case);
 	}
 
-	std::vector<std::vector<z3::Bool>> precondition_simplify() const {
+	std::vector<std::vector<z3::Bool>> simplify_bools(std::vector<std::vector<z3::Bool>> bools) const {
 
 		std::vector<std::vector<z3::Bool>> simp;
-		for (const std::vector<z3::Bool> &case_: unsat_cases) {
+		for (const std::vector<z3::Bool> &case_: bools) {
 			std::vector<z3::Bool> copy;
 			for (const z3::Bool &atom: case_) {
 				copy.push_back(atom);
@@ -1071,6 +1072,17 @@ struct Input {
 
 		return simp;
 	}
+
+	std::vector<std::vector<z3::Bool>> precondition_simplify() const {
+
+		return simplify_bools(unsat_cases);
+	}
+
+	std::vector<std::vector<z3::Bool>> condition_simplify() const {
+
+		return simplify_bools(violated_conditions_current_case);
+	}
+	
 };
 
 
