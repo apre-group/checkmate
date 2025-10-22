@@ -489,7 +489,6 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		// strong_conditional actions -> return true
 		// we've been through all conditions and did not found
 		// a condition for which the property is violated
-
 		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
 		
 	}
@@ -497,7 +496,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 	else if (node->is_subtree()){
 
 		const auto &subtree = node->subtree();
-
+		
 		/*if ((player < subtree.problematic_group) && consider_prob_groups){
 			return true;
 		}*/
@@ -606,7 +605,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 	{
 		// player behaves honestly
 		if (branch.honest)
-		{			
+		{
 			// if we are along the honest history, we want to take an honest strategy
 
 			bool at_least_one_non_contradictory_condition = false;
@@ -632,8 +631,10 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					auto &honest_choice = branch.get_honest_child(i);
 					auto *subtree = honest_choice.node;
 
-					// set chosen action, needed for printing strategy
-					branch.strategy[i] = honest_choice.action;
+					if(options.strategies) {
+						// set chosen action, needed for printing strategy
+						branch.strategy[i] = honest_choice.action;
+					}
 
 					// the honest choice must be weak immune
 					if (weak_immunity_rec(input, solver, options, subtree, player, weaker, consider_prob_groups))
@@ -716,8 +717,10 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				{
 					if (weak_immunity_rec(input, solver, options, choice.node, player, weaker, consider_prob_groups))
 					{
-						// set chosen action, needed for printing strategy
-						branch.strategy[j] = choice.action;
+						if(options.strategies) {
+							// set chosen action, needed for printing strategy
+							branch.strategy[j] = choice.action;
+						}
 						
 						// if (consider_prob_groups) {
 						// 		branch.problematic_group = player + 1;
@@ -1164,8 +1167,10 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					auto &honest_choice = branch.get_honest_child(i);
 					auto *subtree = honest_choice.node;
 
-					// set chosen action, needed for printing strategy
-					branch.strategy[i] = honest_choice.action;
+					if(options.strategies) {
+						// set chosen action, needed for printing strategy
+						branch.strategy[i] = honest_choice.action;
+					}
 
 					// the honest choice must be collusion resilient
 					if (collusion_resilience_rec(input, solver, options, subtree, group, players, group_nr, consider_prob_groups))
@@ -1232,8 +1237,10 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 				{
 					if (collusion_resilience_rec(input, solver, options, choice.node, group, players, group_nr, consider_prob_groups))
 					{
-						// set chosen action, needed for printing strategy
-						branch.strategy[j] = choice.action;
+						if(options.strategies) {
+							// set chosen action, needed for printing strategy
+							branch.strategy[j] = choice.action;
+						}
 						
 						// if (consider_prob_groups) {
 						// 		branch.problematic_group = player + 1;
@@ -2380,11 +2387,12 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 			input.add_unsat_case(current_case);
 			input.stop_logging();
 
-			auto simplified = input.condition_simplify();
+			//auto simplified = input.condition_simplify();
 
 			if(options.strong_conditional_actions) {
 				std::vector<z3::Bool> items;
-				for(auto &cond: simplified) {
+				//for(auto &cond: simplified) {
+				for(auto &cond: input.violated_conditions_current_case) {
 					items.push_back(z3::conjunction(cond).simplify());
 				}
 				input.violated_conditions.push_back(items);
@@ -2744,6 +2752,7 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 
 void property(const Options &options, const Input &input, PropertyType property, size_t history)
 {
+
 	/* determine if the input has some property for the current honest history */
 	Solver solver;
 	for (z3::Bool constraint : input.initial_constraints) {
@@ -3304,6 +3313,7 @@ void analyse_properties(const Options &options, const Input &input)
 	/* iterate over all honest histories and check the properties for each of them */
 	for (size_t history = 0; history < input.honest.size(); history++)
 	{
+
 		if(options.count_nodes) {
 			reset_global_counters(true, true, true, true);
 			input.root->reset_count_check(true, true, true, true);
@@ -3549,7 +3559,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 				// input.reset_counterexamples();
 				// input.root.get()->reset_counterexample_choices();
 				// input.reset_logging();
-				
+
 				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.reset_strategies();
