@@ -460,7 +460,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				if (options.weak_conditional_actions && leaf.reason.null() && !for_sure_insecure) {
 					leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, options, utility, Utility{z3::Real::ZERO, z3::Real::ZERO}, !weaker, weaker, false, false);
 				} else if (options.strong_conditional_actions && !for_sure_secure) {
-					if(!for_sure_insecure) {
+					if(!for_sure_insecure && leaf.reason.null() ) {
 						leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, options, utility, Utility{z3::Real::ZERO, z3::Real::ZERO}, !weaker, weaker, false, false);
 					}
 					
