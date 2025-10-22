@@ -908,6 +908,8 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		// NEW: Allow conditions in leaves
 		bool at_least_one_non_contradictory_condition = false;
 
+		bool result = true;
+
 		for (size_t i = 0; i < leaf.conditions.size(); i++) {
 
 			z3::Frame leafFrame(solver);
@@ -916,6 +918,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 			if (solver.solve() != z3::Result::UNSAT)
 			{
 				at_least_one_non_contradictory_condition = true;
+				bool for_sure_secure = false;
 
 				// compute the total utility for the player group...
 				Utility group_utility{z3::Real::ZERO, z3::Real::ZERO};
@@ -979,10 +982,18 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 							// honest < group_utility so we do not want to split unnecessarily)
 							leaf.reset_reason(); 
 							//leaf.reason = ::new (&leaf.reason) z3::Bool();
-							return false;
+							
+							if(options.preconditions) {
+								result = false;
+								leaf.violated_conditions.push_back({leaf.conditions[i]});
+							} else {
+								return false;
+							}
 						}
 
-						break; // go to next condition
+						if(!(options.strong_conditional_actions && options.preconditions)) {
+							break; // go to next condition
+						}
 						
 					}
 					
@@ -990,8 +1001,16 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					if (options.weak_conditional_actions && leaf.reason.null() && !for_sure_insecure) {
 						leaf.reason = get_split_approx(solver, options, honest_total, group_utility, false, false, true, true);
 					} else if (options.strong_conditional_actions) {
-						leaf.reason = get_split_approx(solver, options, honest_total, group_utility, false, false, true, true);
-						return false;
+						if(!for_sure_insecure && leaf.reason.null()) {
+							leaf.reason = get_split_approx(solver, options, honest_total, group_utility, false, false, true, true);
+						}
+
+						if(options.preconditions) {
+							result = false;
+							leaf.violated_conditions.push_back({leaf.conditions[i]});
+						} else {
+							return false;
+						}
 					}
 				}
 
@@ -1010,6 +1029,10 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 			}
 
+		}
+
+		if(options.strong_conditional_actions && options.preconditions) {
+			return result;
 		}
 
 		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
@@ -1122,6 +1145,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 						// 	subtree.problematic_group = group_nr;
 						// }
 						// input.set_reset_point(subtree);
+						subtree.violated_conditions.insert(subtree.violated_conditions.end(), subtree_result.preconditions_for_player_group.begin(), subtree_result.preconditions_for_player_group.end());
 						return false;
 					}
 				}
@@ -1146,6 +1170,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 			// if we are along the honest history, we want to take an honest strategy
 
 			bool at_least_one_non_contradictory_condition = false;
+			bool result = true;
 
 			for (size_t i = 0; i < branch.conditions.size(); i++)
 			{
@@ -1194,7 +1219,16 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 						if (options.strong_conditional_actions)
 						{
-							return false;
+							if(options.preconditions) {
+								result = false;
+								for(auto &violated_cond : subtree->violated_conditions) {
+									std::vector<z3::Bool> updated_conds = {branch.conditions[i].condition};
+									updated_conds.insert(updated_conds.end(), violated_cond.begin(), violated_cond.end());
+									branch.violated_conditions.push_back(updated_conds);
+								}
+							} else {
+								return false;
+							}
 						}
 					}
 				}
@@ -1207,15 +1241,21 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 			// so if we reach the code after the loop, only one the following cases is possible
 			// mode weak_conditional_actions and no condition is secure -> return false
 			// mode strong_conditional_actions and all conditions are secure -> return true
+			
+			if(options.strong_conditional_actions && options.preconditions) {
+				return result;
+			}
 			return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
 		}
 		// otherwise we can take any strategy we please as long as it's collusion resilient
 		// weak version of conditional actions: we need to have one such option for one condition
 		// strong version of conditional actions: we need to have one such option for each condition
 		bool at_least_one_non_contradictory_condition = false;
+		bool result = true;
 		for (size_t j = 0; j < branch.conditions.size(); j++)
 		{
 
+			std::vector<z3::Bool> disjunctions;
 			z3::Frame f2(solver);
 			solver.assert_(branch.conditions[j].condition);
 
@@ -1252,8 +1292,17 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 						{
 							return true;
 						}
-					} else if (options.strategies && choice.node->reason.null()) {
+					} else {
+
+						std::vector<z3::Bool> disjuncts;
+						for(auto &cond:choice.node->violated_conditions) {
+							disjuncts.push_back(z3::conjunction(cond));
+						}
+						disjunctions.push_back(z3::disjunction(disjuncts));
+						
+						if (options.strategies && choice.node->reason.null()) {
 						choice.node->violates_cr[group_nr - 1] = true;
+						}
 					}
 					
 					if ((!choice.node->reason.null()) && (reason.null()))
@@ -1275,11 +1324,22 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 				if (options.strong_conditional_actions && !secure_choice_found)
 				{
-					return false;
+					if(options.preconditions) {
+						result = false;
+						std::vector<z3::Bool> precond = {branch.conditions[j].condition};
+						precond.insert(precond.end(), disjunctions.begin(), disjunctions.end());
+						branch.violated_conditions.push_back(precond);
+					} else {
+						return false;
+					}
 				}
 			}
 
 			// solver.pop(); , done implicitly because the frame dies
+		}
+
+		if(options.strong_conditional_actions && options.preconditions) {
+			return result;
 		}
 
 		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
@@ -1291,6 +1351,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		// weak version of conditional actions: we need to ensure this for one condition
 		// strong version of conditional actions: we need to ensure this for each condition
 		bool at_least_one_non_contradictory_condition = false;
+		bool result_top_level = true;
 		for (size_t j = 0; j < branch.conditions.size(); j++)
 		{
 			z3::Frame f3(solver);
@@ -1341,7 +1402,16 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 								// input.set_reset_point(*branch.choices[reset_index].node);
 							}
 
-							return false;
+							if(options.preconditions) {
+								result_top_level = false;
+								for(auto &cond: choice.node->violated_conditions) {
+									std::vector<z3::Bool> precond = {branch.conditions[j].condition};
+									precond.insert(precond.end(), cond.begin(), cond.end());
+									branch.violated_conditions.push_back(precond);
+								}
+							} else {
+								return false;
+							}
 						}
 					}
 					i++;
@@ -1368,6 +1438,10 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 		// Refactor: A ? !B : true
 
+		if(options.strong_conditional_actions && options.preconditions) {
+			return result_top_level;
+		}
+		
 		return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
 	}
 }
