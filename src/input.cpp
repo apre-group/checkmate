@@ -731,6 +731,12 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 		std::vector<SubtreeResult> collusion_resilience = {};
 		std::vector<PracticalitySubtreeResult> practicality = {};
 
+		bool subtree_solved_with_preconditions = false;
+		if (node["subtree"].contains("solved_for_preconditions"))
+		{
+			subtree_solved_with_preconditions = node["subtree"]["solved_for_preconditions"];
+		}
+
 		if (node["subtree"].contains("weak_immunity"))
 		{
 			for (const json &wi : node["subtree"]["weak_immunity"])
@@ -766,7 +772,47 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 					satisfied_in_case.push_back(_case);
 				}
 
-				SubtreeResult wi_result{player_group, satisfied_in_case};
+				std::vector<std::vector<z3::Bool>> cases_for_preconditions = {};
+				std::vector<std::vector<std::vector<z3::Bool>>> preconditions = {};
+				
+				if(subtree_solved_with_preconditions) {
+					const json &preconditions_cases_given = wi["cases_for_preconditions"];
+					for (const json &precondition_case : preconditions_cases_given)
+					{
+						std::vector<z3::Bool> _precond_case = {};
+						for (const json &_precond_case_entry : precondition_case)
+						{
+							// if (_precond_entry != "true")
+							// {
+								const std::string &_precond_e = _precond_case_entry;
+								_precond_case.push_back(parse_case(parser, _precond_e));
+							// }
+						}
+						cases_for_preconditions.push_back(_precond_case);
+					}
+
+					const json &preconditions_given_cases = wi["preconditions_for_player_group"];
+					for (const json &preconditions_for_case : preconditions_given_cases)
+					{
+						std::vector<std::vector<z3::Bool>> precondition_for_case = {};
+						for(const json &precondition : preconditions_for_case) {
+							std::vector<z3::Bool> _precond = {};
+							for (const json &_precond_entry : precondition)
+							{
+								// if (_precond_entry != "true")
+								// {
+									const std::string &_precond_e = _precond_entry;
+									_precond.push_back(parse_case(parser, _precond_e));
+								// }
+							}
+							precondition_for_case.push_back(_precond);
+						}
+						preconditions.push_back(precondition_for_case);
+					}
+					
+				}
+
+				SubtreeResult wi_result{player_group, satisfied_in_case, cases_for_preconditions, preconditions};
 				weak_immunity.push_back(wi_result);
 			}
 		}
@@ -806,7 +852,47 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 					satisfied_in_case.push_back(_case);
 				}
 
-				SubtreeResult weri_result{player_group, satisfied_in_case};
+				std::vector<std::vector<z3::Bool>> cases_for_preconditions = {};
+				std::vector<std::vector<std::vector<z3::Bool>>> preconditions = {};
+				
+				if(subtree_solved_with_preconditions) {
+					const json &preconditions_cases_given = weri["preconditions_for_player_group"];
+					for (const json &precondition_case : preconditions_cases_given)
+					{
+						std::vector<z3::Bool> _precond_case = {};
+						for (const json &_precond_case_entry : precondition_case)
+						{
+							// if (_precond_entry != "true")
+							// {
+								const std::string &_precond_e = _precond_case_entry;
+								_precond_case.push_back(parse_case(parser, _precond_e));
+							// }
+						}
+						cases_for_preconditions.push_back(_precond_case);
+					}
+					
+					
+					const json &preconditions_given_cases = weri["preconditions_for_player_group"];
+					for (const json &preconditions_for_case : preconditions_given_cases)
+					{
+						std::vector<std::vector<z3::Bool>> precondition_for_case = {};
+						for(const json &precondition : preconditions_for_case) {
+							std::vector<z3::Bool> _precond = {};
+							for (const json &_precond_entry : precondition)
+							{
+								// if (_precond_entry != "true")
+								// {
+									const std::string &_precond_e = _precond_entry;
+									_precond.push_back(parse_case(parser, _precond_e));
+								// }
+							}
+							precondition_for_case.push_back(_precond);
+						}
+						preconditions.push_back(precondition_for_case);
+					}
+				}
+
+				SubtreeResult weri_result{player_group, satisfied_in_case, cases_for_preconditions, preconditions};
 				weaker_immunity.push_back(weri_result);
 			}
 		}
@@ -846,7 +932,47 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 					satisfied_in_case.push_back(_case);
 				}
 
-				SubtreeResult cr_result{player_group, satisfied_in_case};
+				std::vector<std::vector<z3::Bool>> cases_for_preconditions = {};
+				std::vector<std::vector<std::vector<z3::Bool>>> preconditions = {};
+				
+				if(subtree_solved_with_preconditions) {
+					const json &preconditions_cases_given = cr["cases_for_preconditions"];
+					for (const json &precondition_case : preconditions_cases_given)
+					{
+						std::vector<z3::Bool> _precond_case = {};
+						for (const json &_precond_case_entry : precondition_case)
+						{
+							// if (_precond_entry != "true")
+							// {
+								const std::string &_precond_e = _precond_case_entry;
+								_precond_case.push_back(parse_case(parser, _precond_e));
+							// }
+						}
+						cases_for_preconditions.push_back(_precond_case);
+					}
+					
+					
+					const json &preconditions_given_cases = cr["preconditions_for_player_group"];
+					for (const json &preconditions_for_case : preconditions_given_cases)
+					{
+						std::vector<std::vector<z3::Bool>> precondition_for_case = {};
+						for(const json &precondition : preconditions_for_case) {
+							std::vector<z3::Bool> _precond = {};
+							for (const json &_precond_entry : precondition)
+							{
+								// if (_precond_entry != "true")
+								// {
+									const std::string &_precond_e = _precond_entry;
+									_precond.push_back(parse_case(parser, _precond_e));
+								// }
+							}
+							precondition_for_case.push_back(_precond);
+						}
+						preconditions.push_back(precondition_for_case);
+					}
+				}
+
+				SubtreeResult cr_result{player_group, satisfied_in_case, cases_for_preconditions, preconditions};
 				collusion_resilience.push_back(cr_result);
 			}
 		}
@@ -954,7 +1080,6 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 
 				for (const json &pr : node["subtree"]["practicality"])
 				{
-
 					const json &_case_pr = pr["case"];
 					std::vector<z3::Bool> _case = {};
 					for (const json &_case_entry : _case_pr)
@@ -1029,7 +1154,27 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 					index_utilities_storage++;
 
 					cu.utilities.push_back(utilities_set);
-					PracticalitySubtreeResult pr_sub_result{_case, cu};
+
+					std::vector<std::vector<z3::Bool>> preconditions = {};
+					
+					if(subtree_solved_with_preconditions) {
+						const json &preconditions_given = pr["preconditions_for_current_case"];
+						for (const json &precondition : preconditions_given)
+						{
+							std::vector<z3::Bool> _precond = {};
+							for (const json &_precond_entry : precondition)
+							{
+								// if (_precond_entry != "true")
+								// {
+									const std::string &_precond_e = _precond_entry;
+									_precond.push_back(parse_case(parser, _precond_e));
+								// }
+							}
+							preconditions.push_back(_precond);
+						}
+					}
+
+					PracticalitySubtreeResult pr_sub_result{_case, cu, preconditions};
 
 					practicality.push_back(pr_sub_result);
 
@@ -1155,12 +1300,6 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 		if (node["subtree"].contains("solved_for_weak_conditional_actions"))
 		{
 			type_cond_actions = node["subtree"]["solved_for_weak_conditional_actions"];
-		}
-
-		bool subtree_solved_with_preconditions = false;
-		if (node["subtree"].contains("solved_for_preconditions"))
-		{
-			subtree_solved_with_preconditions = node["subtree"]["solved_for_preconditions"];
 		}
 
 		Subtree *subtree(new Subtree(weak_immunity, weaker_immunity, collusion_resilience, practicality, cond_actions_honest_utility_pairs));

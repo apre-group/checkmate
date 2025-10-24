@@ -262,7 +262,9 @@ struct Condition {
 struct SubtreeResult {
 	std::vector<std::string> player_group;
 	std::vector<std::vector<z3::Bool>> satisfied_in_case;
-	std::vector<std::vector<z3::Bool>> preconditions_for_player_group;
+
+	std::vector<std::vector<z3::Bool>> cases_for_preconditions;
+	std::vector<std::vector<std::vector<z3::Bool>>> preconditions_for_player_group; //actually violated conditions
 };
 
 struct CondActionsUtilityPair {
@@ -274,7 +276,7 @@ struct CondActionsUtilityPair {
 struct PracticalitySubtreeResult {
 	std::vector<z3::Bool> _case;
 	ConditionalUtilities utilities;
-	std::vector<std::vector<z3::Bool>> preconditions_for_current_case;
+	std::vector<std::vector<z3::Bool>> preconditions_for_current_case; //actually violated
 };
 
 

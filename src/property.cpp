@@ -172,7 +172,7 @@ json parse_utility(const Input &input, std::vector<Utility> utility_to_parse) {
     return utility;
 }
 
-json parse_property_to_json(std::vector<SubtreeResult> property_result) {
+json parse_property_to_json(std::vector<SubtreeResult> property_result, bool preconditions) {
 
     json arr_res = json::array();
 
@@ -184,13 +184,33 @@ json parse_property_to_json(std::vector<SubtreeResult> property_result) {
             arr_cases.push_back(arr_case);
         }
 
-        json obj = {{"player_group", subtree_result.player_group}, {"satisfied_in_case", arr_cases}};
+		// parse cases_for_preconditions
+        json arr_cases_preconditions = json::array();
+        for(auto &sat_case: subtree_result.cases_for_preconditions) {
+            json arr_case_precond = parse_sat_case(sat_case);
+            arr_cases_preconditions.push_back(arr_case_precond);
+        }
+
+		// parse preconditions
+        json arr_preconditions = json::array(); // vec vec vec bool
+		if(preconditions) {
+			for(auto &precond_case: subtree_result.preconditions_for_player_group) { // precond is vec vec
+				json arr_preconditions_case = json::array();
+				for(auto &precond: precond_case) {
+					json arr_precond = parse_sat_case(precond);
+					arr_preconditions_case.push_back(arr_precond);
+				}
+				arr_preconditions.push_back(arr_preconditions_case);
+        	}
+		}
+
+        json obj = {{"player_group", subtree_result.player_group}, {"satisfied_in_case", arr_cases}, {"cases_for_preconditions", arr_cases_preconditions}, {"preconditions_for_player_group", arr_preconditions}};
         arr_res.push_back(obj);
     }
     return arr_res;
 }
 
-json parse_practicality_property_to_json(const Input &input, std::vector<PracticalitySubtreeResult> property_result) {
+json parse_practicality_property_to_json(const Input &input, std::vector<PracticalitySubtreeResult> property_result, bool preconditions) {
     json arr_pr = json::array();
     for(auto &subtree_result : property_result) {
         // parse case
@@ -235,23 +255,32 @@ json parse_practicality_property_to_json(const Input &input, std::vector<Practic
         //     utilities.push_back(utility);
         // }
 
-        json obj = {{"case", arr_case}, {"conditional_utilities", utilities}};
+		// parse preconditions
+        json arr_preconditions = json::array();
+		if(preconditions) {
+			for(auto &precond: subtree_result.preconditions_for_current_case) {
+				json arr_precond = parse_sat_case(precond);
+				arr_preconditions.push_back(arr_precond);
+        	}
+		}
+
+        json obj = {{"case", arr_case}, {"conditional_utilities", utilities}, {"preconditions_for_current_case", arr_preconditions}};
 
 		arr_pr.push_back(obj);
     }
     return arr_pr;
 }
 
-void print_subtree_result_to_file(const Input &input, std::string file_name, Subtree &subtree) {
+void print_subtree_result_to_file(const Input &input, std::string file_name, Subtree &subtree, bool preconditions) {
     std::ofstream outputFile(file_name);
     if (outputFile.is_open()) {
         // Convert the subtree object to JSON
         json subtree_json;
 
-        json arr_wi = parse_property_to_json(subtree.weak_immunity);
-        json arr_weri = parse_property_to_json(subtree.weaker_immunity);
-        json arr_cr = parse_property_to_json(subtree.collusion_resilience);
-        json arr_pr = parse_practicality_property_to_json(input, subtree.practicality);
+        json arr_wi = parse_property_to_json(subtree.weak_immunity, preconditions);
+        json arr_weri = parse_property_to_json(subtree.weaker_immunity, preconditions);
+        json arr_cr = parse_property_to_json(subtree.collusion_resilience, preconditions);
+        json arr_pr = parse_practicality_property_to_json(input, subtree.practicality, preconditions);
         json arr_honest_utility = json::array();
 
 
@@ -598,7 +627,8 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					// }
 					//input.set_reset_point(subtree);
 
-					subtree.violated_conditions.insert(subtree.violated_conditions.end(), subtree_result.preconditions_for_player_group.begin(), subtree_result.preconditions_for_player_group.end());
+					// TODO HERE
+					//subtree.violated_conditions.insert(subtree.violated_conditions.end(), subtree_result.preconditions_for_player_group.begin(), subtree_result.preconditions_for_player_group.end());
 					return false;
 				}
 			}
@@ -1166,7 +1196,9 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 						// 	subtree.problematic_group = group_nr;
 						// }
 						// input.set_reset_point(subtree);
-						subtree.violated_conditions.insert(subtree.violated_conditions.end(), subtree_result.preconditions_for_player_group.begin(), subtree_result.preconditions_for_player_group.end());
+						
+						// TODO Here
+						//subtree.violated_conditions.insert(subtree.violated_conditions.end(), subtree_result.preconditions_for_player_group.begin(), subtree_result.preconditions_for_player_group.end());
 						return false;
 					}
 				}
@@ -1543,7 +1575,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					for(auto const &subtree_res : subtree_result.utilities.utilities) {
 						if(subtree_res.size() == 0 && options.strong_conditional_actions) {
 							if(options.preconditions) {
-								subtree.violated_conditions = subtree_result.preconditions_for_current_case;
+								//TODO Here
+								//subtree.violated_conditions = subtree_result.preconditions_for_current_case;
 							}
 							return false;
 						}
@@ -1577,7 +1610,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 		if(options.preconditions) {
 			z3::Bool bool_obj;
-			subtree.violated_conditions = {{bool_obj.True()}};
+			//TODO Here
+			//subtree.violated_conditions = {{bool_obj.True()}};
 		}
 		return false;
 	}
@@ -2540,6 +2574,13 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		if (!input.stop_log)
 		{
 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
+
+			if(options.subtree && options.preconditions) {
+				PracticalitySubtreeResult subtree_result_pr;
+				subtree_result_pr._case = current_case;
+				subtree_result_pr.preconditions_for_current_case = input.root->violated_conditions;
+				subtree_results_pr.push_back(subtree_result_pr);
+			}
 		}
 		if (options.preconditions){
 			input.add_unsat_case(current_case);
@@ -2653,7 +2694,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	return result;
 }
 
-bool property_rec_subtree(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, size_t history, unsigned group_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case) {
+bool property_rec_subtree(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, size_t history, unsigned group_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case,  std::vector<std::vector<z3::Bool>> &violated_in_case, std::vector<std::vector<std::vector<z3::Bool>>> &preconditions_for_player_group) {
 	/*
 		only called for weak(er) immunity and collusion resilience
 		actual case splitting engine
@@ -2687,6 +2728,8 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 	if (split.null()) {
 		if (!input.stop_log){
 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
+			violated_in_case.push_back(current_case);
+			preconditions_for_player_group.push_back(input.root->violated_conditions);
 		}
 
 		return false;
@@ -2717,7 +2760,7 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 		std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
 		new_current_case.push_back(condition);
 
-		bool attempt = property_rec_subtree(solver, options, input, property, new_current_case, history, group_nr, satisfied_in_case);
+		bool attempt = property_rec_subtree(solver, options, input, property, new_current_case, history, group_nr, satisfied_in_case, violated_in_case, preconditions_for_player_group);
 
 		solver.pop();
 
@@ -2728,7 +2771,7 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 	return result;
 }
 
-bool property_rec_utility(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, std::vector<Utility> honest_utility, unsigned group_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case) {
+bool property_rec_utility(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, std::vector<Utility> honest_utility, unsigned group_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case, std::vector<std::vector<z3::Bool>> &violated_in_case, std::vector<std::vector<std::vector<z3::Bool>>> &preconditions_for_player_group) {
 	/*
 		only called for collusion resilience
 		actual case splitting engine
@@ -2763,6 +2806,8 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 	if (split.null()) {
 		if (!input.stop_log){
 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
+			violated_in_case.push_back(current_case);
+			preconditions_for_player_group.push_back(input.root->violated_conditions);
 		}
 
 		return false;
@@ -2792,7 +2837,7 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 		std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
 		new_current_case.push_back(condition);
 
-		bool attempt = property_rec_utility(solver, options, input, property, new_current_case, honest_utility, group_nr, satisfied_in_case);
+		bool attempt = property_rec_utility(solver, options, input, property, new_current_case, honest_utility, group_nr, satisfied_in_case, violated_in_case, preconditions_for_player_group);
 
 		solver.pop();
 
@@ -2803,7 +2848,7 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 	return result;
 }
 
-bool property_rec_nohistory(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, unsigned player_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case, std::vector<PracticalitySubtreeResult> &subtree_results_pr) {
+bool property_rec_nohistory(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, unsigned player_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case, std::vector<PracticalitySubtreeResult> &subtree_results_pr, std::vector<std::vector<z3::Bool>> &violated_in_case, std::vector<std::vector<std::vector<z3::Bool>>> &preconditions_for_player_group) {
 
 	/*
 		only called for w(er)i and practicality
@@ -2868,6 +2913,19 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 	if (split.null()) {
 		if (!input.stop_log){
 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
+			if(options.preconditions) {
+
+				if(property == PropertyType::Practicality) {
+					PracticalitySubtreeResult subtree_result_pr;
+					subtree_result_pr._case = current_case;
+					subtree_result_pr.preconditions_for_current_case = input.root->violated_conditions;
+					subtree_results_pr.push_back(subtree_result_pr);
+				} else {
+					violated_in_case.push_back(current_case);
+					preconditions_for_player_group.push_back(input.root->violated_conditions);
+				}
+				
+			}
 		}
 
 		return false;
@@ -2897,7 +2955,7 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 		std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
 		new_current_case.push_back(condition);
 
-		bool attempt = property_rec_nohistory(solver, options, input, property, new_current_case, player_nr, satisfied_in_case, subtree_results_pr);
+		bool attempt = property_rec_nohistory(solver, options, input, property, new_current_case, player_nr, satisfied_in_case, subtree_results_pr, violated_in_case, preconditions_for_player_group);
 
 		solver.pop();
 
@@ -3198,7 +3256,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 			subtree_result_player.player_group = players;
 			subtree_result_player.satisfied_in_case = {};
 
-			if (property_rec_subtree(solver, options, input, property, std::vector<z3::Bool>(), history, i+1, subtree_result_player.satisfied_in_case)){
+			if (property_rec_subtree(solver, options, input, property, std::vector<z3::Bool>(), history, i+1, subtree_result_player.satisfied_in_case, subtree_result_player.cases_for_preconditions, subtree_result_player.preconditions_for_player_group)){
 				std::cout << "YES, it is " << prop_name << output_text << players << "."  << std::endl;
 			} else {
 				std::cout << "NO, it is not " << prop_name << output_text << players << "." << std::endl;
@@ -3213,6 +3271,8 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 					if(std::equal(subtree_result.player_group.begin(), subtree_result.player_group.end(),subtree_result_player.player_group.begin())) {
 						found = true;
 						subtree_result.satisfied_in_case.insert(subtree_result.satisfied_in_case.end(), subtree_result_player.satisfied_in_case.begin(), subtree_result_player.satisfied_in_case.end());
+						subtree_result.cases_for_preconditions.insert(subtree_result.cases_for_preconditions.end(), subtree_result_player.cases_for_preconditions.begin(), subtree_result_player.cases_for_preconditions.end());
+						subtree_result.preconditions_for_player_group.insert(subtree_result.preconditions_for_player_group.end(), subtree_result_player.preconditions_for_player_group.begin(), subtree_result_player.preconditions_for_player_group.end());
 						break;
 					}
 				}
@@ -3269,10 +3329,10 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 		subtree_result_player.player_group = players;
 		subtree_result_player.satisfied_in_case = {};
 
-		if (property_rec_utility(solver, options, input, property, std::vector<z3::Bool>(), honest_utility, i+1, subtree_result_player.satisfied_in_case)){
+		if (property_rec_utility(solver, options, input, property, std::vector<z3::Bool>(), honest_utility, i+1, subtree_result_player.satisfied_in_case, subtree_result_player.cases_for_preconditions, subtree_result_player.preconditions_for_player_group)){
 			std::cout << "YES, it is collusion resilient against group " <<  players << "."  << std::endl;
 		} else {
-			std::cout << "NO, it is not  collusion resilient against group " << players << "." << std::endl;
+			std::cout << "NO, it is not collusion resilient against group " << players << "." << std::endl;
 		}
 
 		// check whether we already have a SubtreeResult for this player
@@ -3284,6 +3344,8 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 				if(std::equal(subtree_result.player_group.begin(), subtree_result.player_group.end(),subtree_result_player.player_group.begin())) {
 					found = true;
 					subtree_result.satisfied_in_case.insert(subtree_result.satisfied_in_case.end(), subtree_result_player.satisfied_in_case.begin(), subtree_result_player.satisfied_in_case.end());
+					subtree_result.cases_for_preconditions.insert(subtree_result.cases_for_preconditions.end(), subtree_result_player.cases_for_preconditions.begin(), subtree_result_player.cases_for_preconditions.end());
+					subtree_result.preconditions_for_player_group.insert(subtree_result.preconditions_for_player_group.end(), subtree_result_player.preconditions_for_player_group.begin(), subtree_result_player.preconditions_for_player_group.end());
 					break;
 				}
 			}
@@ -3375,8 +3437,11 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 		std::vector<std::vector<z3::Bool>> satisfied_in_case;
 		std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
 
+		std::vector<std::vector<z3::Bool>> violated_in_case;
+		std::vector<std::vector<std::vector<z3::Bool>>> preconditions;
+
 		std::cout << "What are the subtree's practical utilities?" << std::endl;
-		bool pr_result = property_rec_nohistory(solver, options, input, property, std::vector<z3::Bool>(), 0, satisfied_in_case, subtree_results_pr);
+		bool pr_result = property_rec_nohistory(solver, options, input, property, std::vector<z3::Bool>(), 0, satisfied_in_case, subtree_results_pr, violated_in_case, preconditions);
 
 		assert(pr_result);
 
@@ -3425,7 +3490,7 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 			std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
 
 			// i+1 in index2player while i in property_rec_nohistory is on purpose
-			if (property_rec_nohistory(solver, options, input, property, std::vector<z3::Bool>(), i, subtree_result_player.satisfied_in_case, subtree_results_pr)){
+			if (property_rec_nohistory(solver, options, input, property, std::vector<z3::Bool>(), i, subtree_result_player.satisfied_in_case, subtree_results_pr, subtree_result_player.cases_for_preconditions, subtree_result_player.preconditions_for_player_group)){
 				std::cout << "YES, it is " << prop_name << " for player " <<  players << "."  << std::endl;
 			} else {
 				std::cout << "NO, it is not " << prop_name << " for player " << players << "." << std::endl;
@@ -3440,6 +3505,8 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 					if(std::equal(subtree_result.player_group.begin(), subtree_result.player_group.end(),subtree_result_player.player_group.begin())) {
 						found = true;
 						subtree_result.satisfied_in_case.insert(subtree_result.satisfied_in_case.end(), subtree_result_player.satisfied_in_case.begin(), subtree_result_player.satisfied_in_case.end());
+						subtree_result.cases_for_preconditions.insert(subtree_result.cases_for_preconditions.end(), subtree_result_player.cases_for_preconditions.begin(), subtree_result_player.cases_for_preconditions.end());
+						subtree_result.preconditions_for_player_group.insert(subtree_result.preconditions_for_player_group.end(), subtree_result_player.preconditions_for_player_group.begin(), subtree_result_player.preconditions_for_player_group.end());
 						break;
 					}
 				}
@@ -3749,7 +3816,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		}
 
 		std::cout << "Print to file..." << std::endl;
-        print_subtree_result_to_file(input, file_name, subtree);
+        print_subtree_result_to_file(input, file_name, subtree, options.preconditions);
 
 	}
 
@@ -3901,7 +3968,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			}
 
 			std::cout << "Print to file..." << std::endl;
-        	print_subtree_result_to_file(input, file_name, subtree);
+        	print_subtree_result_to_file(input, file_name, subtree, options.preconditions);
 
 		}
 

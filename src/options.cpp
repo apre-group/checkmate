@@ -89,7 +89,8 @@ Options::Options(char **argv) {
 		bail("cannot combine modes for weak and strong conditional actions");
 
 	if(subtree) {
-		if(counterexamples || all_counterexamples || strategies || preconditions) {
+		//if(counterexamples || all_counterexamples || strategies || preconditions) {
+		if(counterexamples || all_counterexamples || strategies) { // we need to allow preconditions for conditional actions
 			bail("cannot combine subtree with any other option");
 		}
 	}
