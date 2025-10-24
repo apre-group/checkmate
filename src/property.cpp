@@ -1623,7 +1623,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					any_honest_practical = true;
 				}
 
-				if (choice.node->get_utilities().utilities.size() > 0)
+				if (choice.node->get_utilities().utilities.size() > 0 || (options.strong_conditional_actions && options.preconditions))
 				{
 					ConditionalUtilities honest_utilities_per_condition = choice.node->get_utilities();
 					for (int k = 0; k < honest_utilities_per_condition.condition.size(); k++)
@@ -1631,7 +1631,9 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 						honest_utilities_per_condition.condition[k] = (z3::conjunction({honest_utilities_per_condition.condition[k], branch.conditions[j].condition}));
 					}
 					honest_utilities.push_back(honest_utilities_per_condition);
-				}
+				} 
+
+
 				honest_choice.push_back(choice.action);
 				// branch.strategy = choice.action; // choose the honest action along the honest history
 				honest_index.push_back(i);
@@ -1715,7 +1717,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		// if we are at an honest node, our strategy must be the honest strategy
 		// honest_utilities.size() == branch.conditions.size(), that is we have
 		// one ConditionalUtility in honest_utilities per condition
-		assert(honest_utilities.size() == branch.conditions.size());
+		
+		assert(honest_utilities.size() == branch.conditions.size());	
 
 		for (const auto &conditional_hon_utility : honest_utilities)
 		{
