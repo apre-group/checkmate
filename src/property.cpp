@@ -1511,6 +1511,9 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					bool one_pr = false;
 					for(auto const &subtree_res : subtree_result.utilities.utilities) {
 						if(subtree_res.size() == 0 && options.strong_conditional_actions) {
+							if(options.preconditions) {
+								subtree.violated_conditions = subtree_result.preconditions_for_current_case;
+							}
 							return false;
 						}
 						else if (subtree_res.size() != 0){
@@ -1540,6 +1543,11 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		// if(options.counterexamples) {
 		// 	input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
 		// }
+
+		if(options.preconditions) {
+			z3::Bool bool_obj;
+			subtree.violated_conditions = {{bool_obj.True()}};
+		}
 		return false;
 	}
 
@@ -1593,10 +1601,22 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					// if(!options.all_counterexamples || !branch.reason.null()) {
 					// 	return result;
 					// }
-					if (!branch.reason.null() || options.strong_conditional_actions)
-					{
-						return result;
+					if(!options.preconditions) {
+						if (!branch.reason.null() || options.strong_conditional_actions)
+						{
+							return result;
+						}
 					}
+
+					if(options.preconditions && options.strong_conditional_actions) {
+						auto &viol_conds_hon_child = choice.node->violated_conditions;
+						for(auto &cond : viol_conds_hon_child) {
+							std::vector<z3::Bool> new_condition = {branch.conditions[j].condition};
+							new_condition.insert(new_condition.end(), cond.begin(), cond.end());
+							branch.violated_conditions.push_back(new_condition);
+						}
+					}
+					
 				}
 				else
 				{
@@ -1696,6 +1716,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		// honest_utilities.size() == branch.conditions.size(), that is we have
 		// one ConditionalUtility in honest_utilities per condition
 		assert(honest_utilities.size() == branch.conditions.size());
+
 		for (const auto &conditional_hon_utility : honest_utilities)
 		{
 			for (const auto &hon_utility : conditional_hon_utility.utilities)
@@ -1846,10 +1867,17 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							result = false;
 							every_honest_practical = false;
 
+							if(options.strong_conditional_actions && options.preconditions) {
+								//current child (deviating choice) is the counterexample together with all its practical histories/strategies,
+								std::vector<z3::Bool> new_condition = {branch.conditions[j].condition};
+								new_condition.push_back(child_condition);
+								branch.violated_conditions.push_back(new_condition);
+							}
+
 							// if(!options.all_counterexamples || !branch.reason.null()) {
 							// 	return result; //false
 							// }
-							if (options.strong_conditional_actions)
+							if (options.strong_conditional_actions && !options.preconditions)
 							{
 								return result; // false
 							}
@@ -1920,8 +1948,13 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			return condition_where_honest_practical;
 		}
 
-		assert(result);
-		return true;
+		if(options.strong_conditional_actions && options.preconditions) {
+			return result;
+		} else {
+			assert(result);
+			return true;
+		}
+		
 	}
 	else
 	{
@@ -2379,7 +2412,18 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 
 	else if (property == PropertyType::Practicality)
 	{
+		if(options.preconditions && options.strong_conditional_actions) {
+			input.root->reset_violated_conditions();
+		}
+
 		bool pr_result = practicality_rec_old(input, options, solver, input.root.get(), {}, true);
+		
+		if(!pr_result) {
+			if(options.preconditions && options.strong_conditional_actions) {
+				input.violated_conditions_current_case.insert(input.violated_conditions_current_case.end(), input.root->violated_conditions.begin(), input.root->violated_conditions.end());
+			}
+		}
+		
 		// if(pr_result && options.counterexamples && !input.root->branch().honest) {
 		// 	CeCase pr_ce_case;
 		// 	std::vector<CeChoice> pr_choices;

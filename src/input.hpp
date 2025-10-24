@@ -274,6 +274,7 @@ struct CondActionsUtilityPair {
 struct PracticalitySubtreeResult {
 	std::vector<z3::Bool> _case;
 	ConditionalUtilities utilities;
+	std::vector<std::vector<z3::Bool>> preconditions_for_current_case;
 };
 
 
