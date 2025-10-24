@@ -1601,7 +1601,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					// if(!options.all_counterexamples || !branch.reason.null()) {
 					// 	return result;
 					// }
-					if(!options.preconditions) {
+					if(!(options.preconditions && options.strong_conditional_actions)) {
 						if (!branch.reason.null() || options.strong_conditional_actions)
 						{
 							return result;
@@ -1631,8 +1631,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 						honest_utilities_per_condition.condition[k] = (z3::conjunction({honest_utilities_per_condition.condition[k], branch.conditions[j].condition}));
 					}
 					honest_utilities.push_back(honest_utilities_per_condition);
-				} 
-
+				}
 
 				honest_choice.push_back(choice.action);
 				// branch.strategy = choice.action; // choose the honest action along the honest history
@@ -1711,7 +1710,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		children.push_back(children_per_condition);
 		children_actions.push_back(actions_per_condition);
 	}
-
+	
 	if (branch.honest)
 	{
 		// if we are at an honest node, our strategy must be the honest strategy
@@ -1827,7 +1826,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							{
 								found = true;
 								// need to insert strategy after honest at right point in vector
-								if (k == honest_index[j] && !honest_added){
+								if (options.strategies && k == honest_index[j] && !honest_added){
 
 									honest_added = true;
 									
@@ -1839,9 +1838,11 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 									honest_utility.strategy_conditions.insert(honest_utility.strategy_conditions.end(), honest_conditions.begin(), honest_conditions.end());
 								}
 								
-								honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
-								honest_utility.strategy_conditions.insert(honest_utility.strategy_conditions.end(), utility.strategy_conditions.begin(), utility.strategy_conditions.end());
-								
+								if(options.strategies) {
+									honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+									honest_utility.strategy_conditions.insert(honest_utility.strategy_conditions.end(), utility.strategy_conditions.begin(), utility.strategy_conditions.end());
+								}
+
 								break;
 							}
 						}
@@ -1897,7 +1898,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				}
 
 				
-				if(k == honest_index[j]) {
+				if(k == honest_index[j] && options.strategies) {
 					honest_utility.strategy_vector.push_back(honest_choice[j]);
 					honest_utility.strategy_conditions.push_back(branch.conditions[j].condition);
 
@@ -1971,8 +1972,10 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		// merge the conditional utilities for each condition
 		std::vector<ConditionalUtilities> practical_utilities_per_condition;
 		std::vector<ConditionalUtilities> practical_utilities_per_condition_storage;
+		std::vector<std::vector<std::string>> preceding_actions;
 		for (size_t j = 0; j < branch.conditions.size(); j++)
 		{
+			std::vector<std::string> preceding_actions_for_condition;
 			ConditionalUtilities cu;
 			unsigned int k = 0;
 			for (const auto &child : children[j])
@@ -1991,13 +1994,15 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 						ut_set.insert(to_insert);
 					}
 					cu.utilities.push_back(ut_set);
+					preceding_actions_for_condition.push_back(children_actions[j][k]);
 				}
 				k++;
 			}
 			practical_utilities_per_condition.push_back(cu);
-
+			preceding_actions.push_back(preceding_actions_for_condition);
 
 			ConditionalUtilities cu1;
+			std::vector<std::string> preceding_action;
 			for (const auto &child : children[j])
 			{
 				for (size_t i = 0; i < child.condition.size(); i++)
@@ -2018,7 +2023,6 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 		for (size_t j = 0; j < branch.conditions.size(); j++)
 		{
-
 			z3::Frame f6(solver);
 			solver.assert_(branch.conditions[j].condition);
 
@@ -2042,7 +2046,6 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				UtilityTuplesSet &practical_utilities_set = conditional_utilites_for_condition.utilities[k];
 				for (const UtilityTuple &candidate : practical_utilities_set)
 				{
-
 					// work out whether to drop `candidate`
 					// this player's utility
 					auto dominatee = candidate[branch.player];
@@ -2053,7 +2056,6 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					//for (size_t m = 0; m < conditional_utilites_for_condition.condition.size(); m++)
 					for (size_t m = 0; m < practical_utilities_per_condition_storage[j].condition.size(); m++)
 					{
-
 						if(options.count_calls) {
 							calls_pr++;
 						}
@@ -2077,14 +2079,17 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							{
 								contained = true;
 
-								if(!action_added) {
+								if(!action_added && options.strategies) {
 									action_added = true;
-									candidate.strategy_vector.push_back(children_actions[j][k]);
+									//candidate.strategy_vector.push_back(children_actions[j][k]);
+									candidate.strategy_vector.push_back(preceding_actions[j][k]);
 									candidate.strategy_conditions.push_back(branch.conditions[j].condition);
 								}
 
-								candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
-								candidate.strategy_conditions.insert(candidate.strategy_conditions.end(), utility.strategy_conditions.begin(), utility.strategy_conditions.end());
+								if(options.strategies) {
+									candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+									candidate.strategy_conditions.insert(candidate.strategy_conditions.end(), utility.strategy_conditions.begin(), utility.strategy_conditions.end());
+								}
 								break;
 							}
 						}
@@ -2106,7 +2111,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							}
 							if (solver.solve({condition}) == z3::Result::SAT)
 							{
-								if (dominated){
+								if (dominated && options.strategies){
 									candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
 									candidate.strategy_conditions.insert(candidate.strategy_conditions.end(), utility.strategy_conditions.begin(), utility.strategy_conditions.end());
 								}
@@ -2136,6 +2141,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				// pop conditional_utilites_for_condition.condition[k], done implicitly because the frame dies
 			}
 
+			
 			// iterate over practical_utilities_per_condition[j] and drop remove set
 			for (auto &utilities_set : practical_utilities_per_condition[j].utilities)
 			{
