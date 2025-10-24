@@ -268,6 +268,7 @@ void print_subtree_result_to_file(const Input &input, std::string file_name, Sub
         subtree_json["subtree"]["practicality"] = arr_pr;
         subtree_json["subtree"]["honest_utility"] = arr_honest_utility;
 		subtree_json["subtree"]["solved_for_weak_conditional_actions"] = subtree.solved_weak_cond_actions;
+		subtree_json["subtree"]["solved_for_preconditions"] = subtree.solved_for_preconditions;
 
         // Print the JSON representation
         outputFile << subtree_json.dump(4); // Pretty print with 4 spaces
@@ -508,6 +509,16 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 		if(!subtree.solved_weak_cond_actions && options.weak_conditional_actions) {
 			std::cerr << "checkmate: subtree is solved for strong conditional actions. Thus, supertree cannot be solved for weak conditional actions... " << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		if(subtree.solved_for_preconditions & !options.preconditions) {
+			std::cerr << "checkmate: subtree is solved with preconditions. Thus, supertree cannot be solved without preconditions... " << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		if(!subtree.solved_for_preconditions & options.preconditions) {
+			std::cerr << "checkmate: subtree is solved without preconditions. Thus, supertree cannot be solved with preconditions... " << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 
@@ -1057,6 +1068,16 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 			std::exit(EXIT_FAILURE);
 		}
 
+		if(subtree.solved_for_preconditions & !options.preconditions) {
+			std::cerr << "checkmate: subtree is solved with preconditions. Thus, supertree cannot be solved without preconditions... " << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		if(!subtree.solved_for_preconditions & options.preconditions) {
+			std::cerr << "checkmate: subtree is solved without preconditions. Thus, supertree cannot be solved with preconditions... " << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
 		// look up current player_group:
 		// 		if disj_of_cases (in satisfied_for_case) that is equivalent to current case or weaker we return true
 		//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
@@ -1478,6 +1499,16 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 		if(!subtree.solved_weak_cond_actions && options.weak_conditional_actions) {
 			std::cerr << "checkmate: subtree is solved for strong conditional actions. Thus, supertree cannot be solved for weak conditional actions... " << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		if(subtree.solved_for_preconditions & !options.preconditions) {
+			std::cerr << "checkmate: subtree is solved with preconditions. Thus, supertree cannot be solved without preconditions... " << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+
+		if(!subtree.solved_for_preconditions & options.preconditions) {
+			std::cerr << "checkmate: subtree is solved without preconditions. Thus, supertree cannot be solved with preconditions... " << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 
@@ -3710,6 +3741,13 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		} else {
 			subtree.solved_weak_cond_actions = false;
 		}
+
+		if(options.preconditions) {
+			subtree.solved_for_preconditions = true;
+		} else {
+			subtree.solved_for_preconditions = false;
+		}
+
 		std::cout << "Print to file..." << std::endl;
         print_subtree_result_to_file(input, file_name, subtree);
 
@@ -3855,6 +3893,14 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			} else {
 				subtree.solved_weak_cond_actions = false;
 			}
+
+			if(options.preconditions) {
+				subtree.solved_for_preconditions = true;
+			} else {
+				subtree.solved_for_preconditions = false;
+			}
+
+			std::cout << "Print to file..." << std::endl;
         	print_subtree_result_to_file(input, file_name, subtree);
 
 		}

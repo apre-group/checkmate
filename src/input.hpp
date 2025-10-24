@@ -285,6 +285,7 @@ class Subtree : public Node {
 	mutable uint64_t problematic_group = 0;
 	mutable ConditionalUtilities utilities;
 	mutable bool solved_weak_cond_actions = false;
+	mutable bool solved_for_preconditions = false;
 
 	NodeType type() const override { return NodeType::SUBTREE; }
 

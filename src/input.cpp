@@ -1157,8 +1157,15 @@ static Node *load_tree(const Input &input, Parser &parser, const json &node, boo
 			type_cond_actions = node["subtree"]["solved_for_weak_conditional_actions"];
 		}
 
+		bool subtree_solved_with_preconditions = false;
+		if (node["subtree"].contains("solved_for_preconditions"))
+		{
+			subtree_solved_with_preconditions = node["subtree"]["solved_for_preconditions"];
+		}
+
 		Subtree *subtree(new Subtree(weak_immunity, weaker_immunity, collusion_resilience, practicality, cond_actions_honest_utility_pairs));
 		subtree->solved_weak_cond_actions = type_cond_actions;
+		subtree->solved_for_preconditions = subtree_solved_with_preconditions;
 		return subtree;
 	}
 
