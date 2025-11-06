@@ -99,7 +99,8 @@ bool duplicate_exists(HistoryChoice &entry, std::vector<HistoryChoice> &choices)
 
 struct CeChoice{
 	std::string player;
-	std::vector<std::string> choices;
+	std::vector<z3::Bool> conditions; // conditions[i] corresponds to choices[i]
+	std::vector<std::vector<std::string>> choices;
 	std::vector<std::string> history;
 };
 
@@ -394,7 +395,7 @@ class Branch final : public Node {
 
 	mutable uint64_t problematic_group;
 	mutable ConditionalUtilities practical_utilities;
-	mutable std::vector<std::string> counterexample_choices;
+	mutable std::vector<std::vector<std::string>> counterexample_choices; // one vec string per condition
 
 	NodeType type() const override { return NodeType::BRANCH; }
 
@@ -434,14 +435,20 @@ class Branch final : public Node {
 		UNREACHABLE;
 	}
 
-	// void reset_counterexample_choices() const {
-	// 	counterexample_choices = {};
-	// 	for (auto& choice: choices) {
-	// 		if (!choice.node->is_leaf() && !choice.node->is_subtree()) {
-	// 			choice.node->branch().reset_counterexample_choices();
-	// 		}
-	// 	}
-	// }
+	void reset_counterexample_choices() const {
+		counterexample_choices = {};
+		for(size_t i = 0; i < conditions.size(); i++) {
+			counterexample_choices.push_back({});
+		}
+
+		for(auto &condition : conditions) {
+			for (auto& choice: condition.children) {
+				if (!choice.node->is_leaf() && !choice.node->is_subtree()) {
+					choice.node->branch().reset_counterexample_choices();
+				}
+			}
+		}
+	}
 
 	// std::vector<z3::Bool> store_reason() const {
 
@@ -535,36 +542,40 @@ class Branch final : public Node {
 	// 	return;
 	// }
 
-	// std::vector<std::vector<std::string>> store_counterexample_choices() const {
+	std::vector<std::vector<std::vector<std::string>>> store_counterexample_choices() const {
 
-	// 	std::vector<std::vector<std::string>> counterexample_choices_vector = {counterexample_choices};
+		std::vector<std::vector<std::vector<std::string>>> counterexample_choices_vector = {counterexample_choices};
 
-	// 	for (const auto& child: choices){
-	// 		if (!child.node->is_leaf() && !child.node->is_subtree()){
-	// 			std::vector<std::vector<std::string>> child_ces = child.node->branch().store_counterexample_choices();
-	// 			counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
-	// 		}
-	// 	}
+		for(auto &condition : conditions) {
+			for (const auto& child: condition.children){
+				if (!child.node->is_leaf() && !child.node->is_subtree()){
+					std::vector<std::vector<std::vector<std::string>>> child_ces = child.node->branch().store_counterexample_choices();
+					counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
+				}
+			}
+		}
 
-	// 	return counterexample_choices_vector;
-	// }
+		return counterexample_choices_vector;
+	}
 
-	// void restore_counterexample_choices(std::vector<std::vector<std::string>> &ces) const {
+	void restore_counterexample_choices(std::vector<std::vector<std::vector<std::string>>> &ces) const {
 
-	// 	if (ces.size() == 0) {
-	// 		return;
-	// 	}
-	// 	counterexample_choices = ces[0];
-	// 	ces.erase(ces.begin());
+		if (ces.size() == 0) {
+			return;
+		}
+		counterexample_choices = ces[0];
+		ces.erase(ces.begin());
 
-	// 	for (const auto& child: this->branch().choices){
-	// 		if (!child.node->is_leaf() && !child.node->is_subtree()){
-	// 		child.node->branch().restore_counterexample_choices(ces);
-	// 		}
-	// 	}
+		for(auto &condition : conditions) {
+			for (const auto& child: condition.children){
+				if (!child.node->is_leaf() && !child.node->is_subtree()){
+					child.node->branch().restore_counterexample_choices(ces);
+				}
+			}
+		}
 
-	// 	return;
-	// }
+		return;
+	}
 
 
 	void mark_honest(const HonestNode* history) const {
@@ -872,108 +883,121 @@ struct Input {
 		}
 	}
 
-	// void compute_cecase(std::vector<size_t> player_group, PropertyType property) const {
-	// 	CeCase new_ce_case;
+	void compute_cecase(std::vector<size_t> player_group, PropertyType property) const {
 
-	// 	new_ce_case._case = {};
-	// 	for (auto player : player_group) {
-	// 		new_ce_case.player_group.push_back(players[player]);
-	// 	}
+		CeCase new_ce_case;
 
-	// 	if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
-	// 		new_ce_case.counterexample = root.get()->compute_wi_ce(players, {}, player_group);
-	// 	} else if (property == PropertyType::CollusionResilience) {
-	// 		new_ce_case.counterexample = root.get()->compute_cr_ce(players, {}, player_group);
-	// 	}
+		new_ce_case._case = {};
+		for (auto player : player_group) {
+			new_ce_case.player_group.push_back(players[player]);
+		}
 
-	// 	counterexamples.push_back(new_ce_case);
-	// }
+		if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
+			new_ce_case.counterexample = root.get()->compute_wi_ce(players, {}, player_group);
+			std::cout << "Lemon 34 " << new_ce_case.counterexample.size() << std::endl;
+			for(auto entry : new_ce_case.counterexample) {
+				std::cout << entry.player << " -- " << entry.conditions << " -- " << entry.choices << " -- " << entry.history << std::endl;
+			}
+		} else if (property == PropertyType::CollusionResilience) {
+			//new_ce_case.counterexample = root.get()->compute_cr_ce(players, {}, player_group);
+		}
 
-	// void add_case2ce(std::vector<z3::Bool> _case) const {
-	// 	// the empty case has a counterexample -> no case splitting
-	// 	// case splitting -> the empty case has no counterexample
-	// 	for (CeCase& ce: counterexamples){
-	// 		if (ce._case.size() == 0){
-	// 			ce._case = _case;
-	// 		}
-	// 	}
-	// }
+		counterexamples.push_back(new_ce_case);
+	}
 
-	// void print_counterexamples(const Options &options, bool is_wi, bool is_cr) const {
-	// 	if(is_wi || is_cr) {
-	// 		std::cout << std::endl;
-	// 		for (CeCase ce_case : counterexamples){
-	// 			std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-	// 			if(ce_case.counterexample.size() == 0) {
-	// 				if(is_wi) {
-	// 					if(options.supertree) {
-	// 						std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history. Run subtree along honest history in default mode with option counterexamples." << std::endl;
-	// 					} else {
-	// 						std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history." << std::endl;
-	// 					}
-	// 				}
-	// 				else if(is_cr) {
-	// 					if(options.supertree) {
-	// 						std::cout << "Group " << ce_case.player_group << " can deviate profitably. Run subtree along honest history in default mode with option counterexamples." << std::endl;
-	// 					} else {
-	// 						std::cout << "Group " << ce_case.player_group << " can deviate profitably." << std::endl;
-	// 					}
-	// 				}
-	// 			} else {
-	// 				if(is_wi){
-	// 					std::cout << "Player " << ce_case.player_group[0] << " can be harmed, if" << std::endl;
-	// 				}
-	// 				else if(is_cr){
-	// 					std::cout << "Group " << ce_case.player_group << " can deviate profitably, if" << std::endl;
-	// 				}
-	// 				for (CeChoice ce_choice : ce_case.counterexample){
-	// 					std::cout
-	// 						<< "\tPlayer "
-	// 						<< ce_choice.player
-	// 						<< " takes one of the actions "
-	// 						<< ce_choice.choices
-	// 						<< " after history "
-	// 						<< ce_choice.history
-	// 						<< std::endl;
-	// 				}
-	// 				if(options.supertree) {
-	// 					std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
-	// 				}
-	// 			}
+	void add_case2ce(std::vector<z3::Bool> _case) const {
+		// the empty case has a counterexample -> no case splitting
+		// case splitting -> the empty case has no counterexample
+		for (CeCase& ce: counterexamples){
+			if (ce._case.size() == 0){
+				ce._case = _case;
+			}
+		}
+	}
 
-	// 		}
-	// 	} else {
-	// 		for (CeCase ce_case : counterexamples){
-	// 			if(ce_case.player_group.size() == 0) {
-	// 				if(options.supertree) {
-	// 					// user should check ce in subtree mode manually
-	// 					std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-	// 					std::cout << "The subtree after history " << ce_case.counterexample[0].history << " is not practical. Run subtree in default mode with option counterexamples." << std::endl;
-	// 				} else {
-	// 					assert(!options.subtree);
-	// 					std::cout << "Practical histories that extend supertree counterexamples for case: " << ce_case._case <<  std::endl;
-	// 					for(auto history : ce_case.counterexample) {
-	// 						std::cout << history.choices << std::endl;
-	// 					}
-	// 				}
-	// 			} else {
-	// 				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-	// 				std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
-	// 				std::cout << "Practical histories:" << std::endl;
-	// 				for(auto history : ce_case.counterexample) {
-	// 					std::vector<std::string> history_to_print;
-	// 					history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
-	// 					history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
-	// 					std::cout << history_to_print << std::endl;
-	// 				}
-	// 				if(options.supertree) {
-	// 					std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
-	// 				}
-	// 			}
-	// 		}
-	// 	}
+	void print_counterexamples(const Options &options, bool is_wi, bool is_cr) const {
+		if(is_wi || is_cr) {
+			std::cout << std::endl;
+			for (CeCase ce_case : counterexamples){
+				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+				if(ce_case.counterexample.size() == 0) {
+					if(is_wi) {
+						if(options.supertree) {
+							std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history. Run subtree along honest history in default mode with option counterexamples." << std::endl;
+						} else {
+							std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history." << std::endl;
+						}
+					}
+					else if(is_cr) {
+						if(options.supertree) {
+							std::cout << "Group " << ce_case.player_group << " can deviate profitably. Run subtree along honest history in default mode with option counterexamples." << std::endl;
+						} else {
+							std::cout << "Group " << ce_case.player_group << " can deviate profitably." << std::endl;
+						}
+					}
+				} else {
+					if(is_wi){
+						std::cout << "Player " << ce_case.player_group[0] << " can be harmed, if" << std::endl;
+					}
+					else if(is_cr){
+						std::cout << "Group " << ce_case.player_group << " can deviate profitably, if" << std::endl;
+					}
+					for (CeChoice ce_choice : ce_case.counterexample){
+						std::cout
+							<< "\tAfter history "
+							<< ce_choice.history
+							<< " player "
+							<< ce_choice.player
+							<< std::endl;
 
-	// }
+							for (size_t i = 0; i < ce_choice.conditions.size(); i++) {
+								std::cout
+									<< "\t\ttakes one of the actions "
+									<< ce_choice.choices[i]
+									<< " for condition "
+									<< ce_choice.conditions[i]
+									<< std::endl;
+							}
+					}
+					if(options.supertree) {
+						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
+					}
+				}
+
+			}
+		}
+		// else {
+		// 	for (CeCase ce_case : counterexamples){
+		// 		if(ce_case.player_group.size() == 0) {
+		// 			if(options.supertree) {
+		// 				// user should check ce in subtree mode manually
+		// 				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+		// 				std::cout << "The subtree after history " << ce_case.counterexample[0].history << " is not practical. Run subtree in default mode with option counterexamples." << std::endl;
+		// 			} else {
+		// 				assert(!options.subtree);
+		// 				std::cout << "Practical histories that extend supertree counterexamples for case: " << ce_case._case <<  std::endl;
+		// 				for(auto history : ce_case.counterexample) {
+		// 					std::cout << history.choices << std::endl;
+		// 				}
+		// 			}
+		// 		} else {
+		// 			std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+		// 			std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
+		// 			std::cout << "Practical histories:" << std::endl;
+		// 			for(auto history : ce_case.counterexample) {
+		// 				std::vector<std::string> history_to_print;
+		// 				history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
+		// 				history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
+		// 				std::cout << history_to_print << std::endl;
+		// 			}
+		// 			if(options.supertree) {
+		// 				std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
+		// 			}
+		// 		}
+		// 	}
+		// }
+
+	}
 
 	void add_unsat_case(std::vector<z3::Bool> _case) const {
 		unsat_cases.push_back(_case);

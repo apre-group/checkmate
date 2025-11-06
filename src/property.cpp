@@ -699,8 +699,12 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			for (size_t i = 0; i < branch.conditions.size(); i++)
 			{
 
+				std::cout << "***********************lemon Condition same and along honest  " << branch.conditions[i] << std::endl;
+
 				z3::Frame f1(solver);
 				solver.assert_(branch.conditions[i].condition);
+
+				std::cout << "***********************lemon Condition same and along honest  A " << std::endl;
 
 				// while we refine the case by adding a case split, we may have to prune
 				// the tree of contradictory actions. In practice, we can ignore the
@@ -708,9 +712,10 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				if(options.count_calls) {
 					weaker ? calls_weri++ : calls_wi++;
 				}
+				std::cout << "***********************lemon Condition same and along honest  B " << std::endl;
 				if (solver.solve() != z3::Result::UNSAT)
 				{
-
+					std::cout << "***********************lemon Condition same and along honest  C " << std::endl;
 					at_least_one_non_contradictory_condition = true;
 
 					auto &honest_choice = branch.get_honest_child(i);
@@ -724,6 +729,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					// the honest choice must be weak immune
 					if (weak_immunity_rec(input, solver, options, subtree, player, weaker, consider_prob_groups))
 					{
+						std::cout << "***********************lemon Condition same and along honest WTH " << std::endl;
 						// if (consider_prob_groups) {
 						// 	branch.problematic_group = player + 1;
 						// }
@@ -735,6 +741,11 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					}
 					else
 					{
+						if(subtree->is_branch())
+							std::cout << "***********************lemon Condition same and along honest cont  " << subtree->branch().counterexample_choices << std::endl;
+						
+						std::cout << "***********************lemon Condition same and along honest cont  WTH2 " << std::endl;
+
 						if (branch.reason.null())
 						{
 							branch.reason = subtree->reason;
@@ -871,6 +882,8 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		bool result_top_level = true;
 		for (size_t j = 0; j < branch.conditions.size(); j++)
 		{
+			std::cout << "***********************lemon Condition  " << branch.conditions[j] << std::endl;
+					
 			z3::Frame f3(solver);
 			solver.assert_(branch.conditions[j].condition);
 
@@ -887,21 +900,27 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				bool result = true;
 				z3::Bool reason;
 				unsigned reset_index;
-				unsigned i = 0;
+				//unsigned i = 0;
+				
 				for (const Choice &choice : branch.conditions[j].children)
 				{
+					std::cout << "LEMON " << branch.conditions[j].condition << " -- " << choice.action << std::endl;
 					if (!weak_immunity_rec(input, solver, options, choice.node, player, weaker, consider_prob_groups))
 					{
+						std::cout << "LEMONN " << branch.conditions[j].condition << " -- " << choice.action << std::endl;
 						if (choice.node->reason.null()){
-							// if (options.counterexamples) {
-							// 	branch.counterexample_choices.push_back(choice.action);
-							//  }
+							std::cout << "LEMONN YES" << std::endl;
+							if (options.counterexamples) {
+								std::cout << "LEMONN YESYESYES" << std::endl;
+								branch.counterexample_choices[j].push_back(choice.action);
+							}
 							// if (!options.all_counterexamples){
 							//  	return false;
 							// } else {
 								result = false;
 							// }
 						} else {
+							std::cout << "LEMONNN " << branch.conditions[j].condition << " -- " << choice.action << std::endl<< std::endl;
 							if (result && reason.null()){
 								reason = choice.node->reason;
 								// reset_index = i;
@@ -931,8 +950,13 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 							}
 							
 						}
+					
+						if(!options.all_counterexamples ) {
+							std::cout << "----> Lemon  " << branch.counterexample_choices[j] << std::endl;
+							break; // go to next condition
+						}
 					}
-					i++;
+					//i++;
 				}
 				if (!reason.null())
 				{
@@ -2434,35 +2458,35 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			// problematic groups are only considered when we haven't found a case split point yet
 
 			bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity, true);
-			
+		
 			if (!weak_immune_for_player)
 			{
 				if(options.preconditions && options.strong_conditional_actions) {
 					input.violated_conditions_current_case.insert(input.violated_conditions_current_case.end(), input.root->violated_conditions.begin(), input.root->violated_conditions.end());
 				}
 
-				// if (options.counterexamples && input.root->reason.null()){
-				// 	is_unsat = true;
-				// 	std::vector<size_t> pl = {player};
-				// 	input.compute_cecase(pl, property);
-				// 	input.root.get()->reset_counterexample_choices();
-				// }
+				if (options.counterexamples && input.root->reason.null()){
+					is_unsat = true;
+					std::vector<size_t> pl = {player};
+					input.compute_cecase(pl, property);
+					input.root.get()->reset_counterexample_choices();
+				}
 				if (!options.all_counterexamples && input.root->reason.null() && !options.preconditions)
 				{
 					return false;
 				}
-				// else if ((!options.all_counterexamples || !is_unsat) && !input.root->reason.null() && reason.null()) {
-				// 	reason = input.root->reason;
-				// 	current_reset_point = input.reset_point;
-				// 	problematic_group_storage = input.root->store_problematic_groups();
-				// 	reason_storage = input.root->store_reason();
-				// }
+				else if ((!options.all_counterexamples || !is_unsat) && !input.root->reason.null() && reason.null()) {
+					reason = input.root->reason;
+					// current_reset_point = input.reset_point;
+					// problematic_group_storage = input.root->store_problematic_groups();
+					// reason_storage = input.root->store_reason();
+				}
 				result = false;
 			}
 
-			// input.root.get()->reset_counterexample_choices();
-			//  input.root->reset_reason();
-			// }
+			input.root.get()->reset_counterexample_choices();
+			input.root->reset_reason();
+			
 		}
 		// if (!options.all_counterexamples) {
 		// 	if (!reason.null()){
@@ -2530,33 +2554,33 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 						input.violated_conditions_current_case.insert(input.violated_conditions_current_case.end(), input.root->violated_conditions.begin(), input.root->violated_conditions.end());
 					}
 
-					// if (options.counterexamples && input.root->reason.null()){
-					// 	is_unsat = true;
-					// 	std::vector<size_t> pl;
-					// 	for (size_t player = 0; player < input.players.size(); player++) {
-					// 		if (group[player]) {
-					// 			pl.push_back(player);
-					// 		}
-					// 	}
-					// 	input.compute_cecase(pl, property);
-					// 	input.root.get()->reset_counterexample_choices();
-					// }
+					if (options.counterexamples && input.root->reason.null()){
+						is_unsat = true;
+						std::vector<size_t> pl;
+						for (size_t player = 0; player < input.players.size(); player++) {
+							if (group[player]) {
+								pl.push_back(player);
+							}
+						}
+						input.compute_cecase(pl, property);
+						input.root.get()->reset_counterexample_choices();
+					}
 
-					// if (!options.all_counterexamples && input.root->reason.null()){
-					// 	return false;
-					// } else if ((!options.all_counterexamples || !is_unsat ) && !input.root->reason.null() && reason.null()) {
-					// 	reason = input.root->reason;
-					// 	current_reset_point = input.reset_point;
-					// 	problematic_group_storage = input.root->store_problematic_groups();
-					// 	reason_storage = input.root->store_reason();
-					// }
+					if (!options.all_counterexamples && input.root->reason.null()){
+						return false;
+					} else if ((!options.all_counterexamples || !is_unsat ) && !input.root->reason.null() && reason.null()) {
+						reason = input.root->reason;
+						// current_reset_point = input.reset_point;
+						// problematic_group_storage = input.root->store_problematic_groups();
+						// reason_storage = input.root->store_reason();
+					}
 					result = false;
 					// } else {
 					//input.solved_for_group[binary_counter] = true;
 				}
 
-				// input.root.get()->reset_counterexample_choices();
-				//input.root->reset_reason();
+				input.root.get()->reset_counterexample_choices();
+				input.root->reset_reason();
 			//}
 		}
 		// if (!options.all_counterexamples) {
@@ -2650,9 +2674,9 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 			}
 		}
 
-		// if(options.counterexamples && property == PropertyType::Practicality && !input.root->honest) {
-		// 	input.add_case2ce(current_case);
-		// }
+		if(options.counterexamples && property == PropertyType::Practicality && !input.root->honest) {
+			input.add_case2ce(current_case);
+		}
 
 		return true;
 	}
@@ -2691,9 +2715,9 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 		}
 
-		// if (options.counterexamples){
-		// 	input.add_case2ce(current_case);
-		// }
+		if (options.counterexamples){
+			input.add_case2ce(current_case);
+		}
 
 		if(options.all_cases && options.strategies && property == PropertyType::CollusionResilience) {
 			input.root->reset_violation_cr();
@@ -2711,10 +2735,10 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		violation = input.root->store_violation_cr();
 	}
 
-	// std::vector<std::vector<std::string>> ce_storage;
-	// if (options.counterexamples && property != PropertyType::Practicality) {
-	// 	ce_storage = input.root->store_counterexample_choices();
-	// }
+	std::vector<std::vector<std::vector<std::string>>> ce_storage;
+	if (options.counterexamples && property != PropertyType::Practicality) {
+		ce_storage = input.root->store_counterexample_choices();
+	}
 
 	// std::vector<bool> solved_for_storage;
 	// std::vector<uint64_t> problematic_groups;
@@ -2752,15 +2776,15 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 		solver.pop();
 
-		// if (property != PropertyType::Practicality) {
+		if (property != PropertyType::Practicality) {
 		// 	// reset the branch.problematic_group for all branches to presplit state, such that the other case split starts at the same point
 		// 	input.root->restore_problematic_groups(problematic_groups);
 		// 	input.restore_solved_for(solved_for_storage);
 
-		// 	if (options.counterexamples){
-		// 		input.root->restore_counterexample_choices(ce_storage);
-		// 	}
-		// }
+			if (options.counterexamples){
+				input.root->restore_counterexample_choices(ce_storage);
+			}
+		}
 
 		if (property == PropertyType::CollusionResilience && options.strategies){
 			std::vector<std::vector<bool>> violation_copy;
@@ -3255,15 +3279,15 @@ void property(const Options &options, const Input &input, PropertyType property,
 		input.print_strategies(options, is_wi);
 	}
 
-	// if (options.counterexamples && !prop_holds){
-	// 	bool is_wi = (property == PropertyType::WeakerImmunity) || (property == PropertyType::WeakImmunity);
-	// 	bool is_cr = (property == PropertyType::CollusionResilience);
-	// 	input.print_counterexamples(options, is_wi, is_cr);
-	// }
+	if (options.counterexamples && !prop_holds){
+		bool is_wi = (property == PropertyType::WeakerImmunity) || (property == PropertyType::WeakImmunity);
+		bool is_cr = (property == PropertyType::CollusionResilience);
+		input.print_counterexamples(options, is_wi, is_cr);
+	}
 
-	// if(options.counterexamples && prop_holds && history == input.honest.size() && property == PropertyType::Practicality) {
-	// 	input.print_counterexamples(options, false, false);
-	// }
+	if(options.counterexamples && prop_holds && history == input.honest.size() && property == PropertyType::Practicality) {
+		input.print_counterexamples(options, false, false);
+	}
 }
 
 void property_subtree(const Options &options, const Input &input, PropertyType property, size_t history, Subtree &subtree) {
@@ -3697,10 +3721,9 @@ void analyse_properties(const Options &options, const Input &input)
 		{
 			if (property_chosen[i])
 			{
-				// input.reset_counterexamples();
-				// input.root.get()->reset_counterexample_choices();
-				// input.reset_logging();
-
+				input.reset_counterexamples();
+				input.root.get()->reset_counterexample_choices();
+				input.reset_logging();
 
 				input.reset_unsat_cases();
 				input.root->reset_reason();
@@ -3759,14 +3782,15 @@ void analyse_properties(const Options &options, const Input &input)
 
 		for (size_t i=0; i<property_chosen.size(); i++) {
 			if(property_chosen[i]) {
-				// input.reset_counterexamples();
-				// input.root.get()->reset_counterexample_choices();
-				// input.reset_logging();
+				input.reset_counterexamples();
+				input.root.get()->reset_counterexample_choices();
+				input.reset_logging();
 				
 				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.root->reset_strategy();
 				input.reset_strategies();
+
 				// input.root->reset_problematic_group(false);
 				// input.reset_reset_point();
 
@@ -3815,15 +3839,17 @@ void analyse_properties(const Options &options, const Input &input)
 					input.root->reset_violation_cr();
 				}
 
-				// input.reset_counterexamples();
-				// input.root.get()->reset_counterexample_choices();
-				// input.reset_logging();
+				input.reset_counterexamples();
+				input.root.get()->reset_counterexample_choices();
+				input.reset_logging();
 				
 				input.reset_unsat_cases();
 				input.root->reset_reason();
 				input.reset_strategies();
+
 				// input.root->reset_problematic_group(true);
 				// input.reset_reset_point();
+				
 				// input.honest.size() + honest_utility means we are running a subree in default mode
 				// and we consider collusion resilience for the honest utility
 				
@@ -3887,7 +3913,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 		input.root->reset_honest();
 		input.root->mark_honest(input.honest[history]);
-		//input.root->reset_practical_utilities();
+		input.root->reset_practical_utilities();
 		input.cond_actions_honest_utility_pairs = {};
 
 		if(options.collusion_resilience) {
@@ -3909,9 +3935,9 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 		for (size_t i=0; i<property_chosen.size(); i++) {
 			if(property_chosen[i]) {
-				// input.reset_counterexamples();
-				// input.root.get()->reset_counterexample_choices();
-				// input.reset_logging();
+				input.reset_counterexamples();
+				input.root.get()->reset_counterexample_choices();
+				input.reset_logging();
 
 				input.reset_unsat_cases();
 				input.root->reset_reason();
@@ -3984,9 +4010,9 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 		for (size_t i=0; i<property_chosen.size(); i++) {
 			if(property_chosen[i]) {
-				// input.reset_counterexamples();
-				// input.root.get()->reset_counterexample_choices();
-				// input.reset_logging();
+				input.reset_counterexamples();
+				input.root.get()->reset_counterexample_choices();
+				input.reset_logging();
 				
 				input.reset_unsat_cases();
 				input.root->reset_reason();
@@ -4042,9 +4068,9 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			subtree.collusion_resilience = {};
 
 			if(options.collusion_resilience) {
-				// input.reset_counterexamples();
-				// input.root.get()->reset_counterexample_choices();
-				// input.reset_logging();
+				input.reset_counterexamples();
+				input.root.get()->reset_counterexample_choices();
+				input.reset_logging();
 				
 				input.reset_unsat_cases();
 				input.root->reset_reason();
