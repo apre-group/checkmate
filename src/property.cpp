@@ -620,6 +620,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					if (z3_result_disjoint == z3::Result::SAT) {
 						// set reason
 						subtree.reason = disj_of_cases;
+						return false;
 					}
 
 					// if (consider_prob_groups) {
@@ -627,8 +628,51 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					// }
 					//input.set_reset_point(subtree);
 
-					// TODO HERE
-					//subtree.violated_conditions.insert(subtree.violated_conditions.end(), subtree_result.preconditions_for_player_group.begin(), subtree_result.preconditions_for_player_group.end());
+					if(options.preconditions) {
+						// we now look at subtree.cases_for_preconditions and subtree.preconditions_for_player_group
+						// cases_for_preconditions[i] is a case and preconditions_for_player_group[i] specifies which conditions 
+						// are violated for this case that is, what needs to be propagated to be later (negated and) used for preconditions
+
+						// we proceed as follows:
+						// go through each case from cases_for_preconditions
+						// if not case and current unsat
+						// add case && preconditions_for_player_group[i] to subtree.violated_conditions
+
+						// examples
+						// 1) case a<b and c<=d ; precond p>=0 ; current a < b
+						// 		add (a<b and c<=d and p>= 0) to subtree violated
+						// 2) case a<b ; precond p>=0 ; current a < b and c <= d
+						// 		add (a<b and p>= 0) to subtree violated
+						// 3) case a<b ; precond p>=0 ; current a >= b 
+						// 		do nothing
+						// 4) case e<f ; precond p>=0 ; current a<b 
+						// 		add (e<f and p>= 0) to subtree violated
+
+						for(size_t i = 0; i < subtree_result.cases_for_preconditions.size(); i++) {
+
+							auto case_violated = subtree_result.cases_for_preconditions[i];
+							
+							if(solver.solve(case_violated) != z3::Result::UNSAT) {
+
+								auto violated_for_case = subtree_result.preconditions_for_player_group[i];
+
+								std::vector<z3::Bool> vec_to_add = {};
+
+								auto case_conj = z3::conjunction(case_violated);
+
+								for(auto violated_case : violated_for_case) {
+
+									std::vector<z3::Bool> entries = {case_conj};
+									entries.insert(entries.end(), violated_case.begin(), violated_case.end());
+									auto conj = z3::conjunction(entries);
+									vec_to_add.push_back(conj);
+								}
+
+								subtree.violated_conditions.push_back(vec_to_add);
+							}	
+						}
+					}
+					
 					return false;
 				}
 			}
@@ -1196,9 +1240,52 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 						// 	subtree.problematic_group = group_nr;
 						// }
 						// input.set_reset_point(subtree);
+
+						if(options.preconditions) {
+							// we now look at subtree.cases_for_preconditions and subtree.preconditions_for_player_group
+							// cases_for_preconditions[i] is a case and preconditions_for_player_group[i] specifies which conditions 
+							// are violated for this case that is, what needs to be propagated to be later (negated and) used for preconditions
+
+							// we proceed as follows:
+							// go through each case from cases_for_preconditions
+							// if not case and current unsat
+							// add case && preconditions_for_player_group[i] to subtree.violated_conditions
+
+							// examples
+							// 1) case a<b and c<=d ; precond p>=0 ; current a < b
+							// 		add (a<b and c<=d and p>= 0) to subtree violated
+							// 2) case a<b ; precond p>=0 ; current a < b and c <= d
+							// 		add (a<b and p>= 0) to subtree violated
+							// 3) case a<b ; precond p>=0 ; current a >= b 
+							// 		do nothing
+							// 4) case e<f ; precond p>=0 ; current a<b 
+							// 		add (e<f and p>= 0) to subtree violated
+
+							for(size_t i = 0; i < subtree_result.cases_for_preconditions.size(); i++) {
+
+								auto case_violated = subtree_result.cases_for_preconditions[i];
+								
+								if(solver.solve(case_violated) != z3::Result::UNSAT) {
+
+									auto violated_for_case = subtree_result.preconditions_for_player_group[i];
+
+									std::vector<z3::Bool> vec_to_add = {};
+
+									auto case_conj = z3::conjunction(case_violated);
+
+									for(auto violated_case : violated_for_case) {
+
+										std::vector<z3::Bool> entries = {case_conj};
+										entries.insert(entries.end(), violated_case.begin(), violated_case.end());
+										auto conj = z3::conjunction(entries);
+										vec_to_add.push_back(conj);
+									}
+
+									subtree.violated_conditions.push_back(vec_to_add);
+								}	
+							}
+						}
 						
-						// TODO Here
-						//subtree.violated_conditions.insert(subtree.violated_conditions.end(), subtree_result.preconditions_for_player_group.begin(), subtree_result.preconditions_for_player_group.end());
 						return false;
 					}
 				}
@@ -1520,6 +1607,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		//			if yes: ask whether current_case and not case is satisfiable
 		//				if yes: case split on case (i.e. set reason to case, return false)
 		//				if no: set practical_utilities for this node to the set of utilities in PracticalitySubtreeResult
+		//						or if there are no practical utilities -> take over preconditions
 		//			if no: proceed to next PracticalitySubtreeResult
 
 		const auto &subtree = node->subtree();
@@ -1571,12 +1659,12 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					subtree.reason = subtree_case;
 					return false;
 				} else {
+
 					bool one_pr = false;
 					for(auto const &subtree_res : subtree_result.utilities.utilities) {
 						if(subtree_res.size() == 0 && options.strong_conditional_actions) {
 							if(options.preconditions) {
-								//TODO Here
-								//subtree.violated_conditions = subtree_result.preconditions_for_current_case;
+								subtree.violated_conditions = subtree_result.preconditions_for_current_case;
 							}
 							return false;
 						}
@@ -1585,6 +1673,9 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 						}
 					}
 					if(options.weak_conditional_actions && !one_pr) {
+						if(options.preconditions) {
+							subtree.violated_conditions = subtree_result.preconditions_for_current_case;
+						}
 						return false;
 					}
 
@@ -1608,10 +1699,10 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		// 	input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
 		// }
 
+		// with the new implementation for conditional actions we should never be here
+		// if we care about preconditions
 		if(options.preconditions) {
-			z3::Bool bool_obj;
-			//TODO Here
-			//subtree.violated_conditions = {{bool_obj.True()}};
+			assert(false);
 		}
 		return false;
 	}
@@ -2574,28 +2665,30 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		if (!input.stop_log)
 		{
 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
-
-			if(options.subtree && options.preconditions) {
+		}
+		
+		if (options.preconditions)
+		{
+			input.stop_logging();
+			
+			if(options.subtree) {
 				PracticalitySubtreeResult subtree_result_pr;
 				subtree_result_pr._case = current_case;
 				subtree_result_pr.preconditions_for_current_case = input.root->violated_conditions;
 				subtree_results_pr.push_back(subtree_result_pr);
-			}
-		}
-		if (options.preconditions){
-			input.add_unsat_case(current_case);
-			input.stop_logging();
-
-			//auto simplified = input.condition_simplify();
-
-			if(options.strong_conditional_actions) {
-				std::vector<z3::Bool> items;
-				//for(auto &cond: simplified) {
-				for(auto &cond: input.violated_conditions_current_case) {
-					items.push_back(z3::conjunction(cond).simplify());
+			} else {
+				input.add_unsat_case(current_case);
+				//auto simplified = input.condition_simplify();
+				if(options.strong_conditional_actions) {
+					std::vector<z3::Bool> items;
+					//for(auto &cond: simplified) {
+					for(auto &cond: input.violated_conditions_current_case) {
+						items.push_back(z3::conjunction(cond).simplify());
+					}
+					input.violated_conditions.push_back(items);
 				}
-				input.violated_conditions.push_back(items);
 			}
+
 		}
 
 		// if (options.counterexamples){
@@ -2764,8 +2857,20 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 
 		solver.pop();
 
-		if (!attempt){
-			result = false;
+		if (!attempt)
+		{
+			if ((!options.preconditions) && (!options.all_cases))
+			{
+				return false;
+			}
+			else
+			{
+				result = false;
+				if (options.preconditions)
+				{
+					input.stop_logging();
+				}
+			}
 		}
 	}
 	return result;
@@ -2841,8 +2946,20 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 
 		solver.pop();
 
-		if (!attempt){
-			result = false;
+		if (!attempt)
+		{
+			if ((!options.preconditions) && (!options.all_cases))
+			{
+				return false;
+			}
+			else
+			{
+				result = false;
+				if (options.preconditions)
+				{
+					input.stop_logging();
+				}
+			}
 		}
 	}
 	return result;
@@ -2913,19 +3030,18 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 	if (split.null()) {
 		if (!input.stop_log){
 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
-			if(options.preconditions) {
-
-				if(property == PropertyType::Practicality) {
-					PracticalitySubtreeResult subtree_result_pr;
-					subtree_result_pr._case = current_case;
-					subtree_result_pr.preconditions_for_current_case = input.root->violated_conditions;
-					subtree_results_pr.push_back(subtree_result_pr);
-				} else {
-					violated_in_case.push_back(current_case);
-					preconditions_for_player_group.push_back(input.root->violated_conditions);
-				}
-				
+		}
+		if(options.preconditions) {
+			if(property == PropertyType::Practicality) {
+				PracticalitySubtreeResult subtree_result_pr;
+				subtree_result_pr._case = current_case;
+				subtree_result_pr.preconditions_for_current_case = input.root->violated_conditions;
+				subtree_results_pr.push_back(subtree_result_pr);
+			} else {
+				violated_in_case.push_back(current_case);
+				preconditions_for_player_group.push_back(input.root->violated_conditions);
 			}
+			
 		}
 
 		return false;
@@ -2959,8 +3075,20 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 
 		solver.pop();
 
-		if (!attempt){
-			result = false;
+		if (!attempt)
+		{
+			if ((!options.preconditions) && (!options.all_cases))
+			{
+				return false;
+			}
+			else
+			{
+				result = false;
+				if (options.preconditions)
+				{
+					input.stop_logging();
+				}
+			}
 		}
 	}
 	return result;
