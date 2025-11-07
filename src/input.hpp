@@ -202,7 +202,11 @@ public:
 
 	std::vector<HistoryChoice> compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector, std::vector<z3::Bool>& strategy_condition, z3::Bool condition) const;
 
-	std::vector<CeChoice> compute_wi_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
+	std::vector<CeChoice> compute_wi_ce(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
+
+	std::vector<CeChoice> compute_wi_ce_weakCA(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
+
+	std::vector<CeChoice> compute_wi_ce_strongCA(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
 
 	std::vector<CeChoice> compute_cr_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
 
@@ -396,6 +400,7 @@ class Branch final : public Node {
 	mutable uint64_t problematic_group;
 	mutable ConditionalUtilities practical_utilities;
 	mutable std::vector<std::vector<std::string>> counterexample_choices; // one vec string per condition
+	mutable std::vector<bool> use_cond_for_strong_ce; 
 
 	NodeType type() const override { return NodeType::BRANCH; }
 
@@ -579,6 +584,56 @@ class Branch final : public Node {
 		}
 
 		return;
+	}
+
+	std::vector<std::vector<bool>> store_use_cond_for_strong_ce() const {
+
+		std::vector<std::vector<bool>> use_cond_for_strong_ce_vector = {use_cond_for_strong_ce};
+
+		for(auto &condition : conditions) {
+			for (const auto& child: condition.children){
+				if (!child.node->is_leaf() && !child.node->is_subtree()){
+					std::vector<std::vector<bool>> child_ces = child.node->branch().store_use_cond_for_strong_ce();
+					use_cond_for_strong_ce_vector.insert(use_cond_for_strong_ce_vector.end(), child_ces.begin(), child_ces.end());
+				}
+			}
+		}
+
+		return use_cond_for_strong_ce_vector;
+	}
+
+	void restore_use_cond_for_strong_ce(std::vector<std::vector<bool>> &ces) const {
+
+		if (ces.size() == 0) {
+			return;
+		}
+		use_cond_for_strong_ce = ces[0];
+		ces.erase(ces.begin());
+
+		for(auto &condition : conditions) {
+			for (const auto& child: condition.children){
+				if (!child.node->is_leaf() && !child.node->is_subtree()){
+					child.node->branch().restore_use_cond_for_strong_ce(ces);
+				}
+			}
+		}
+
+		return;
+	}
+
+	void reset_use_cond_for_strong_ce() const {
+		use_cond_for_strong_ce = {};
+		for(size_t i = 0; i < conditions.size(); i++) {
+			use_cond_for_strong_ce.push_back(false);
+		}
+
+		for(auto &condition : conditions) {
+			for (auto& choice: condition.children) {
+				if (!choice.node->is_leaf() && !choice.node->is_subtree()) {
+					choice.node->branch().reset_use_cond_for_strong_ce();
+				}
+			}
+		}
 	}
 
 
@@ -887,7 +942,7 @@ struct Input {
 		}
 	}
 
-	void compute_cecase(std::vector<size_t> player_group, PropertyType property) const {
+	void compute_cecase(const Options &options, std::vector<size_t> player_group, PropertyType property) const {
 
 		CeCase new_ce_case;
 
@@ -897,7 +952,7 @@ struct Input {
 		}
 
 		if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
-			new_ce_case.counterexample = root.get()->compute_wi_ce(players, {}, player_group);
+			new_ce_case.counterexample = root.get()->compute_wi_ce(options, players, {}, player_group);
 		} else if (property == PropertyType::CollusionResilience) {
 			//new_ce_case.counterexample = root.get()->compute_cr_ce(players, {}, player_group);
 		}

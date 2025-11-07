@@ -1872,7 +1872,17 @@ std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> pl
 	return strategy;
 }
 
-std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
+std::vector<CeChoice> Node::compute_wi_ce(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
+
+	if(options.weak_conditional_actions) {
+		return compute_wi_ce_weakCA(options, players, actions_so_far, player_group);
+	} else {
+		return compute_wi_ce_strongCA(options, players, actions_so_far, player_group);
+	}
+}
+
+
+std::vector<CeChoice> Node::compute_wi_ce_weakCA(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
 
 	if (this->is_leaf() || this->is_subtree()){
 		return {};
@@ -1888,7 +1898,7 @@ std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std:
 					if (child.node->honest) {
 						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
 						updated_actions.push_back(child.action);
-						std::vector<CeChoice> child_counterexample = child.node->compute_wi_ce(players, updated_actions, player_group);
+						std::vector<CeChoice> child_counterexample = child.node->compute_wi_ce(options, players, updated_actions, player_group);
 						counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
 						break;
 					}
@@ -1899,17 +1909,16 @@ std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std:
 				for (auto& child: condition.children){
 					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
 					updated_actions.push_back(child.action);
-					std::vector<CeChoice> child_counterexample = child.node->compute_wi_ce(players, updated_actions, player_group);
+					std::vector<CeChoice> child_counterexample = child.node->compute_wi_ce(options, players, updated_actions, player_group);
 					counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
 				}
 			}
 		}
 	} else {
-		// the following can be asserted only for weakCA -> maybe do in future
-		// cause we need to pass options to this method
-		// for (size_t i = 0; i < this->branch().conditions.size(); i++) {
-		// 	assert(!this->branch().counterexample_choices[i].empty());
-		// }
+		// the following can be asserted only for weakCA 
+		for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+			assert(!this->branch().counterexample_choices[i].empty());
+		}
 
 		CeChoice ce_choice;
 		ce_choice.player = players[this->branch().player];
@@ -1931,15 +1940,93 @@ std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std:
 				if (cnt > 0) {
 					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
 					updated_actions.push_back(choice.action);
-					std::vector<CeChoice> child_ce = choice.node->compute_wi_ce(players, updated_actions, player_group);
+					std::vector<CeChoice> child_ce = choice.node->compute_wi_ce(options, players, updated_actions, player_group);
 					counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
 				}
 			}
 		}
 	}
-	
+
 	return counterexample;
 }
+
+std::vector<CeChoice> Node::compute_wi_ce_strongCA(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
+
+	if (this->is_leaf() || this->is_subtree()){
+		return {};
+	}
+	std::vector<CeChoice> counterexample;
+
+	assert(player_group.size() == 1);
+
+	if (player_group[0] == this->branch().player) {
+		if (honest){
+			for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+				if(this->branch().use_cond_for_strong_ce[i]) {
+					for (auto& child: this->branch().conditions[i].children){
+						if (child.node->honest) {
+							std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+							updated_actions.push_back(child.action);
+							std::vector<CeChoice> child_counterexample = child.node->compute_wi_ce(options, players, updated_actions, player_group);
+							counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
+							break;
+						}
+					}
+				}
+			}
+		} else {
+			for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+				if(this->branch().use_cond_for_strong_ce[i]) {
+					for (auto& child: this->branch().conditions[i].children){
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+						updated_actions.push_back(child.action);
+						std::vector<CeChoice> child_counterexample = child.node->compute_wi_ce(options, players, updated_actions, player_group);
+						counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
+					}
+				}
+			}
+		}
+	} else {
+		// the following can be asserted only for strongCA 
+		for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+			if(this->branch().use_cond_for_strong_ce[i]) {
+				assert(!this->branch().counterexample_choices[i].empty());
+			}
+		}
+
+		CeChoice ce_choice;
+		ce_choice.player = players[this->branch().player];
+		ce_choice.conditions = {};
+		ce_choice.choices = {};
+		ce_choice.history = actions_so_far;
+
+		for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+			if(this->branch().use_cond_for_strong_ce[i]) {
+				ce_choice.conditions.push_back(this->branch().conditions[i].condition);
+				ce_choice.choices.push_back(this->branch().counterexample_choices[i]);
+			}
+		}
+		counterexample.push_back(ce_choice);
+
+		for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+			if(this->branch().use_cond_for_strong_ce[i]) {
+				for (const Choice &choice: this->branch().conditions[i].children) {
+					int cnt = std::count(this->branch().counterexample_choices[i].begin(), this->branch().counterexample_choices[i].end(), choice.action);
+					if (cnt > 0) {
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+						updated_actions.push_back(choice.action);
+						std::vector<CeChoice> child_ce = choice.node->compute_wi_ce(options, players, updated_actions, player_group);
+						counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+					}
+				}
+			}
+		}
+	}
+
+	return counterexample;
+}
+
+
 
 // std::vector<CeChoice> Node::compute_cr_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
 

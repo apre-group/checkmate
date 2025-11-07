@@ -740,6 +740,10 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 						}
 						input.set_reset_point(branch);
 
+						if(options.counterexamples && subtree->reason.null()) {
+							branch.use_cond_for_strong_ce[i] = true;
+						}
+
 						if (options.strong_conditional_actions)
 						{
 							if(options.preconditions) {
@@ -749,7 +753,10 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 									updated_conds.insert(updated_conds.end(), violated_cond.begin(), violated_cond.end());
 									branch.violated_conditions.push_back(updated_conds);
 								}
-							} else {
+							} else if (options.all_counterexamples) {
+								result = false;
+							}
+							else {
 								return false;
 							}
 							
@@ -766,7 +773,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			// mode weak_conditional_actions and no condition is secure -> return false
 			// mode strong_conditional_actions and all conditions are secure -> return true
 
-			if(options.strong_conditional_actions && options.preconditions) {
+			if(options.strong_conditional_actions && (options.preconditions || options.all_counterexamples)) {
 				return result;
 			}
 			return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
@@ -779,7 +786,6 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		bool result = true;
 		for (size_t j = 0; j < branch.conditions.size(); j++)
 		{
-			
 			std::vector<z3::Bool> disjunctions;
 			z3::Frame f2(solver);
 			solver.assert_(branch.conditions[j].condition);
@@ -845,7 +851,13 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 						std::vector<z3::Bool> precond = {branch.conditions[j].condition};
 						precond.insert(precond.end(), disjunctions.begin(), disjunctions.end());
 						branch.violated_conditions.push_back(precond);
-					} else {
+					} else if (options.all_counterexamples) {
+						result = false;
+						if (!reason.null()) {
+							branch.use_cond_for_strong_ce[j] = true;
+						}
+					}
+					else {
 						return false;
 					}
 				}
@@ -854,7 +866,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			// solver.pop(); , done implicitly because the frame dies
 		}
 
-		if(options.strong_conditional_actions && options.preconditions) {
+		if(options.strong_conditional_actions && (options.preconditions || options.all_counterexamples)) {
 			return result;
 		}
 
@@ -895,6 +907,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 						if (choice.node->reason.null()){
 							if (options.counterexamples) {
 								branch.counterexample_choices[j].push_back(choice.action);
+								branch.use_cond_for_strong_ce[j] = true;
 							}
 							// if (!options.all_counterexamples){
 							//  	return false;
@@ -926,6 +939,8 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 									precond.insert(precond.end(), cond.begin(), cond.end());
 									branch.violated_conditions.push_back(precond);
 								}
+							} else if (options.all_counterexamples) {
+								result_top_level = false;
 							} else {
 								return false;
 							}
@@ -958,7 +973,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			// solver.pop(); , done implicitly because the frame dies
 		}
 
-		if(options.strong_conditional_actions && options.preconditions) {
+		if(options.strong_conditional_actions && (options.preconditions || options.all_counterexamples)) {
 			return result_top_level;
 		}
 
@@ -2447,8 +2462,9 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 				if (options.counterexamples && input.root->reason.null()){
 					is_unsat = true;
 					std::vector<size_t> pl = {player};
-					input.compute_cecase(pl, property);
+					input.compute_cecase(options, pl, property);
 					input.root.get()->reset_counterexample_choices();
+					input.root.get()->reset_use_cond_for_strong_ce();
 				}
 				if (!options.all_counterexamples && input.root->reason.null() && !options.preconditions)
 				{
@@ -2464,6 +2480,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			}
 
 			input.root.get()->reset_counterexample_choices();
+			input.root.get()->reset_use_cond_for_strong_ce();
 			input.root->reset_reason();
 			
 		}
@@ -2541,8 +2558,9 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 								pl.push_back(player);
 							}
 						}
-						input.compute_cecase(pl, property);
+						input.compute_cecase(options, pl, property);
 						input.root.get()->reset_counterexample_choices();
+						input.root.get()->reset_use_cond_for_strong_ce();
 					}
 
 					if (!options.all_counterexamples && input.root->reason.null()){
@@ -2559,6 +2577,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 				}
 
 				input.root.get()->reset_counterexample_choices();
+				input.root.get()->reset_use_cond_for_strong_ce();
 				input.root->reset_reason();
 			//}
 		}
@@ -2715,8 +2734,10 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	}
 
 	std::vector<std::vector<std::vector<std::string>>> ce_storage;
+	std::vector<std::vector<bool>> use_for_ce_storage;
 	if (options.counterexamples && property != PropertyType::Practicality) {
 		ce_storage = input.root->store_counterexample_choices();
+		use_for_ce_storage= input.root->store_use_cond_for_strong_ce();
 	}
 
 	// std::vector<bool> solved_for_storage;
@@ -2762,6 +2783,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 			if (options.counterexamples){
 				input.root->restore_counterexample_choices(ce_storage);
+				input.root->restore_use_cond_for_strong_ce(use_for_ce_storage);
 			}
 		}
 
@@ -3702,6 +3724,7 @@ void analyse_properties(const Options &options, const Input &input)
 			{
 				input.reset_counterexamples();
 				input.root.get()->reset_counterexample_choices();
+				input.root.get()->reset_use_cond_for_strong_ce();
 				input.reset_logging();
 
 				input.reset_unsat_cases();
@@ -3763,6 +3786,7 @@ void analyse_properties(const Options &options, const Input &input)
 			if(property_chosen[i]) {
 				input.reset_counterexamples();
 				input.root.get()->reset_counterexample_choices();
+				input.root.get()->reset_use_cond_for_strong_ce();
 				input.reset_logging();
 				
 				input.reset_unsat_cases();
@@ -3820,6 +3844,7 @@ void analyse_properties(const Options &options, const Input &input)
 
 				input.reset_counterexamples();
 				input.root.get()->reset_counterexample_choices();
+				input.root.get()->reset_use_cond_for_strong_ce();
 				input.reset_logging();
 				
 				input.reset_unsat_cases();
@@ -3916,6 +3941,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			if(property_chosen[i]) {
 				input.reset_counterexamples();
 				input.root.get()->reset_counterexample_choices();
+				input.root.get()->reset_use_cond_for_strong_ce();
 				input.reset_logging();
 
 				input.reset_unsat_cases();
@@ -3991,6 +4017,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			if(property_chosen[i]) {
 				input.reset_counterexamples();
 				input.root.get()->reset_counterexample_choices();
+				input.root.get()->reset_use_cond_for_strong_ce();
 				input.reset_logging();
 				
 				input.reset_unsat_cases();
@@ -4049,6 +4076,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			if(options.collusion_resilience) {
 				input.reset_counterexamples();
 				input.root.get()->reset_counterexample_choices();
+				input.root.get()->reset_use_cond_for_strong_ce();
 				input.reset_logging();
 				
 				input.reset_unsat_cases();
