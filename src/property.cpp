@@ -699,12 +699,8 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			for (size_t i = 0; i < branch.conditions.size(); i++)
 			{
 
-				std::cout << "***********************lemon Condition same and along honest  " << branch.conditions[i] << std::endl;
-
 				z3::Frame f1(solver);
 				solver.assert_(branch.conditions[i].condition);
-
-				std::cout << "***********************lemon Condition same and along honest  A " << std::endl;
 
 				// while we refine the case by adding a case split, we may have to prune
 				// the tree of contradictory actions. In practice, we can ignore the
@@ -712,10 +708,8 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				if(options.count_calls) {
 					weaker ? calls_weri++ : calls_wi++;
 				}
-				std::cout << "***********************lemon Condition same and along honest  B " << std::endl;
 				if (solver.solve() != z3::Result::UNSAT)
 				{
-					std::cout << "***********************lemon Condition same and along honest  C " << std::endl;
 					at_least_one_non_contradictory_condition = true;
 
 					auto &honest_choice = branch.get_honest_child(i);
@@ -729,7 +723,6 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					// the honest choice must be weak immune
 					if (weak_immunity_rec(input, solver, options, subtree, player, weaker, consider_prob_groups))
 					{
-						std::cout << "***********************lemon Condition same and along honest WTH " << std::endl;
 						// if (consider_prob_groups) {
 						// 	branch.problematic_group = player + 1;
 						// }
@@ -741,11 +734,6 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					}
 					else
 					{
-						if(subtree->is_branch())
-							std::cout << "***********************lemon Condition same and along honest cont  " << subtree->branch().counterexample_choices << std::endl;
-						
-						std::cout << "***********************lemon Condition same and along honest cont  WTH2 " << std::endl;
-
 						if (branch.reason.null())
 						{
 							branch.reason = subtree->reason;
@@ -882,8 +870,6 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		bool result_top_level = true;
 		for (size_t j = 0; j < branch.conditions.size(); j++)
 		{
-			std::cout << "***********************lemon Condition  " << branch.conditions[j] << std::endl;
-					
 			z3::Frame f3(solver);
 			solver.assert_(branch.conditions[j].condition);
 
@@ -904,14 +890,10 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				
 				for (const Choice &choice : branch.conditions[j].children)
 				{
-					std::cout << "LEMON " << branch.conditions[j].condition << " -- " << choice.action << std::endl;
 					if (!weak_immunity_rec(input, solver, options, choice.node, player, weaker, consider_prob_groups))
 					{
-						std::cout << "LEMONN " << branch.conditions[j].condition << " -- " << choice.action << std::endl;
 						if (choice.node->reason.null()){
-							std::cout << "LEMONN YES" << std::endl;
 							if (options.counterexamples) {
-								std::cout << "LEMONN YESYESYES" << std::endl;
 								branch.counterexample_choices[j].push_back(choice.action);
 							}
 							// if (!options.all_counterexamples){
@@ -920,7 +902,6 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 								result = false;
 							// }
 						} else {
-							std::cout << "LEMONNN " << branch.conditions[j].condition << " -- " << choice.action << std::endl<< std::endl;
 							if (result && reason.null()){
 								reason = choice.node->reason;
 								// reset_index = i;
@@ -951,8 +932,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 							
 						}
 					
-						if(!options.all_counterexamples ) {
-							std::cout << "----> Lemon  " << branch.counterexample_choices[j] << std::endl;
+						if(!options.all_counterexamples && reason.null()) {
 							break; // go to next condition
 						}
 					}
@@ -2464,7 +2444,6 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 				if(options.preconditions && options.strong_conditional_actions) {
 					input.violated_conditions_current_case.insert(input.violated_conditions_current_case.end(), input.root->violated_conditions.begin(), input.root->violated_conditions.end());
 				}
-
 				if (options.counterexamples && input.root->reason.null()){
 					is_unsat = true;
 					std::vector<size_t> pl = {player};
@@ -2479,7 +2458,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 					reason = input.root->reason;
 					// current_reset_point = input.reset_point;
 					// problematic_group_storage = input.root->store_problematic_groups();
-					// reason_storage = input.root->store_reason();
+					reason_storage = input.root->store_reason();
 				}
 				result = false;
 			}
@@ -2488,19 +2467,19 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			input.root->reset_reason();
 			
 		}
-		// if (!options.all_counterexamples) {
-		// 	if (!reason.null()){
-		// 		input.root->restore_problematic_groups(problematic_group_storage);
-		// 		input.root->restore_reason(reason_storage);
-		// 		input.reset_point = current_reset_point;
-		// 	}
-		// } else {
-		// 	if ((!reason.null()) && !is_unsat){
-		// 		input.root->restore_problematic_groups(problematic_group_storage);
-		// 		input.root->restore_reason(reason_storage);
-		// 		input.reset_point = current_reset_point;
-		// 	}
-		// }
+		if (!options.all_counterexamples) {
+			if (!reason.null()){
+				// input.root->restore_problematic_groups(problematic_group_storage);
+				// input.reset_point = current_reset_point;
+				input.root->restore_reason(reason_storage);
+			}
+		} else {
+			if ((!reason.null()) && !is_unsat){
+				// input.root->restore_problematic_groups(problematic_group_storage);
+				// input.reset_point = current_reset_point;
+				input.root->restore_reason(reason_storage);
+			}
+		}
 		return result;
 	}
 
@@ -2572,7 +2551,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 						reason = input.root->reason;
 						// current_reset_point = input.reset_point;
 						// problematic_group_storage = input.root->store_problematic_groups();
-						// reason_storage = input.root->store_reason();
+						reason_storage = input.root->store_reason();
 					}
 					result = false;
 					// } else {
@@ -2583,19 +2562,19 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 				input.root->reset_reason();
 			//}
 		}
-		// if (!options.all_counterexamples) {
-		// 	if (!reason.null()){
-		// 		input.root->restore_problematic_groups(problematic_group_storage);
-		// 		input.root->restore_reason(reason_storage);
-		// 		input.reset_point = current_reset_point;
-		// 	}
-		// } else {
-		// 	if ((!reason.null()) && !is_unsat){
-		// 		input.root->restore_problematic_groups(problematic_group_storage);
-		// 		input.root->restore_reason(reason_storage);
-		// 		input.reset_point = current_reset_point;
-		// 	}
-		// }
+		if (!options.all_counterexamples) {
+			if (!reason.null()){
+				// input.root->restore_problematic_groups(problematic_group_storage);
+				// input.reset_point = current_reset_point;
+				input.root->restore_reason(reason_storage);
+			}
+		} else {
+			if ((!reason.null()) && !is_unsat){
+				// input.root->restore_problematic_groups(problematic_group_storage);
+				// input.reset_point = current_reset_point;
+				input.root->restore_reason(reason_storage);
+			}
+		}
 		return result;
 	}
 

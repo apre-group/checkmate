@@ -450,52 +450,56 @@ class Branch final : public Node {
 		}
 	}
 
-	// std::vector<z3::Bool> store_reason() const {
+	std::vector<z3::Bool> store_reason() const {
 
-	// 	std::vector<z3::Bool> reason_vector = {reason};
+		std::vector<z3::Bool> reason_vector = {reason};
 
-	// 	for (const auto& child: choices){
-	// 		if (!child.node->is_leaf() && !child.node->is_subtree()){
-	// 			std::vector<z3::Bool> child_reason = child.node->branch().store_reason();
-	// 			reason_vector.insert(reason_vector.end(), child_reason.begin(), child_reason.end());
-	// 		} else if (child.node->is_leaf()){
-	// 			reason_vector.push_back(child.node->leaf().reason);
-	// 		} else {
-	// 			reason_vector.push_back(child.node->subtree().reason);
-	// 		}
-	// 	}
+		for(auto &condition : this->branch().conditions) {
+			for (const auto& child: condition.children){
+				if (!child.node->is_leaf() && !child.node->is_subtree()){
+					std::vector<z3::Bool> child_reason = child.node->branch().store_reason();
+					reason_vector.insert(reason_vector.end(), child_reason.begin(), child_reason.end());
+				} else if (child.node->is_leaf()){
+					reason_vector.push_back(child.node->leaf().reason);
+				} else {
+					reason_vector.push_back(child.node->subtree().reason);
+				}
+			}
+		}
 
-	// 	return reason_vector;
-	// }
+		return reason_vector;
+	}
 
-	// void restore_reason(std::vector<z3::Bool> &reasons) const {
+	void restore_reason(std::vector<z3::Bool> &reasons) const {
 
-	// 	if (reasons.size() == 0) {
-	// 		return;
-	// 	}
-	// 	reason = reasons[0];
-	// 	reasons.erase(reasons.begin());
+		if (reasons.size() == 0) {
+			return;
+		}
+		reason = reasons[0];
+		reasons.erase(reasons.begin());
 
-	// 	for (const auto& child: this->branch().choices){
-	// 		if (!child.node->is_leaf() && !child.node->is_subtree()){
-	// 		child.node->branch().restore_reason(reasons);
-	// 		} else if (child.node->is_leaf()) {
-	// 			if (reasons.size() == 0) {
-	// 				return;
-	// 			}
-	// 			child.node->leaf().reason = reasons[0];
-	// 			reasons.erase(reasons.begin());
-	// 		} else {
-	// 			if (reasons.size() == 0) {
-	// 				return;
-	// 			}
-	// 			child.node->subtree().reason = reasons[0];
-	// 			reasons.erase(reasons.begin());
-	// 		}
-	// 	}
+		for(auto &condition : this->conditions) {
+			for (const auto& child: condition.children){
+				if (!child.node->is_leaf() && !child.node->is_subtree()){
+				child.node->branch().restore_reason(reasons);
+				} else if (child.node->is_leaf()) {
+					if (reasons.size() == 0) {
+						return;
+					}
+					child.node->leaf().reason = reasons[0];
+					reasons.erase(reasons.begin());
+				} else {
+					if (reasons.size() == 0) {
+						return;
+					}
+					child.node->subtree().reason = reasons[0];
+					reasons.erase(reasons.begin());
+				}
+			}
+		}
 
-	// 	return;
-	// }
+		return;
+	}
 
 	// std::vector<uint64_t> store_problematic_groups() const {
 
@@ -894,10 +898,6 @@ struct Input {
 
 		if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
 			new_ce_case.counterexample = root.get()->compute_wi_ce(players, {}, player_group);
-			std::cout << "Lemon 34 " << new_ce_case.counterexample.size() << std::endl;
-			for(auto entry : new_ce_case.counterexample) {
-				std::cout << entry.player << " -- " << entry.conditions << " -- " << entry.choices << " -- " << entry.history << std::endl;
-			}
 		} else if (property == PropertyType::CollusionResilience) {
 			//new_ce_case.counterexample = root.get()->compute_cr_ce(players, {}, player_group);
 		}
@@ -943,7 +943,12 @@ struct Input {
 						std::cout << "Group " << ce_case.player_group << " can deviate profitably, if" << std::endl;
 					}
 					for (CeChoice ce_choice : ce_case.counterexample){
-						std::cout
+
+						if(ce_choice.conditions.size() > 0) {
+							//it can be zero when a condition has not been analyzed
+							// e.g. when additing the condition to the solver gives us UNSAT
+							// so this part is pruned in the analysis
+							std::cout
 							<< "\tAfter history "
 							<< ce_choice.history
 							<< " player "
@@ -958,6 +963,8 @@ struct Input {
 									<< ce_choice.conditions[i]
 									<< std::endl;
 							}
+						}
+						
 					}
 					if(options.supertree) {
 						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;

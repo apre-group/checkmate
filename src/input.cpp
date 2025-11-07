@@ -1937,10 +1937,7 @@ std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std:
 			}
 		}
 	}
-	std::cout << "Lemon 12 " << counterexample.size() << std::endl;
-	for(auto entry : counterexample) {
-		std::cout << entry.player << " -- " << entry.conditions << " -- " << entry.choices << " -- " << entry.history << std::endl;
-	}
+	
 	return counterexample;
 }
 
