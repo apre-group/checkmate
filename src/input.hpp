@@ -208,8 +208,12 @@ public:
 
 	std::vector<CeChoice> compute_wi_ce_strongCA(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
 
-	std::vector<CeChoice> compute_cr_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
+	std::vector<CeChoice> compute_cr_ce(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
 
+	std::vector<CeChoice> compute_cr_ce_weakCA(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
+	
+	std::vector<CeChoice> compute_cr_ce_strongCA(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
+	
 	CeCase compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::string current_action, UtilityTuplesSet practical_utilities) const;
 
 	std::vector<CeChoice> compute_pr_ce(std::string current_action, std::vector<std::string> actions_so_far, UtilityTuplesSet practical_utilities) const;
@@ -954,7 +958,7 @@ struct Input {
 		if (property == PropertyType::WeakImmunity || property == PropertyType::WeakerImmunity) {
 			new_ce_case.counterexample = root.get()->compute_wi_ce(options, players, {}, player_group);
 		} else if (property == PropertyType::CollusionResilience) {
-			//new_ce_case.counterexample = root.get()->compute_cr_ce(players, {}, player_group);
+			new_ce_case.counterexample = root.get()->compute_cr_ce(options, players, {}, player_group);
 		}
 
 		counterexamples.push_back(new_ce_case);
@@ -1003,6 +1007,11 @@ struct Input {
 							//it can be zero when a condition has not been analyzed
 							// e.g. when additing the condition to the solver gives us UNSAT
 							// so this part is pruned in the analysis
+
+							// shouldn't be the case anymore, because in compute_wi_ce and compute_cr_ce
+							// we only add the non-empty ones now
+							// but this is the clear implementation so we leave it as it is
+							
 							std::cout
 							<< "\tAfter history "
 							<< ce_choice.history

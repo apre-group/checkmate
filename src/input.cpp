@@ -1916,9 +1916,13 @@ std::vector<CeChoice> Node::compute_wi_ce_weakCA(const Options &options, std::ve
 		}
 	} else {
 		// the following can be asserted only for weakCA 
-		for (size_t i = 0; i < this->branch().conditions.size(); i++) {
-			assert(!this->branch().counterexample_choices[i].empty());
-		}
+		// for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+		// 	assert(!this->branch().counterexample_choices[i].empty());
+		// }
+		//UPDATE we cannot assert the thing above
+		//it can be zero when a condition has not been analyzed
+		// e.g. when additing the condition to the solver gives us UNSAT
+		// so this part is pruned in the analysis
 
 		CeChoice ce_choice;
 		ce_choice.player = players[this->branch().player];
@@ -2026,58 +2030,160 @@ std::vector<CeChoice> Node::compute_wi_ce_strongCA(const Options &options, std::
 	return counterexample;
 }
 
+std::vector<CeChoice> Node::compute_cr_ce(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
 
+	if(options.weak_conditional_actions) {
+		return compute_cr_ce_weakCA(options, players, actions_so_far, player_group);
+	} else {
+		return compute_cr_ce_strongCA(options, players, actions_so_far, player_group);
+	}
+}
 
-// std::vector<CeChoice> Node::compute_cr_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
+std::vector<CeChoice> Node::compute_cr_ce_weakCA(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
 
-// 		if (this->is_leaf() || this->is_subtree()){
-// 			return {};
-// 		}
-// 		std::vector<CeChoice> counterexample;
+	if (this->is_leaf() || this->is_subtree()){
+		return {};
+	}
+	std::vector<CeChoice> counterexample;
 
-// 		assert(player_group.size() >= 1);
+	int cnt = std::count(player_group.begin(), player_group.end(), this->branch().player);
+	if (cnt == 0) {
+		if (honest){
+			for(auto &condition : this->branch().conditions) {
+				for (auto& child: condition.children){
+					if (child.node->honest) {
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+						updated_actions.push_back(child.action);
+						std::vector<CeChoice> child_counterexample = child.node->compute_cr_ce(options, players, updated_actions, player_group);
+						counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
+						break;
+					}
+				}
+			}
+		} else {
+			for(auto &condition : this->branch().conditions) {
+				for (auto& child: condition.children){
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(child.action);
+					std::vector<CeChoice> child_counterexample = child.node->compute_cr_ce(options, players, updated_actions, player_group);
+					counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
+				}
+			}
+		}
+	} else {
+		// the following can be asserted only for weakCA 
+		// for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+		// 	assert(!this->branch().counterexample_choices[i].empty());
+		// }
+		//UPDATE we cannot assert the thing above
+		//it can be zero when a condition has not been analyzed
+		// e.g. when additing the condition to the solver gives us UNSAT
+		// so this part is pruned in the analysis
 
-// 		int cnt = std::count(player_group.begin(), player_group.end(), this->branch().player);
-// 		if (cnt == 0) {
-// 			if (honest){
-// 				for (auto& child: this->branch().choices){
-// 					if (child.node->honest) {
-// 						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-// 	 					updated_actions.push_back(child.action);
-// 						counterexample = child.node->compute_cr_ce(players, updated_actions, player_group);
-// 						break;
-// 					}
-// 				}
-// 			} else {
-// 				for (auto& child: this->branch().choices){
-// 						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-// 	 					updated_actions.push_back(child.action);
-// 						std::vector<CeChoice> child_counterexample = child.node->compute_cr_ce(players, updated_actions, player_group);
-// 						counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
-// 				}
-// 			}
-// 		} else {
-// 			assert(!this->branch().counterexample_choices.empty());
-// 			CeChoice ce_choice;
-// 			ce_choice.player = players[this->branch().player];
-// 			ce_choice.choices = this->branch().counterexample_choices;
-// 			ce_choice.history = actions_so_far;
+		CeChoice ce_choice;
+		ce_choice.player = players[this->branch().player];
+		ce_choice.conditions = {};
+		ce_choice.choices = {};
+		ce_choice.history = actions_so_far;
 
-// 			counterexample.push_back(ce_choice);
+		for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+			if(this->branch().counterexample_choices[i].size() != 0) {
+				ce_choice.conditions.push_back(this->branch().conditions[i].condition);
+				ce_choice.choices.push_back(this->branch().counterexample_choices[i]);
+			}
+		}
+		counterexample.push_back(ce_choice);
 
-// 			for (const Choice &choice: this->branch().choices) {
+		for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+			for (const Choice &choice: this->branch().conditions[i].children) {
+				int cnt = std::count(this->branch().counterexample_choices[i].begin(), this->branch().counterexample_choices[i].end(), choice.action);
+				if (cnt > 0) {
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(choice.action);
+					std::vector<CeChoice> child_ce = choice.node->compute_cr_ce(options, players, updated_actions, player_group);
+					counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+				}
+			}
+		}
+	}
 
-// 				int cnt = std::count(this->branch().counterexample_choices.begin(), this->branch().counterexample_choices.end(), choice.action);
-// 				if (cnt > 0) {
-// 					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-// 					updated_actions.push_back(choice.action);
-// 					std::vector<CeChoice> child_ce = choice.node->compute_cr_ce(players, updated_actions, player_group);
-// 					counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
-// 				}
-// 			}
-// 		}
-// 		return counterexample;
-// 	}
+	return counterexample;
+}
+
+std::vector<CeChoice> Node::compute_cr_ce_strongCA(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
+
+	if (this->is_leaf() || this->is_subtree()){
+		return {};
+	}
+	std::vector<CeChoice> counterexample;
+
+	int cnt = std::count(player_group.begin(), player_group.end(), this->branch().player);
+	if (cnt == 0) {
+		if (honest){
+			for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+				if(this->branch().use_cond_for_strong_ce[i]) {
+					for (auto& child: this->branch().conditions[i].children){
+						if (child.node->honest) {
+							std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+							updated_actions.push_back(child.action);
+							std::vector<CeChoice> child_counterexample = child.node->compute_cr_ce(options, players, updated_actions, player_group);
+							counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
+							break;
+						}
+					}
+				}
+			}
+		} else {
+			for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+				if(this->branch().use_cond_for_strong_ce[i]) {
+					for (auto& child: this->branch().conditions[i].children){
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+						updated_actions.push_back(child.action);
+						std::vector<CeChoice> child_counterexample = child.node->compute_cr_ce(options, players, updated_actions, player_group);
+						counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
+					}
+				}
+			}
+		}
+	} else {
+		// the following can be asserted only for strongCA 
+		for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+			if(this->branch().use_cond_for_strong_ce[i]) {
+				assert(!this->branch().counterexample_choices[i].empty());
+			}
+		}
+
+		CeChoice ce_choice;
+		ce_choice.player = players[this->branch().player];
+		ce_choice.conditions = {};
+		ce_choice.choices = {};
+		ce_choice.history = actions_so_far;
+
+		for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+			if(this->branch().use_cond_for_strong_ce[i]) {
+				ce_choice.conditions.push_back(this->branch().conditions[i].condition);
+				ce_choice.choices.push_back(this->branch().counterexample_choices[i]);
+			}
+		}
+		counterexample.push_back(ce_choice);
+
+		for (size_t i = 0; i < this->branch().conditions.size(); i++) {
+			if(this->branch().use_cond_for_strong_ce[i]) {
+				for (const Choice &choice: this->branch().conditions[i].children) {
+					int cnt = std::count(this->branch().counterexample_choices[i].begin(), this->branch().counterexample_choices[i].end(), choice.action);
+					if (cnt > 0) {
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+						updated_actions.push_back(choice.action);
+						std::vector<CeChoice> child_ce = choice.node->compute_cr_ce(options, players, updated_actions, player_group);
+						counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+					}
+				}
+			}
+		}
+	}
+
+	return counterexample;
+}
 
 // CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::string current_action, UtilityTuplesSet practical_utilities) const {
 

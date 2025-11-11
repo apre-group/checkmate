@@ -844,6 +844,10 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					// input.set_reset_point(*branch.choices[reset_index].node);
 				}
 
+				if(options.counterexamples && reason.null()) {
+					branch.use_cond_for_strong_ce[j] = true;
+				}
+
 				if (options.strong_conditional_actions && !secure_choice_found)
 				{
 					if(options.preconditions) {
@@ -853,9 +857,6 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 						branch.violated_conditions.push_back(precond);
 					} else if (options.all_counterexamples) {
 						result = false;
-						if (!reason.null()) {
-							branch.use_cond_for_strong_ce[j] = true;
-						}
 					}
 					else {
 						return false;
@@ -1376,6 +1377,10 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 						}
 						// input.set_reset_point(branch);
 
+						if(options.counterexamples && subtree->reason.null()) {
+							branch.use_cond_for_strong_ce[i] = true;
+						}
+
 						if (options.strong_conditional_actions)
 						{
 							if(options.preconditions) {
@@ -1385,6 +1390,8 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 									updated_conds.insert(updated_conds.end(), violated_cond.begin(), violated_cond.end());
 									branch.violated_conditions.push_back(updated_conds);
 								}
+							} else if (options.all_counterexamples) {
+								result = false;
 							} else {
 								return false;
 							}
@@ -1401,7 +1408,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 			// mode weak_conditional_actions and no condition is secure -> return false
 			// mode strong_conditional_actions and all conditions are secure -> return true
 			
-			if(options.strong_conditional_actions && options.preconditions) {
+			if(options.strong_conditional_actions && (options.preconditions || options.all_counterexamples)) {
 				return result;
 			}
 			return options.weak_conditional_actions ? at_least_one_non_contradictory_condition ? false : true : true;
@@ -1481,6 +1488,10 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					// input.set_reset_point(*branch.choices[reset_index].node);
 				}
 
+				if(options.counterexamples && reason.null()) {
+					branch.use_cond_for_strong_ce[j] = true;
+				}
+
 				if (options.strong_conditional_actions && !secure_choice_found)
 				{
 					if(options.preconditions) {
@@ -1488,6 +1499,8 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 						std::vector<z3::Bool> precond = {branch.conditions[j].condition};
 						precond.insert(precond.end(), disjunctions.begin(), disjunctions.end());
 						branch.violated_conditions.push_back(precond);
+					} else if (options.all_counterexamples) {
+						result = false;
 					} else {
 						return false;
 					}
@@ -1497,7 +1510,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 			// solver.pop(); , done implicitly because the frame dies
 		}
 
-		if(options.strong_conditional_actions && options.preconditions) {
+		if(options.strong_conditional_actions && (options.preconditions || options.all_counterexamples)) {
 			return result;
 		}
 
@@ -1535,9 +1548,10 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					if (!collusion_resilience_rec(input, solver, options, choice.node, group, players, group_nr, consider_prob_groups))
 					{
 						if (choice.node->reason.null()){
-							// if (options.counterexamples) {
-							// 	branch.counterexample_choices.push_back(choice.action);
-							//  }
+							if (options.counterexamples) {
+								branch.counterexample_choices[j].push_back(choice.action);
+								branch.use_cond_for_strong_ce[j] = true;
+							 }
 							// if (!options.all_counterexamples){
 							//  	return false;
 							// } else {
@@ -1568,9 +1582,15 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 									precond.insert(precond.end(), cond.begin(), cond.end());
 									branch.violated_conditions.push_back(precond);
 								}
+							} else if (options.all_counterexamples) {
+								result_top_level = false;
 							} else {
 								return false;
 							}
+						}
+
+						if(!options.all_counterexamples && reason.null()) {
+							break; // go to next condition
 						}
 					}
 					i++;
@@ -1597,7 +1617,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 		// Refactor: A ? !B : true
 
-		if(options.strong_conditional_actions && options.preconditions) {
+		if(options.strong_conditional_actions && (options.preconditions || options.all_counterexamples)) {
 			return result_top_level;
 		}
 		
