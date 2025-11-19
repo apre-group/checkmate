@@ -2185,7 +2185,7 @@ std::vector<CeChoice> Node::compute_cr_ce_strongCA(const Options &options, std::
 	return counterexample;
 }
 
-CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::string current_action, UtilityTuplesSet practical_utilities) const {
+CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::vector<z3::Bool> conditions_so_far, std::string current_action, z3::Bool current_condition, ConditionalUtilities practical_utilities) const {
 
 	// regular case (called from branch)
 	if(current_player < players.size()) {
@@ -2198,8 +2198,12 @@ CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned curren
 		actions_to_deviation.insert(actions_to_deviation.end(), actions_so_far.begin(), actions_so_far.end());
 		actions_to_deviation.push_back(current_action); // BE AWARE: current_action = action leading to subtree where pr histories are ce
 
-		deviation_node = compute_deviation_node(actions_to_deviation);
-		std::vector<CeChoice> rec_choices = deviation_node->compute_pr_ce(current_action, actions_so_far, practical_utilities);
+		std::vector<z3::Bool> conditions_to_deviation;
+		conditions_to_deviation.insert(conditions_to_deviation.end(), conditions_so_far.begin(), conditions_so_far.end());
+		conditions_to_deviation.push_back(current_condition);
+
+		deviation_node = compute_deviation_node(actions_to_deviation, conditions_to_deviation);
+		std::vector<CeChoice> rec_choices = deviation_node->compute_pr_ce(current_action, current_condition, actions_so_far, conditions_so_far, practical_utilities);
 		cecase.counterexample.insert(cecase.counterexample.end(), rec_choices.begin(), rec_choices.end());
 		return cecase;
 	} else {
@@ -2216,97 +2220,140 @@ CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned curren
 	}
 }
 
-// const Node* Node::compute_deviation_node(std::vector<std::string> actions_so_far) const {
+const Node* Node::compute_deviation_node(std::vector<std::string> actions_so_far, std::vector<z3::Bool> conditions_so_far) const {
 
-// 	if(actions_so_far.size() > 0) {
-// 		assert(!this->is_leaf());
-// 		assert(!this->is_subtree());
-// 		for (const auto &child: this->branch().choices){
-// 			if(child.action == actions_so_far[0]) {
-// 				actions_so_far.erase(actions_so_far.begin());
-// 				return child.node.get()->compute_deviation_node(actions_so_far);
-// 			}
-// 		}
-// 	}
+	if(actions_so_far.size() > 0) {
+		assert(!this->is_leaf());
+		assert(!this->is_subtree());
+		for(auto &condition : this->branch().conditions) {
+			if(equivalent_conditions(condition.condition, conditions_so_far[0]))
+			{
+				for (const auto &child: condition.children){
+					if(child.action == actions_so_far[0]) {
+						actions_so_far.erase(actions_so_far.begin());
+						conditions_so_far.erase(conditions_so_far.begin());
+						return child.node->compute_deviation_node(actions_so_far, conditions_so_far);
+					}
+				}
+			}
+		}
+	}
 
-// 	return this;
+	return this;
 
-// }
+}
 
-// // Be aware that return value represents a set of histories, rather than one partial strategy
-// // This has to be taken into account when printing the counterexamples
-// std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, std::vector<std::string> actions_so_far, UtilityTuplesSet practical_utilities) const {
-// 	std::vector<CeChoice> cechoices;
+// Be aware that return value represents a set of histories, rather than one partial strategy
+// This has to be taken into account when printing the counterexamples
+std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, z3::Bool current_condition, std::vector<std::string> actions_so_far, std::vector<z3::Bool> conditions_so_far, ConditionalUtilities practical_utilities) const {
+	std::vector<CeChoice> cechoices;
 
-// 	for(auto &utility : practical_utilities) {
+	for (size_t i = 0; i < practical_utilities.condition.size(); i++) {
 
-// 		CeChoice cechoice;
-// 		cechoice.player = "";
+		auto &condition = practical_utilities.condition[i];
+		auto &practical_utilities_set = practical_utilities.utilities[i];
 
-// 		cechoice.choices = {};
+		for(auto &utility : practical_utilities_set) {
 
-// 		std::vector<std::string> result_hist = strat2hist(utility.strategy_vector);
-// 		cechoice.choices.insert(cechoice.choices.end(), result_hist.begin(), result_hist.end());
+			CeChoice cechoice;
+			cechoice.player = "";
+			cechoice.conditions = {};
+			cechoice.choices = {};
 
-// 		std::vector<std::string> updated_history;
-// 		updated_history.insert(updated_history.end(), actions_so_far.begin(), actions_so_far.end());
-// 		updated_history.push_back(current_action);
-// 		cechoice.history = updated_history;
-// 		cechoices.push_back(cechoice);
+			std::vector<std::string> pruned_history = {};
+			std::vector<z3::Bool> pruned_conditions = {};
 
-// 	}
+			strat2hist(utility.strategy_vector, utility.strategy_conditions, condition, pruned_history, pruned_conditions);
 
-// 	return cechoices;
-// }
+			cechoice.choices.push_back(pruned_history);
+			cechoice.conditions.insert(cechoice.conditions.end(), pruned_conditions.begin(), pruned_conditions.end());
 
-// std::vector<std::string> Node::strat2hist(std::vector<std::string> &strategy) const {
+			std::vector<std::string> updated_history;
+			updated_history.insert(updated_history.end(), actions_so_far.begin(), actions_so_far.end());
+			updated_history.push_back(current_action);
+			cechoice.history = updated_history;
 
-// 	if(this->is_leaf()) {
-// 		return {};
-// 	} else if (this->is_subtree()) {
-// 		return {};
-// 	}
+			std::vector<z3::Bool> updated_conditions;
+			updated_conditions.insert(updated_conditions.end(), conditions_so_far.begin(), conditions_so_far.end());
+			updated_conditions.push_back(current_condition);
+			cechoice.history_conditions = updated_conditions;
 
-// 	assert(strategy.size() > 0);
+			cechoices.push_back(cechoice);
 
-// 	std::vector<std::string> strategy_copy;
-// 	strategy_copy.insert(strategy_copy.begin(), strategy.begin(), strategy.end());
+		}
+	}
 
-// 	std::vector<std::string> hist_player_pairs;
-// 	std::string first_action = strategy_copy[0];
-// 	strategy_copy.erase(strategy_copy.begin());
-// 	hist_player_pairs.push_back(first_action);
+	return cechoices;
+}
 
-// 	bool found = false;
-// 	for(auto &child: this->branch().choices) {
+// save results in pruned_history, pruned_conditions
+void Node::strat2hist(std::vector<std::string> &strategy, std::vector<z3::Bool> &conditions, z3::Bool &condition, std::vector<std::string> &pruned_history, std::vector<z3::Bool> &pruned_conditions) const {
 
-// 		if(child.action == first_action) {
-// 			std::vector<std::string> child_result = child.node->strat2hist(strategy_copy);
-// 			hist_player_pairs.insert(hist_player_pairs.end(), child_result.begin(), child_result.end());
-// 			found = true;
-// 		} else {
-// 			child.node->prune_actions_from_strategy(strategy_copy);
-// 		}
-// 	}
+	if(this->is_leaf()) {
+		return;
+	} else if (this->is_subtree()) {
+		return;
+	}
 
-// 	assert(found);
+	assert(strategy.size() > 0);
 
-// 	return hist_player_pairs;
+	std::vector<std::string> strategy_copy;
+	strategy_copy.insert(strategy_copy.begin(), strategy.begin(), strategy.end());
+	std::vector<z3::Bool> conditions_copy;
+	conditions_copy.insert(conditions_copy.begin(), conditions.begin(), conditions.end());
 
-// }
+	// go through each condition c from this branch
+	// if condition does not imply c
+	//		remove first elements of strategy_copy and conditions_copy
+	//		for node after each action call prune_actions
+	// if condition implies c
+	// 		go through every action a
+	// 			if a is NOT the first element of strategy copy
+	//				for node after a call prune_actions
+	//			else take a and the first condition in the result and remove them from strategy and conditions
+	//			and contiue recursively for node after a
 
-// void Node::prune_actions_from_strategy(std::vector<std::string> &strategy) const {
+	for (auto &c : this->branch().conditions) {
+		if(!implies(condition, c.condition)) {
+			strategy_copy.erase(strategy_copy.begin());
+			conditions_copy.erase(conditions_copy.begin());
+			for (auto &child : c.children) {
+				child.node->prune_actions_from_strategy(strategy_copy, conditions_copy);
+			}
+		} else {
+			for (auto &child : c.children) {
+				if(child.action == strategy_copy[0]) {
+					pruned_history.push_back(strategy_copy[0]);
+					pruned_conditions.push_back(conditions_copy[0]);
+					strategy_copy.erase(strategy_copy.begin());
+					conditions_copy.erase(conditions_copy.begin());
 
-// 	if(this->is_leaf() || this->is_subtree()) {
-// 		return;
-// 	}
+					child.node->strat2hist(strategy_copy, conditions_copy, condition, pruned_history, pruned_conditions);
+				} else {
+					child.node->prune_actions_from_strategy(strategy_copy, conditions_copy);
+				}
+			}
+		}
+	}
 
-// 	assert(strategy.size() > 0);
-// 	strategy.erase(strategy.begin());
-// 	for(auto &child: this->branch().choices) {
-// 		child.node->prune_actions_from_strategy(strategy);
-// 	}
-// }
+}
+
+void Node::prune_actions_from_strategy(std::vector<std::string> &strategy, std::vector<z3::Bool> &conditions) const {
+
+	if(this->is_leaf() || this->is_subtree()) {
+		return;
+	}
+
+	assert(strategy.size() > 0);
+
+	for (auto &condition : this->branch().conditions) {
+		strategy.erase(strategy.begin());
+		conditions.erase(conditions.begin());
+		for(auto &child: condition.children) {
+			child.node->prune_actions_from_strategy(strategy, conditions);
+		}
+	}
+}
 
 void Node::reset_violation_cr() const {
 		violates_cr = {};

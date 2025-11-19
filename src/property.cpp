@@ -1625,7 +1625,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 	}
 }
 
-bool practicality_rec_old(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far, bool consider_prob_groups)
+bool practicality_rec_old(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far, std::vector<z3::Bool> conditions_so_far, bool consider_prob_groups)
 {
 	count_pr_repetitions++;
 	if(!node->checked_pr) {
@@ -1718,14 +1718,15 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 						return false;
 					}
 
-					// if (subtree_result.utilities.size() == 0) {
-						// we have to be along honest at this point, otw we would have had at least one pr utility
+					if (subtree_result.utilities.utilities.size() == 0) {
+						//we have to be along honest at this point, otw we would have had at least one pr utility
 
-						// if(options.counterexamples) {
-						// 	input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
-						// }
-					// 	return false;
-					// }
+						if(options.counterexamples) {
+							z3::Bool placeholder;
+							input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, {}, "", placeholder, {}));
+						}
+						return false;
+					}
 
 					subtree.utilities = subtree_result.utilities;
 					return true;
@@ -1734,9 +1735,10 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		}
 		// in case we have listed only cases where it is practical and they do not
 		// span the whole universe, return false, because no corresponding case has been found
-		// if(options.counterexamples) {
-		// 	input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
-		// }
+		if(options.counterexamples) {
+			z3::Bool placeholder;
+			input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, {}, "", placeholder, {}));
+		}
 
 		// with the new implementation for conditional actions we should never be here
 		// if we care about preconditions
@@ -1783,7 +1785,11 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
 				updated_actions.push_back(choice.action);
 
-				if (!practicality_rec_old(input, options, solver, choice.node, updated_actions, consider_prob_groups))
+				std::vector<z3::Bool> updated_conditions;
+				updated_conditions.insert(updated_conditions.begin(), conditions_so_far.begin(), conditions_so_far.end());
+				updated_conditions.push_back(branch.conditions[j].condition);
+
+				if (!practicality_rec_old(input, options, solver, choice.node, updated_actions, updated_conditions, consider_prob_groups))
 				{
 					if (result)
 					{
@@ -1870,7 +1876,12 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 				std::vector<std::string> updated_actions;
 				updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
 				updated_actions.push_back(choice.action);
-				if (!practicality_rec_old(input, options, solver, choice.node, updated_actions, consider_prob_groups))
+
+				std::vector<z3::Bool> updated_conditions;
+				updated_conditions.insert(updated_conditions.begin(), conditions_so_far.begin(), conditions_so_far.end());
+				updated_conditions.push_back(branch.conditions[j].condition);
+
+				if (!practicality_rec_old(input, options, solver, choice.node, updated_actions, updated_conditions, consider_prob_groups))
 				{
 					if (result)
 					{
@@ -1887,23 +1898,23 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					// We (Anja, Ivana) believe that this is always the case
 					// When NOT along honest history there is always a pr unitility except when we need to spilit i.e. reason is not null
 					// At least in the usual mode (no all_cases, all_counterexamples, etc.)
-					if (!branch.reason.null()) // !options.all_counterexamples would be redundant here
-					{
+					// if (!branch.reason.null())
+					// {
+					// 	return result;
+					// }
+
+					// Branch reason can be null if we are running in mode all_counterexamples
+					// and still want to gather further counterexamples
+					if(!options.all_counterexamples || !branch.reason.null()) {
 						return result;
-					} else {
-						std::cout << "LEMON 1" << std::endl;
-						assert(false);
 					}
 				}
 
-				// if (choice.node->get_utilities().size()==0){
-				// 	std::cout << "LEMON 2" << std::endl;
-				// 	assert(!result);
-				// 	assert(options.all_counterexamples);
-				// 	assert(input.counterexamples.size()>0);
-				// } else {
-				// 	std::cout << "LEMON 3" << std::endl;
-				// }
+				if (choice.node->get_utilities().utilities.size()==0){
+					assert(!result);
+					assert(options.all_counterexamples);
+					assert(input.counterexamples.size()>0);
+				}
 
 				ConditionalUtilities conditional_utilities = choice.node->get_utilities();
 				for (int k = 0; k < conditional_utilities.condition.size(); k++)
@@ -2071,11 +2082,13 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 							// NOTE: for not along honest history, nothing to do
 
-							// std::string deviating_action = children_actions[k];
 
-							// if(options.counterexamples && branch.reason.null()) {
-							// 	input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, deviating_action, utilities));
-							// }
+							// TO DO: add counterexample here
+							std::string deviating_action = children_actions[j][k];
+							z3::Bool deviating_condition = branch.conditions[j].condition;
+							if(options.counterexamples && branch.reason.null()) {
+								input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, conditions_so_far, deviating_action, deviating_condition, utilities));
+							}
 
 							result = false;
 							every_honest_practical = false;
@@ -2090,7 +2103,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							// if(!options.all_counterexamples || !branch.reason.null()) {
 							// 	return result; //false
 							// }
-							if (options.strong_conditional_actions && !options.preconditions)
+							if (options.strong_conditional_actions && !options.preconditions && !options.all_counterexamples)
 							{
 								return result; // false
 							}
@@ -2161,7 +2174,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			return condition_where_honest_practical;
 		}
 
-		if(options.strong_conditional_actions && options.preconditions) {
+		if(options.strong_conditional_actions && (options.preconditions || options.all_counterexamples)) {
 			return result;
 		} else {
 			assert(result);
@@ -2637,7 +2650,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			input.root->reset_violated_conditions();
 		}
 
-		bool pr_result = practicality_rec_old(input, options, solver, input.root.get(), {}, true);
+		bool pr_result = practicality_rec_old(input, options, solver, input.root.get(), {}, {}, true);
 		
 		if(!pr_result) {
 			if(options.preconditions && options.strong_conditional_actions) {
@@ -2645,17 +2658,41 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			}
 		}
 		
-		// if(pr_result && options.counterexamples && !input.root->branch().honest) {
-		// 	CeCase pr_ce_case;
-		// 	std::vector<CeChoice> pr_choices;
-		// 	for(const auto& pr_utility : input.root->practical_utilities) {
-		// 		CeChoice ce_choice;
-		// 		ce_choice.choices = input.root->strat2hist(pr_utility.strategy_vector);
-		// 		pr_choices.push_back(ce_choice);
-		// 	}
-		// 	pr_ce_case.counterexample = pr_choices;
-		// 	input.counterexamples.push_back(pr_ce_case);
-		// }
+		if(pr_result && options.counterexamples && !input.root->branch().honest) {
+			CeCase pr_ce_case;
+			std::vector<CeChoice> pr_choices;
+
+			for (size_t i = 0; i < input.root->practical_utilities.condition.size(); i++) {
+
+				auto &condition = input.root->practical_utilities.condition[i];
+				auto &practical_utilities_set = input.root->practical_utilities.utilities[i];
+
+				for(auto &utility : practical_utilities_set) {
+					CeChoice cechoice;
+
+					cechoice.conditions = {};
+					cechoice.choices = {};
+
+					std::vector<std::string> pruned_history = {};
+					std::vector<z3::Bool> pruned_conditions = {};
+
+					input.root->strat2hist(utility.strategy_vector, utility.strategy_conditions, condition, pruned_history, pruned_conditions);
+
+					cechoice.choices.push_back(pruned_history);
+					cechoice.conditions.insert(cechoice.conditions.end(), pruned_conditions.begin(), pruned_conditions.end());
+
+					pr_choices.push_back(cechoice);
+
+					// for(const auto& pr_utility : input.root->practical_utilities) {
+					// 	CeChoice ce_choice;
+					// 	ce_choice.choices = input.root->strat2hist(pr_utility.strategy_vector);
+					// 	pr_choices.push_back(ce_choice);
+					// }
+					// pr_ce_case.counterexample = pr_choices;
+					// input.counterexamples.push_back(pr_ce_case);
+				}
+			}
+		}
 		return pr_result;
 	}
 
@@ -3040,7 +3077,7 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 	} else if (property == PropertyType::WeakerImmunity) {
 		property_result = weak_immunity_rec(input, solver, options, input.root.get(), player_nr, true, false);
 	} else if (property == PropertyType::Practicality) {
-		property_result = practicality_rec_old(input, options, solver, input.root.get(),{}, false);
+		property_result = practicality_rec_old(input, options, solver, input.root.get(),{}, {}, false);
 	}
 
 	// property holds under current split

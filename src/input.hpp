@@ -101,7 +101,9 @@ struct CeChoice{
 	std::string player;
 	std::vector<z3::Bool> conditions; // conditions[i] corresponds to choices[i]
 	std::vector<std::vector<std::string>> choices;
+
 	std::vector<std::string> history;
+	std::vector<z3::Bool> history_conditions;
 };
 
 struct StrategyCase {
@@ -214,15 +216,15 @@ public:
 	
 	std::vector<CeChoice> compute_cr_ce_strongCA(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
 	
-	CeCase compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::string current_action, UtilityTuplesSet practical_utilities) const;
+	CeCase compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::vector<z3::Bool> conditions_so_far, std::string current_action, z3::Bool current_condition, ConditionalUtilities practical_utilities) const;
 
-	std::vector<CeChoice> compute_pr_ce(std::string current_action, std::vector<std::string> actions_so_far, UtilityTuplesSet practical_utilities) const;
+	std::vector<CeChoice> compute_pr_ce(std::string current_action, z3::Bool current_condition, std::vector<std::string> actions_so_far, std::vector<z3::Bool> conditions_so_far, ConditionalUtilities practical_utilities) const;
 
-	const Node* compute_deviation_node(std::vector<std::string> actions_so_far) const;
+	const Node* compute_deviation_node(std::vector<std::string> actions_so_far, std::vector<z3::Bool> conditions_so_far) const;
 
-	std::vector<std::string> strat2hist(std::vector<std::string> &strategy) const;
+	void strat2hist(std::vector<std::string> &strategy, std::vector<z3::Bool> &conditions, z3::Bool &condition, std::vector<std::string> &pruned_history, std::vector<z3::Bool> &pruned_conditions) const;
 
-	void prune_actions_from_strategy(std::vector<std::string> &strategy) const;
+	void prune_actions_from_strategy(std::vector<std::string> &strategy, std::vector<z3::Bool> &conditions) const;
 
 	void reset_violation_cr() const;
 
@@ -1049,17 +1051,25 @@ struct Input {
 						std::cout << "Practical histories that extend supertree counterexamples for case: " << ce_case._case <<  std::endl;
 						for(auto history : ce_case.counterexample) {
 							std::cout << history.choices << std::endl;
+							std::cout << "\tConditions along the history above: " << history.conditions << std::endl;
+							std::cout << std::endl;
 						}
 					}
 				} else {
 					std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-					std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
+					std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history << " given conditions " << ce_case.counterexample[0].history_conditions <<" yield a better utility than the honest one." << std::endl;
 					std::cout << "Practical histories:" << std::endl;
 					for(auto history : ce_case.counterexample) {
 						std::vector<std::string> history_to_print;
 						history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
-						history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
+						history_to_print.insert(history_to_print.end(), history.choices[0].begin(), history.choices[0].end());
 						std::cout << history_to_print << std::endl;
+
+						std::vector<z3::Bool> conditions_to_print;
+						conditions_to_print.insert(conditions_to_print.end(), ce_case.counterexample[0].history_conditions.begin(), ce_case.counterexample[0].history_conditions.end());
+						conditions_to_print.insert(conditions_to_print.end(), history.conditions.begin(), history.conditions.end());
+						std::cout << "\tConditions along the history above: " << conditions_to_print << std::endl;
+						std::cout << std::endl;
 					}
 					if(options.supertree) {
 						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
