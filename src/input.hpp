@@ -1037,36 +1037,36 @@ struct Input {
 
 			}
 		}
-		// else {
-		// 	for (CeCase ce_case : counterexamples){
-		// 		if(ce_case.player_group.size() == 0) {
-		// 			if(options.supertree) {
-		// 				// user should check ce in subtree mode manually
-		// 				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-		// 				std::cout << "The subtree after history " << ce_case.counterexample[0].history << " is not practical. Run subtree in default mode with option counterexamples." << std::endl;
-		// 			} else {
-		// 				assert(!options.subtree);
-		// 				std::cout << "Practical histories that extend supertree counterexamples for case: " << ce_case._case <<  std::endl;
-		// 				for(auto history : ce_case.counterexample) {
-		// 					std::cout << history.choices << std::endl;
-		// 				}
-		// 			}
-		// 		} else {
-		// 			std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-		// 			std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
-		// 			std::cout << "Practical histories:" << std::endl;
-		// 			for(auto history : ce_case.counterexample) {
-		// 				std::vector<std::string> history_to_print;
-		// 				history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
-		// 				history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
-		// 				std::cout << history_to_print << std::endl;
-		// 			}
-		// 			if(options.supertree) {
-		// 				std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
-		// 			}
-		// 		}
-		// 	}
-		// }
+		else {
+			for (CeCase ce_case : counterexamples){
+				if(ce_case.player_group.size() == 0) {
+					if(options.supertree) {
+						// user should check ce in subtree mode manually
+						std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+						std::cout << "The subtree after history " << ce_case.counterexample[0].history << " is not practical. Run subtree in default mode with option counterexamples." << std::endl;
+					} else {
+						assert(!options.subtree);
+						std::cout << "Practical histories that extend supertree counterexamples for case: " << ce_case._case <<  std::endl;
+						for(auto history : ce_case.counterexample) {
+							std::cout << history.choices << std::endl;
+						}
+					}
+				} else {
+					std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+					std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
+					std::cout << "Practical histories:" << std::endl;
+					for(auto history : ce_case.counterexample) {
+						std::vector<std::string> history_to_print;
+						history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
+						history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
+						std::cout << history_to_print << std::endl;
+					}
+					if(options.supertree) {
+						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
+					}
+				}
+			}
+		}
 
 	}
 

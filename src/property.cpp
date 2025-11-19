@@ -1796,12 +1796,6 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					// if(!options.all_counterexamples || !branch.reason.null()) {
 					// 	return result;
 					// }
-					if(!(options.preconditions && options.strong_conditional_actions)) {
-						if (!branch.reason.null() || options.strong_conditional_actions)
-						{
-							return result;
-						}
-					}
 
 					if(options.preconditions && options.strong_conditional_actions) {
 						auto &viol_conds_hon_child = choice.node->violated_conditions;
@@ -1809,6 +1803,15 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							std::vector<z3::Bool> new_condition = {branch.conditions[j].condition};
 							new_condition.insert(new_condition.end(), cond.begin(), cond.end());
 							branch.violated_conditions.push_back(new_condition);
+						}
+					} else {
+						if(options.strong_conditional_actions && options.all_counterexamples) {
+							//don't return 
+							result = false;
+						}
+						else if (!branch.reason.null() || options.strong_conditional_actions)
+						{
+							return result;
 						}
 					}
 					
@@ -1841,7 +1844,12 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 	// Because we can only return if this is along the honest history
 	if (!any_honest_practical && options.weak_conditional_actions && branch.honest)
 	{
-		return false;
+		if(options.all_counterexamples) {
+			// don't terminate yet, there might be more counterexamples upwards
+			result = false;
+		} else {
+			return false;
+		}
 	}
 
 	for (size_t j = 0; j < branch.conditions.size(); j++)
@@ -1879,16 +1887,22 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					// We (Anja, Ivana) believe that this is always the case
 					// When NOT along honest history there is always a pr unitility except when we need to spilit i.e. reason is not null
 					// At least in the usual mode (no all_cases, all_counterexamples, etc.)
-					if (!branch.reason.null())
+					if (!branch.reason.null()) // !options.all_counterexamples would be redundant here
 					{
 						return result;
+					} else {
+						std::cout << "LEMON 1" << std::endl;
+						assert(false);
 					}
 				}
 
 				// if (choice.node->get_utilities().size()==0){
+				// 	std::cout << "LEMON 2" << std::endl;
 				// 	assert(!result);
 				// 	assert(options.all_counterexamples);
 				// 	assert(input.counterexamples.size()>0);
+				// } else {
+				// 	std::cout << "LEMON 3" << std::endl;
 				// }
 
 				ConditionalUtilities conditional_utilities = choice.node->get_utilities();
@@ -2405,7 +2419,7 @@ void compute_conditional_actions_honest_utility_pairs(const Input &input, std::v
 
 	if (node->is_leaf())
 	{
-		for (size_t i = 0; i < node->leaf().conditions.size(); i++) {
+		for (size_t i = 0; i < node->leaf().conditions.size(); i++) { 
 
 			CondActionsUtilityPair pair;
 			pair.conditional_actions.insert(pair.conditional_actions.begin(), cond_actions_so_far.begin(), cond_actions_so_far.end());

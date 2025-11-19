@@ -2185,36 +2185,36 @@ std::vector<CeChoice> Node::compute_cr_ce_strongCA(const Options &options, std::
 	return counterexample;
 }
 
-// CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::string current_action, UtilityTuplesSet practical_utilities) const {
+CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::string current_action, UtilityTuplesSet practical_utilities) const {
 
-// 	// regular case (called from branch)
-// 	if(current_player < players.size()) {
-// 		CeCase cecase;
-// 		cecase.player_group = {players[current_player]};
+	// regular case (called from branch)
+	if(current_player < players.size()) {
+		CeCase cecase;
+		cecase.player_group = {players[current_player]};
 
-// 		const Node* deviation_node = nullptr;
+		const Node* deviation_node = nullptr;
 
-// 		std::vector<std::string> actions_to_deviation;
-// 		actions_to_deviation.insert(actions_to_deviation.end(), actions_so_far.begin(), actions_so_far.end());
-// 		actions_to_deviation.push_back(current_action); // BE AWARE: current_action = action leading to subtree where pr histories are ce
+		std::vector<std::string> actions_to_deviation;
+		actions_to_deviation.insert(actions_to_deviation.end(), actions_so_far.begin(), actions_so_far.end());
+		actions_to_deviation.push_back(current_action); // BE AWARE: current_action = action leading to subtree where pr histories are ce
 
-// 		deviation_node = compute_deviation_node(actions_to_deviation);
-// 		std::vector<CeChoice> rec_choices = deviation_node->compute_pr_ce(current_action, actions_so_far, practical_utilities);
-// 		cecase.counterexample.insert(cecase.counterexample.end(), rec_choices.begin(), rec_choices.end());
-// 		return cecase;
-// 	} else {
-// 		// called from subtree
-// 		CeCase cecase;
-// 		cecase.player_group = {}; // check and handle this when printing counterexamples
+		deviation_node = compute_deviation_node(actions_to_deviation);
+		std::vector<CeChoice> rec_choices = deviation_node->compute_pr_ce(current_action, actions_so_far, practical_utilities);
+		cecase.counterexample.insert(cecase.counterexample.end(), rec_choices.begin(), rec_choices.end());
+		return cecase;
+	} else {
+		// called from subtree
+		CeCase cecase;
+		cecase.player_group = {}; // check and handle this when printing counterexamples
 
-// 		CeChoice deviation;
-// 		deviation.history = actions_so_far;
-// 		cecase.counterexample = {deviation};
+		CeChoice deviation;
+		deviation.history = actions_so_far;
+		cecase.counterexample = {deviation};
 
-// 		return cecase;
+		return cecase;
 
-// 	}
-// }
+	}
+}
 
 // const Node* Node::compute_deviation_node(std::vector<std::string> actions_so_far) const {
 
