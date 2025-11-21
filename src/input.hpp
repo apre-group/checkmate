@@ -222,7 +222,7 @@ public:
 
 	const Node* compute_deviation_node(std::vector<std::string> actions_so_far, std::vector<z3::Bool> conditions_so_far) const;
 
-	void strat2hist(std::vector<std::string> &strategy, std::vector<z3::Bool> &conditions, z3::Bool &condition, std::vector<std::string> &pruned_history, std::vector<z3::Bool> &pruned_conditions) const;
+	void strat2hist(std::vector<std::string> &strategy, std::vector<z3::Bool> &conditions, z3::Bool &condition, UtilityTuple utility, std::vector<std::string> &pruned_history, std::vector<z3::Bool> &pruned_conditions, bool &stop_reached) const;
 
 	void prune_actions_from_strategy(std::vector<std::string> &strategy, std::vector<z3::Bool> &conditions) const;
 
@@ -355,7 +355,6 @@ class Leaf final : public Node {
 	std::vector<UtilityTuple> utilities;
 
 	// condition[i] has a UtilityTuple utilities[i]
-
 	
 	// DEPRECATED
 	// utilities for each player: NB in lexicographic order of players!
@@ -895,12 +894,15 @@ struct Input {
 				strategy_vector.insert(strategy_vector.begin(), utility_tuple.strategy_vector.begin(), utility_tuple.strategy_vector.end());
 				strategy_condition.insert(strategy_condition.begin(), utility_tuple.strategy_conditions.begin(), utility_tuple.strategy_conditions.end());
 
-				auto res = root.get()->compute_pr_strategy(players, {}, strategy_vector, strategy_condition, cu.condition[i]); 
+				if(utility_tuple.strategy_vector.size() > 0) {
+					auto res = root.get()->compute_pr_strategy(players, {}, strategy_vector, strategy_condition, cu.condition[i]); 
 
-				for (auto &entry: res) {
-					if(!duplicate_exists(entry, new_strat_case.strategy)) {
-						new_strat_case.strategy.push_back(entry);
+					for (auto &entry: res) {
+						if(!duplicate_exists(entry, new_strat_case.strategy)) {
+							new_strat_case.strategy.push_back(entry);
+						}
 					}
+
 				}
 			}
 

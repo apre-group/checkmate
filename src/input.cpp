@@ -2263,7 +2263,13 @@ std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, z3::Bool c
 			std::vector<std::string> pruned_history = {};
 			std::vector<z3::Bool> pruned_conditions = {};
 
-			strat2hist(utility.strategy_vector, utility.strategy_conditions, condition, pruned_history, pruned_conditions);
+			std::vector<std::string> strategy_copy;
+			strategy_copy.insert(strategy_copy.begin(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+			std::vector<z3::Bool> conditions_copy;
+			conditions_copy.insert(conditions_copy.begin(), utility.strategy_conditions.begin(), utility.strategy_conditions.end());
+
+			bool stop_reached = false;
+			strat2hist(strategy_copy, conditions_copy, condition, utility, pruned_history, pruned_conditions, stop_reached);
 
 			cechoice.choices.push_back(pruned_history);
 			cechoice.conditions.insert(cechoice.conditions.end(), pruned_conditions.begin(), pruned_conditions.end());
@@ -2287,7 +2293,11 @@ std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, z3::Bool c
 }
 
 // save results in pruned_history, pruned_conditions
-void Node::strat2hist(std::vector<std::string> &strategy, std::vector<z3::Bool> &conditions, z3::Bool &condition, std::vector<std::string> &pruned_history, std::vector<z3::Bool> &pruned_conditions) const {
+void Node::strat2hist(std::vector<std::string> &strategy_copy, std::vector<z3::Bool> &conditions_copy, z3::Bool &condition, UtilityTuple utility, std::vector<std::string> &pruned_history, std::vector<z3::Bool> &pruned_conditions, bool &stop_reached) const {
+
+	if(stop_reached) {
+		return;
+	}
 
 	if(this->is_leaf()) {
 		return;
@@ -2295,12 +2305,7 @@ void Node::strat2hist(std::vector<std::string> &strategy, std::vector<z3::Bool> 
 		return;
 	}
 
-	assert(strategy.size() > 0);
-
-	std::vector<std::string> strategy_copy;
-	strategy_copy.insert(strategy_copy.begin(), strategy.begin(), strategy.end());
-	std::vector<z3::Bool> conditions_copy;
-	conditions_copy.insert(conditions_copy.begin(), conditions.begin(), conditions.end());
+	assert(strategy_copy.size() > 0);
 
 	// go through each condition c from this branch
 	// if condition does not imply c
@@ -2313,7 +2318,13 @@ void Node::strat2hist(std::vector<std::string> &strategy, std::vector<z3::Bool> 
 	//			else take a and the first condition in the result and remove them from strategy and conditions
 	//			and contiue recursively for node after a
 
+	bool found_cond = false;
+	bool found_action = false;
+
 	for (auto &c : this->branch().conditions) {
+		if(stop_reached)
+			return;
+
 		if(!implies(condition, c.condition)) {
 			strategy_copy.erase(strategy_copy.begin());
 			conditions_copy.erase(conditions_copy.begin());
@@ -2321,20 +2332,38 @@ void Node::strat2hist(std::vector<std::string> &strategy, std::vector<z3::Bool> 
 				child.node->prune_actions_from_strategy(strategy_copy, conditions_copy);
 			}
 		} else {
+			found_cond = true;
 			for (auto &child : c.children) {
+				if(stop_reached) {
+					return;
+				}
+
 				if(child.action == strategy_copy[0]) {
+					found_action = true;
 					pruned_history.push_back(strategy_copy[0]);
 					pruned_conditions.push_back(conditions_copy[0]);
 					strategy_copy.erase(strategy_copy.begin());
 					conditions_copy.erase(conditions_copy.begin());
 
-					child.node->strat2hist(strategy_copy, conditions_copy, condition, pruned_history, pruned_conditions);
+					if(child.node->is_leaf()) {
+						for(auto &util : child.node->leaf().utilities) {
+							if(util == utility) {
+								stop_reached = true;
+								return;
+							}
+						}
+					}
+
+					child.node->strat2hist(strategy_copy, conditions_copy, condition, utility, pruned_history, pruned_conditions, stop_reached);
 				} else {
 					child.node->prune_actions_from_strategy(strategy_copy, conditions_copy);
 				}
 			}
 		}
 	}
+
+	assert(found_cond);
+	assert(found_action);
 
 }
 
