@@ -285,7 +285,7 @@
                             ]
                           },
                           {
-                            "condition": "g >= 95",
+                            "condition": "g >= 90",
                             "actions": [
                               {
                                 "action": "E8",

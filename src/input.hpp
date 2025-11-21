@@ -216,13 +216,13 @@ public:
 	
 	std::vector<CeChoice> compute_cr_ce_strongCA(const Options &options, std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
 	
-	CeCase compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::vector<z3::Bool> conditions_so_far, std::string current_action, z3::Bool current_condition, ConditionalUtilities practical_utilities) const;
+	CeCase compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::vector<z3::Bool> conditions_so_far, std::string current_action, z3::Bool current_condition, ConditionalUtilities practical_utilities, size_t index) const;
 
-	std::vector<CeChoice> compute_pr_ce(std::string current_action, z3::Bool current_condition, std::vector<std::string> actions_so_far, std::vector<z3::Bool> conditions_so_far, ConditionalUtilities practical_utilities) const;
+	std::vector<CeChoice> compute_pr_ce(std::string current_action, z3::Bool current_condition, std::vector<std::string> actions_so_far, std::vector<z3::Bool> conditions_so_far, ConditionalUtilities practical_utilities, size_t index) const;
 
 	const Node* compute_deviation_node(std::vector<std::string> actions_so_far, std::vector<z3::Bool> conditions_so_far) const;
 
-	void strat2hist(std::vector<std::string> &strategy, std::vector<z3::Bool> &conditions, z3::Bool &condition, UtilityTuple utility, std::vector<std::string> &pruned_history, std::vector<z3::Bool> &pruned_conditions, bool &stop_reached) const;
+	void strat2hist(std::vector<std::string> &strategy, std::vector<z3::Bool> &conditions, z3::Bool &condition, UtilityTuple utility, std::vector<std::string> &pruned_history, std::vector<z3::Bool> &pruned_conditions, bool &stop_reached, bool &first_condition) const;
 
 	void prune_actions_from_strategy(std::vector<std::string> &strategy, std::vector<z3::Bool> &conditions) const;
 
@@ -1042,7 +1042,7 @@ struct Input {
 			}
 		}
 		else {
-			for (CeCase ce_case : counterexamples){
+			for (CeCase ce_case : counterexamples) {
 				if(ce_case.player_group.size() == 0) {
 					if(options.supertree) {
 						// user should check ce in subtree mode manually
