@@ -2311,8 +2311,6 @@ void Node::strat2hist(std::vector<std::string> &strategy_copy, std::vector<z3::B
 		return;
 	}
 
-	std::cout << "Lemon 0" << std::endl;
-
 	assert(strategy_copy.size() > 0);
 
 	// go through each condition c from this branch
