@@ -10,7 +10,41 @@
     "L2",
     "E1",
     "E2",
-    "I"
+    "L",
+    "I_1",
+    "I_2",
+    "I_3",
+    "I_4",
+    "I_5",
+    "I_6",
+    "I_7",
+    "I_8",
+    "I_9",
+    "I_10",
+    "I_11",
+    "I_12",
+    "I_13",
+    "I_14",
+    "I_15",
+    "I_16",
+    "I_17",
+    "I_18",
+    "I_19",
+    "I_20",
+    "I_21",
+    "I_22",
+    "I_23",
+    "I_24",
+    "I_25",
+    "I_26",
+    "I_27",
+    "I_28",
+    "I_29",
+    "I_30",
+    "I_31",
+    "I_32",
+    "I_33",
+    "I_34"
   ],
   "infinitesimals": [
     "alpha"
@@ -101,7 +135,7 @@
               "action": "E1",
               "children": [
                 {
-                  "action": "I",
+                  "action": "I_8",
                   "children": []
                 }
               ]
@@ -110,7 +144,7 @@
               "action": "E2",
               "children": [
                 {
-                  "action": "I",
+                  "action": "I_13",
                   "children": []
                 }
               ]
@@ -124,7 +158,7 @@
               "action": "E1",
               "children": [
                 {
-                  "action": "I",
+                  "action": "I_25",
                   "children": []
                 }
               ]
@@ -133,7 +167,7 @@
               "action": "E2",
               "children": [
                 {
-                  "action": "I",
+                  "action": "I_30",
                   "children": []
                 }
               ]
@@ -183,7 +217,7 @@
                             }
                           },
                           {
-                            "action": "I",
+                            "action": "I_1",
                             "child": {
                               "utility": [
                                 {
@@ -205,7 +239,7 @@
                       }
                     },
                     {
-                      "action": "I",
+                      "action": "I_2",
                       "child": {
                         "player": "P2",
                         "children": [
@@ -229,7 +263,7 @@
                             }
                           },
                           {
-                            "action": "I",
+                            "action": "I_3",
                             "child": {
                               "utility": [
                                 {
@@ -291,7 +325,7 @@
                                 }
                               },
                               {
-                                "action": "I",
+                                "action": "I_4",
                                 "child": {
                                   "utility": [
                                     {
@@ -315,7 +349,7 @@
                       }
                     },
                     {
-                      "action": "L",
+                      "action": "L_1",
                       "child": {
                         "player": "P2",
                         "children": [
@@ -342,7 +376,7 @@
                                 }
                               },
                               {
-                                "action": "L",
+                                "action": "L_2",
                                 "child": {
                                   "utility": [
                                     {
@@ -361,7 +395,7 @@
                                 }
                               },
                               {
-                                "action": "I",
+                                "action": "I_5",
                                 "child": {
                                   "utility": [
                                     {
@@ -404,7 +438,7 @@
                       }
                     },
                     {
-                      "action": "I",
+                      "action": "I_6",
                       "child": {
                         "player": "P2",
                         "children": [
@@ -431,7 +465,7 @@
                                 }
                               },
                               {
-                                "action": "L",
+                                "action": "L_3",
                                 "child": {
                                   "utility": [
                                     {
@@ -450,7 +484,7 @@
                                 }
                               },
                               {
-                                "action": "I",
+                                "action": "I_7",
                                 "child": {
                                   "utility": [
                                     {
@@ -520,7 +554,7 @@
                                 }
                               },
                               {
-                                "action": "I",
+                                "action": "I_8",
                                 "child": {
                                   "utility": [
                                     {
@@ -576,7 +610,7 @@
                                 }
                               },
                               {
-                                "action": "I",
+                                "action": "I_9",
                                 "child": {
                                   "utility": [
                                     {
@@ -600,7 +634,7 @@
                       }
                     },
                     {
-                      "action": "L",
+                      "action": "L_4",
                       "child": {
                         "player": "P2",
                         "children": [
@@ -627,7 +661,7 @@
                                 }
                               },
                               {
-                                "action": "L",
+                                "action": "L_5",
                                 "child": {
                                   "utility": [
                                     {
@@ -646,7 +680,7 @@
                                 }
                               },
                               {
-                                "action": "I",
+                                "action": "I_10",
                                 "child": {
                                   "utility": [
                                     {
@@ -689,7 +723,7 @@
                       }
                     },
                     {
-                      "action": "I",
+                      "action": "I_11",
                       "child": {
                         "player": "P2",
                         "children": [
@@ -713,7 +747,7 @@
                             }
                           },
                           {
-                            "action": "L",
+                            "action": "L_6",
                             "child": {
                               "utility": [
                                 {
@@ -732,7 +766,7 @@
                             }
                           },
                           {
-                            "action": "I",
+                            "action": "I_12",
                             "child": {
                               "utility": [
                                 {
@@ -797,7 +831,7 @@
                             }
                           },
                           {
-                            "action": "I",
+                            "action": "I_13",
                             "child": {
                               "utility": [
                                 {
@@ -824,7 +858,7 @@
             }
           },
           {
-            "action": "I",
+            "action": "I_14",
             "child": {
               "utility": [
                 {
@@ -872,7 +906,7 @@
                         }
                       },
                       {
-                        "action": "I",
+                        "action": "I_15",
                         "child": {
                           "utility": [
                             {
@@ -894,7 +928,7 @@
                   }
                 },
                 {
-                  "action": "I",
+                  "action": "I_16",
                   "child": {
                     "player": "P2",
                     "children": [
@@ -918,7 +952,7 @@
                         }
                       },
                       {
-                        "action": "I",
+                        "action": "I_17",
                         "child": {
                           "utility": [
                             {
@@ -980,7 +1014,7 @@
                             }
                           },
                           {
-                            "action": "I",
+                            "action": "I_18",
                             "child": {
                               "utility": [
                                 {
@@ -1002,7 +1036,7 @@
                       }
                     },
                     {
-                      "action": "I",
+                      "action": "I_19",
                       "child": {
                         "player": "P2",
                         "children": [
@@ -1026,7 +1060,7 @@
                             }
                           },
                           {
-                            "action": "I",
+                            "action": "I_20",
                             "child": {
                               "utility": [
                                 {
@@ -1088,7 +1122,7 @@
                                 }
                               },
                               {
-                                "action": "I",
+                                "action": "I_21",
                                 "child": {
                                   "utility": [
                                     {
@@ -1112,7 +1146,7 @@
                       }
                     },
                     {
-                      "action": "L",
+                      "action": "L_7",
                       "child": {
                         "player": "P2",
                         "children": [
@@ -1139,7 +1173,7 @@
                                 }
                               },
                               {
-                                "action": "L",
+                                "action": "L_8",
                                 "child": {
                                   "utility": [
                                     {
@@ -1158,7 +1192,7 @@
                                 }
                               },
                               {
-                                "action": "I",
+                                "action": "I_22",
                                 "child": {
                                   "utility": [
                                     {
@@ -1201,7 +1235,7 @@
                       }
                     },
                     {
-                      "action": "I",
+                      "action": "I_23",
                       "child": {
                         "player": "P2",
                         "children": [
@@ -1228,7 +1262,7 @@
                                 }
                               },
                               {
-                                "action": "L",
+                                "action": "L_9",
                                 "child": {
                                   "utility": [
                                     {
@@ -1247,7 +1281,7 @@
                                 }
                               },
                               {
-                                "action": "I",
+                                "action": "I_24",
                                 "child": {
                                   "utility": [
                                     {
@@ -1317,7 +1351,7 @@
                                 }
                               },
                               {
-                                "action": "I",
+                                "action": "I_25",
                                 "child": {
                                   "utility": [
                                     {
@@ -1373,7 +1407,7 @@
                                 }
                               },
                               {
-                                "action": "I",
+                                "action": "I_26",
                                 "child": {
                                   "utility": [
                                     {
@@ -1397,7 +1431,7 @@
                       }
                     },
                     {
-                      "action": "L",
+                      "action": "L_10",
                       "child": {
                         "player": "P2",
                         "children": [
@@ -1424,7 +1458,7 @@
                                 }
                               },
                               {
-                                "action": "L",
+                                "action": "L_11",
                                 "child": {
                                   "utility": [
                                     {
@@ -1443,7 +1477,7 @@
                                 }
                               },
                               {
-                                "action": "I",
+                                "action": "I_27",
                                 "child": {
                                   "utility": [
                                     {
@@ -1486,7 +1520,7 @@
                       }
                     },
                     {
-                      "action": "I",
+                      "action": "I_28",
                       "child": {
                         "player": "P2",
                         "children": [
@@ -1510,7 +1544,7 @@
                             }
                           },
                           {
-                            "action": "L",
+                            "action": "L_12",
                             "child": {
                               "utility": [
                                 {
@@ -1529,7 +1563,7 @@
                             }
                           },
                           {
-                            "action": "I",
+                            "action": "I_29",
                             "child": {
                               "utility": [
                                 {
@@ -1594,7 +1628,7 @@
                             }
                           },
                           {
-                            "action": "I",
+                            "action": "I_30",
                             "child": {
                               "utility": [
                                 {
@@ -1621,7 +1655,7 @@
             }
           },
           {
-            "action": "I",
+            "action": "I_31",
             "child": {
               "utility": [
                 {
@@ -1669,7 +1703,7 @@
                         }
                       },
                       {
-                        "action": "I",
+                        "action": "I_32",
                         "child": {
                           "utility": [
                             {
@@ -1691,7 +1725,7 @@
                   }
                 },
                 {
-                  "action": "I",
+                  "action": "I_33",
                   "child": {
                     "player": "P2",
                     "children": [
@@ -1715,7 +1749,7 @@
                         }
                       },
                       {
-                        "action": "I",
+                        "action": "I_34",
                         "child": {
                           "utility": [
                             {
