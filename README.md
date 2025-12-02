@@ -97,6 +97,9 @@ python3 GAME.py -> GAME.json
 
 Important benchmarks include `closing_game.py` that models the Closing Game proposed in [1] for the closing phase of the [Bitcoin Lightning protocol](https://lightning.network/lightning-network-paper.pdf) as well as `routing_three.py`, which models the routing module of the Lightning protocol [1] for three users. There are also `closing_game-simplified.json` and  `routing_game-simplified.json`, which are simplified versions of the games mentioned before.
 
+## Talks
+Automated game-theoretic security analysis of blockchain protocols, Ivana Bocevska, The 12th Workshop on Formal Reasoning in Distributed Algorithms (FRIDA25): https://www.youtube.com/watch?v=WgPr_BDOWYY&list=PLmr3tp_7-7GiLJXW9CEmRO10rds-e3PbQ&index=3
+
 ## Publications
 
 [[1]](https://doi.org/10.48550/arXiv.2109.07429) Sophie Rain, Georgia Avarikioti, Laura Kovács, Matteo Maffei.
@@ -113,3 +116,7 @@ CheckMate: Automated Game-Theoretic Security Reasoning (CCS 2023).
 
 [[5]](https://easychair.org/publications/paper/6ZDH) Sophie Rain, Lea Salome Brugger, Anja Petković Komel, Laura Kovács and Michael Rawson
 Scaling CheckMate for Game-Theoretic Security (LPAR 2024).
+
+[[6]](https://easychair.org/publications/preprint/cBvG) Ivana Bocevska, Anja Petković Komel, Laura Kovács, Sophie Rain and Michael Rawson, Divide and Conquer: a Compositional Approach to Game-Theoretic Security (OOPSLA25).
+
+[[7]](https://easychair.org/publications/preprint/zdhG) Sophie Rain, Anja Petković Komel, Michael Rawson and Laura Kovács, Game Modeling of Blockchain Protocols (iFM25).
