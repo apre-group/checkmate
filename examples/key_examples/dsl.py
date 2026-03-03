@@ -351,18 +351,25 @@ def disjunction(*args) -> Disjunction:
 
 class HistoryTree:
 
-    def __init__(self, action_name: str, children: List[HistoryTree]):
-        self.action = action_name
-        self.children = children
+    def __init__(self, path: List[Union[Action, List[HistoryTreeCondition]]]):
+        self.path = path
+
+    def json(self):
+        return [
+            ch.json() if isinstance(ch, HistoryTreeCondition) else repr(ch)
+            for ch in self.path
+        ]
+
+class HistoryTreeCondition(HistoryTree):
+    def __init__(self, condition: Constraint, path: HistoryTree):
+        self.condition = condition
+        self.path = path
 
     def json(self):
         return {
-            'action': self.action,
-            'children': [
-                ch.json() for ch in self.children
-            ]
+            'condition': self.condition.json(),
+            'path': self.path.json()
         }
-
 
 class Tree:
     def graphviz(self):
@@ -370,26 +377,16 @@ class Tree:
 
 
 class Leaf(Tree):
-    def __init__(self, utilities: Dict[Player, LExpr], condition:Constraint=Truth()):
-        self.condition = condition
+    def __init__(self, utilities: Dict[Player, LExpr]):
         self.utilities = utilities
 
     def json(self):
-        if self.condition:
-            return {
-                'condition' : self.condition.json(),
-                'utility': [
-                    {'player': player, 'value': utility}
-                    for player, utility in self.utilities.items()
-                ]
-            }
-        else:
-            return {
-                'utility': [
-                    {'player': player, 'value': utility}
-                    for player, utility in self.utilities.items()
-                ]
-            }
+        return {
+            'utility': [
+                {'player': player, 'value': utility}
+                for player, utility in self.utilities.items()
+            ]
+        }
 
     def graphviz(self):
         print(f'\tn{id(self)} [label="*"];')
@@ -398,35 +395,43 @@ class Leaf(Tree):
             print(f'\tn{id(self)} -> n{id(self)}_{player} [label="{player}"];')
 
 
-def leaf(utilities: Dict[Player, LExpr], condition:Constraint=Truth()) -> Leaf:
-    return Leaf(utilities, condition)
+def leaf(utilities: Dict[Player, LExpr]) -> Leaf:
+    return Leaf(utilities)
 
+class Condition(Tree):
+    def __init__(self, conditions: Dict[Constraint, Tree]):
+        self.conditions = conditions
+
+    def json(self):
+        return {
+            'condition': [
+                {'constraint': constraint.json(), 'child': child}
+                for constraint, child in self.conditions.items()
+            ]
+        }
+
+    def graphviz(self):
+        print(f'\tn{id(self)} [label="Condition"];')
+        for constraint, child in self.conditions.items():
+            child.graphviz()
+            print(f'\tn{id(self)} -> n{id(child)} [label="{constraint}"];')
+
+def condition(conditions: Dict[Constraint, Tree]) -> Condition:
+    return Condition(conditions)
 
 class Branch(Tree):
     def __init__(self, player: Player, actions: Dict[Action, Tree], condition: Constraint=Truth()):
         self.player = player
-        self.condition = condition
         self.actions = actions
-        self.condition = condition
 
     def json(self):
-        if self.condition:
-            return {
-                'player': self.player,
-                'condition' : self.condition.json(),
-                'children': [
-                    {'action': action, 'child': child}
-                    for action, child in self.actions.items()
-                ]
-            }
-        else:
-            return {
-                'player': self.player,
-                'children': [
-                    {'action': action, 'child': child}
-                    for action, child in self.actions.items()
-                ]
-            }
+        return {
+            'player': self.player,
+            'children': [
+                {'action': action, 'child': child}
+                for action, child in self.actions.items()
+            ]
+        }
 
     def graphviz(self):
         print(f'\tn{id(self)} [label="{self.player}"];')
@@ -435,8 +440,8 @@ class Branch(Tree):
             print(f'\tn{id(self)} -> n{id(child)} [label="{action}"];')
 
 
-def branch(player: Player, actions: Dict[Action, Tree], condition:Constraint=Truth()) -> Branch:
-    return Branch(player, actions, condition)
+def branch(player: Player, actions: Dict[Action, Tree]) -> Branch:
+    return Branch(player, actions)
 
 
 def players(*players: str) -> List[Player]:
