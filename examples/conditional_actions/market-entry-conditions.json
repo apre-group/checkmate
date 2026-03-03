@@ -1,0 +1,217 @@
+{
+    "players": [
+        "M",
+        "E"
+    ],
+    "actions": [
+        "o1",
+        "e1",
+        "i1",
+        "pw1",
+        "o2",
+        "e2",
+        "i2",
+        "pw2"
+    ],
+    "infinitesimals": [
+        "alpha"
+    ],
+    "constants": [
+        "a",
+        "p",
+        "c",
+        "d"
+    ],
+    "initial_constraints": [
+        "a > 0",
+        "p > 0",
+        "c > 0",
+        "d >= 0",
+        "d <= 1"
+    ],
+    "property_constraints": {
+        "weak_immunity": [],
+        "weaker_immunity": [],
+        "collusion_resilience": [],
+        "practicality": []
+    },
+    "honest_histories": [
+        [
+            [
+                {
+                    "condition": "p<10*c",
+                    "path": [ "o1" ]
+                },
+                {
+                    "condition": "p>=10*c",
+                    "path": 
+                    [ 
+                        "e2", 
+                        [
+                            { 
+                                "condition": "d<0.6",
+                                "path": [ "i1"]
+                            },
+                            {
+                                "condition": "d>=0.6",
+                                "path": [ "pw2" ]
+                            }
+                        ]
+                    ]
+                }
+            ]
+        ]
+              
+                  
+    
+    ],
+    "tree": {
+        "conditions": [
+            {
+                "condition": "p<10*c",
+                "child": {
+                    "player": "M",
+                    "actions": [
+                        {
+                            "action": "o1",
+                            "child": {
+                                "utility": [
+                                    {
+                                        "player": "M",
+                                        "value": 0
+                                    },
+                                    {
+                                        "player": "E",
+                                        "value": "p"
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "action": "e1",
+                            "child": {
+                                "utility": [
+                                    {
+                                        "player": "M",
+                                        "value": "-c"
+                                    },
+                                    {
+                                        "player": "E",
+                                        "value": "p"
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            },
+            {
+                "condition": "p>=10*c",
+                "child": {
+                    "player": "M",
+                    "actions": [
+                        {
+                        "action": "o2",
+                        "child": {
+                            "utility": [
+                                {
+                                    "player": "M",
+                                    "value": "-alpha"
+                                },
+                                {
+                                    "player": "E",
+                                    "value": "p"
+                                }
+                            ]
+                        }
+                        },
+                        {
+                            "action": "e2",
+                            "child": {
+                                "conditions": [
+                                    {
+                                        "condition": "d<0.6",
+                                        "child": {
+                                            "player": "E",
+                                            "actions": [
+                                                {
+                                                    "action": "i1",
+                                                    "child": {
+                                                        "utility": [
+                                                            {
+                                                                "player": "M",
+                                                                "value": "p*0.3"
+                                                            },
+                                                            {
+                                                                "player": "E",
+                                                                "value": "2*p*0.3"
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                {
+                                                    "action": "pw1",
+                                                    "child": {
+                                                        "utility": [
+                                                            {
+                                                                "player": "M",
+                                                                "value": "-a"
+                                                            },
+                                                            {
+                                                                "player": "E",
+                                                                "value": "-a"
+                                                            }
+                                                        ]
+                                                    }
+                                                }    
+                                            ]   
+                                        } 
+                                    },
+                                    {
+                                        "condition": "d>=0.6",
+                                        "child": {
+                                            "player": "E",
+                                            "actions": [
+                                                {
+                                                    "action": "i2",
+                                                    "child": {
+                                                        "utility": [
+                                                            {
+                                                                "player": "M",
+                                                                "value": "2*p*0.3"
+                                                            },
+                                                            {
+                                                                "player": "E",
+                                                                "value": "p*0.3"
+                                                            }
+                                                        ]
+                                                    }
+                                                },
+                                                {
+                                                    "action": "pw2",
+                                                    "child": {
+                                                        "utility": [
+                                                            {
+                                                                "player": "M",
+                                                                "value": "p*0.5"
+                                                            },
+                                                            {
+                                                                "player": "E",
+                                                                "value": "p*0.5"
+                                                            }
+                                                        ]
+                                                    }
+                                                }    
+                                            ]
+                                        }
+                                    }
+                                    
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        ]
+    }
+}
