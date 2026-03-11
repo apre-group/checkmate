@@ -20,7 +20,7 @@ M, L, A = PLAYERS = players('M', 'L', 'A')
 
 I, pp, npp, le, lne, burn = ACTIONS = actions('I', 'pp', 'npp', 'le', 'lne', 'burn')
 alpha, eps, pi, gas = INFINITESIMALS = infinitesimals('alpha', 'epsilon', 'pi', 'gas')
-l, crSafety, lsize, priceBTC, priceFLR, mfee, crf, ex, nBackedAssets, n, amt, cInit, cr, premium = CONSTANTS = constants('l', 'crSafety','lsize', 'priceBTC', 'priceFLR', 'mfee', 'crf', 'ex', 'nBackedAssets', 'n', 'amt', 'cInit', 'cr', 'premium')
+l, crSafety, lsize, priceBTC, priceFLR, mfee, crf, nBackedAssets, n, amt, cInit, cr, premium = CONSTANTS = constants('l', 'crSafety','lsize', 'priceBTC', 'priceFLR', 'mfee', 'crf', 'nBackedAssets', 'n', 'amt', 'cInit', 'cr', 'premium')
 
 # list your assumptions and design choices as iniital constraints (if applicable),
 # the following expressions are supported: +, -, *, /, real numbers, >, >=, <, <=, ==, != (inequality), disjunction(*args) (or)
@@ -46,10 +46,8 @@ INITIAL_CONSTRAINTS = [
     priceBTC > 0,
     priceFLR > 0,
     mfee > 0,
-    ex > 1,
-    ex < cr,
     amt >= 0, # amount to be liquidated cannot be negative
-    n > amt,
+    n > amt, # n is the amount that needs to be liquidated to reach the safety threshold
     ((l * lsize + nBackedAssets) * priceBTC) / cInit > cr, # conditions for minting to be possible
 ]
 
