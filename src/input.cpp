@@ -438,6 +438,22 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 		return branch;
 	}
 
+	// condition node
+	if (node.contains("conditions")) {
+		std::unique_ptr<ConditionNode> condition_node(new ConditionNode());
+		for (const json &cond: node["conditions"]) {
+			// parse the condition constraint
+			const std::string &condition_str = cond["condition"];
+			z3::Bool condition = parser.parse_constraint(condition_str.c_str());
+			
+			// load the child subtree
+			auto loaded = load_tree(input, parser, cond["child"], supertree);
+			
+			condition_node->conditions.push_back({condition, std::move(loaded)});
+		}
+		return condition_node;
+	}
+
 	// leaf 
 	if (node.contains("utility")) {
 		// (player, utility) pairs
