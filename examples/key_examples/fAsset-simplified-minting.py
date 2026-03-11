@@ -20,20 +20,22 @@ M, L, A = PLAYERS = players('M', 'L', 'A')
 
 I, pp, npp, le, lne, burn = ACTIONS = actions('I', 'pp', 'npp', 'le', 'lne', 'burn')
 alpha, eps, pi, gas = INFINITESIMALS = infinitesimals('alpha', 'epsilon', 'pi', 'gas')
-l, crSafety, lsize, priceBTC, priceFLR, mfee, crf, nBackedAssets, n, amt, cInit, cr, premium = CONSTANTS = constants('l', 'crSafety','lsize', 'priceBTC', 'priceFLR', 'mfee', 'crf', 'nBackedAssets', 'n', 'amt', 'cInit', 'cr', 'premium')
+l, priceBTC, priceFLR, priceBTCinit, priceFLRinit, mfee, crf, nBackedAssets, n, amt, cInit, cr, premium = CONSTANTS = constants('l', 'priceBTC', 'priceFLR', 'priceBTCinit', 'priceFLRinit', 'mfee', 'crf', 'nBackedAssets', 'n', 'amt', 'cInit', 'cr', 'premium')
 
 # list your assumptions and design choices as iniital constraints (if applicable),
 # the following expressions are supported: +, -, *, /, real numbers, >, >=, <, <=, ==, != (inequality), disjunction(*args) (or)
 # e.g.
 INITIAL_CONSTRAINTS = [
-    priceBTC == 85500,
-    priceFLR == 0.01607,
+    # priceBTC == 85500,
+    # priceFLR == 0.01607,
+    priceBTC > 0,
+    priceFLR > 0,
+    priceBTCinit > 0,
+    priceFLRinit > 0,
     premium >= 0.2,
     0.5 >= premium,
     cr > 1,
-    crSafety > cr,
     cInit > 0,
-    lsize == 0.05,
     mfee > 0,
     crf > 0,
     eps > 0,
@@ -42,13 +44,12 @@ INITIAL_CONSTRAINTS = [
     l > 0,
     gas > 0,
     alpha > 10000 * gas,
-    lsize > 0,
-    priceBTC > 0,
-    priceFLR > 0,
     mfee > 0,
     amt >= 0, # amount to be liquidated cannot be negative
     n > amt, # n is the amount that needs to be liquidated to reach the safety threshold
-    ((l * lsize + nBackedAssets) * priceBTC) / cInit > cr, # conditions for minting to be possible
+    n <= nBackedAssets, # n cannot be more than the total number of assets that are currently backed
+    cInit * priceFLR >= cr * l * priceBTC, # we assume we  can reach safety threshold after liquidations
+    ((l + nBackedAssets) * priceBTCinit) > cr * cInit, # conditions for minting to be possible
 ]
 
 
@@ -60,7 +61,7 @@ PRACTICALITY_CONSTRAINTS = []
 
 #define the list of honest histories
 # TO DO
-HONEST_HISTORIES  = []
+HONEST_HISTORIES  = [HistoryTree([pp])]
 
 # honest utilities can be listed, if modeling used in an interleaving way with CheckMate
 # TO DO
@@ -78,7 +79,9 @@ initial_state = {
     "burning": False,
     "collateral" : cInit,
     "number_backed_assets": nBackedAssets,
-    "extra_balance": {M : 0, A : 0, L : 0}
+    "extra_balance": {M : -gas, A : 0, L : 0},
+    "priceBTC": priceBTCinit,
+    "priceFLR": priceFLRinit
 }
 
 
@@ -101,6 +104,8 @@ def copy_state(state : Dict) -> Dict:
     state_copy["burning"] = state["burning"]
     state_copy["collateral"] = state["collateral"]
     state_copy["number_backed_assets"] = state["number_backed_assets"]
+    state_copy["priceBTC"] = state["priceBTC"]
+    state_copy["priceFLR"] = state["priceFLR"]
     
     # copy the player-wise values 
     state_copy["extra_balance"] = {}
@@ -115,23 +120,23 @@ def compute_utility(state : Dict) -> Dict:
     ut : Dict = {player: 0 for player in PLAYERS}
     if state["payment_happened"] and state["payment_proof"]:
         ut[M] = alpha * l
-        ut[A] = mfee * l * lsize * priceBTC - l * lsize * (eps + pi)
+        ut[A] = mfee * l * state["priceBTC"] - eps
     elif state["payment_happened"] and not state["payment_proof"] and not state["nonpayment_proof"]:
-        ut[M] = (- (1 + mfee) * l * lsize) * priceBTC - crf * l * lsize * priceFLR
-        ut[A] = (mfee * l * lsize) * priceBTC
+        ut[M] = (- (1 + mfee) * l) * state["priceBTC"] - crf * l * state["priceFLR"]
+        ut[A] = (mfee * l) * state["priceBTC"]
         if state["burning"]:
-            ut[A] = ut[A] - l * lsize * priceBTC
+            ut[A] = ut[A]  - gas
         else:
-            ut[A] = ut[A] - l * lsize * (crSafety) 
+            ut[A] = ut[A] - l *(cr -1) * state["priceBTC"] 
     else: # payment did not happen
-        ut[M] = - crf * l * lsize * priceFLR - gas
+        ut[M] = - crf * l * state["priceFLR"]
         if not state["payment_happened"] and state["nonpayment_proof"]:
-            ut[A] = crf * l * lsize * priceFLR
+            ut[A] = crf * l * state["priceFLR"]
         elif not state["payment_happened"] and not state["nonpayment_proof"]:
             if state["burning"]:
-                ut[A] = ut[A] - l * lsize * priceBTC - gas
+                ut[A] = ut[A] - l * state["priceBTC"] - gas
             else:
-                ut[A] = ut[A]  - l * lsize * (crSafety)
+                ut[A] = ut[A]  - l * cr * state["priceBTC"]
 
     if state["payment_proof"] or state["nonpayment_proof"]:
         ut[state["who_proved"]] = ut[state["who_proved"]] - gas
@@ -173,9 +178,9 @@ def liquidation(state : Dict) -> Tree:
 
     # liquidate enough
     # math: 
-    # state["collateral"]*priceFLR >= crSafety * (state["number_backed_assets"]-n)* priceBTC>
-    # n = crSafety * state["number_backed_assets"]* priceBTC - state["collateral"]*priceFLR / (crSafety* priceBTC)
-    INITIAL_CONSTRAINTS.append(n == crSafety * state["number_backed_assets"]* priceBTC - state["collateral"]*priceFLR / (crSafety* priceBTC))
+    # state["collateral"]*priceFLR >= cr * (state["number_backed_assets"]+ l - n)* priceBTC>
+    # n = cr * ((state["number_backed_assets"] + l)* priceBTC - state["collateral"]*priceFLR) / (cr* priceBTC)
+    INITIAL_CONSTRAINTS.append(n == cr * ((state["number_backed_assets"] + l)* priceBTC - state["collateral"]*priceFLR) / (cr* priceBTC))
 
     state1 = copy_state(state)
     state1["number_backed_assets"] = state["number_backed_assets"] - n
@@ -198,15 +203,18 @@ def liquidation(state : Dict) -> Tree:
 
 def conditional_node(state : Dict) -> Tree:
     branch_conditional_node = {}
+    state1 = copy_state(state)
+    state1["priceBTC"] = priceBTC
+    state1["priceFLR"] = priceFLR
 
     # liquidation is possible
-    liq = state["collateral"]*priceFLR < cr * state["number_backed_assets"]* priceBTC
+    liq = state["collateral"]*priceFLR < cr * (state["number_backed_assets"] + l)* priceBTC
 
-    branch_conditional_node[liq] = liquidation(state)
+    branch_conditional_node[liq] = liquidation(state1)
 
     # liquidation is not possible
-    no_liq = state["collateral"]*priceFLR >= cr * state["number_backed_assets"]* priceBTC
-    branch_conditional_node[no_liq] = further_actions_A(state)
+    no_liq = state["collateral"]*priceFLR >= cr * (state["number_backed_assets"] +l)* priceBTC
+    branch_conditional_node[no_liq] = further_actions_A(state1)
 
     return condition(branch_conditional_node)
 
