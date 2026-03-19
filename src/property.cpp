@@ -150,6 +150,28 @@ json parse_utility(const Input &input, std::vector<Utility> utility_to_parse) {
     return utility;
 }
 
+json parse_honest_utility_element(const Input &input, const HonestUtilityElement &element) {
+    if (std::holds_alternative<std::vector<Utility>>(element)) {
+        // It's a utility vector
+        return parse_utility(input, std::get<std::vector<Utility>>(element));
+    } else {
+        // It's a vector of conditions
+        const auto &conditions = std::get<std::vector<HonestUtilityCondition>>(element);
+        json result = json::array();
+        
+        for (const auto &cond : conditions) {
+            json cond_obj;
+            std::stringstream ss;
+            ss << cond.condition;
+            cond_obj["condition"] = ss.str();
+            cond_obj["utility"] = parse_honest_utility_element(input, cond.utility);
+            result.push_back(cond_obj);
+        }
+        
+        return result;
+    }
+}
+
 json parse_property_to_json(std::vector<SubtreeResult> property_result) {
 
     json arr_res = json::array();
@@ -197,7 +219,7 @@ void print_subtree_result_to_file(const Input &input, std::string file_name, Sub
         json arr_weri = parse_property_to_json(subtree.weaker_immunity);
         json arr_cr = parse_property_to_json(subtree.collusion_resilience);
         json arr_pr = parse_practicality_property_to_json(input, subtree.practicality);
-        json arr_honest_utility = parse_utility(input, subtree.honest_utility);
+        json arr_honest_utility = parse_honest_utility_element(input, subtree.honest_utility);
 
         subtree_json["subtree"]["weak_immunity"] = arr_wi;
         subtree_json["subtree"]["weaker_immunity"] = arr_weri;

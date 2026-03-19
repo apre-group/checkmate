@@ -351,7 +351,7 @@ def disjunction(*args) -> Disjunction:
 
 class HistoryTree:
 
-    def __init__(self, path: List[Union[Action, List[HistoryTreeCondition]]]):
+    def __init__(self, path: List[Union[Action, List['HistoryTreeCondition']]]):
         self.path = path
 
     def json(self):
@@ -370,6 +370,79 @@ class HistoryTreeCondition(HistoryTree):
             'condition': self.condition.json(),
             'path': self.path.json()
         }
+
+class HonestUtility:
+    """Represents honest utility - either a simple utility mapping or conditional utilities"""
+    
+    def __init__(self, utility: Union[Dict[Player, LExpr], List['HonestUtilityCondition']]):
+        self.utility = utility
+
+    def json(self):
+        if isinstance(self.utility, dict):
+            # Simple utility mapping
+            return {
+                'utility': [
+                    {'player': player, 'value': utility}
+                    for player, utility in self.utility.items()
+                ]
+            }
+        else:
+            # Conditional utilities
+            return {
+                'utility': [cond.json() for cond in self.utility]
+            }
+        
+    def graphviz(self):
+        if isinstance(self.utility, dict):
+            print(f'\tn{id(self)} [label="HonestUtility"];')
+            for player, utility in self.utilities.items():
+                print(f'\tn{id(self)}_{player} [label="{utility}"];')
+                print(f'\tn{id(self)} -> n{id(self)}_{player} [label="{player}"];')
+            
+        else:
+            print(f'\tn{id(self)} [label="HonestUtility"];')
+            for cond in self.utility:
+                cond.graphviz()
+                print(f'\tn{id(self)} -> n{id(cond)};')
+
+
+class HonestUtilityCondition:
+    """Represents a conditional branch in honest utility"""
+    
+    def __init__(self, condition: Constraint, utility: Union[Dict[Player, LExpr], List['HonestUtilityCondition']]):
+        self.condition = condition
+        self.utility = utility
+    
+    def json(self):
+        if isinstance(self.utility, dict):
+            # Simple utility mapping
+            return {
+                'condition': self.condition.json(),
+                'utility': [
+                    {'player': player, 'value': utility_val}
+                    for player, utility_val in self.utility.items()
+                ]
+            }
+        else:
+            # Nested conditional utilities
+            return {
+                'condition': self.condition.json(),
+                'utility': [cond.json() for cond in self.utility]
+            }
+        
+    def graphviz(self):
+        print(f'\tn{id(self)} [label="*"];')
+        print(f'\tn{id(self)} -> n{id(self.condition)} [label="condition"];')
+        self.condition.graphviz()
+        
+        if isinstance(self.utility, dict):
+            for player, utility in self.utility.items():
+                print(f'\tn{id(self)}_{player} [label="{utility}"];')
+                print(f'\tn{id(self)} -> n{id(self)}_{player} [label="{player}"];')
+        else:
+            for cond in self.utility:
+                cond.graphviz()
+                print(f'\tn{id(self)} -> n{id(cond)};')
 
 class Tree:
     def graphviz(self):
@@ -473,8 +546,8 @@ def finish(
         weaker_immunity_constraints: List[Constraint],
         collusion_resilience_constraints: List[Constraint],
         practicality_constraints: List[Constraint],
-        honest_histories: List[List[Action]],
-        honest_utilities: List,
+        honest_histories: List[HistoryTree],
+        honest_utilities: List[HonestUtility],
         tree: Tree,
         file = None
 ):

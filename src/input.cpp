@@ -410,6 +410,9 @@ static z3::Bool parse_case(Parser &parser, const std::string &_case) {
 	return parser.parse_constraint(_case.c_str());
 }
 
+// Forward declarations
+static HonestUtilityElement parse_honest_utility_element(Parser &parser, const json &element, const Input &input);
+
 /*
  * load a tree from a JSON document `node`, assuming a certain format
  * - `input` is the input parsed so far
@@ -668,45 +671,10 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 			}
 		}
 
-		std::vector<Utility> honest_utility;
+		// Parse honest_utility (default to empty vector if not present)
+		HonestUtilityElement honest_utility = std::vector<Utility>();
 		if (node["subtree"].contains("honest_utility")) {
-			using PlayerUtility = std::pair<std::string, Utility>;
-			std::vector<PlayerUtility> player_utilities;
-			for (const json &utility: node["subtree"]["honest_utility"]) {
-				const json &value = utility["value"];
-				// parse a utility expression
-				if (value.is_string()) {
-					const std::string &string = value;
-					player_utilities.push_back({
-													utility["player"],
-													parser.parse_utility(string.c_str())
-											});
-				}
-					// numeric utility, assumed real
-				else if (value.is_number_unsigned()) {
-					unsigned number = value;
-					player_utilities.push_back({
-													utility["player"],
-													{z3::Real::value(number), z3::Real::ZERO}
-											});
-				}
-					// foreign object, bail
-				else {
-					std::cerr << "checkmate: unsupported utility value " << value << std::endl;
-					std::exit(EXIT_FAILURE);
-				}
-			}
-
-			// sort (player, utility) pairs alphabetically by player
-			sort(
-					player_utilities.begin(),
-					player_utilities.end(),
-					[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
-			);
-
-			for (auto &player_utility: player_utilities)
-				honest_utility.push_back(player_utility.second);
-
+			honest_utility = parse_honest_utility_element(parser, node["subtree"]["honest_utility"], input);
 		}
 
 
@@ -717,6 +685,127 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 
 	// foreign object, bail
 	std::cerr << "checkmate: unexpected object in tree position " << node << std::endl;
+	std::exit(EXIT_FAILURE);
+}
+
+// Parse a single honest history element (can be an action string or a list of conditional branches)
+static HonestHistoryElement parse_honest_history_element(Parser &parser, const json &element) {
+	// If it's a string, it's an action
+	if (element.is_string()) {
+		return HonestHistoryElement(std::string(element));
+	}
+	
+	// If it's an array of condition objects, parse each
+	if (element.is_array()) {
+		std::vector<HonestHistoryCondition> conditions;
+		for (const json &cond_obj : element) {
+			if (cond_obj.contains("condition")) {
+				const std::string &condition_str = cond_obj["condition"];
+				z3::Bool condition = parser.parse_constraint(condition_str.c_str());
+				
+				// Recursively parse the path
+				std::vector<HonestHistoryElement> path;
+				for (const json &path_element : cond_obj["path"]) {
+					path.push_back(parse_honest_history_element(parser, path_element));
+				}
+				
+				conditions.push_back(HonestHistoryCondition(condition, path));
+			}
+			else {
+				std::cerr << "checkmate: expected condition object in honest history element " << cond_obj << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+		}
+		return HonestHistoryElement(conditions);
+	}
+	
+	// Unknown format, bail
+	std::cerr << "checkmate: unexpected honest history element format " << element << std::endl;
+	std::exit(EXIT_FAILURE);
+}
+
+// Parse a complete honest history (sequence of elements)
+static HonestHistory parse_honest_history(Parser &parser, const json &history_json) {
+	HonestHistory history;
+	for (const json &element : history_json) {
+		history.push_back(parse_honest_history_element(parser, element));
+	}
+	return history;
+}
+
+// Parse utility vector from JSON (helper for honest_utility)
+static std::vector<Utility> parse_utility_vector(Parser &parser, const json &utility_json, const Input &input) {
+	using PlayerUtility = std::pair<std::string, Utility>;
+	std::vector<PlayerUtility> player_utilities;
+	
+	for (const json &utility: utility_json) {
+		const json &value = utility["value"];
+		// parse a utility expression
+		if (value.is_string()) {
+			const std::string &string = value;
+			player_utilities.push_back({
+											utility["player"],
+											parser.parse_utility(string.c_str())
+									});
+		}
+		// numeric utility, assumed real
+		else if (value.is_number_unsigned()) {
+			unsigned number = value;
+			player_utilities.push_back({
+											utility["player"],
+											{z3::Real::value(number), z3::Real::ZERO}
+									});
+		}
+		// foreign object, bail
+		else {
+			std::cerr << "checkmate: unsupported utility value " << value << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+	}
+
+	// sort (player, utility) pairs alphabetically by player
+	sort(
+			player_utilities.begin(),
+			player_utilities.end(),
+			[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
+	);
+
+	std::vector<Utility> result;
+	for (auto &player_utility: player_utilities)
+		result.push_back(player_utility.second);
+	
+	return result;
+}
+
+// Parse a single honest utility element (can be a utility vector or a list of conditional branches)
+static HonestUtilityElement parse_honest_utility_element(Parser &parser, const json &element, const Input &input) {
+
+	// If it's an array, check if it contains condition objects or utility objects
+	if (element.is_array()) {
+		// Check first element to determine type
+		if (!element.empty() && element[0].is_object()) {
+			if (element[0].contains("condition")) {
+				// It's an array of condition objects
+				std::vector<HonestUtilityCondition> conditions;
+				for (const json &cond_obj : element) {
+					const std::string &condition_str = cond_obj["condition"];
+					z3::Bool condition = parser.parse_constraint(condition_str.c_str());
+					
+					// Recursively parse the utility
+					HonestUtilityElement utility_element = parse_honest_utility_element(parser, cond_obj["utility"], input);
+					
+					conditions.push_back(HonestUtilityCondition(condition, utility_element));
+				}
+				return HonestUtilityElement(conditions);
+			} else if (element[0].contains("player")) {
+				// It's a utility vector
+				return HonestUtilityElement(parse_utility_vector(parser, element, input));
+			}
+		}
+	}
+	
+	// Unknown format, bail
+	std::cerr << "checkmate: unexpected honest utility format " << element << std::endl;
 	std::exit(EXIT_FAILURE);
 }
 
@@ -751,7 +840,9 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 	sort(players.begin(), players.end());
 
 	// load honest histories automatically
-	honest = document["honest_histories"];
+	for (const json &history_json : document["honest_histories"]) {
+		honest.push_back(parse_honest_history(parser, history_json));
+	}
 
 
 	// load real/infinitesimal identifiers
@@ -767,58 +858,18 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 	}
 
 	if(document["honest_utilities"].size() > 0 && supertree) {
-		std::cerr << "checkmate: honest utility should not be specified in supertree mode " << std::endl;
+		std::cerr << "checkmate: honest utilities should not be specified in supertree mode " << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 
 	// load honest utilities
-	for (auto utility_dict : document["honest_utilities"]) {
-
-		// terrible code for now, @Ivana: please clean up
-
-		// (player, utility) pairs
-		using PlayerUtility = std::pair<std::string, Utility>;
-		std::vector<PlayerUtility> player_utilities;
-		for (const json &utility: utility_dict["utility"]) {
-			const json &value = utility["value"];
-			// parse a utility expression
-			if (value.is_string()) {
-				const std::string &string = value;
-				player_utilities.push_back({
-												   utility["player"],
-												   parser.parse_utility(string.c_str())
-										   });
-			}
-				// numeric utility, assumed real
-			else if (value.is_number_unsigned()) {
-				unsigned number = value;
-				player_utilities.push_back({
-												   utility["player"],
-												   {z3::Real::value(number), z3::Real::ZERO}
-										   });
-			}
-				// foreign object, bail
-			else {
-				std::cerr << "checkmate: unsupported utility value " << value << std::endl;
-				std::exit(EXIT_FAILURE);
-			}
-		}
-
-		// sort (player, utility) pairs alphabetically by player
-		sort(
-				player_utilities.begin(),
-				player_utilities.end(),
-				[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
+	for (const auto &utility_dict : document["honest_utilities"]) {
+		// Parse the "utility" field which can be either a simple utility vector or conditional structure
+		HonestUtilityElement *element = new HonestUtilityElement(
+			parse_honest_utility_element(parser, utility_dict["utility"], *this)
 		);
-
-		// leaked on purpose (honest_utilities utilities are also references but do not refer to a leaf in the tree)
-		std::vector<Utility> *leaf = new std::vector<Utility>;
-		for (auto &player_utility: player_utilities) {
-			leaf->push_back(player_utility.second);
-		}
-
-		UtilityTuple utilityTuple(*leaf);
 		
+		HonestUtilityTuple utilityTuple(*element);
 		honest_utilities.push_back(utilityTuple);
 	}
 
@@ -1342,6 +1393,272 @@ void Node::reset_count_check(bool wi, bool weri, bool cr, bool pr) const {
 		const auto &branch = this->branch();
 		for(auto &child : branch.choices) {
 			child.node.get()->reset_count_check(wi, weri, cr, pr);
+		}
+	}
+}
+
+void Branch::reset_counterexample_choices() const {
+	counterexample_choices = {};
+	for (auto& choice: choices) {
+		if (choice.node->is_branch()) {
+			choice.node->branch().reset_counterexample_choices();
+		} else if (choice.node->is_condition_node()){
+			choice.node->condition_node().reset_counterexample_choices();
+		} 
+	}
+}
+
+std::vector<z3::Bool> Branch::store_reason() const {
+
+	std::vector<z3::Bool> reason_vector = {reason};
+
+	for (const auto& child: choices){
+		if (child.node->is_branch()){
+			std::vector<z3::Bool> child_reason = child.node->branch().store_reason();
+			reason_vector.insert(reason_vector.end(), child_reason.begin(), child_reason.end());
+		} else if (child.node->is_leaf()){
+			reason_vector.push_back(child.node->leaf().reason);
+		} else if (child.node->is_subtree()) {
+			reason_vector.push_back(child.node->subtree().reason);
+		} else if (child.node->is_condition_node()) {
+			std::vector<z3::Bool> child_reason = child.node->condition_node().store_reason();
+			reason_vector.insert(reason_vector.end(), child_reason.begin(), child_reason.end());
+		}
+	}
+
+	return reason_vector;
+}
+
+void Branch::restore_reason(std::vector<z3::Bool> &reasons) const {
+
+	if (reasons.size() == 0) {
+		return;
+	}
+	reason = reasons[0];
+	reasons.erase(reasons.begin());
+
+	for (const auto& child: this->branch().choices){
+		if (child.node->is_branch()){
+			child.node->branch().restore_reason(reasons);
+		} else if (child.node->is_condition_node()) {
+			child.node->condition_node().restore_reason(reasons);
+		} else if (child.node->is_leaf()) {
+			if (reasons.size() == 0) {
+				return;
+			}
+			child.node->leaf().reason = reasons[0];
+			reasons.erase(reasons.begin());
+		} else {
+			if (reasons.size() == 0) {
+				return;
+			}
+			child.node->subtree().reason = reasons[0];
+			reasons.erase(reasons.begin());
+		}
+	}
+
+	return;
+}
+
+std::vector<uint64_t> Branch::store_problematic_groups() const {
+
+	std::vector<uint64_t> problematic_groups_vector = {problematic_group};
+
+	for (const auto& child: choices){
+		if(child.node->is_leaf()) {
+			problematic_groups_vector.push_back(child.node->leaf().problematic_group);
+		}
+		else if (child.node->is_subtree()){
+			problematic_groups_vector.push_back(child.node->subtree().problematic_group);
+		}
+		else if (child.node->is_condition_node()) {
+			std::vector<uint64_t> child_pg = child.node->condition_node().store_problematic_groups();
+			problematic_groups_vector.insert(problematic_groups_vector.end(), child_pg.begin(), child_pg.end());
+		}
+		else {
+			std::vector<uint64_t> child_pg = child.node->branch().store_problematic_groups();
+			problematic_groups_vector.insert(problematic_groups_vector.end(), child_pg.begin(), child_pg.end());
+		}
+	}
+	return problematic_groups_vector;
+}
+
+void Branch::restore_problematic_groups(std::vector<uint64_t> &pg) const {
+
+	if (pg.size() == 0) {
+		return;
+	}
+	problematic_group = pg[0];
+	pg.erase(pg.begin());
+
+	for (const auto& child: this->branch().choices){
+		if(child.node->is_leaf()){
+			child.node->leaf().problematic_group = pg[0];
+			pg.erase(pg.begin());
+		}
+		else if (child.node->is_subtree()) {
+			child.node->subtree().problematic_group = pg[0];
+			pg.erase(pg.begin());
+		}
+		else if (child.node->is_condition_node()) {
+			child.node->condition_node().restore_problematic_groups(pg);
+		}
+		else {
+			child.node->branch().restore_problematic_groups(pg);
+		}
+	}
+
+	return;
+}
+
+std::vector<std::vector<std::string>> Branch::store_counterexample_choices() const {
+
+	std::vector<std::vector<std::string>> counterexample_choices_vector = {counterexample_choices};
+
+	for (const auto& child: choices){
+		if (child.node->is_branch()) {
+			std::vector<std::vector<std::string>> child_ces = child.node->branch().store_counterexample_choices();
+			counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
+		} else if (child.node->is_condition_node()) {
+			std::vector<std::vector<std::string>> child_ces = child.node->condition_node().store_counterexample_choices();
+			counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
+		}
+	}
+
+	return counterexample_choices_vector;
+}
+
+void Branch::restore_counterexample_choices(std::vector<std::vector<std::string>> &ces) const {
+
+	if (ces.size() == 0) {
+		return;
+	}
+	counterexample_choices = ces[0];
+	ces.erase(ces.begin());
+
+	for (const auto& child: this->branch().choices){
+		if (child.node->is_branch()){
+		child.node->branch().restore_counterexample_choices(ces);
+		} else if (child.node->is_condition_node()) {
+			child.node->condition_node().restore_counterexample_choices(ces);
+		}
+	}
+
+	return;
+}
+
+void Branch::mark_honest(const HonestHistory &history) const {
+	assert(!honest);
+	honest = true;
+	
+	if (history.empty()) {
+		std::cerr << "checkmate: honest history not fitting the game tree (too short)" << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+	
+	const auto &first_element = history[0];
+	
+	if (!std::holds_alternative<std::string>(first_element)) {
+		std::cerr << "checkmate: honest history does not fit tree shape (conditions provided where action expected)" << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+
+	else{
+		// Branch case: recurse on honest child
+		const std::string &action = std::get<std::string>(first_element);
+		const Choice &honest_choice = this->branch().get_choice(action);
+		
+		// Prepare remaining history for recursion
+		HonestHistory remaining_history(history.begin() + 1, history.end());
+		
+		// Recurse if the child is a branch or condition node
+		if (honest_choice.node->is_branch() || honest_choice.node->is_condition_node()) {
+			if (honest_choice.node->is_branch()) {
+				honest_choice.node->branch().mark_honest(remaining_history);
+			} else {
+				honest_choice.node->condition_node().mark_honest(remaining_history);
+			}
+		}
+		else {
+			//otherwise set honest to true for the child node and check that the history is fully consumed
+			honest_choice.node->honest = true;
+			if (!remaining_history.empty()) {
+				std::cerr << "checkmate: honest history not fitting the game tree (too long)" << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+		}
+	} 
+}
+
+void Branch::reset_honest() const {
+	if(!honest)
+		return;
+
+	honest = false;
+	
+	const Node * current = this->branch().get_honest_child().node.get();
+	if (current->is_branch()) {
+		current->branch().reset_honest();
+	} else if (current->is_condition_node()) {
+		current->condition_node().reset_honest();
+	} else if (current->is_leaf()) {
+		current->leaf().honest = false;
+	} else {
+		current->subtree().honest = false;
+	}
+	
+}
+
+void Branch::reset_reason() const {
+	::new (&reason) z3::Bool();
+	for(auto &choice: choices)
+		if(choice.node->is_branch()){
+			choice.node->branch().reset_reason();
+		}
+		else if (choice.node->is_condition_node()) {
+			choice.node->condition_node().reset_reason();
+		}
+		else if (choice.node->is_leaf()) {
+			choice.node->leaf().reset_reason();
+		} else {
+			choice.node->subtree().reset_reason();
+		}
+}
+
+void Branch::reset_strategy() const {
+	strategy.clear();
+	for(auto &choice: choices)
+		if(choice.node->is_branch())
+			choice.node->branch().reset_strategy();
+		else if (choice.node->is_condition_node()) {
+			choice.node->condition_node().reset_strategy();
+		}
+}
+
+void Branch::reset_problematic_group(bool is_cr) const {
+	problematic_group = is_cr ? 1 : 0;
+	for(auto &choice: choices)
+		if(choice.node->is_branch()) {
+			choice.node->branch().reset_problematic_group(is_cr);
+		} else if (choice.node->is_condition_node()){
+			choice.node->condition_node().reset_problematic_group(is_cr);
+		} else if (choice.node->is_leaf()){
+			choice.node->leaf().reset_problematic_group(is_cr);
+		} else {
+			choice.node->subtree().reset_problematic_group(is_cr);
+		}
+}
+
+void Branch::reset_practical_utilities() const {
+	practical_utilities = {};
+	for (auto& choice: choices){
+		if (choice.node->is_condition_node()) {
+			choice.node->condition_node().reset_practical_utilities();
+		} else if (choice.node->is_branch()) {
+				choice.node->branch().reset_practical_utilities();
+			
+		} else if (choice.node->is_subtree()) {
+			choice.node->subtree().reset_practical_utilities();
 		}
 	}
 }
