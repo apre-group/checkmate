@@ -2,6 +2,7 @@
 #define __checkmate_input__
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <variant>
@@ -103,7 +104,7 @@ struct HistoryChoice{
 };
 
 struct CeChoice{
-	std::string player;
+	std::optional<std::string> player;
 	std::vector<std::string> choices;
 	std::vector<std::string> history;
 };
@@ -939,8 +940,10 @@ struct Input {
 
 	mutable std::vector<UtilityCase> utilities_pr_nohistory;
 
-	// root: NB must be a branch
-	std::unique_ptr<Branch> root;
+	// root: NB must be a branch or condition node
+	// is asserted when loading the tree
+	std::unique_ptr<Node> root;
+
 
 	// maximum number of players currently supported
 	// no reason there couldn't be more, but convenient for implementation (cf collusion resilience)
@@ -1000,7 +1003,11 @@ struct Input {
 	}
 
 	void reset_practical_utilities() const {
-		root.get()->reset_practical_utilities();
+		if (root->is_branch()) {
+			root->branch().reset_practical_utilities();
+		} else if (root->is_condition_node()) {
+			root->condition_node().reset_practical_utilities();
+		}
 	}
 
 	void compute_strategy_case(std::vector<z3::Bool> _case, PropertyType property) const {
@@ -1118,14 +1125,23 @@ struct Input {
 						std::cout << "Group " << ce_case.player_group << " can deviate profitably, if" << std::endl;
 					}
 					for (CeChoice ce_choice : ce_case.counterexample){
-						std::cout
-							<< "\tPlayer "
-							<< ce_choice.player
-							<< " takes one of the actions "
-							<< ce_choice.choices
-							<< " after history "
-							<< ce_choice.history
-							<< std::endl;
+						if (ce_choice.player.has_value()) {
+							std::cout
+								<< "\tPlayer "
+								<< ce_choice.player.value()
+								<< " takes one of the actions "
+								<< ce_choice.choices
+								<< " after history "
+								<< ce_choice.history
+								<< std::endl;
+						} else {
+							std::cout
+								<< "\tOne of the conditions "
+								<< ce_choice.choices
+								<< " holds at history "
+								<< ce_choice.history
+								<< std::endl;
+						}
 					}
 					if(options.supertree) {
 						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;

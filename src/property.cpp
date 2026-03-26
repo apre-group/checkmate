@@ -118,7 +118,7 @@ void print_calls_counters(bool wi, bool weri, bool cr, bool pr) {
 
 }
 
-// third-party library for parsing JSON
+// third-party library for parsing to JSON
 using json = nlohmann::json;
 
 json parse_sat_case(std::vector<z3::Bool> sat_case) {
@@ -253,19 +253,35 @@ z3::Bool get_split_approx(z3::Solver &solver, Utility a, Utility b) {
 	}	
 }
 
-const Node& get_honest_leaf(Node *node, const std::vector<std::string> &history, unsigned index) {
+std::vector<const Node*> get_honest_leaves(Node *node, const HonestHistory &history) {
 	switch(node->type()) {
     case NodeType::LEAF:
-		return node->leaf();
+		return {&node->leaf()};
     case NodeType::SUBTREE:
-        return node->subtree();
+        return {&node->subtree()};
 	case NodeType::BRANCH:
+		break;
+	case NodeType::CONDITION_NODE:
 		break;
     // no need for default
     }
 
-	unsigned next_index = index + 1;
-	return get_honest_leaf(node->branch().get_choice(history[index]).node.get(), history, next_index);
+	assert(!history.empty());
+	if (node->is_branch()) {
+		assert(std::holds_alternative<std::string>(history[0]));
+		HonestHistory next_history(history.begin() + 1, history.end());
+		return get_honest_leaves(node->branch().get_choice(std::get<std::string>(history[0])).node.get(), next_history);
+	} else if (node->is_condition_node()) {
+		assert(std::holds_alternative<std::vector<HonestHistoryCondition>>(history[0]));
+		// For condition nodes, recursively collect leaves from all conditions
+		std::vector<const Node*> all_leaves;
+		for (const auto &hhcondition : std::get<std::vector<HonestHistoryCondition>>(history[0])) {
+			std::vector<const Node*> condition_leaves = get_honest_leaves(node->condition_node().get_choice(hhcondition.condition).node.get(), hhcondition.path);
+			all_leaves.insert(all_leaves.end(), condition_leaves.begin(), condition_leaves.end());
+		}
+		return all_leaves;
+	}
+	return {}; // Should not reach here
 }
 
 bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
@@ -301,6 +317,8 @@ std::vector<std::string> index2player(const Input &input, PropertyType property,
 
 	return players;
 }
+
+
 
 
 bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, unsigned player, bool weaker, bool consider_prob_groups) {
@@ -1168,6 +1186,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 }
 
 
+
 bool property_under_split(z3::Solver &solver, const Input &input, const Options &options, const PropertyType property, size_t history) {
 	/* determine if the input has some property for the current honest history under the current split */
 	
@@ -1229,7 +1248,8 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		// lookup the leaf for this history
 		std::vector<Utility> utility;
 		if(history < input.honest.size()) {
-			const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
+			std::vector<const Node*> honest_leaves = get_honest_leaves(input.root.get(), input.honest[history]);
+			// TODO: honest_leaf is now honest_leaves; has to be aligned
 			if (honest_leaf.is_leaf()){
 				utility = honest_leaf.leaf().utilities;
 			} else {
@@ -1318,7 +1338,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 
 	else if (property == PropertyType::Practicality) {
 		bool pr_result = practicality_rec_old(input, options, solver, input.root.get(), {}, true);
-		if(pr_result && options.counterexamples && !input.root->branch().honest) {
+		if(pr_result && options.counterexamples && !input.root->honest) {
 			CeCase pr_ce_case;
 			std::vector<CeChoice> pr_choices;
 			for(const auto& pr_utility : input.root->practical_utilities) {
@@ -1337,7 +1357,6 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 	UNREACHABLE
 }
 
-
 bool property_rec(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, size_t history, std::vector<PracticalitySubtreeResult> &subtree_results_pr) {
 	/* 
 		actual case splitting engine
@@ -1355,8 +1374,14 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 			subtree_result_pr._case = current_case;
 			subtree_result_pr.utilities = {};
 			std::vector<Utility> honest_utility;
-			for (auto elem: input.root->branch().practical_utilities) {
-				honest_utility = elem.leaf;
+			if (input.root->is_branch()) {
+				for (auto elem: input.root->branch().practical_utilities) {
+					honest_utility = elem.leaf;
+				}
+			} else if (input.root->is_condition_node()){
+				for (auto elem: input.root->condition_node().practical_utilities) {
+					honest_utility = elem.leaf;
+				}
 			}
 			subtree_result_pr.utilities = {honest_utility};
 			subtree_results_pr.push_back(subtree_result_pr);
@@ -1491,8 +1516,9 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 
 
 	if(property == PropertyType::CollusionResilience){
-		const Node &honest_leaf_pre = get_honest_leaf(input.root.get(), input.honest[history], 0);
-		// in subtree mode there cannot be subtrees in the input;
+		std::vector<const Node*> honest_leaves_pre = get_honest_leaves(input.root.get(), input.honest[history]);
+		// in subtree mode there cannot be subtrees in the input
+		// TODO there are now multiple honest leaves, has to be aligned with honest_total computation
 		const Leaf &honest_leaf = honest_leaf_pre.leaf();
 		group = group_nr;
 		
@@ -1672,9 +1698,16 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 			PracticalitySubtreeResult subtree_result_pr;
 			subtree_result_pr._case = current_case;
 			subtree_result_pr.utilities = {};
-			for (auto elem: input.root->branch().practical_utilities) {
-				subtree_result_pr.utilities.push_back(elem.leaf);
+			if (input.root->is_branch()) {
+				for (auto elem: input.root->branch().practical_utilities) {
+					subtree_result_pr.utilities.push_back(elem.leaf);
+				}
+			} else if (input.root->is_condition_node()){
+				for (auto elem: input.root->condition_node().practical_utilities) {
+					subtree_result_pr.utilities.push_back(elem.leaf);
+				}
 			}
+
 			subtree_results_pr.push_back(subtree_result_pr);
 		} else if (property != PropertyType::Practicality) {
 			satisfied_in_case.push_back(current_case);
@@ -1739,6 +1772,7 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 	}
 	return result;
 }
+
 
 
 void property(const Options &options, const Input &input, PropertyType property, size_t history) {
@@ -1892,14 +1926,25 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 		bool pr_result = property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, subtree_results_pr);
 
 		if (pr_result) {
-			assert(input.root->branch().practical_utilities.size() == 1);
-			std::vector<Utility> honest_utility;
-			for (auto elem: input.root->branch().practical_utilities) {
-				honest_utility = elem.leaf;
+			if (input.root->is_branch()) {
+				assert(input.root->branch().practical_utilities.size() == 1);
+				std::vector<Utility> honest_utility;
+				for (auto elem: input.root->branch().practical_utilities) {
+					honest_utility = elem.leaf;
+				}
+			} else if (input.root->is_condition_node()){
+				assert(input.root->condition_node().practical_utilities.size() == 1);
+				std::vector<Utility> honest_utility;
+				for (auto elem: input.root->condition_node().practical_utilities) {
+					honest_utility = elem.leaf;
+				}
 			}
 			std::cout << "YES, it is " << prop_name << ", the honest practical utility is "<<  honest_utility << "." << std::endl;
 		} else {
-			//assert( input.root->branch().practical_utilities.size() == 0);
+			// if (input.root->is_branch()) {
+			//		assert( input.root->branch().practical_utilities.size() == 0); }
+			// else if (input.root->is_condition_node()){
+			//		assert( input.root->condition_node().practical_utilities.size() == 0); }
 			// removed this assertion bacause it was failing
 			// practical utilites is always at least once - we always set it
 			// even though when it is not correct because we needed this for an 
@@ -2147,6 +2192,7 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 }
 
 
+
 void analyse_properties(const Options &options, const Input &input) {
 
 	if(input.honest_utilities.size() != 0) {
@@ -2364,7 +2410,8 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 		Subtree st({}, {}, {}, {}, {});
 		Subtree &subtree = st;
-		const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
+		std::vector<const Node*> honest_leaves = get_honest_leaves(input.root.get(), input.honest[history]);
+		// TODO we have multiple honest leaves now, we have to adapt this
 		subtree.honest_utility = honest_leaf.leaf().utilities;
 
 		for (size_t i=0; i<property_chosen.size(); i++) {

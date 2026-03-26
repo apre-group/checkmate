@@ -917,7 +917,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 	practicality_constraint = conjunction(conjuncts);
 
 
-	// load the game tree and leak it so we can downcast to Branch
+	// load the game tree and leak it so we can downcast to Branch or ConditionNode
 	auto node = load_tree(*this, parser, document["tree"], supertree).release();
 
 	if (node->is_leaf() || node->is_subtree()) {
@@ -925,9 +925,10 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 		std::exit(EXIT_FAILURE);
 	}
 	// un-leaked and downcasted here
-	root = std::unique_ptr<Branch>(static_cast<Branch *>(node));
-
+	root = std::unique_ptr<Node>(static_cast<Node *>(node));
 }
+
+
 
 std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const {
 
@@ -936,21 +937,33 @@ std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> playe
 		}
 		std::vector<HistoryChoice> strategy;
 
-		if (!this->branch().strategy.empty()){
-			HistoryChoice hist_choice;
-			hist_choice.player = players[this->branch().player];
-			hist_choice.choice = this->branch().strategy;
-			hist_choice.history = actions_so_far;
+		if (this->is_branch()) {
+			if (!this->branch().strategy.empty()){
+				HistoryChoice hist_choice;
+				hist_choice.player = players[this->branch().player];
+				hist_choice.choice = this->branch().strategy;
+				hist_choice.history = actions_so_far;
 
-			strategy.push_back(hist_choice);
+				strategy.push_back(hist_choice);
+			}
+			
+			for (const Choice &choice: this->branch().choices) {
+				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+				updated_actions.push_back(choice.action);
+				std::vector<HistoryChoice> child_strategy = choice.node->compute_strategy(players, updated_actions);
+				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+			}
+		} else if (this->is_condition_node()) {
+			// For condition nodes, recursively compute strategy for all conditional branches
+			// since no action itself is taken at a condition node, we only track the condition in the history;
+			for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
+				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+				updated_actions.push_back(cond_choice.condition.to_string()); // Add the condition to the history for tracking purposes
+				std::vector<HistoryChoice> child_strategy = cond_choice.node->compute_strategy(players, updated_actions);
+				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+			}
 		}
 		
-		for (const Choice &choice: this->branch().choices) {
-	 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-	 		updated_actions.push_back(choice.action);
-	 		std::vector<HistoryChoice> child_strategy = choice.node->compute_strategy(players, updated_actions);
-			strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
-	 	}
 		return strategy;
 	}
 
@@ -978,7 +991,6 @@ std::vector<bool> convertToBinary(uint n)
 	bit_reps.push_back(n % 2 == 1);
 	return bit_reps;
 }
-
 
 bool Node::cr_against_supergroups_of(std::vector<uint> deviating_players) const {
 
@@ -1012,8 +1024,14 @@ void Node::add_violation_cr() const {
 
 	if (!this->is_leaf() && !this->is_subtree()){
 
-		for (const auto& child: this->branch().choices){
-			child.node->add_violation_cr();
+		if (this->is_branch()) {
+			for (const auto& child: this->branch().choices){
+				child.node->add_violation_cr();
+			}
+		} else if (this->is_condition_node()) {
+			for (const auto& cond_choice: this->condition_node().conditions) {
+				cond_choice.node->add_violation_cr();
+			}
 		}
 	}
 	return;
@@ -1027,28 +1045,12 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> pl
 		std::vector<HistoryChoice> strategy;
 		std::string strategy_choice;
 
-		if (honest) {
-			for (const Choice &choice: this->branch().choices) {
+		if (this->is_branch()) {
+			if (honest) {
+				for (const Choice &choice: this->branch().choices) {
 
-				if (choice.node->honest) {
-					assert(choice.node->cr_against_all());
-					HistoryChoice hist_choice;
-					hist_choice.player = players[this->branch().player];
-					hist_choice.choice = choice.action;
-					hist_choice.history = actions_so_far;
-					strategy_choice = choice.action;
-
-					strategy.push_back(hist_choice);
-					break;
-				}
-			}
-		} else {
-			bool have_found_cr = false;
-			for (const Choice &choice: this->branch().choices) {
-
-				if (choice.node->cr_against_supergroups_of(deviating_players)){
-					if(!have_found_cr) {
-						have_found_cr = true;
+					if (choice.node->honest) {
+						assert(choice.node->cr_against_all());
 						HistoryChoice hist_choice;
 						hist_choice.player = players[this->branch().player];
 						hist_choice.choice = choice.action;
@@ -1056,28 +1058,57 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> pl
 						strategy_choice = choice.action;
 
 						strategy.push_back(hist_choice);
+						break;
 					}
 				}
+			} else {
+				bool have_found_cr = false;
+				for (const Choice &choice: this->branch().choices) {
 
+					if (choice.node->cr_against_supergroups_of(deviating_players)){
+						if(!have_found_cr) {
+							have_found_cr = true;
+							HistoryChoice hist_choice;
+							hist_choice.player = players[this->branch().player];
+							hist_choice.choice = choice.action;
+							hist_choice.history = actions_so_far;
+							strategy_choice = choice.action;
+
+							strategy.push_back(hist_choice);
+						}
+					}
+
+				}
+				assert(have_found_cr);
 			}
-			assert(have_found_cr);
+			
+			for (const Choice &choice: this->branch().choices) {
+				std::vector<uint> new_deviating_players;
+				new_deviating_players.insert(new_deviating_players.end(), deviating_players.begin(), deviating_players.end());
+
+				int cnt = std::count(deviating_players.begin(), deviating_players.end(), this->branch().player + 1);
+				if((choice.action != strategy_choice) && (cnt == 0)) {
+					new_deviating_players.push_back(this->branch().player + 1);
+				}
+
+				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+				updated_actions.push_back(choice.action);
+
+				std::vector<HistoryChoice> child_strategy = choice.node->compute_cr_strategy(players, updated_actions, new_deviating_players); 
+				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+			}
+		} else if (this->is_condition_node()) {
+			// For condition nodes, recursively compute cr_strategy for all conditional branches
+			for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
+
+				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+				updated_actions.push_back(cond_choice.condition.to_string()); // Add the condition to the history for tracking purposes
+
+				std::vector<HistoryChoice> child_strategy = cond_choice.node->compute_cr_strategy(players, updated_actions, deviating_players);
+				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+			}
 		}
 		
-		for (const Choice &choice: this->branch().choices) {
-			std::vector<uint> new_deviating_players;
-			new_deviating_players.insert(new_deviating_players.end(), deviating_players.begin(), deviating_players.end());
-
-			int cnt = std::count(deviating_players.begin(), deviating_players.end(), this->branch().player + 1);
-			if((choice.action != strategy_choice) && (cnt == 0)) {
-				new_deviating_players.push_back(this->branch().player + 1);
-			}
-
-	 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-	 		updated_actions.push_back(choice.action);
-
-	 		std::vector<HistoryChoice> child_strategy = choice.node->compute_cr_strategy(players, updated_actions, new_deviating_players); 
-			strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
-	 	}
 		return strategy;
 	}
 
@@ -1090,23 +1121,37 @@ std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> pl
 		assert(strategy_vector.size()>0);
 		std::vector<HistoryChoice> strategy;
 
-		HistoryChoice hist_choice;
-		hist_choice.player = players[this->branch().player];
-		hist_choice.choice = strategy_vector[0];
-		strategy_vector.erase(strategy_vector.begin());
-		hist_choice.history = actions_so_far;
+		if (this->is_branch()){
 
-		strategy.push_back(hist_choice);
+			HistoryChoice hist_choice;
+			hist_choice.player = players[this->branch().player];
+			hist_choice.choice = strategy_vector[0];
+			strategy_vector.erase(strategy_vector.begin());
+			hist_choice.history = actions_so_far;
 
-		
-		for (const Choice &choice: this->branch().choices) {
-	 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-	 		updated_actions.push_back(choice.action);
-	 		std::vector<HistoryChoice> child_strategy = choice.node->compute_pr_strategy(players, updated_actions, strategy_vector);
-			strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
-	 	}
+			strategy.push_back(hist_choice);
+
+			
+			for (const Choice &choice: this->branch().choices) {
+				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+				updated_actions.push_back(choice.action);
+				std::vector<HistoryChoice> child_strategy = choice.node->compute_pr_strategy(players, updated_actions, strategy_vector);
+				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+			}
+		}
+		 else if (this->is_condition_node()) {
+			// For condition nodes, recursively compute pr_strategy for all conditional branches
+			for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
+				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+				updated_actions.push_back(cond_choice.condition.to_string()); // Add the condition to the history for tracking purposes
+				std::vector<HistoryChoice> child_strategy = cond_choice.node->compute_pr_strategy(players, updated_actions, strategy_vector);
+				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+			}
+		}
+
 		return strategy;
 	}
+
 
 std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
 
@@ -1117,43 +1162,64 @@ std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std:
 
 		assert(player_group.size() == 1);
 
-		if (player_group[0] == this->branch().player) {
-			if (honest){
-				for (auto& child: this->branch().choices){
-					if (child.node->honest) {
-						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-	 					updated_actions.push_back(child.action);
-						counterexample = child.node->compute_wi_ce(players, updated_actions, player_group);
-						break;
+		if (this->is_branch()){
+			if (player_group[0] == this->branch().player) {
+				if (honest){
+					for (auto& child: this->branch().choices){
+						if (child.node->honest) {
+							std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+							updated_actions.push_back(child.action);
+							counterexample = child.node->compute_wi_ce(players, updated_actions, player_group);
+							break;
+						}
+					}
+				} else {
+					for (auto& child: this->branch().choices){
+							std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+							updated_actions.push_back(child.action);
+							std::vector<CeChoice> child_counterexample = child.node->compute_wi_ce(players, updated_actions, player_group);
+							counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
 					}
 				}
 			} else {
-				for (auto& child: this->branch().choices){
+				assert(!this->branch().counterexample_choices.empty());
+				CeChoice ce_choice;
+				ce_choice.player = players[this->branch().player];
+				ce_choice.choices = this->branch().counterexample_choices;
+				ce_choice.history = actions_so_far;
+
+				counterexample.push_back(ce_choice);
+
+				for (const Choice &choice: this->branch().choices) {
+
+					int cnt = std::count(this->branch().counterexample_choices.begin(), this->branch().counterexample_choices.end(), choice.action);
+					if (cnt > 0) {
 						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-	 					updated_actions.push_back(child.action);
-						std::vector<CeChoice> child_counterexample = child.node->compute_wi_ce(players, updated_actions, player_group);
-						counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
+						updated_actions.push_back(choice.action);
+						std::vector<CeChoice> child_ce = choice.node->compute_wi_ce(players, updated_actions, player_group);
+						counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+					}
 				}
 			}
-		} else {
-			assert(!this->branch().counterexample_choices.empty());
-			CeChoice ce_choice;
-			ce_choice.player = players[this->branch().player];
-			ce_choice.choices = this->branch().counterexample_choices;
-			ce_choice.history = actions_so_far;
+		} else if (this->is_condition_node()) {
+			assert(!this->condition_node().counterexample_choices.empty());
+				CeChoice ce_choice;
+				ce_choice.player = std::nullopt; // no player associated with condition nodes
+				ce_choice.choices = this->condition_node().counterexample_choices;
+				ce_choice.history = actions_so_far;
 
-			counterexample.push_back(ce_choice);
+				counterexample.push_back(ce_choice);
 
-			for (const Choice &choice: this->branch().choices) {
+				for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
 
-				int cnt = std::count(this->branch().counterexample_choices.begin(), this->branch().counterexample_choices.end(), choice.action);
-				if (cnt > 0) {
-					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-					updated_actions.push_back(choice.action);
-					std::vector<CeChoice> child_ce = choice.node->compute_wi_ce(players, updated_actions, player_group);
-					counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+					int cnt = std::count(this->condition_node().counterexample_choices.begin(), this->condition_node().counterexample_choices.end(), cond_choice.condition.to_string());
+					if (cnt > 0) {
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+						updated_actions.push_back(cond_choice.condition.to_string());
+						std::vector<CeChoice> child_ce = cond_choice.node->compute_wi_ce(players, updated_actions, player_group);
+						counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+					}
 				}
-			}
 		}
 		return counterexample;
 	}
@@ -1167,53 +1233,72 @@ std::vector<CeChoice> Node::compute_cr_ce(std::vector<std::string> players, std:
 
 		assert(player_group.size() >= 1);
 
-
-		int cnt = std::count(player_group.begin(), player_group.end(), this->branch().player);
-		if (cnt == 0) {
-			if (honest){
-				for (auto& child: this->branch().choices){
-					if (child.node->honest) {
-						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-	 					updated_actions.push_back(child.action);
-						counterexample = child.node->compute_cr_ce(players, updated_actions, player_group);
-						break;
+		if (this->is_branch()){
+			int cnt = std::count(player_group.begin(), player_group.end(), this->branch().player);
+			if (cnt == 0) {
+				if (honest){
+					for (auto& child: this->branch().choices){
+						if (child.node->honest) {
+							std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+							updated_actions.push_back(child.action);
+							counterexample = child.node->compute_cr_ce(players, updated_actions, player_group);
+							break;
+						}
+					}
+				} else {
+					for (auto& child: this->branch().choices){
+							std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+							updated_actions.push_back(child.action);
+							std::vector<CeChoice> child_counterexample = child.node->compute_cr_ce(players, updated_actions, player_group);
+							counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
 					}
 				}
 			} else {
-				for (auto& child: this->branch().choices){
+				assert(!this->branch().counterexample_choices.empty());
+				CeChoice ce_choice;
+				ce_choice.player = players[this->branch().player];
+				ce_choice.choices = this->branch().counterexample_choices;
+				ce_choice.history = actions_so_far;
+
+				counterexample.push_back(ce_choice);
+
+				for (const Choice &choice: this->branch().choices) {
+
+					int cnt = std::count(this->branch().counterexample_choices.begin(), this->branch().counterexample_choices.end(), choice.action);
+					if (cnt > 0) {
 						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-	 					updated_actions.push_back(child.action);
-						std::vector<CeChoice> child_counterexample = child.node->compute_cr_ce(players, updated_actions, player_group);
-						counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
+						updated_actions.push_back(choice.action);
+						std::vector<CeChoice> child_ce = choice.node->compute_cr_ce(players, updated_actions, player_group);
+						counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+					}
 				}
 			}
-		} else {
-			assert(!this->branch().counterexample_choices.empty());
-			CeChoice ce_choice;
-			ce_choice.player = players[this->branch().player];
-			ce_choice.choices = this->branch().counterexample_choices;
-			ce_choice.history = actions_so_far;
+		} else if (this->is_condition_node()) {
+			assert(!this->condition_node().counterexample_choices.empty());
+				CeChoice ce_choice;
+				ce_choice.player = std::nullopt; // no player associated with condition nodes
+				ce_choice.choices = this->condition_node().counterexample_choices;
+				ce_choice.history = actions_so_far;
 
-			counterexample.push_back(ce_choice);
+				counterexample.push_back(ce_choice);
 
-			for (const Choice &choice: this->branch().choices) {
+				for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
 
-				int cnt = std::count(this->branch().counterexample_choices.begin(), this->branch().counterexample_choices.end(), choice.action);
-				if (cnt > 0) {
-					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-					updated_actions.push_back(choice.action);
-					std::vector<CeChoice> child_ce = choice.node->compute_cr_ce(players, updated_actions, player_group);
-					counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+					int cnt = std::count(this->condition_node().counterexample_choices.begin(), this->condition_node().counterexample_choices.end(), cond_choice.condition.to_string());
+					if (cnt > 0) {
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+						updated_actions.push_back(cond_choice.condition.to_string());
+						std::vector<CeChoice> child_ce = cond_choice.node->compute_cr_ce(players, updated_actions, player_group);
+						counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+					}
 				}
-			}
 		}
 		return counterexample;
 	}
 
-
 CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::string current_action, UtilityTuplesSet practical_utilities) const {
 	
-	// regular case (called from branch)
+	// regular case (called from branch or a condition node)
 	if(current_player < players.size()) {
 		CeCase cecase;
 		cecase.player_group = {players[current_player]};
@@ -1247,10 +1332,19 @@ const Node* Node::compute_deviation_node(std::vector<std::string> actions_so_far
 	if(actions_so_far.size() > 0) { 
 		assert(!this->is_leaf());
 		assert(!this->is_subtree());
-		for (const auto &child: this->branch().choices){
-			if(child.action == actions_so_far[0]) {
-				actions_so_far.erase(actions_so_far.begin());
-				return child.node.get()->compute_deviation_node(actions_so_far);
+		if (this->is_branch()) {
+			for (const auto &child: this->branch().choices){
+				if(child.action == actions_so_far[0]) {
+					actions_so_far.erase(actions_so_far.begin());
+					return child.node.get()->compute_deviation_node(actions_so_far);
+				}
+			}
+		} else if (this->is_condition_node()) {
+			for (const auto &cond_choice: this->condition_node().conditions) {
+				if(cond_choice.condition.to_string() == actions_so_far[0]) {
+					actions_so_far.erase(actions_so_far.begin());
+					return cond_choice.node.get()->compute_deviation_node(actions_so_far);
+				}
 			}
 		}
 	}
@@ -1304,14 +1398,26 @@ std::vector<std::string> Node::strat2hist(std::vector<std::string> &strategy) co
 	hist_player_pairs.push_back(first_action);
 
 	bool found = false;
-	for(auto &child: this->branch().choices) {
+	if (this->is_branch()) {
+		for(auto &child: this->branch().choices) {
 
-		if(child.action == first_action) {
-			std::vector<std::string> child_result = child.node->strat2hist(strategy_copy);
-			hist_player_pairs.insert(hist_player_pairs.end(), child_result.begin(), child_result.end());
-			found = true;
-		} else {
-			child.node->prune_actions_from_strategy(strategy_copy);
+			if(child.action == first_action) {
+				std::vector<std::string> child_result = child.node->strat2hist(strategy_copy);
+				hist_player_pairs.insert(hist_player_pairs.end(), child_result.begin(), child_result.end());
+				found = true;
+			} else {
+				child.node->prune_actions_from_strategy(strategy_copy);
+			}
+		}
+	} else if (this->is_condition_node()) { // assuming this is a counterexample strategy, there is only one condition there
+		for (auto &cond_choice: this->condition_node().conditions) {
+			if(cond_choice.condition.to_string() == first_action) {
+				std::vector<std::string> child_result = cond_choice.node->strat2hist(strategy_copy);
+				hist_player_pairs.insert(hist_player_pairs.end(), child_result.begin(), child_result.end());
+				found = true;
+			} else {
+				cond_choice.node->prune_actions_from_strategy(strategy_copy);
+			}
 		}
 	}
 
@@ -1329,34 +1435,54 @@ void Node::prune_actions_from_strategy(std::vector<std::string> &strategy) const
 
 	assert(strategy.size() > 0);
 	strategy.erase(strategy.begin());
-	for(auto &child: this->branch().choices) {
-		child.node->prune_actions_from_strategy(strategy);
+	if (this->is_branch()) {
+		for(auto &child: this->branch().choices) {
+			child.node->prune_actions_from_strategy(strategy);
+		}
+	} else if (this->is_condition_node()) {
+		for (auto &cond_choice: this->condition_node().conditions) {
+			cond_choice.node->prune_actions_from_strategy(strategy);
+		}
 	}
 }
 
+
 void Node::reset_violation_cr() const {
-		violates_cr = {};
+	violates_cr = {};
 
-		if (!this->is_leaf() && !this->is_subtree()){
+	if (!this->is_leaf() && !this->is_subtree()){
 
+		if (this->is_branch()) {
 			for (const auto& child: this->branch().choices){
 				child.node->reset_violation_cr();
 			}
+		} else if (this->is_condition_node()) {
+			for (const auto& cond_choice: this->condition_node().conditions) {
+				cond_choice.node->reset_violation_cr();
+			}
 		}
-		return;
+	}
+	return;
 }
 
 std::vector<std::vector<bool>> Node::store_violation_cr() const {
 
 	std::vector<std::vector<bool>> violation = {violates_cr};
 
-	if (!this->is_leaf() && !this->is_subtree()){
+	if (!this->is_branch()){
 
 		for (const auto& child: this->branch().choices){
 			std::vector<std::vector<bool>> child_violation = child.node->store_violation_cr();
 			violation.insert(violation.end(), child_violation.begin(), child_violation.end());
 		}
-	} 
+
+	} else if (this->is_condition_node()) {
+
+		for (const auto& cond_choice: this->condition_node().conditions) {
+			std::vector<std::vector<bool>> child_violation = cond_choice.node->store_violation_cr();
+			violation.insert(violation.end(), child_violation.begin(), child_violation.end());
+		}
+	}
 	return violation;
 }
 
@@ -1366,10 +1492,15 @@ void Node::restore_violation_cr(std::vector<std::vector<bool>> &violation) const
 	violates_cr = violation[0];
 	violation.erase(violation.begin());
 
-	if (!this->is_leaf() && !this->is_subtree()){
+	if (!this->is_branch()){
 
 		for (const auto& child: this->branch().choices){
 			child.node->restore_violation_cr(violation);
+		}
+	} else if (this->is_condition_node()) {
+
+		for (const auto& cond_choice: this->condition_node().conditions) {
+			cond_choice.node->restore_violation_cr(violation);
 		}
 	}
 
@@ -1394,8 +1525,16 @@ void Node::reset_count_check(bool wi, bool weri, bool cr, bool pr) const {
 		for(auto &child : branch.choices) {
 			child.node.get()->reset_count_check(wi, weri, cr, pr);
 		}
+	} else if (this->is_condition_node()) {
+		const auto &cond_node = this->condition_node();
+		for(auto &cond_choice : cond_node.conditions) {
+			cond_choice.node.get()->reset_count_check(wi, weri, cr, pr);
+		}
 	}
 }
+
+
+
 
 void Branch::reset_counterexample_choices() const {
 	counterexample_choices = {};

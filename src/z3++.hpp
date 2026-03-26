@@ -293,6 +293,12 @@ namespace z3 {
 			return new_expr;
 		}
 
+		std::string to_string() {
+			std::ostringstream oss;
+			oss << *this;
+			return oss.str();
+		}
+
 	private:
 		Bool(Z3_ast ast) : Expression(ast) { assert(is_bool()); }
 	};
