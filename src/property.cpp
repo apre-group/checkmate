@@ -347,12 +347,12 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		// known utility for us
 		auto utility = leaf.utilities[player];
 
-		z3::Bool condition = weaker ? utility.real >= z3::Real::ZERO : utility >= Utility {z3::Real::ZERO, z3::Real::ZERO};
+		z3::Bool property = weaker ? utility.real >= z3::Real::ZERO : utility >= Utility {z3::Real::ZERO, z3::Real::ZERO};
 
 		if(options.count_calls) {
 			weaker ? calls_weri++ : calls_wi++;
 		}
-		if (solver.solve({!condition}) == z3::Result::UNSAT) {
+		if (solver.solve({!property}) == z3::Result::UNSAT) {
 			if (consider_prob_groups) {
 				leaf.problematic_group = player + 1;
 			}
@@ -362,7 +362,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		if(options.count_calls) {
 			weaker ? calls_weri++ : calls_wi++;
 		}
-		if (solver.solve({condition}) == z3::Result::UNSAT) {
+		if (solver.solve({property}) == z3::Result::UNSAT) {
 			return false;
 		}
 
@@ -382,13 +382,13 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		}
 
 		// look up current player:
-		// 		if disj_of_cases (in satisfied_for_case) is equivalent to current case or weaker we return true 
+		// 		if disj_of_cases (in satisfied_for_case) is implied by current case we return true 
 		//			e.g. satisfied for case [a+1>b, b>a+1], current_case is a>b;
 		//				 since a>b => a+1>b, we conclude satisfied for a>b (i.e. return true)
 		// 		else if disj_of_cases not disjoint from current case --> need case split (set the first of these not disjoint ones to be reason)
 		//			e.g. satisfied for case [a>b], current_case is a>0;
 		//  			hence whether satisfied or not depends on b, so we add a>b as the reason 
-		// 		else return false
+		// 		else (satisfied in case disjoint from current case) return false
 		//			e.g. satisfied for case [a>b], current case a < b, then for sure not satisfied, make sure reason is empty and return false
 
 		// search for SubtreeResult in weak(er)_immunity that corresponds to the current player
@@ -418,7 +418,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					}
 				}
 
-				z3::Bool disj_of_cases = z3::disjunction(cases_as_conjunctions);
+				z3::Bool disj_of_cases;
 
 				if(cases_as_conjunctions.size() == 1) {
 					disj_of_cases = cases_as_conjunctions[0];
@@ -431,6 +431,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				}
 				z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
+				// first case in description above: disj_of_cases implied by current case, so subtree weak(er) immune for player
 				if (z3_result_implied == z3::Result::UNSAT) {
 					if (consider_prob_groups) {
 						subtree.problematic_group = player + 1;
@@ -447,11 +448,13 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					}
 					z3::Result z3_result_disjoint = solver.solve({disj_of_cases});
 					
+					// second case in description above: not disjoint, but also not implied, so we need to split on the case as reason
 					if (z3_result_disjoint == z3::Result::SAT) {
 						// set reason
 						subtree.reason = disj_of_cases;
 					}
 
+					// third case in description above: disjoint, so subtree not weak(er) immune for player, make sure reason is empty and return false
 					if (consider_prob_groups) {
 						subtree.problematic_group = player;
 					}
@@ -460,102 +463,154 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				}
 			}
 		}
-	}
+	} else if (node->is_condition_node()) {
 
-	
+		const auto &cond_node = node->condition_node();
 
-	const auto &branch = node->branch();
-
-	if ((player < branch.problematic_group) && consider_prob_groups){
-		return true;
-	}
-
-
-	// else we deal with a branch
-	if (player == branch.player) { 	
-
-		// player behaves honestly
-		if (branch.honest) {
-			// if we are along the honest history, we want to take an honest strategy
-			auto &honest_choice = branch.get_honest_child();
-			auto *subtree = honest_choice.node.get();
-
-			// set chosen action, needed for printing strategy
-			branch.strategy = honest_choice.action;
-
-			// the honest choice must be weak immune
-			if (weak_immunity_rec(input, solver, options, subtree, player, weaker, consider_prob_groups)) {
-				if (consider_prob_groups) {
-					branch.problematic_group = player + 1;
-				}
-				return true;
-			} 
-
-			branch.reason = subtree->reason;
-			input.set_reset_point(branch);
-			return false;
+		if ((player < cond_node.problematic_group) && consider_prob_groups){
+			return true;
 		}
-		// otherwise we can take any strategy we please as long as it's weak immune
-		z3::Bool reason;
-		unsigned reset_index;
-		unsigned i = 0;
-		for (const Choice &choice: branch.choices) {
-			if (weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker, consider_prob_groups)) {
-				// set chosen action, needed for printing strategy
-				branch.strategy = choice.action;
-				if (consider_prob_groups) {
-						branch.problematic_group = player + 1;
-					}
-				return true;
-			}
-			if ((!choice.node->reason.null()) && (reason.null())) {
-					reason = choice.node->reason;
-					reset_index = i;
-			}
-			i++;
-		}
-		if (!reason.null()) {
-				branch.reason = reason;
-				input.set_reset_point(*branch.choices[reset_index].node);
-		}	
-		return false;
 
-	} else {
-		// if we are not the honest player, we could do anything,
-		// so all branches should be weak immune for the player
+		// we cannot control which condition will become true, so all branches (that are possible given the current case)
+		// should be weak immune for the analyzed player
 		bool result = true;
 		z3::Bool reason;
 		unsigned reset_index;
 		unsigned i = 0;
-		for (const Choice &choice: branch.choices) {
-			if (!weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker, consider_prob_groups)) {
-				if (choice.node->reason.null()){
-					if (options.counterexamples) {
-						branch.counterexample_choices.push_back(choice.action);
-					}
-					if (!options.all_counterexamples){
-						return false;
+		for (const ConditionChoice &choice: cond_node.conditions) {
+			// only consider condition if it is compatible with the current case
+			if (solver.solve({choice.condition}) == z3::Result::SAT) {
+				// add condition as assumption for recursive call, and remove it afterwards (solver.pop())
+				solver.push();
+				solver.assert_(choice.condition);
+				if (!weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker, consider_prob_groups)) {
+					if (choice.node->reason.null()){
+						if (options.counterexamples) {
+							z3::Bool current_condition = choice.condition;
+							cond_node.counterexample_choices.push_back(current_condition.to_string());
+						}
+						if (!options.all_counterexamples){
+							return false;
+						} else {
+							result = false;
+						}
 					} else {
+						if (result && reason.null()){
+							reason = choice.node->reason;
+							reset_index = i;
+						}
 						result = false;
-					}
-				} else {
-					if (result && reason.null()){
-						reason = choice.node->reason;
-						reset_index = i;
-					}
-					result = false;
-				}	
+					}	
+				}
+				solver.pop();
+				i++;
 			}
-			i++;
 		}
 		if (!reason.null()) {
-			branch.reason = reason;
-			input.set_reset_point(*branch.choices[reset_index].node);
+			cond_node.reason = reason;
+			input.set_reset_point(*cond_node.conditions[reset_index].node);
 		}
 		if (result && consider_prob_groups) {
-			branch.problematic_group = player + 1;
+			cond_node.problematic_group = player + 1;
 		}
 		return result;
+	}
+	else {
+		assert(node->is_branch());
+	
+		const auto &branch = node->branch();
+
+		if ((player < branch.problematic_group) && consider_prob_groups){
+			return true;
+		}
+
+
+		// analyzed player is current player
+		if (player == branch.player) { 	
+
+			// we are along the honest history -> we have to take the honest action, so we only need to check that branch for weak immunity
+			if (branch.honest) {
+				// if we are along the honest history, we want to take the honest action
+				auto &honest_choice = branch.get_honest_child();
+				auto *subtree = honest_choice.node.get();
+
+				// set chosen action, needed for printing strategy
+				branch.strategy = honest_choice.action;
+
+				// the honest choice must be weak immune
+				if (weak_immunity_rec(input, solver, options, subtree, player, weaker, consider_prob_groups)) {
+					if (consider_prob_groups) {
+						branch.problematic_group = player + 1;
+					}
+					return true;
+				} 
+
+				branch.reason = subtree->reason;
+				input.set_reset_point(branch);
+				return false;
+			}
+			// otherwise, we are not along the honest history, we can take any action we please as long as it's weak immune
+			z3::Bool reason;
+			unsigned reset_index;
+			unsigned i = 0;
+			for (const Choice &choice: branch.choices) {
+				if (weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker, consider_prob_groups)) {
+					// set chosen action, needed for printing strategy
+					branch.strategy = choice.action;
+					if (consider_prob_groups) {
+							branch.problematic_group = player + 1;
+						}
+					return true;
+				}
+				if ((!choice.node->reason.null()) && (reason.null())) {
+						reason = choice.node->reason;
+						reset_index = i;
+				}
+				i++;
+			}
+			if (!reason.null()) {
+					branch.reason = reason;
+					input.set_reset_point(*branch.choices[reset_index].node);
+			}	
+			return false;
+
+		} else {
+			// if we are not the analyzed player, we could do anything,
+			// so all branches should be weak immune for the analyzed player
+			bool result = true;
+			z3::Bool reason;
+			unsigned reset_index;
+			unsigned i = 0;
+			for (const Choice &choice: branch.choices) {
+				if (!weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker, consider_prob_groups)) {
+					if (choice.node->reason.null()){
+						if (options.counterexamples) {
+							branch.counterexample_choices.push_back(choice.action);
+						}
+						if (!options.all_counterexamples){
+							return false;
+						} else {
+							result = false;
+						}
+					} else {
+						if (result && reason.null()){
+							reason = choice.node->reason;
+							reset_index = i;
+						}
+						result = false;
+					}	
+				}
+				i++;
+			}
+			if (!reason.null()) {
+				branch.reason = reason;
+				input.set_reset_point(*branch.choices[reset_index].node);
+			}
+			if (result && consider_prob_groups) {
+				branch.problematic_group = player + 1;
+			}
+			return result;
+		}
 	}
 
 } 
