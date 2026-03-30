@@ -87,6 +87,8 @@ struct Utility {
 	}
 };
 
+
+
 inline std::ostream &operator<<(std::ostream &out, Utility utility) {
 	return out << utility.real << " + " << utility.infinitesimal;
 }

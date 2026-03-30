@@ -125,6 +125,24 @@ struct UtilityCase {
 	std::vector<std::vector<Utility>> utilities; 
 };
 
+struct HonestLeaf {
+	z3::Bool condition;
+	const Node* leaf;
+};
+
+// honest utility tuple + the conditions leading to that utility 
+struct CondHonestUtility {
+	std::vector<Utility> utility_tuple;
+	z3::Bool condition;
+};
+
+// honest total utility for a group + the conditions leading to that utility 
+struct CondHonestTotalUtility {
+	Utility utility;
+	z3::Bool condition;
+};
+
+
 // TODO: make find() work for vector<z3::Bool> instead of using this function
 inline bool case_found (z3::Bool _case_to_find, const std::vector<z3::Bool> _case) {
 	bool found = false;
@@ -337,6 +355,72 @@ struct HonestUtilityCondition {
 		return true;
 	}
 };
+
+// Helper function to convert HonestUtilityElement to a flat vector of CondHonestUtility
+inline std::vector<CondHonestUtility> get_conditional_honest_utilities(const HonestUtilityElement &element, const z3::Bool &parent_condition = z3::Bool()) {
+	std::vector<CondHonestUtility> result;
+	
+	if (std::holds_alternative<std::vector<Utility>>(element)) {
+		// Base case: element is a utility vector
+		CondHonestUtility cond_utility;
+		cond_utility.utility_tuple = std::get<std::vector<Utility>>(element);
+		// If parent_condition is null, use true; otherwise use parent_condition
+		cond_utility.condition = parent_condition.null() ? z3::Bool(true) : parent_condition;
+		result.push_back(cond_utility);
+	} else {
+		// Recursive case: element contains conditions
+		const auto &conditions = std::get<std::vector<HonestUtilityCondition>>(element);
+		for (const auto &cond : conditions) {
+			// Combine parent condition with current condition
+			z3::Bool combined_condition = parent_condition.null() ? cond.condition : (parent_condition && cond.condition);
+			// Recursively process nested utility
+			std::vector<CondHonestUtility> nested_result = get_conditional_honest_utilities(cond.utility, combined_condition);
+			result.insert(result.end(), nested_result.begin(), nested_result.end());
+		}
+	}
+	
+	return result;
+}
+
+
+// Helper function to convert an honest history into an HonestUtilityElement
+// Traverses the tree following the honest history path and collects utilities with their conditions
+inline HonestUtilityElement honest_history2utility(Node *node, const HonestHistory &history) {
+	
+	if (node->is_leaf()) { // Base case: reached a leaf
+		return node->leaf().utilities;
+
+	} else if (node->is_subtree()) { // Base case: reached a subtree
+		return node->subtree().honest_utility;
+
+	} else if (node->is_branch()) { // Handle branch nodes
+		assert(!history.empty());
+		assert(std::holds_alternative<std::string>(history[0]));
+		const std::string &action = std::get<std::string>(history[0]);
+		HonestHistory next_history(history.begin() + 1, history.end());
+		return honest_history2utility(node->branch().get_choice(action).node.get(), next_history);
+
+	} else { // Handle condition nodes
+		assert(node->is_condition_node());
+		assert(!history.empty());
+		assert(std::holds_alternative<std::vector<HonestHistoryCondition>>(history[0]));
+		const auto &hist_conditions = std::get<std::vector<HonestHistoryCondition>>(history[0]);
+		
+		// Collect utilities from all conditional branches
+		std::vector<HonestUtilityCondition> utility_conditions;
+		for (const auto &hist_cond : hist_conditions) {
+			// Recursively get utilities for this conditional path
+			HonestUtilityElement branch_utility = honest_history2utility(
+				node->condition_node().get_choice(hist_cond.condition).node.get(),
+				hist_cond.path);
+			
+			HonestUtilityCondition util_cond(hist_cond.condition, branch_utility);
+			utility_conditions.push_back(util_cond);
+		}
+		
+		return utility_conditions;
+	}
+}
 
 
 struct HonestUtilityTuple {
