@@ -374,6 +374,39 @@ struct HonestUtilityCondition {
 	}
 };
 
+// Forward declare for operator<<
+inline std::ostream& operator<<(std::ostream& os, const HonestUtilityElement& element);
+
+// Helper to print HonestUtilityCondition
+inline std::ostream& operator<<(std::ostream& os, const HonestUtilityCondition& huc) {
+	os << "(" << huc.condition << " -> " << huc.utility << ")";
+	return os;
+}
+
+// Operator<< for HonestUtilityElement (handles the variant)
+inline std::ostream& operator<<(std::ostream& os, const HonestUtilityElement& element) {
+	if (std::holds_alternative<std::vector<Utility>>(element)) {
+		// Print utility vector
+		const auto& utilities = std::get<std::vector<Utility>>(element);
+		os << "[";
+		for (size_t i = 0; i < utilities.size(); i++) {
+			if (i > 0) os << ", ";
+			os << utilities[i];
+		}
+		os << "]";
+	} else {
+		// Print conditional branches
+		const auto& conditions = std::get<std::vector<HonestUtilityCondition>>(element);
+		os << "{";
+		for (size_t i = 0; i < conditions.size(); i++) {
+			if (i > 0) os << ", ";
+			os << conditions[i];
+		}
+		os << "}";
+	}
+	return os;
+}
+
 // Helper function to convert HonestUtilityElement to a flat vector of CondHonestUtility
 inline std::vector<CondHonestUtility> get_conditional_honest_utilities(const HonestUtilityElement &element, const z3::Bool &parent_condition = z3::Bool()) {
 	std::vector<CondHonestUtility> result;
@@ -445,6 +478,10 @@ struct HonestUtilityTuple {
 	const HonestUtilityElement &element;
 	mutable std::vector<std::string> strategy_vector;
 
+	// Type aliases to avoid parsing issues with commas in template arguments
+	using UtilityOrCondition = std::variant<Utility, HonestUtilityCondition>;
+	using IteratorVariant = std::variant<std::vector<Utility>::const_iterator, std::vector<HonestUtilityCondition>::const_iterator>;
+
 	// GCC doesn't like copy-assign without explicit copy constructor
 	HonestUtilityTuple(const HonestUtilityTuple &other) = default;
 
@@ -466,25 +503,25 @@ struct HonestUtilityTuple {
 		return std::get<std::vector<HonestUtilityCondition>>(element).size();
 	}
 
-	const std::variant<Utility,HonestUtilityCondition> &operator[](size_t index) const { 
+	UtilityOrCondition operator[](size_t index) const { 
 		if (std::holds_alternative<std::vector<Utility>>(element)) {
-			return std::variant<Utility,HonestUtilityCondition>(std::get<std::vector<Utility>>(element)[index]);
+			return UtilityOrCondition(std::get<std::vector<Utility>>(element)[index]);
 		}
-		return std::variant<Utility,HonestUtilityCondition>(std::get<std::vector<HonestUtilityCondition>>(element)[index]);
+		return UtilityOrCondition(std::get<std::vector<HonestUtilityCondition>>(element)[index]);
 	}
 
-	std::variant<std::vector<Utility>::const_iterator, std::vector<HonestUtilityCondition>::const_iterator> begin() const { 
+	IteratorVariant begin() const { 
 		if (std::holds_alternative<std::vector<Utility>>(element)) {
-			return std::variant<std::vector<Utility>::const_iterator, std::vector<HonestUtilityCondition>::const_iterator>(std::get<std::vector<Utility>>(element).cbegin());
+			return IteratorVariant(std::get<std::vector<Utility>>(element).cbegin());
 		}
-		return std::variant<std::vector<Utility>::const_iterator, std::vector<HonestUtilityCondition>::const_iterator>(std::get<std::vector<HonestUtilityCondition>>(element).cbegin());
+		return IteratorVariant(std::get<std::vector<HonestUtilityCondition>>(element).cbegin());
 	}
 
-	std::variant<std::vector<Utility>::const_iterator, std::vector<HonestUtilityCondition>::const_iterator> end() const { 
+	IteratorVariant end() const { 
 		if (std::holds_alternative<std::vector<Utility>>(element)) {
-			return std::variant<std::vector<Utility>::const_iterator, std::vector<HonestUtilityCondition>::const_iterator>(std::get<std::vector<Utility>>(element).cend());
+			return IteratorVariant(std::get<std::vector<Utility>>(element).cend());
 		}
-		return std::variant<std::vector<Utility>::const_iterator, std::vector<HonestUtilityCondition>::const_iterator>(std::get<std::vector<HonestUtilityCondition>>(element).cend());
+		return IteratorVariant(std::get<std::vector<HonestUtilityCondition>>(element).cend());
 	}
 
 	bool operator==(const HonestUtilityTuple &other) const {
@@ -1120,14 +1157,31 @@ struct Input {
 	void compute_strategy_case(std::vector<z3::Bool> _case, PropertyType property) const {
 		
 		if (property == PropertyType::Practicality){
-			if(root.get()->branch().honest) {
+			bool is_honest;
+			if (root->is_branch()) {
+				is_honest = root->branch().honest;
+			} else if (root->is_condition_node()) {
+				is_honest = root->condition_node().honest;
+			}
+			if(is_honest) {
 				// the honest one has to be the practical one
 				// otw (if we call a subtree in default mode to obtain the strategies)
 				//  there can be more than one pr strategy if the subtree is not along the 
 				//  honest history 
-				assert(root.get()->practical_utilities.size()==1);
+				if (root->is_branch()) {
+					assert(root->branch().practical_utilities.size()==1);
+				} else if (root->is_condition_node()) {
+					assert(root->condition_node().practical_utilities.size()==1);
+				}
 			}
-			for (const auto& pr_utility: root.get()->practical_utilities){
+			UtilityTuplesSet pr_utils;
+			if (root->is_branch()) {
+				pr_utils = root->branch().practical_utilities;
+			} else if (root->is_condition_node()) {
+				pr_utils = root->condition_node().practical_utilities;
+			}
+			
+			for (const auto& pr_utility: pr_utils){
 				StrategyCase new_strat_case;
 				new_strat_case._case = _case;
 				std::vector<std::string> strategy_vector;
