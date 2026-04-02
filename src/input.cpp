@@ -958,7 +958,8 @@ std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> playe
 			// since no action itself is taken at a condition node, we only track the condition in the history;
 			for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
 				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-				updated_actions.push_back(cond_choice.condition.to_string()); // Add the condition to the history for tracking purposes
+				z3::Bool condition = cond_choice.condition;
+				updated_actions.push_back(condition.to_string()); // Add the condition to the history for tracking purposes
 				std::vector<HistoryChoice> child_strategy = cond_choice.node->compute_strategy(players, updated_actions);
 				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
 			}
@@ -1102,7 +1103,8 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> pl
 			for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
 
 				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-				updated_actions.push_back(cond_choice.condition.to_string()); // Add the condition to the history for tracking purposes
+				z3::Bool condition = cond_choice.condition;
+				updated_actions.push_back(condition.to_string()); // Add the condition to the history for tracking purposes
 
 				std::vector<HistoryChoice> child_strategy = cond_choice.node->compute_cr_strategy(players, updated_actions, deviating_players);
 				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
@@ -1143,7 +1145,8 @@ std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> pl
 			// For condition nodes, recursively compute pr_strategy for all conditional branches
 			for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
 				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-				updated_actions.push_back(cond_choice.condition.to_string()); // Add the condition to the history for tracking purposes
+				z3::Bool condition = cond_choice.condition;
+				updated_actions.push_back(condition.to_string()); // Add the condition to the history for tracking purposes
 				std::vector<HistoryChoice> child_strategy = cond_choice.node->compute_pr_strategy(players, updated_actions, strategy_vector);
 				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
 			}
@@ -1215,7 +1218,8 @@ std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std:
 					int cnt = std::count(this->condition_node().counterexample_choices.begin(), this->condition_node().counterexample_choices.end(), cond_choice.condition.to_string());
 					if (cnt > 0) {
 						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-						updated_actions.push_back(cond_choice.condition.to_string());
+						z3::Bool condition = cond_choice.condition;
+						updated_actions.push_back(condition.to_string());
 						std::vector<CeChoice> child_ce = cond_choice.node->compute_wi_ce(players, updated_actions, player_group);
 						counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
 					}
@@ -1287,7 +1291,8 @@ std::vector<CeChoice> Node::compute_cr_ce(std::vector<std::string> players, std:
 					int cnt = std::count(this->condition_node().counterexample_choices.begin(), this->condition_node().counterexample_choices.end(), cond_choice.condition.to_string());
 					if (cnt > 0) {
 						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-						updated_actions.push_back(cond_choice.condition.to_string());
+						z3::Bool condition = cond_choice.condition;
+						updated_actions.push_back(condition.to_string());
 						std::vector<CeChoice> child_ce = cond_choice.node->compute_cr_ce(players, updated_actions, player_group);
 						counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
 					}
@@ -1410,14 +1415,14 @@ std::vector<std::string> Node::strat2hist(std::vector<std::string> &strategy) co
 			}
 		}
 	} else if (this->is_condition_node()) { // assuming this is a counterexample strategy, there is only one condition there
+		// and no strategies to prune since all branches of a condition node are taken in a counterexample strategy, so we only look for the right branch to continue with
 		for (auto &cond_choice: this->condition_node().conditions) {
-			if(cond_choice.condition.to_string() == first_action) {
+			z3::Bool condition = cond_choice.condition;
+			if(condition.to_string() == first_action) {
 				std::vector<std::string> child_result = cond_choice.node->strat2hist(strategy_copy);
 				hist_player_pairs.insert(hist_player_pairs.end(), child_result.begin(), child_result.end());
 				found = true;
-			} else {
-				cond_choice.node->prune_actions_from_strategy(strategy_copy);
-			}
+			} 
 		}
 	}
 
@@ -1434,6 +1439,7 @@ void Node::prune_actions_from_strategy(std::vector<std::string> &strategy) const
 	} 
 
 	assert(strategy.size() > 0);
+	std::string first_item = strategy[0];
 	strategy.erase(strategy.begin());
 	if (this->is_branch()) {
 		for(auto &child: this->branch().choices) {
@@ -1441,7 +1447,10 @@ void Node::prune_actions_from_strategy(std::vector<std::string> &strategy) const
 		}
 	} else if (this->is_condition_node()) {
 		for (auto &cond_choice: this->condition_node().conditions) {
-			cond_choice.node->prune_actions_from_strategy(strategy);
+			z3::Bool condition = cond_choice.condition;
+			if (condition.to_string() == first_item) {
+				cond_choice.node->prune_actions_from_strategy(strategy);
+			} 
 		}
 	}
 }

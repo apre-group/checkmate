@@ -296,22 +296,6 @@ std::vector<HonestLeaf> get_honest_leaves(Node *node, const HonestHistory &histo
 	return {}; // Should not reach here
 }
 
-bool utility_tuples_eq(UtilityTuple tuple1, UtilityTuple tuple2) {
-	if(tuple1.size() != tuple2.size()) {
-		return false;
-	} else {
-		bool all_same = true;
-		for (size_t i = 0; i < tuple1.size(); i++) {
-			if (!tuple1[i].is(tuple2[i])) {
-				all_same = false;
-			}
-		}
-		return all_same;
-	}
-	return false;
-
-}
-
 std::vector<std::string> index2player(const Input &input, PropertyType property, unsigned index) {
 
 	if(property==PropertyType::WeakImmunity || property==PropertyType::WeakerImmunity) {
@@ -1020,16 +1004,22 @@ bool practicality_rec(const Input &input, const Options &options, z3::Solver &so
 			}
 			z3::Result overlapping = solver.solve({subtree_case});
 
+			
 			if (overlapping == z3::Result::SAT){
+				// cases overlap, check whether current case is implying subtree case
 				if(options.count_calls) {
 					calls_pr++;
 				}
 				z3::Result implied = solver.solve({!subtree_case});
 
 				if (implied == z3::Result::SAT){
+					// current case does not imply subtree case, so we need to split on this case
 					subtree.reason = subtree_case;
 					return false;
 				} else {
+					// current case implies subtree case,
+					// hence every other subtree case is disjoint from current case 
+					// so we can set the practical utilities for this subtree to the ones in this practicality subtree result
 					if (subtree_result.utilities.size() == 0) {
 						// we have to be along honest at this point, otw we would have had at least one pr utility
 						if(options.counterexamples) {
@@ -1048,278 +1038,367 @@ bool practicality_rec(const Input &input, const Options &options, z3::Solver &so
 			input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, input.players.size(), actions_so_far, "", {}));
 		}
 		return false;
-	}
 
-	// else we deal with a branch
- 	const auto &branch = node->branch();
+	} else if (node->is_condition_node()) { 
 
-	if  (branch.problematic_group == 1 && consider_prob_groups){
-		return true;
-	}	
+		const auto &cond_node = node->condition_node();
 
-	// get practical strategies and corresponding utilities recursively
-	std::vector<UtilityTuplesSet> children;
-	std::vector<std::string> children_actions;
-
-	UtilityTuplesSet honest_utilities;
-	unsigned int i = 0;
-	unsigned honest_index = 0;
-	std::string honest_choice;
-
-	bool result = true;
-
-	// check honest branch first
-	for (const Choice &choice: branch.choices) {
-		if (choice.node->honest) {
-			std::vector<std::string> updated_actions;
-			updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
-			updated_actions.push_back(choice.action);
-			if(!practicality_rec(input, options, solver, choice.node.get(), updated_actions, consider_prob_groups)) {
-				if (result) {
-					branch.reason = choice.node->reason;
-					input.set_reset_point(branch);
-				}
-
-				result = false;
-
-				if(!options.all_counterexamples || !branch.reason.null()) {
-					return result;
-				}
-			}
-
-			
-			honest_utilities = choice.node->get_utilities();
-			honest_choice = choice.action;
-			branch.strategy = choice.action; // choose the honest action along the honest history
-			honest_index = i;
-			
-			break;
-		}
-		i++;
-	}
-
-	for (const Choice &choice: branch.choices) {
-		if (!choice.node->honest) {
-			// this child has no practical strategy (propagate reason for case split, if any) 
-			std::vector<std::string> updated_actions;
-			updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
-			updated_actions.push_back(choice.action);
-			if(!practicality_rec(input, options, solver, choice.node.get(), updated_actions, consider_prob_groups)) {
-				if (result) {
-					branch.reason = choice.node->reason;
-					input.set_reset_point(branch);
-				}
-
-				result = false;
-
-				if(!options.all_counterexamples || !branch.reason.null()) {
-					return result;
-				}
-			}
-
-			
-			if (choice.node->get_utilities().size()==0){
-				assert(!result);
-				assert(options.all_counterexamples);
-				assert(input.counterexamples.size()>0);
-			}
-		
-			children.push_back(choice.node->get_utilities());
-			children_actions.push_back(choice.action);
-			
-		}
-	}
-
-
-
-
-	if (branch.honest) {
-		// if we are at an honest node, our strategy must be the honest strategy
-		
-		assert(honest_utilities.size() == 1);
-		// the utility at the leaf of the honest history
-		std::vector<std::string> honest_strategy;
-		std::vector<Utility> leaf;
-		UtilityTuplesSet to_clear_strategy;
-		for (const auto& hon_utility: honest_utilities){
-		 	honest_strategy.insert(honest_strategy.end(), hon_utility.strategy_vector.begin(), hon_utility.strategy_vector.end());
-			UtilityTuple cleared_strategy(hon_utility.leaf);
-			to_clear_strategy.insert(cleared_strategy);
+		if ((cond_node.problematic_group == 1) && consider_prob_groups){
+			return true;
 		}
 
-		UtilityTuple honest_utility = *to_clear_strategy.begin();
-		
-		honest_utility.strategy_vector = {};
-		honest_utility.strategy_vector.push_back(honest_choice);
-		
-		// this should be maximal against other players, so...
-		Utility maximum = honest_utility[branch.player]; 
+		// we cannot control which condition will become true, so all branches (that are possible given the current case)
+		// should be practical
 
-		// for all other children
-		unsigned int j = 0;
-		for (const auto& utilities : children) {
-			bool found = false;
-			// does there exist a possible utility such that `maximum` is geq than it?				
+		// get all practical utilities recursively
+		std::vector<UtilityTuplesSet> children; 
+		std::vector<z3::Bool> children_conditions;
 
-			for (const auto& utility : utilities) {
-				auto condition =   maximum < utility[branch.player];
-				if(options.count_calls) {
-					calls_pr++;
-				}
-				if (solver.solve({condition}) == z3::Result::SAT) {
-					if(options.count_calls) {
-						calls_pr++;
+		bool result = true;
+
+  		for (const ConditionChoice &choice: cond_node.conditions) {
+			if (options.count_calls) {
+				calls_pr++;
+			}
+			if (solver.solve({choice.condition}) == z3::Result::SAT) {	
+
+				std::vector<std::string> updated_actions;
+				updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
+				z3::Bool current_condition = choice.condition;
+				updated_actions.push_back(current_condition.to_string());
+				solver.push();
+				solver.assert_(current_condition);
+				if(!practicality_rec(input, options, solver, choice.node.get(), updated_actions, consider_prob_groups)) {
+					if (result) {
+						cond_node.reason = choice.node->reason;
+						input.set_reset_point(cond_node);
 					}
-					if (solver.solve({!condition}) == z3::Result::SAT) {
-						// might be maximal, just couldn't prove it
-						if (result){
-							branch.reason =  get_split_approx(solver, maximum, utility[branch.player]); 
-							input.set_reset_point(branch);
-						}
+
+					result = false;
+
+					if(!options.all_counterexamples || !cond_node.reason.null()) {
+						return false;
 					}
-				} 
-				else {
-					found = true;
-					// need to insert strategy after honest at right point in vector
-					if (j == honest_index){
-						honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
-					} 
-					honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
-					break;
 				}
-			}
-			if (!found && utilities.size()>0) {
+
 				
-				// counterexample: current child (deviating choice) is the counterexample together with all its practical histories/strategies, 
-				//                  additional information needed: current history (to be able to document deviation point)
-				//                                                 current player
-				// NOTE format of ce different from wi and cr, since all practical histories of child are needed to be a CE 
-
-				// store (push back) it in input.counterexamples; case will be added in property rec
-
-
-				// all counterexamples: do not return here (store return value in variable), but check all other children for further violations --> counterexamples
-				// 						then also do not return yet, but continue the reasoning up to the root to collect further CEs
-
-				// NOTE: for not along honest history, nothing to do
-
-				std::string deviating_action = children_actions[j];
-
-				if(options.counterexamples && branch.reason.null()) {
-					input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, deviating_action, utilities));
+				if (choice.node->get_utilities().size()==0){
+					assert(!result);
+					assert(options.all_counterexamples);
+					assert(input.counterexamples.size()>0);
 				}
-
-				result = false;
-
-				if(!options.all_counterexamples || !branch.reason.null()) {
-					return result; //false
-				}
+			
+				children.push_back(choice.node->get_utilities());
+				children_conditions.push_back(current_condition);
+				
+				solver.pop();
 			}
-			j++;
 		}
-		if(j == honest_index) {
-			honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
-		}
-		
-		branch.practical_utilities = {honest_utility};
-		
-		// we return the maximal strategy 
-		// honest choice is practical for current player
-		// return true;
 
+		UtilityTuplesSet practical_utilities;
+		unsigned int i = 0;
+		for (const auto& utilities : children) {
+			for (const auto& utility : utilities) {
+				UtilityTuple to_add(utility.leaf, utility.condition && children_conditions[i]);
+				to_add.strategy_vector.push_back(children_conditions[i].to_string());
+				to_add.strategy_vector.insert(to_add.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+				practical_utilities.insert(to_add);
+			}
+			i++;
+		}
+
+		cond_node.practical_utilities = practical_utilities;
 		return result;
 
 	} else {
-		// not in the honest history
-		// to do: we could do this more efficiently by working out the set of utilities for the player
-		// but utilities can't be put in a set easily -> fix this here in the C++ version
+		assert(node->is_branch());
+		// else we deal with a branch
+		const auto &branch = node->branch();
 
-		// compute the set of possible utilities by merging the set of children's utilities
-		UtilityTuplesSet utility_result;
-		unsigned int k = 0;
-		for (const auto& utilities : children) {
-			for (const auto& utility : utilities) {
-				UtilityTuple to_insert(utility.leaf); 
-				to_insert.strategy_vector.push_back(children_actions[k]);
-				utility_result.insert(to_insert);
+		if  (branch.problematic_group == 1 && consider_prob_groups){
+			return true;
+		}	
+
+		// get practical utilities recursively
+		std::vector<UtilityTuplesSet> children; // conditions taken care of correctly by get_utilities
+		std::vector<std::string> children_actions;
+
+		UtilityTuplesSet honest_utilities; // conditions taken care of correctly by get_utilities
+		unsigned int i = 0;
+		unsigned honest_index = 0;
+		std::string honest_choice;
+
+		bool result = true;
+
+		// collecting practical utilities for all children
+		// start with honest child (if along honest)
+		if (branch.honest) {
+			// check honest branch first
+			for (const Choice &choice: branch.choices) {
+				if (choice.node->honest) {
+					std::vector<std::string> updated_actions;
+					updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(choice.action);
+					if(!practicality_rec(input, options, solver, choice.node.get(), updated_actions, consider_prob_groups)) {
+						branch.reason = choice.node->reason;
+						input.set_reset_point(branch);
+						result = false;
+
+						if(!options.all_counterexamples || !branch.reason.null()) {
+							return false;
+						}
+					}
+					honest_utilities = choice.node->get_utilities();
+					honest_choice = choice.action;
+					branch.strategy = choice.action; // choose the honest action along the honest history
+					honest_index = i;
+					
+					break;
+				}
+				i++;
 			}
-			k++;
 		}
 
-		// the set to drop
-		UtilityTuplesSet remove;
+		// check other (not honest) children
+		for (const Choice &choice: branch.choices) {
+			if (!choice.node->honest) {
+				// this child has no practical strategy (propagate reason for case split, if any) 
+				std::vector<std::string> updated_actions;
+				updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
+				updated_actions.push_back(choice.action);
+				if(!practicality_rec(input, options, solver, choice.node.get(), updated_actions, consider_prob_groups)) {
+					if (result) {
+						branch.reason = choice.node->reason;
+						input.set_reset_point(branch);
+					}
 
-		// work out whether to drop `candidate`
-		unsigned int l = 0;
-		for (const auto& candidate : utility_result) {
-			// this player's utility
-			auto dominatee = candidate[branch.player];
-			// check all other children
-            // if any child has the property that all its utilities are bigger than `dominatee`
-            // it can be dropped
-            for (const auto& utilities : children) {
-				// skip any where the cadidate is already contained
+					result = false;
 
-				// this logic can be factored out in an external function
-				bool contained = false;
-				for (const auto& utility : utilities) {
-					if (utility_tuples_eq(utility, candidate)) {
-						contained = true;
-						candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
-						break;
+					if(!options.all_counterexamples || !branch.reason.null()) {
+						return false;
 					}
 				}
 
-				if (contained) {
-					continue;
+				
+				if (choice.node->get_utilities().size()==0){
+					assert(!result);
+					assert(options.all_counterexamples);
+					assert(input.counterexamples.size()>0);
 				}
+			
+				children.push_back(choice.node->get_utilities());
+				children_actions.push_back(choice.action);
+				
+			}
+		}
 
-				// *all* utilities have to be bigger
-				bool dominated = true;
+		// practicality reasoning starting here
+		if (branch.honest) {
+			// each honest utility has to be checked for practicality
+			for ( auto& honest_utility: honest_utilities) {
 
-				for (const auto& utility : utilities) {
-					auto dominator = utility[branch.player];
-					auto condition = dominator <= dominatee;
-					if(options.count_calls) {
-						calls_pr++;
-					}
-					if (solver.solve({condition}) == z3::Result::SAT) {
-						if (dominated){
-							candidate.strategy_vector.insert(candidate.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
-						}
-						dominated = false;
+				// we need to remove the strategy of the PR utilities in a first step to be able to update it correctly later
+				// so we store it temporarily in honest_strategy
+				std::vector<std::string> honest_strategy; 
+				honest_strategy.insert(honest_strategy.end(), honest_utility.strategy_vector.begin(), honest_utility.strategy_vector.end());
+				honest_utility.strategy_vector = {};
+				honest_utility.strategy_vector.push_back(honest_choice);
 
+				// for all other children
+				unsigned int j = 0;
+				for (const auto& utilities : children) {
+
+					// exists dominated "function"
+					bool found = false;
+					z3::Bool condition = z3::Bool(false);
+
+					// does there exist a possible utility such that `honest_utility` is geq than it?				
+					for (const auto& utility : utilities) {
 						if(options.count_calls) {
 							calls_pr++;
 						}
-						if (solver.solve({!condition}) == z3::Result::SAT) {
-							branch.reason = get_split_approx(solver, dominatee, dominator); 
-							input.set_reset_point(branch);
-							return false; 
+						if (solver.solve({honest_utility.condition, utility.condition}) == z3::Result::SAT) {
+							solver.push();
+							solver.assert_(honest_utility.condition);
+							solver.assert_(utility.condition);
+							auto comparison =   honest_utility[branch.player] < utility[branch.player];
+							if(options.count_calls) {
+								calls_pr++;
+							}
+							z3::Result comparison_result = solver.solve({comparison});
+							if (comparison_result == z3::Result::SAT) {
+								if(options.count_calls) {
+									calls_pr++;
+								}
+								if (solver.solve({!comparison}) == z3::Result::SAT) {
+									// might be maximal, just couldn't prove it
+									if (result){
+										branch.reason =  get_split_approx(solver, honest_utility[branch.player], utility[branch.player]); 
+										input.set_reset_point(branch);
+									}
+								}
+							} 
+							else {
+								assert(comparison_result == z3::Result::UNSAT);
+								found = true;
+								// need to insert strategy after honest at right point in vector
+								if (j == honest_index){
+									honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
+								} 
+								honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+								condition = condition || utility.condition;
+							}
+							solver.pop();
 						}
 					}
-				}  
+					// end of exists dominated "function"
 
-				if (dominated) {
-					remove.insert(candidate);
-					break;
+					if(options.count_calls) {
+						calls_pr++;
+					}
+					bool exists_non_pr_condition = solver.solve({!condition, honest_utility.condition}) == z3::Result::SAT;
+					if ((!found || exists_non_pr_condition) && utilities.size()>0) {
+						
+						// counterexample: current child (deviating choice) is the counterexample together with all its practical histories/strategies, 
+						//                  additional information needed: current history (to be able to document deviation point)
+						//                                                 current player
+						// NOTE format of ce different from wi and cr, since all practical histories of child are needed to be a CE 
+
+						// store (push back) it in input.counterexamples; case will be added in property rec
+
+
+						// all counterexamples: do not return here (store return value in variable), but check all other children for further violations --> counterexamples
+						// 						then also do not return yet, but continue the reasoning up to the root to collect further CEs
+
+						// NOTE: for not along honest history, nothing to do
+
+						std::string deviating_action = children_actions[j];
+
+						if(options.counterexamples && branch.reason.null()) {
+							input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, deviating_action, utilities));
+						}
+
+						result = false;
+
+						if(!options.all_counterexamples || !branch.reason.null()) {
+							return result; //false
+						}
+					}
+					j++;
+				}
+				if(j == honest_index) {
+					honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
 				}
 			}
-			l++;
-		}
+			
+			branch.practical_utilities = honest_utilities;
+			
+			// honest choice is practical for current player
+			// return true;
 
-		// result is all children's utilities inductively, minus those dropped
-		for (const auto& elem : remove) {
-			utility_result.erase(elem);
-		}
+			return result;
 
-		branch.practical_utilities = utility_result;
-		
-		assert(utility_result.size()>0);
-		return true;
+		} else { // not along the honest history
 
-	} 
+			UtilityTuplesSet utility_result;
+			
+			unsigned int k = 0;
+			for (const auto& utilities : children) {
+				for ( const auto& utility : utilities) {
+					// Save the original strategy from recursive call
+					std::vector<std::string> new_strategy = {};
+					new_strategy.push_back(children_actions[k]);
 
+					// start actual practicality reasoning: check whether to drop this utility or not
+					bool is_practical = true;
+					z3::Bool new_condition = utility.condition;
+
+					unsigned int m = 0;
+					for (const auto& sibling_utilities : children) {
+						if (k != m) {
+							// exists dominated "function"
+							bool found = false;
+							z3::Bool condition = z3::Bool(false);
+
+							// does there exist a sibling utility such that `utility` is geq than it?				
+							for (const auto& other_utility : sibling_utilities) {
+								if(options.count_calls) {
+									calls_pr++;
+								}
+								if (solver.solve({utility.condition, other_utility.condition}) == z3::Result::SAT) {
+									solver.push();
+									solver.assert_(utility.condition);
+									solver.assert_(other_utility.condition);
+									auto comparison =   utility[branch.player] < other_utility[branch.player];
+									if(options.count_calls) {
+										calls_pr++;
+									}
+									z3::Result comparison_result = solver.solve({comparison});
+									if (comparison_result == z3::Result::SAT) {
+										if(options.count_calls) {
+											calls_pr++;
+										}
+										if (solver.solve({!comparison}) == z3::Result::SAT) {
+											// need case split
+											if (result){
+												branch.reason =  get_split_approx(solver, utility[branch.player], other_utility[branch.player]); 
+												input.set_reset_point(branch);
+											}
+										}
+									} 
+									else {
+										assert(comparison_result == z3::Result::UNSAT);
+										// TODO: strategy now has the stategy of the first dominated utility, but it could be that there are multiple dominated utilities 
+										//       with different conditions
+										if (!found){
+											// Insert the strategy of the dominating sibling utility
+											new_strategy.insert(new_strategy.end(), other_utility.strategy_vector.begin(), other_utility.strategy_vector.end());
+										}
+										condition = condition || other_utility.condition;
+										found = true;
+									}
+									solver.pop();
+								}
+							}
+							// end of exists dominated "function"
+
+							if (!found) {
+								assert(sibling_utilities.size()>0);
+								if(!branch.reason.null()) {
+									return false;
+								}
+
+								is_practical = false;
+								break;
+							} else {
+								// this utility is dominating at least one other utility, so we need to add the condition under which it is dominating to the condition of this utility
+								new_condition = new_condition && condition;
+							}
+						} else {
+							//  insert the original child strategy at the correct place
+							new_strategy.insert(new_strategy.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+						
+						}
+						m++;
+					}
+					if (is_practical) {
+						UtilityTuple to_insert(utility.leaf, new_condition); 
+						to_insert.strategy_vector.insert(to_insert.strategy_vector.end(), new_strategy.begin(), new_strategy.end());
+						utility_result.insert(to_insert);
+					}
+
+				}
+				k++;
+			}
+
+			branch.practical_utilities = utility_result;
+			
+			assert(utility_result.size()>0);
+			return true;
+
+		} 
+
+	}
 }
 
 
@@ -1649,19 +1728,34 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 	std::vector<std::vector<bool>> violation;
 	if (property == PropertyType::CollusionResilience && options.strategies){
-		violation = input.root->store_violation_cr();
+		if (input.root->is_branch()) {
+			violation = input.root->branch().store_violation_cr();
+		} else {
+			assert(input.root->is_condition_node());
+			violation = input.root->condition_node().store_violation_cr();
+		}
 	}
 
 	std::vector<std::vector<std::string>> ce_storage;
 	if (options.counterexamples && property != PropertyType::Practicality) {
-		ce_storage = input.root->store_counterexample_choices();
+		if (input.root->is_branch()) {
+			ce_storage = input.root->branch().store_counterexample_choices();
+		} else {
+			assert(input.root->is_condition_node());
+			ce_storage = input.root->condition_node().store_counterexample_choices();
+		}
 	}
 
 	std::vector<bool> solved_for_storage;
 	std::vector<uint64_t> problematic_groups;
 	if (property != PropertyType::Practicality) {
 		solved_for_storage = input.store_solved_for();
-		problematic_groups = input.root->store_problematic_groups();
+		if (input.root->is_branch()) {
+			problematic_groups = input.root->branch().store_problematic_groups();
+		} else {
+			assert(input.root->is_condition_node());
+			problematic_groups = input.root->condition_node().store_problematic_groups();
+		}
 	}
 
 	auto &current_reset_point = input.reset_point;
@@ -1670,7 +1764,12 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 	for (const z3::Bool& condition : {split, split.invert()}) {
 		// reset reason and strategy
 		// ? should be the same point of reset
-		input.root->reset_reason();
+		if (input.root->is_branch()) {
+			input.root->branch().reset_reason();
+		} else {
+			assert(input.root->is_condition_node());
+			input.root->condition_node().reset_reason();
+		}
 		if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
 			auto &current_reset_branch = current_reset_point->branch();
 			current_reset_branch.reset_strategy();
@@ -1690,18 +1789,33 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 
 		if (property != PropertyType::Practicality) {
 			// reset the branch.problematic_group for all branches to presplit state, such that the other case split starts at the same point
-			input.root->restore_problematic_groups(problematic_groups);
+			if (input.root->is_branch()) {
+				input.root->branch().restore_problematic_groups(problematic_groups);
+			} else {
+				assert(input.root->is_condition_node());
+				input.root->condition_node().restore_problematic_groups(problematic_groups);
+			}
 			input.restore_solved_for(solved_for_storage);
 
 			if (options.counterexamples){
-				input.root->restore_counterexample_choices(ce_storage);
+				if (input.root->is_branch()) {
+					input.root->branch().restore_counterexample_choices(ce_storage);
+				} else {
+					assert(input.root->is_condition_node());
+					input.root->condition_node().restore_counterexample_choices(ce_storage);
+				}
 			}
 		}
 
 		if (property == PropertyType::CollusionResilience && options.strategies){
 			std::vector<std::vector<bool>> violation_copy;
 			violation_copy.insert(violation_copy.end(), violation.begin(), violation.end());
-			input.root->restore_violation_cr(violation_copy);
+			if (input.root->is_branch()) {
+				input.root->branch().restore_violation_cr(violation_copy);
+			} else {
+				assert(input.root->is_condition_node());
+				input.root->condition_node().restore_violation_cr(violation_copy);
+			}
 		}
 
 		if (!attempt){
@@ -1793,7 +1907,12 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 	for (const z3::Bool& condition : {split, split.invert()}) {
 		// reset reason and strategy
 		// ? should be the same point of reset
-		input.root->reset_reason();
+		if (input.root->is_branch()) {
+			input.root->branch().reset_reason();
+		} else {
+			assert(input.root->is_condition_node());
+			input.root->condition_node().reset_reason();
+		}
 		if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
 			auto &current_reset_branch = current_reset_point->branch();
 			current_reset_branch.reset_strategy();
@@ -1818,7 +1937,7 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 	return result;
 }
 
-bool property_rec_utility(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, std::vector<Utility> honest_utility, unsigned group_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case) {
+bool property_rec_utility(z3::Solver &solver, const Options &options, const Input &input, const PropertyType property, std::vector<z3::Bool> current_case, const std::vector<CondHonestTotalUtility> &all_honest_total, unsigned group_nr, std::vector<std::vector<z3::Bool>> &satisfied_in_case) {
 	/* 
 		only called for collusion resilience
 		actual case splitting engine
@@ -1827,15 +1946,8 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 
 	bool property_result;
 	std::bitset<Input::MAX_PLAYERS> group = group_nr;
-	Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
-	
-	// compute the honest total for the current group
-	for (size_t player = 0; player < input.players.size(); player++) {
-		if (group[player]) {
-			honest_total = honest_total + honest_utility[player];
-		}
-	}
-	property_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_total, input.players.size(), group_nr, false);
+
+	property_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, all_honest_total, input.players.size(), group_nr, false);
 
 	// property holds under current split
 	if (property_result) {
@@ -1869,7 +1981,11 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 	for (const z3::Bool& condition : {split, split.invert()}) {
 		// reset reason and strategy
 		// ? should be the same point of reset
-		input.root->reset_reason();
+		if (input.root->is_branch()) {
+			input.root->branch().reset_reason();
+		} else if (input.root->is_condition_node()){
+			input.root->condition_node().reset_reason();
+		}
 		if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
 			auto &current_reset_branch = current_reset_point->branch();
 			current_reset_branch.reset_strategy();
@@ -1883,7 +1999,7 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 		new_current_case.push_back(condition);
 
 
-		bool attempt = property_rec_utility(solver, options, input, property, new_current_case, honest_utility, group_nr, satisfied_in_case);
+		bool attempt = property_rec_utility(solver, options, input, property, new_current_case, all_honest_total, group_nr, satisfied_in_case);
 
 		solver.pop();
 
@@ -1942,7 +2058,8 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 		if(property == PropertyType::Practicality) {	
 			UtilityCase utilityCase;
 			utilityCase._case = current_case;
-			for(auto practical_utility : input.root.get()->practical_utilities) {
+			const auto& practical_utilities = input.root->is_branch() ? input.root->branch().practical_utilities : input.root->condition_node().practical_utilities;
+			for(auto practical_utility : practical_utilities) {
 				utilityCase.utilities.push_back(practical_utility.leaf);
 			}
 			
@@ -1973,7 +2090,12 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 	for (const z3::Bool& condition : {split, split.invert()}) {
 		// reset reason and strategy
 		// ? should be the same point of reset
-		input.root->reset_reason();
+		if (input.root->is_branch()) {
+			input.root->branch().reset_reason();
+		} else {
+			assert(input.root->is_condition_node());
+			input.root->condition_node().reset_reason();
+		}
 		if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
 			auto &current_reset_branch = current_reset_point->branch();
 			current_reset_branch.reset_strategy();
@@ -2151,15 +2273,14 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 		bool pr_result = property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, subtree_results_pr);
 
 		if (pr_result) {
+			std::vector<Utility> honest_utility;
 			if (input.root->is_branch()) {
 				assert(input.root->branch().practical_utilities.size() == 1);
-				std::vector<Utility> honest_utility;
 				for (auto elem: input.root->branch().practical_utilities) {
 					honest_utility = elem.leaf;
 				}
 			} else if (input.root->is_condition_node()){
 				assert(input.root->condition_node().practical_utilities.size() == 1);
-				std::vector<Utility> honest_utility;
 				for (auto elem: input.root->condition_node().practical_utilities) {
 					honest_utility = elem.leaf;
 				}
@@ -2189,7 +2310,12 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 
 		for (unsigned i = 0; i < number_groups; i++){
 			input.reset_reset_point();
-			input.root.get()->reset_reason();
+			if (input.root->is_branch()) {
+				input.root->branch().reset_reason();
+			} else {
+				assert(input.root->is_condition_node());
+				input.root->condition_node().reset_reason();
+			}
 			
 			std::vector<std::string> players;
 
@@ -2240,7 +2366,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 	return;
 }
 
-void property_subtree_utility(const Options &options, const Input &input, PropertyType property, std::vector<Utility> honest_utility, Subtree &subtree) {
+void property_subtree_utility(const Options &options, const Input &input, PropertyType property, HonestUtilityTuple honest_utility, Subtree &subtree) {
 	/* determine if the input has some property for the current honest history */
 
 	assert(property == PropertyType::CollusionResilience);
@@ -2250,9 +2376,11 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 
 	solver.assert_(input.collusion_resilience_constraint);
 
+	std::vector<CondHonestUtility> honest_utility_vec = get_conditional_honest_utilities(honest_utility.element);
+
 	std::cout << std::endl;
 	std::cout << std::endl;
-	std::cout << "Is utility " << honest_utility << " collusion resilient?" << std::endl;
+	std::cout << "Is utility " << honest_utility_vec << " collusion resilient?" << std::endl;
 
 	assert(solver.solve() == z3::Result::SAT);
 
@@ -2261,14 +2389,37 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 
 	for (unsigned i = 0; i < number_groups; i++){
 		input.reset_reset_point();
-		input.root.get()->reset_reason();
+		if (input.root->is_branch()) {
+			input.root->branch().reset_reason();
+		} else if (input.root->is_condition_node()){
+			input.root->condition_node().reset_reason();
+		}
 		std::vector<std::string> players = index2player(input, property, i+1);
 
 		SubtreeResult subtree_result_player;
 		subtree_result_player.player_group = players;
 		subtree_result_player.satisfied_in_case = {};
 
-		if (property_rec_utility(solver, options, input, property, std::vector<z3::Bool>(), honest_utility, i+1, subtree_result_player.satisfied_in_case)){
+		std::bitset<Input::MAX_PLAYERS> group = i+1;
+		std::vector<CondHonestTotalUtility> all_honest_total;
+
+		for (const auto& cond_utility : honest_utility_vec) {
+
+			Utility group_total{z3::Real::ZERO, z3::Real::ZERO};
+			
+			// compute the honest total for the current group
+			for (size_t player = 0; player < input.players.size(); player++) {
+				if (group[player]) {
+					group_total = group_total + cond_utility.utility_tuple[player];
+				}
+			}
+			CondHonestTotalUtility cond_total;
+			cond_total.condition = cond_utility.condition;
+			cond_total.utility = group_total;
+			all_honest_total.push_back(cond_total);
+		}
+
+		if (property_rec_utility(solver, options, input, property, std::vector<z3::Bool>(), all_honest_total, i+1, subtree_result_player.satisfied_in_case)){
 			std::cout << "YES, it is collusion resilient against group " <<  players << "."  << std::endl;
 		} else { 
 			std::cout << "NO, it is not  collusion resilient against group " << players << "." << std::endl;
@@ -2344,7 +2495,8 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 
 		assert(pr_result);
 
-		assert(input.root.get()->practical_utilities.size()>0);
+		const auto& practical_utilities = input.root->is_branch() ? input.root->branch().practical_utilities : input.root->condition_node().practical_utilities;
+		assert(practical_utilities.size()>0);
 		// ATTENTION THINK ABOUT HOW LATER (IN SUPERTREE) CASE SPLITS MAY IMPACT THE RESULT
 		// we need to print the corresponding utilities for each case
 		// kind of "all cases" for practicality_subtree
@@ -2368,7 +2520,12 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 
 		for (size_t i = 0; i < number_groups; i++){
 			input.reset_reset_point();
-			input.root.get()->reset_reason();
+			if (input.root->is_branch()) {
+				input.root->branch().reset_reason();
+			} else {
+				assert(input.root->is_condition_node());
+				input.root->condition_node().reset_reason();
+			}
 
 			size_t value = property == PropertyType::CollusionResilience? i+1 : i;
 			std::vector<std::string> players = index2player(input, property, value);
@@ -2440,8 +2597,14 @@ void analyse_properties(const Options &options, const Input &input) {
 		std::cout << std::endl;
 		std::cout << "Checking history " << input.honest[history] << std::endl; 
 
-		input.root->reset_honest();
-		input.root->mark_honest(input.honest[history]);
+		if (input.root->is_branch()) {
+			input.root->branch().reset_honest();
+			input.root->branch().mark_honest(input.honest[history]);
+		} else {
+			assert(input.root->is_condition_node());
+			input.root->condition_node().reset_honest();
+			input.root->condition_node().mark_honest(input.honest[history]);
+		}
 
 		if(options.strategies) {
 			input.root->reset_violation_cr();
@@ -2454,14 +2617,23 @@ void analyse_properties(const Options &options, const Input &input) {
 
 		for (size_t i=0; i<property_chosen.size(); i++) {
 			if(property_chosen[i]) {
+				
+				if (input.root->is_branch()) {
+					input.root->branch().reset_counterexample_choices();
+					input.root->branch().reset_reason();
+					input.root->branch().reset_strategy();
+					input.root->branch().reset_problematic_group(i==2);
+				} else {
+					assert(input.root->is_condition_node());
+					input.root->condition_node().reset_counterexample_choices();
+					input.root->condition_node().reset_reason();
+					input.root->condition_node().reset_strategy();
+					input.root->condition_node().reset_problematic_group(i==2);
+				}
 				input.reset_counterexamples();
-				input.root.get()->reset_counterexample_choices();
 				input.reset_logging();
 				input.reset_unsat_cases();
-				input.root->reset_reason();
-				input.root->reset_strategy();
 				input.reset_strategies(); 
-				input.root->reset_problematic_group(i==2); 
 				input.reset_reset_point();
 				property(options, input, property_types[i], history);
 			}
@@ -2493,7 +2665,12 @@ void analyse_properties(const Options &options, const Input &input) {
 			reset_calls(true, true, false, true);
 		}
 
-		input.root->reset_honest();
+		if (input.root->is_branch()) {
+			input.root->branch().reset_honest();
+		} else {
+			assert(input.root->is_condition_node());
+			input.root->condition_node().reset_honest();
+		}
 
 		std::vector<bool> property_chosen = {options.weak_immunity, options.weaker_immunity, options.practicality};
 		std::vector<PropertyType> property_types = {PropertyType::WeakImmunity, PropertyType::WeakerImmunity, PropertyType::Practicality};
@@ -2509,13 +2686,29 @@ void analyse_properties(const Options &options, const Input &input) {
 		for (size_t i=0; i<property_chosen.size(); i++) {
 			if(property_chosen[i]) {
 				input.reset_counterexamples();
-				input.root.get()->reset_counterexample_choices();
+				if (input.root->is_branch()) {
+					input.root->branch().reset_counterexample_choices();
+				} else {
+					assert(input.root->is_condition_node());
+					input.root->condition_node().reset_counterexample_choices();
+				}
 				input.reset_logging();
 				input.reset_unsat_cases();
-				input.root->reset_reason();
-				input.root->reset_strategy();
+				if (input.root->is_branch()) {
+					input.root->branch().reset_reason();
+					input.root->branch().reset_strategy();
+				} else {
+					assert(input.root->is_condition_node());
+					input.root->condition_node().reset_reason();
+					input.root->condition_node().reset_strategy();
+				}
 				input.reset_strategies(); 
-				input.root->reset_problematic_group(false); 
+				if (input.root->is_branch()) {
+					input.root->branch().reset_problematic_group(false);
+				} else {
+					assert(input.root->is_condition_node());
+					input.root->condition_node().reset_problematic_group(false);
+				}
 				input.reset_reset_point();
 				property(options, input, property_types[i], input.honest.size());
 			}
@@ -2550,20 +2743,41 @@ void analyse_properties(const Options &options, const Input &input) {
 
 				std::cout << std::endl;
 				std::cout << std::endl;
-				std::cout << "Checking honest utility " << input.honest_utilities[honest_utility].leaf << std::endl; 
+				std::cout << "Checking honest utility " << input.honest_utilities[honest_utility].element << std::endl; 
 
 				if(options.strategies) {
-					input.root->reset_violation_cr();
+					if (input.root->is_branch()) {
+						input.root->branch().reset_violation_cr();
+					} else {
+						assert(input.root->is_condition_node());
+						input.root->condition_node().reset_violation_cr();
+					}
 				}
 
 				input.reset_counterexamples();
-				input.root.get()->reset_counterexample_choices();
+				if (input.root->is_branch()) {
+					input.root->branch().reset_counterexample_choices();
+				} else {
+					assert(input.root->is_condition_node());
+					input.root->condition_node().reset_counterexample_choices();
+				}
 				input.reset_logging();
 				input.reset_unsat_cases();
-				input.root->reset_reason();
-				input.root->reset_strategy();
+				if (input.root->is_branch()) {
+					input.root->branch().reset_reason();
+					input.root->branch().reset_strategy();
+				} else {
+					assert(input.root->is_condition_node());
+					input.root->condition_node().reset_reason();
+					input.root->condition_node().reset_strategy();
+				}
 				input.reset_strategies(); 
-				input.root->reset_problematic_group(true); 
+				if (input.root->is_branch()) {
+					input.root->branch().reset_problematic_group(true);
+				} else {
+					assert(input.root->is_condition_node());
+					input.root->condition_node().reset_problematic_group(true);
+				}
 				input.reset_reset_point();
 				// input.honest.size() + honest_utility means we are running a subree in default mode
 				// and we consider collusion resilience for the honest utility
@@ -2572,14 +2786,14 @@ void analyse_properties(const Options &options, const Input &input) {
 				if(options.count_nodes) {
 					std::cout << std::endl;
 					std::cout << std::endl;
-					std::cout << "Number of checked nodes for honest utility: " << input.honest_utilities[honest_utility].leaf << std::endl;
+					std::cout << "Number of checked nodes for honest utility: " << input.honest_utilities[honest_utility].element << std::endl;
 					print_global_counters(false, false, true, false);
 				}
 
 				if(options.count_calls) {
 					std::cout << std::endl;
 					std::cout << std::endl;
-					std::cout << "Number of checked nodes for honest utility: " << input.honest_utilities[honest_utility].leaf << std::endl;
+					std::cout << "Number of checked nodes for honest utility: " << input.honest_utilities[honest_utility].element << std::endl;
 					print_calls_counters(false, false, true, false);
 				}
 
@@ -2620,9 +2834,16 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		std::cout << std::endl;
 		std::cout << "Checking history " << input.honest[history] << std::endl; 
 
-		input.root->reset_honest();
-		input.root->mark_honest(input.honest[history]);
-		input.root->reset_practical_utilities();
+		if (input.root->is_branch()) {
+			input.root->branch().reset_honest();
+			input.root->branch().mark_honest(input.honest[history]);
+			input.root->branch().reset_practical_utilities();
+		} else {
+			assert(input.root->is_condition_node());
+			input.root->condition_node().reset_honest();
+			input.root->condition_node().mark_honest(input.honest[history]);
+			input.root->condition_node().reset_practical_utilities();
+		}
 
 		if(options.strategies) {
 			input.root->reset_violation_cr();
@@ -2633,7 +2854,8 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 		assert(property_chosen.size() == property_types.size());
 
-		Subtree st({}, {}, {}, {}, {});
+		HonestUtilityElement honest_utility_element = {};
+		Subtree st({}, {}, {}, {}, honest_utility_element);
 		Subtree &subtree = st;
 		subtree.honest_utility = honest_history2utility(input.root.get(), input.honest[history]);
 		
@@ -2641,13 +2863,29 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		for (size_t i=0; i<property_chosen.size(); i++) {
 			if(property_chosen[i]) {
 				input.reset_counterexamples();
-				input.root.get()->reset_counterexample_choices();
+				if (input.root->is_branch()) {
+					input.root->branch().reset_counterexample_choices();
+				} else {
+					assert(input.root->is_condition_node());
+					input.root->condition_node().reset_counterexample_choices();
+				}
 				input.reset_logging();
 				input.reset_unsat_cases();
-				input.root->reset_reason();
-				input.root->reset_strategy();
+				if (input.root->is_branch()) {
+					input.root->branch().reset_reason();
+					input.root->branch().reset_strategy();
+				} else {
+					assert(input.root->is_condition_node());
+					input.root->condition_node().reset_reason();
+					input.root->condition_node().reset_strategy();
+				}
 				input.reset_strategies(); 
-				input.root->reset_problematic_group(i==2); 
+				if (input.root->is_branch()) {
+					input.root->branch().reset_problematic_group(i==2);
+				} else {
+					assert(input.root->is_condition_node());
+					input.root->condition_node().reset_problematic_group(i==2);
+				}
 				input.reset_reset_point();
 				property_subtree(options, input, property_types[i], history, subtree);
 			}
@@ -2689,15 +2927,22 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		std::cout << std::endl;
 		std::cout << "Checking no honest history " << std::endl;
 
-		input.root->reset_honest();
-		input.root->reset_practical_utilities();
+		if (input.root->is_branch()) {
+			input.root->branch().reset_honest();
+			input.root->branch().reset_practical_utilities();
+		} else {
+			assert(input.root->is_condition_node());
+			input.root->condition_node().reset_honest();
+			input.root->condition_node().reset_practical_utilities();
+		}
 
 		// possibly comment out
 		if(options.strategies) {
 			input.root->reset_violation_cr();
 		}
 
-		Subtree st({}, {}, {}, {}, {});
+		HonestUtilityElement honest_utility_element = {};
+		Subtree st({}, {}, {}, {}, honest_utility_element);
 		Subtree &subtree = st;
 
 		// cr handled below
@@ -2709,11 +2954,22 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		for (size_t i=0; i<property_chosen.size(); i++) {
 			if(property_chosen[i]) {
 				input.reset_counterexamples();
-				input.root.get()->reset_counterexample_choices();
+				if (input.root->is_branch()) {
+					input.root->branch().reset_counterexample_choices();
+				} else {
+					assert(input.root->is_condition_node());
+					input.root->condition_node().reset_counterexample_choices();
+				}
 				input.reset_logging();
 				input.reset_unsat_cases();
-				input.root->reset_reason();
-				input.root->reset_strategy();
+				if (input.root->is_branch()) {
+					input.root->branch().reset_reason();
+					input.root->branch().reset_strategy();
+				} else {
+					assert(input.root->is_condition_node());
+					input.root->condition_node().reset_reason();
+					input.root->condition_node().reset_strategy();
+				}
 				input.reset_strategies(); 
 				input.reset_reset_point();
 				property_subtree_nohistory(options, input, property_types[i], subtree);
@@ -2748,9 +3004,14 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 			std::cout << std::endl;
 			std::cout << std::endl;
-			std::cout << "Checking utility " << input.honest_utilities[utility].leaf << std::endl; 
+			std::cout << "Checking utility " << input.honest_utilities[utility].element << std::endl; 
 
-			input.root->reset_honest();
+			if (input.root->is_branch()) {
+				input.root->branch().reset_honest();
+			} else {
+				assert(input.root->is_condition_node());
+				input.root->condition_node().reset_honest();
+			}
 
 			// possible comment out?
 			if(options.strategies) {
@@ -2759,30 +3020,44 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 			subtree.collusion_resilience = {};
 
-			if(options.collusion_resilience) {
-				input.reset_counterexamples();
-				input.root.get()->reset_counterexample_choices();
-				input.reset_logging();
-				input.reset_unsat_cases();
-				input.root->reset_reason();
-				input.root->reset_strategy();
-				input.reset_strategies(); 
-				input.root->reset_problematic_group(true); 
-				input.reset_reset_point();
-				property_subtree_utility(options, input, PropertyType::CollusionResilience, input.honest_utilities[utility].leaf, subtree);
+		if(options.collusion_resilience) {
+			input.reset_counterexamples();
+			if (input.root->is_branch()) {
+				input.root->branch().reset_counterexample_choices();
+			} else {
+				assert(input.root->is_condition_node());
+				input.root->condition_node().reset_counterexample_choices();
 			}
-
-			if(options.count_nodes) {
+			input.reset_logging();
+			input.reset_unsat_cases();
+			if (input.root->is_branch()) {
+				input.root->branch().reset_reason();
+				input.root->branch().reset_strategy();
+			} else {
+				assert(input.root->is_condition_node());
+				input.root->condition_node().reset_reason();
+				input.root->condition_node().reset_strategy();
+			}
+			input.reset_strategies(); 
+			if (input.root->is_branch()) {
+				input.root->branch().reset_problematic_group(true);
+			} else {
+				assert(input.root->is_condition_node());
+				input.root->condition_node().reset_problematic_group(true);
+			}
+			input.reset_reset_point();
+			property_subtree_utility(options, input, PropertyType::CollusionResilience, input.honest_utilities[utility].element, subtree);
+		}			if(options.count_nodes) {
 				std::cout << std::endl;
 				std::cout << std::endl;
-				std::cout << "Number of checked nodes for honest utility: " << input.honest_utilities[utility].leaf << std::endl;
+				std::cout << "Number of checked nodes for honest utility: " << input.honest_utilities[utility].element << std::endl;
 				print_global_counters(false, false, true, false);
 			}
 
 			if(options.count_calls) {
 				std::cout << std::endl;
 				std::cout << std::endl;
-				std::cout << "Number of checked nodes for honest utility: " << input.honest_utilities[utility].leaf << std::endl;
+				std::cout << "Number of checked nodes for honest utility: " << input.honest_utilities[utility].element << std::endl;
 				print_calls_counters(false, false, true, false);
 			}
 
@@ -2790,7 +3065,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 			// set honest utility to this utility
 			// set wi, weri, cr, pr subtree results
 			// wi, weri, pr always the same, only cr changes
-			subtree.honest_utility = input.honest_utilities[utility].leaf;
+			subtree.honest_utility = input.honest_utilities[utility].element;
 
 			std::string file_name = options.input_path + std::string(".out");
         	print_subtree_result_to_file(input, file_name, subtree);
