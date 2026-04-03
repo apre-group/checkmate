@@ -2020,7 +2020,7 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 
 	assert(property != PropertyType::CollusionResilience);
 	
-	bool property_result;
+	bool property_result = false;
 	if(property == PropertyType::WeakImmunity) {
 		property_result = weak_immunity_rec(input, solver, options, input.root.get(), player_nr, false, false);
 	} else if (property == PropertyType::WeakerImmunity) {
@@ -2160,7 +2160,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 			// see comment in analyze properties
 			// if history >= input.honest.size() then we are running subtree in default mode
 			// and are considering an honest utility, not an honest history
-			std::cout << "Is the subtree " << prop_name << " for honest utility " << input.honest_utilities[history - input.honest.size()].leaf << "?" << std::endl;
+			std::cout << "Is the subtree " << prop_name << " for honest utility " << input.honest_utilities[history - input.honest.size()].element << "?" << std::endl;
 		} else {
 			std::cout << "Is the subtree " << prop_name << "?" << std::endl;
 		}

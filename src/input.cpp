@@ -734,7 +734,7 @@ static HonestHistory parse_honest_history(Parser &parser, const json &history_js
 }
 
 // Parse utility vector from JSON (helper for honest_utility)
-static std::vector<Utility> parse_utility_vector(Parser &parser, const json &utility_json, const Input &input) {
+static std::vector<Utility> parse_utility_vector(Parser &parser, const json &utility_json) {
 	using PlayerUtility = std::pair<std::string, Utility>;
 	std::vector<PlayerUtility> player_utilities;
 	
@@ -799,7 +799,7 @@ static HonestUtilityElement parse_honest_utility_element(Parser &parser, const j
 				return HonestUtilityElement(conditions);
 			} else if (element[0].contains("player")) {
 				// It's a utility vector
-				return HonestUtilityElement(parse_utility_vector(parser, element, input));
+				return HonestUtilityElement(parse_utility_vector(parser, element));
 			}
 		}
 	}
@@ -1214,14 +1214,10 @@ std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std:
 				counterexample.push_back(ce_choice);
 
 				for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
-
-					int cnt = std::count(this->condition_node().counterexample_choices.begin(), this->condition_node().counterexample_choices.end(), cond_choice.condition.to_string());
-					if (cnt > 0) {
-						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-						z3::Bool condition = cond_choice.condition;
-						updated_actions.push_back(condition.to_string());
-						std::vector<CeChoice> child_ce = cond_choice.node->compute_wi_ce(players, updated_actions, player_group);
-						counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+				z3::Bool condition = cond_choice.condition;
+				int cnt = std::count(this->condition_node().counterexample_choices.begin(), this->condition_node().counterexample_choices.end(), condition.to_string());
+				if (cnt > 0) {
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
 					}
 				}
 		}
@@ -1287,14 +1283,10 @@ std::vector<CeChoice> Node::compute_cr_ce(std::vector<std::string> players, std:
 				counterexample.push_back(ce_choice);
 
 				for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
-
-					int cnt = std::count(this->condition_node().counterexample_choices.begin(), this->condition_node().counterexample_choices.end(), cond_choice.condition.to_string());
-					if (cnt > 0) {
-						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-						z3::Bool condition = cond_choice.condition;
-						updated_actions.push_back(condition.to_string());
-						std::vector<CeChoice> child_ce = cond_choice.node->compute_cr_ce(players, updated_actions, player_group);
-						counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+				z3::Bool condition = cond_choice.condition;
+				int cnt = std::count(this->condition_node().counterexample_choices.begin(), this->condition_node().counterexample_choices.end(), condition.to_string());
+				if (cnt > 0) {
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
 					}
 				}
 		}
@@ -1346,7 +1338,8 @@ const Node* Node::compute_deviation_node(std::vector<std::string> actions_so_far
 			}
 		} else if (this->is_condition_node()) {
 			for (const auto &cond_choice: this->condition_node().conditions) {
-				if(cond_choice.condition.to_string() == actions_so_far[0]) {
+				z3::Bool condition = cond_choice.condition;
+				if(condition.to_string() == actions_so_far[0]) {
 					actions_so_far.erase(actions_so_far.begin());
 					return cond_choice.node.get()->compute_deviation_node(actions_so_far);
 				}

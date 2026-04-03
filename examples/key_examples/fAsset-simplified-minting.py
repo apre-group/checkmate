@@ -180,7 +180,7 @@ def liquidation(state : Dict) -> Tree:
     # math: 
     # state["collateral"]*priceFLR >= cr * (state["number_backed_assets"]+ l - n)* priceBTC>
     # n = cr * ((state["number_backed_assets"] + l)* priceBTC - state["collateral"]*priceFLR) / (cr* priceBTC)
-    INITIAL_CONSTRAINTS.append(n == cr * ((state["number_backed_assets"] + l)* priceBTC - state["collateral"]*priceFLR) / (cr* priceBTC))
+    INITIAL_CONSTRAINTS.append(n * cr* priceBTC == cr * ((state["number_backed_assets"] + l)* priceBTC - state["collateral"]*priceFLR) )
 
     state1 = copy_state(state)
     state1["number_backed_assets"] = state["number_backed_assets"] - n

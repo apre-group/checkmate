@@ -105,6 +105,33 @@ struct HonestHistoryCondition {
 // An honest history is a sequence of HonestHistoryElements
 using HonestHistory = std::vector<HonestHistoryElement>;
 
+// Forward declaration for operator<<
+inline std::ostream& operator<<(std::ostream& os, const HonestHistoryElement& element);
+
+// Operator<< for HonestHistoryCondition
+inline std::ostream& operator<<(std::ostream& os, const HonestHistoryCondition& hhc) {
+	os << "(" << hhc.condition << " -> " << hhc.path << ")";
+	return os;
+}
+
+// Operator<< for HonestHistoryElement (handles the variant)
+inline std::ostream& operator<<(std::ostream& os, const HonestHistoryElement& element) {
+	if (std::holds_alternative<std::string>(element)) {
+		os << std::get<std::string>(element);
+	} else {
+		const auto& conditions = std::get<std::vector<HonestHistoryCondition>>(element);
+		os << "{";
+		bool first = true;
+		for (const auto& cond : conditions) {
+			if (!first) os << ", ";
+			first = false;
+			os << cond;
+		}
+		os << "}";
+	}
+	return os;
+}
+
 struct HistoryChoice{
 	std::string player;
 	std::string choice;
@@ -436,42 +463,8 @@ inline std::vector<CondHonestUtility> get_conditional_honest_utilities(const Hon
 
 // Helper function to convert an honest history into an HonestUtilityElement
 // Traverses the tree following the honest history path and collects utilities with their conditions
-inline HonestUtilityElement honest_history2utility(Node *node, const HonestHistory &history) {
-	
-	if (node->is_leaf()) { // Base case: reached a leaf
-		return node->leaf().utilities;
-
-	} else if (node->is_subtree()) { // Base case: reached a subtree
-		return node->subtree().honest_utility;
-
-	} else if (node->is_branch()) { // Handle branch nodes
-		assert(!history.empty());
-		assert(std::holds_alternative<std::string>(history[0]));
-		const std::string &action = std::get<std::string>(history[0]);
-		HonestHistory next_history(history.begin() + 1, history.end());
-		return honest_history2utility(node->branch().get_choice(action).node.get(), next_history);
-
-	} else { // Handle condition nodes
-		assert(node->is_condition_node());
-		assert(!history.empty());
-		assert(std::holds_alternative<std::vector<HonestHistoryCondition>>(history[0]));
-		const auto &hist_conditions = std::get<std::vector<HonestHistoryCondition>>(history[0]);
-		
-		// Collect utilities from all conditional branches
-		std::vector<HonestUtilityCondition> utility_conditions;
-		for (const auto &hist_cond : hist_conditions) {
-			// Recursively get utilities for this conditional path
-			HonestUtilityElement branch_utility = honest_history2utility(
-				node->condition_node().get_choice(hist_cond.condition).node.get(),
-				hist_cond.path);
-			
-			HonestUtilityCondition util_cond(hist_cond.condition, branch_utility);
-			utility_conditions.push_back(util_cond);
-		}
-		
-		return utility_conditions;
-	}
-}
+// Implementation moved to end of file after class definitions
+inline HonestUtilityElement honest_history2utility(Node *node, const HonestHistory &history);
 
 
 struct HonestUtilityTuple {
@@ -1157,7 +1150,7 @@ struct Input {
 	void compute_strategy_case(std::vector<z3::Bool> _case, PropertyType property) const {
 		
 		if (property == PropertyType::Practicality){
-			bool is_honest;
+			bool is_honest = false;
 			if (root->is_branch()) {
 				is_honest = root->branch().honest;
 			} else if (root->is_condition_node()) {
@@ -1469,6 +1462,44 @@ inline const Branch &Node::branch() const {
 inline const ConditionNode &Node::condition_node() const {
 	assert(is_condition_node());
 	return *static_cast<const ConditionNode *>(this);
+}
+
+// Implementation of honest_history2utility (defined after classes are complete)
+inline HonestUtilityElement honest_history2utility(Node *node, const HonestHistory &history) {
+	
+	if (node->is_leaf()) { // Base case: reached a leaf
+		return node->leaf().utilities;
+
+	} else if (node->is_subtree()) { // Base case: reached a subtree
+		return node->subtree().honest_utility;
+
+	} else if (node->is_branch()) { // Handle branch nodes
+		assert(!history.empty());
+		assert(std::holds_alternative<std::string>(history[0]));
+		const std::string &action = std::get<std::string>(history[0]);
+		HonestHistory next_history(history.begin() + 1, history.end());
+		return honest_history2utility(node->branch().get_choice(action).node.get(), next_history);
+
+	} else { // Handle condition nodes
+		assert(node->is_condition_node());
+		assert(!history.empty());
+		assert(std::holds_alternative<std::vector<HonestHistoryCondition>>(history[0]));
+		const auto &hist_conditions = std::get<std::vector<HonestHistoryCondition>>(history[0]);
+		
+		// Collect utilities from all conditional branches
+		std::vector<HonestUtilityCondition> utility_conditions;
+		for (const auto &hist_cond : hist_conditions) {
+			// Recursively get utilities for this conditional path
+			HonestUtilityElement branch_utility = honest_history2utility(
+				node->condition_node().get_choice(hist_cond.condition).node.get(),
+				hist_cond.path);
+			
+			HonestUtilityCondition util_cond(hist_cond.condition, branch_utility);
+			utility_conditions.push_back(util_cond);
+		}
+		
+		return utility_conditions;
+	}
 }
 
 #endif
