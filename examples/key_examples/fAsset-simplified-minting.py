@@ -43,7 +43,7 @@ INITIAL_CONSTRAINTS = [
     pi > 0,
     l > 0,
     gas > 0,
-    alpha > 10000 * gas,
+    alpha * l > 2 * gas,
     mfee > 0,
     amt >= 0, # amount to be liquidated cannot be negative
     n > amt, # n is the amount that needs to be liquidated to reach the safety threshold

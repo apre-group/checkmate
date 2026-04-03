@@ -1771,8 +1771,14 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 			input.root->condition_node().reset_reason();
 		}
 		if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
-			auto &current_reset_branch = current_reset_point->branch();
-			current_reset_branch.reset_strategy();
+			if (input.reset_point->is_branch()) {
+				input.reset_point->branch().reset_strategy();
+			} else {
+				assert(input.reset_point->is_condition_node());
+				input.reset_point->condition_node().reset_strategy();
+			}
+			// auto &current_reset_branch = current_reset_point->branch();
+			// current_reset_branch.reset_strategy();
 		}
 
 		solver.push();

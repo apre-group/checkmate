@@ -442,11 +442,11 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 	}
 
 	// condition node
-	if (node.contains("conditions")) {
+	if (node.contains("condition")) {
 		std::unique_ptr<ConditionNode> condition_node(new ConditionNode());
-		for (const json &cond: node["conditions"]) {
+		for (const json &cond: node["condition"]) {
 			// parse the condition constraint
-			const std::string &condition_str = cond["condition"];
+			const std::string &condition_str = cond["constraint"];
 			z3::Bool condition = parser.parse_constraint(condition_str.c_str());
 			
 			// load the child subtree
