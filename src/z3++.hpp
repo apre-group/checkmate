@@ -293,7 +293,7 @@ namespace z3 {
 			return new_expr;
 		}
 
-		std::string to_string() {
+		std::string to_string() const {
 			std::ostringstream oss;
 			oss << *this;
 			return oss.str();

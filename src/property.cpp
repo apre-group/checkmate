@@ -1100,8 +1100,9 @@ bool practicality_rec(const Input &input, const Options &options, z3::Solver &so
 		for (const auto& utilities : children) {
 			for (const auto& utility : utilities) {
 				UtilityTuple to_add(utility.leaf, utility.condition && children_conditions[i]);
-				to_add.strategy_vector.push_back(children_conditions[i].to_string());
-				to_add.strategy_vector.insert(to_add.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+				Strategy new_strategy(children_conditions[i].to_string());
+				new_strategy.children_strategies = {utility.strategy};
+				to_add.strategy = new_strategy;
 				practical_utilities.insert(to_add);
 			}
 			i++;
@@ -1199,10 +1200,8 @@ bool practicality_rec(const Input &input, const Options &options, z3::Solver &so
 
 				// we need to remove the strategy of the PR utilities in a first step to be able to update it correctly later
 				// so we store it temporarily in honest_strategy
-				std::vector<std::string> honest_strategy; 
-				honest_strategy.insert(honest_strategy.end(), honest_utility.strategy_vector.begin(), honest_utility.strategy_vector.end());
-				honest_utility.strategy_vector = {};
-				honest_utility.strategy_vector.push_back(honest_choice);
+				std::optional<Strategy> honest_strategy = honest_utility.strategy; 
+				honest_utility.strategy = Strategy(honest_choice);
 
 				// for all other children
 				unsigned int j = 0;
@@ -1211,6 +1210,7 @@ bool practicality_rec(const Input &input, const Options &options, z3::Solver &so
 					// exists dominated "function"
 					bool found = false;
 					z3::Bool condition = z3::Bool(false);
+					std::vector<ConditionStrategy> child_strategy;
 
 					// does there exist a possible utility such that `honest_utility` is geq than it?				
 					for (const auto& utility : utilities) {
@@ -1241,16 +1241,23 @@ bool practicality_rec(const Input &input, const Options &options, z3::Solver &so
 							else {
 								assert(comparison_result == z3::Result::UNSAT);
 								found = true;
-								// need to insert strategy after honest at right point in vector
-								if (j == honest_index){
-									honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
-								} 
-								honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+								ConditionStrategy dominated_strategy(utility.condition, utility.strategy);
+								child_strategy.push_back(dominated_strategy);
+								
 								condition = condition || utility.condition;
 							}
 							solver.pop();
 						}
 					}
+					if (found){
+						// need to insert strategy after honest at right point in vector
+						if (j == honest_index){
+							honest_utility.strategy->children_strategies.push_back(honest_strategy);
+						} 
+						honest_utility.strategy->children_strategies.push_back(child_strategy);
+					}
+					
+					
 					// end of exists dominated "function"
 
 					if(options.count_calls) {
@@ -1287,7 +1294,7 @@ bool practicality_rec(const Input &input, const Options &options, z3::Solver &so
 					j++;
 				}
 				if(j == honest_index) {
-					honest_utility.strategy_vector.insert(honest_utility.strategy_vector.end(), honest_strategy.begin(), honest_strategy.end());
+					honest_utility.strategy->children_strategies.push_back(honest_strategy);
 				}
 			}
 			
@@ -1305,9 +1312,8 @@ bool practicality_rec(const Input &input, const Options &options, z3::Solver &so
 			unsigned int k = 0;
 			for (const auto& utilities : children) {
 				for ( const auto& utility : utilities) {
-					// Save the original strategy from recursive call
-					std::vector<std::string> new_strategy = {};
-					new_strategy.push_back(children_actions[k]);
+					
+					Strategy new_strategy(children_actions[k]);
 
 					// start actual practicality reasoning: check whether to drop this utility or not
 					bool is_practical = true;
@@ -1319,6 +1325,7 @@ bool practicality_rec(const Input &input, const Options &options, z3::Solver &so
 							// exists dominated "function"
 							bool found = false;
 							z3::Bool condition = z3::Bool(false);
+							std::vector<ConditionStrategy> child_strategy;
 
 							// does there exist a sibling utility such that `utility` is geq than it?				
 							for (const auto& other_utility : sibling_utilities) {
@@ -1348,17 +1355,20 @@ bool practicality_rec(const Input &input, const Options &options, z3::Solver &so
 									} 
 									else {
 										assert(comparison_result == z3::Result::UNSAT);
-										// TODO: strategy now has the stategy of the first dominated utility, but it could be that there are multiple dominated utilities 
-										//       with different conditions
-										if (!found){
-											// Insert the strategy of the dominating sibling utility
-											new_strategy.insert(new_strategy.end(), other_utility.strategy_vector.begin(), other_utility.strategy_vector.end());
-										}
+										// Insert the strategy of the dominating sibling utility
+										ConditionStrategy dominated_strategy(other_utility.condition, other_utility.strategy);
+										child_strategy.push_back(dominated_strategy);
+										
 										condition = condition || other_utility.condition;
 										found = true;
 									}
 									solver.pop();
 								}
+							}
+
+							if (found){
+								// need to insert strategy at right point in vector
+								new_strategy.children_strategies.push_back(child_strategy);
 							}
 							// end of exists dominated "function"
 
@@ -1376,14 +1386,14 @@ bool practicality_rec(const Input &input, const Options &options, z3::Solver &so
 							}
 						} else {
 							//  insert the original child strategy at the correct place
-							new_strategy.insert(new_strategy.end(), utility.strategy_vector.begin(), utility.strategy_vector.end());
+							new_strategy.children_strategies.push_back(utility.strategy);
 						
 						}
 						m++;
 					}
 					if (is_practical) {
 						UtilityTuple to_insert(utility.leaf, new_condition); 
-						to_insert.strategy_vector.insert(to_insert.strategy_vector.end(), new_strategy.begin(), new_strategy.end());
+						to_insert.strategy = new_strategy;
 						utility_result.insert(to_insert);
 					}
 
@@ -1638,7 +1648,8 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			const auto& practical_utilities = input.root->is_branch() ? input.root->branch().practical_utilities : input.root->condition_node().practical_utilities;
 			for(const auto& pr_utility : practical_utilities) {
 				CeChoice ce_choice;
-				ce_choice.choices = input.root->strat2hist(pr_utility.strategy_vector);
+				ce_choice.choices = input.root->strat2hist(pr_utility.strategy);
+				ce_choice.condition = pr_utility.condition;
 				pr_choices.push_back(ce_choice);
 			}
 			pr_ce_case.counterexample = pr_choices;
@@ -2224,7 +2235,8 @@ void property(const Options &options, const Input &input, PropertyType property,
 	if (options.strategies && prop_holds){
 		// for each case a strategy
 		bool is_wi = (property == PropertyType::WeakerImmunity) || (property == PropertyType::WeakImmunity);
-		input.print_strategies(options, is_wi);
+		bool is_pr = (property == PropertyType::Practicality);
+		input.print_strategies(options, is_wi, is_pr);
 	}
 
 	if (options.counterexamples && !prop_holds){

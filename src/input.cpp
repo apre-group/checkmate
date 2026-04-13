@@ -1,6 +1,8 @@
 #include <fstream>
 #include <iostream>
 #include "json.hpp"
+#include <optional>
+#include <variant>
 
 #include "input.hpp"
 
@@ -1114,46 +1116,138 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> pl
 		return strategy;
 	}
 
-std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector) const {
+std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, const StrategyElement& strategy_element, std::vector<std::string> conditions_so_far) const {
 
-		if (this -> is_leaf() || this->is_subtree()){
-			return {};
-		}
+	if (this -> is_leaf() || this->is_subtree()){
+		assert(std::holds_alternative<std::optional<Strategy>>(strategy_element));
+		assert(!std::get<std::optional<Strategy>>(strategy_element).has_value());
+		return {};
+	}
 
-		assert(strategy_vector.size()>0);
-		std::vector<HistoryChoice> strategy;
+	std::vector<HistoryChoice> choices;
 
-		if (this->is_branch()){
+	if (std::holds_alternative<std::optional<Strategy>>(strategy_element)) {
 
+		assert(std::get<std::optional<Strategy>>(strategy_element).has_value());
+		const Strategy& given_strategy = std::get<std::optional<Strategy>>(strategy_element).value();
+
+		if (this->is_branch()){				
 			HistoryChoice hist_choice;
 			hist_choice.player = players[this->branch().player];
-			hist_choice.choice = strategy_vector[0];
-			strategy_vector.erase(strategy_vector.begin());
+			hist_choice.choice = given_strategy.root_action;
 			hist_choice.history = actions_so_far;
+			hist_choice.condition = conditions_so_far;
+			choices.push_back(hist_choice);
 
-			strategy.push_back(hist_choice);
-
-			
-			for (const Choice &choice: this->branch().choices) {
+			unsigned int i = 0;
+			for (const StrategyElement& child_strategy_element: given_strategy.children_strategies) {
 				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-				updated_actions.push_back(choice.action);
-				std::vector<HistoryChoice> child_strategy = choice.node->compute_pr_strategy(players, updated_actions, strategy_vector);
-				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+				updated_actions.push_back(this->branch().choices[i].action);
+				
+				std::vector<HistoryChoice> child_choices = this->branch().choices[i].node->compute_pr_strategy(players, updated_actions, child_strategy_element, conditions_so_far);
+
+
+				choices.insert(choices.end(), child_choices.begin(), child_choices.end());
+				i++;
 			}
+
+			return choices;
+
 		}
-		 else if (this->is_condition_node()) {
-			// For condition nodes, recursively compute pr_strategy for all conditional branches
+		else if (this->is_condition_node()) {
+			// For condition nodes, only one condition is there since these are the strategies that make a specific utility practical,
+			// this condition probably has to be added to case
+
+			std::string current_condition = std::get<std::optional<Strategy>>(strategy_element).value().root_action;
+			assert(std::get<std::optional<Strategy>>(strategy_element).value().children_strategies.size() == 1); // should only be one child strategy since only one condition should make the utility practical
 			for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
-				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-				z3::Bool condition = cond_choice.condition;
-				updated_actions.push_back(condition.to_string()); // Add the condition to the history for tracking purposes
-				std::vector<HistoryChoice> child_strategy = cond_choice.node->compute_pr_strategy(players, updated_actions, strategy_vector);
-				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+				if (cond_choice.condition.to_string() == current_condition) {
+
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(current_condition); // Add the condition to the history for tracking purposes
+					std::vector<HistoryChoice> child_choices = cond_choice.node->compute_pr_strategy(players, updated_actions, std::get<std::optional<Strategy>>(strategy_element).value().children_strategies[0], conditions_so_far);					// this condition is added later when different choices have to be combined (ConditionStrategy)
+					// for (StrategyCase& child_case: child_strategy_case) {
+					// 	child_case._case.push_back(cond_choice.condition); 
+					// }
+					
+					return child_choices;
+				}
 			}
+			assert(false); // should have found the condition in the condition node
 		}
 
-		return strategy;
+		return choices;
+
+	} else {
+		std::vector<ConditionStrategy> condition_strategies = std::get<std::vector<ConditionStrategy>>(strategy_element);
+
+		if (this->is_branch()){
+			assert(!condition_strategies.empty());
+			for (ConditionStrategy& condition_strategy: condition_strategies) {
+
+				assert(condition_strategy.strategy.has_value());
+				Strategy& given_strategy = condition_strategy.strategy.value();
+
+				std::vector<std::string> updated_conditions(conditions_so_far.begin(), conditions_so_far.end());
+				updated_conditions.push_back(condition_strategy.condition.to_string()); 
+
+				HistoryChoice hist_choice;
+				hist_choice.player = players[this->branch().player];
+				hist_choice.choice = given_strategy.root_action;
+				hist_choice.history = actions_so_far;
+				hist_choice.condition = updated_conditions;
+				choices.push_back(hist_choice);
+
+				unsigned int i = 0;
+				for (const StrategyElement& child_strategy_element: given_strategy.children_strategies) {
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(this->branch().choices[i].action);
+					
+					std::vector<HistoryChoice> child_choices = this->branch().choices[i].node->compute_pr_strategy(players, updated_actions, child_strategy_element, updated_conditions);
+
+
+					choices.insert(choices.end(), child_choices.begin(), child_choices.end());
+					i++;
+				}
+	
+			}
+			return choices;
+			
+
+		} else {
+			assert(this->is_condition_node()); 
+			assert(!condition_strategies.empty());
+			for (ConditionStrategy& condition_strategy: condition_strategies) {
+				assert(condition_strategy.strategy.has_value());
+				Strategy& given_strategy = condition_strategy.strategy.value();
+
+				std::vector<std::string> updated_conditions(conditions_so_far.begin(), conditions_so_far.end());
+				updated_conditions.push_back(condition_strategy.condition.to_string()); 
+
+				std::string current_condition = given_strategy.root_action;
+				assert(given_strategy.children_strategies.size() == 1); // should only be one child strategy since only one condition should make the utility practical
+				for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
+					if (cond_choice.condition.to_string() == current_condition) {
+
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+						updated_actions.push_back(current_condition); // Add the condition to the history for tracking purposes
+						std::vector<HistoryChoice> child_choices = cond_choice.node->compute_pr_strategy(players, updated_actions, given_strategy.children_strategies[0], updated_conditions);
+
+						// this condition is added later when different choices have to be combined (ConditionStrategy)
+						// for (StrategyCase& child_case: child_strategy_case) {
+						// 	child_case._case.push_back(cond_choice.condition); 
+						// }
+						
+						return child_choices;
+					}
+				}
+			}
+			assert(false); // should have found the condition in the condition node
+		}
+		
 	}
+				
+}
 
 
 std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
@@ -1363,8 +1457,9 @@ std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, std::vecto
 
 		cechoice.choices = {};
 		
-		std::vector<std::string> result_hist = strat2hist(utility.strategy_vector);
+		std::vector<std::string> result_hist = strat2hist(utility.strategy);
 		cechoice.choices.insert(cechoice.choices.end(), result_hist.begin(), result_hist.end());
+		cechoice.condition = utility.condition;
 		
 		std::vector<std::string> updated_history;
 		updated_history.insert(updated_history.end(), actions_so_far.begin(), actions_so_far.end());
@@ -1377,7 +1472,7 @@ std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, std::vecto
 	return cechoices;
 }
 
-std::vector<std::string> Node::strat2hist(std::vector<std::string> &strategy) const {
+std::vector<std::string> Node::strat2hist(std::optional<Strategy> &strategy) const {
 	
 	if(this->is_leaf()) {
 		return {};
@@ -1385,34 +1480,40 @@ std::vector<std::string> Node::strat2hist(std::vector<std::string> &strategy) co
 		return {};
 	}
 
-	assert(strategy.size() > 0);
+	assert(strategy.has_value());
 
-	std::vector<std::string> strategy_copy;
-	strategy_copy.insert(strategy_copy.begin(), strategy.begin(), strategy.end());
+	// std::vector<std::string> strategy_copy;
+	// strategy_copy.insert(strategy_copy.begin(), strategy.begin(), strategy.end());
 	
 	std::vector<std::string> hist_player_pairs;
-	std::string first_action = strategy_copy[0];
-	strategy_copy.erase(strategy_copy.begin());
+	std::string first_action = strategy.value().root_action;
+	// strategy_copy.erase(strategy_copy.begin());
 	hist_player_pairs.push_back(first_action);
 
 	bool found = false;
 	if (this->is_branch()) {
+		int i = 0;
 		for(auto &child: this->branch().choices) {
-
 			if(child.action == first_action) {
-				std::vector<std::string> child_result = child.node->strat2hist(strategy_copy);
+				// along the utility's history it will always be a strategy not a condition strategy
+				assert(std::holds_alternative<std::optional<Strategy>>(strategy.value().children_strategies[i]));
+				std::vector<std::string> child_result = child.node->strat2hist(std::get<std::optional<Strategy>>(strategy.value().children_strategies[i]));
 				hist_player_pairs.insert(hist_player_pairs.end(), child_result.begin(), child_result.end());
 				found = true;
-			} else {
-				child.node->prune_actions_from_strategy(strategy_copy);
-			}
+			} 
+			// else {
+			// 	child.node->prune_actions_from_strategy(strategy_copy);
+			// }
+			i++;
 		}
-	} else if (this->is_condition_node()) { // assuming this is a counterexample strategy, there is only one condition there
-		// and no strategies to prune since all branches of a condition node are taken in a counterexample strategy, so we only look for the right branch to continue with
+	} else if (this->is_condition_node()) { // assuming this is a strategy leading to one specific utility, there is only one condition (= child) there
+		assert(strategy.value().children_strategies.size() == 1);
+		// along the utility's history it will always be a strategy not a condition strategy
+		assert(std::holds_alternative<std::optional<Strategy>>(strategy.value().children_strategies[0]));
 		for (auto &cond_choice: this->condition_node().conditions) {
 			z3::Bool condition = cond_choice.condition;
 			if(condition.to_string() == first_action) {
-				std::vector<std::string> child_result = cond_choice.node->strat2hist(strategy_copy);
+				std::vector<std::string> child_result = cond_choice.node->strat2hist(std::get<std::optional<Strategy>>(strategy.value().children_strategies[0]));
 				hist_player_pairs.insert(hist_player_pairs.end(), child_result.begin(), child_result.end());
 				found = true;
 			} 
@@ -1425,28 +1526,28 @@ std::vector<std::string> Node::strat2hist(std::vector<std::string> &strategy) co
 
 }
 
-void Node::prune_actions_from_strategy(std::vector<std::string> &strategy) const {
+// void Node::prune_actions_from_strategy(std::vector<std::string> &strategy) const {
 
-	if(this->is_leaf() || this->is_subtree()) {
-		return;
-	} 
+// 	if(this->is_leaf() || this->is_subtree()) {
+// 		return;
+// 	} 
 
-	assert(strategy.size() > 0);
-	std::string first_item = strategy[0];
-	strategy.erase(strategy.begin());
-	if (this->is_branch()) {
-		for(auto &child: this->branch().choices) {
-			child.node->prune_actions_from_strategy(strategy);
-		}
-	} else if (this->is_condition_node()) {
-		for (auto &cond_choice: this->condition_node().conditions) {
-			z3::Bool condition = cond_choice.condition;
-			if (condition.to_string() == first_item) {
-				cond_choice.node->prune_actions_from_strategy(strategy);
-			} 
-		}
-	}
-}
+// 	assert(strategy.size() > 0);
+// 	std::string first_item = strategy[0];
+// 	strategy.erase(strategy.begin());
+// 	if (this->is_branch()) {
+// 		for(auto &child: this->branch().choices) {
+// 			child.node->prune_actions_from_strategy(strategy);
+// 		}
+// 	} else if (this->is_condition_node()) {
+// 		for (auto &cond_choice: this->condition_node().conditions) {
+// 			z3::Bool condition = cond_choice.condition;
+// 			if (condition.to_string() == first_item) {
+// 				cond_choice.node->prune_actions_from_strategy(strategy);
+// 			} 
+// 		}
+// 	}
+// }
 
 
 void Node::reset_violation_cr() const {

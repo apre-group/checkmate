@@ -28,10 +28,66 @@ enum class NodeType {
     CONDITION_NODE
 };
 
+// Forward declarations
+struct Strategy;
+struct ConditionStrategy;
+
+using StrategyElement = std::variant<std::optional<Strategy>, std::vector<ConditionStrategy>>;
+
+struct Strategy {
+	std::string root_action;
+	std::vector<StrategyElement> children_strategies;
+
+	Strategy(const std::string& action) : root_action(action), children_strategies() {}
+	
+	// Deep copy constructor - defined after ConditionStrategy
+	Strategy(const Strategy& other);
+};
+
+struct ConditionStrategy {
+	z3::Bool condition;
+	std::optional<Strategy> strategy;
+
+	ConditionStrategy(const z3::Bool& cond, const Strategy& strat) : condition(cond), strategy(strat) {}
+	ConditionStrategy(const z3::Bool& cond, const std::optional<Strategy>& strat) : condition(cond), strategy(strat) {}
+	
+	// Copy constructor (explicit deep copy)
+	ConditionStrategy(const ConditionStrategy& other) : condition(other.condition) {
+		if (other.strategy.has_value()) {
+			strategy = Strategy(other.strategy.value());  // deep copy
+		}
+		// else strategy remains empty (default constructed as nullopt)
+	}
+};
+
+// Strategy copy constructor implementation (must be after ConditionStrategy definition)
+inline Strategy::Strategy(const Strategy& other) : root_action(other.root_action) {
+	children_strategies.reserve(other.children_strategies.size());
+	for (const auto& child : other.children_strategies) {
+		if (std::holds_alternative<std::optional<Strategy>>(child)) {
+			const auto& opt_strat = std::get<std::optional<Strategy>>(child);
+			if (opt_strat.has_value()) {
+				children_strategies.push_back(std::optional<Strategy>(Strategy(opt_strat.value())));
+			} else {
+				children_strategies.push_back(std::optional<Strategy>());
+			}
+		} else {
+			const auto& cond_strats = std::get<std::vector<ConditionStrategy>>(child);
+			std::vector<ConditionStrategy> new_cond_strats;
+			new_cond_strats.reserve(cond_strats.size());
+			for (const auto& cs : cond_strats) {
+				new_cond_strats.push_back(ConditionStrategy(cs));  // uses copy constructor
+			}
+			children_strategies.push_back(new_cond_strats);
+		}
+	}
+}
+
 // reference to a utility tuple in a leaf
 struct UtilityTuple {
 	const std::vector<Utility> &leaf;
-	mutable std::vector<std::string> strategy_vector;
+	// mutable std::vector<std::string> strategy_vector;
+	mutable std::optional<Strategy> strategy; 
 	z3::Bool condition;
 
 
@@ -47,8 +103,8 @@ struct UtilityTuple {
 		return *this;
 	}
 
-	UtilityTuple(decltype(leaf) leaf) : leaf(leaf), strategy_vector(), condition(z3::Bool(true)) {}
-	UtilityTuple(decltype(leaf) leaf, z3::Bool cond) : leaf(leaf), strategy_vector(), condition(cond) {}
+	UtilityTuple(decltype(leaf) leaf) : leaf(leaf), condition(z3::Bool(true)) {}
+	UtilityTuple(decltype(leaf) leaf, z3::Bool cond) : leaf(leaf), condition(cond) {}
 	size_t size() const { return leaf.size(); }
 	const Utility &operator[](size_t index) const { return leaf[index]; }
 	std::vector<Utility>::const_iterator begin() const { return leaf.cbegin(); }
@@ -136,12 +192,14 @@ struct HistoryChoice{
 	std::string player;
 	std::string choice;
 	std::vector<std::string> history;
+	std::vector<std::string> condition;
 };
 
 struct CeChoice{
 	std::optional<std::string> player;
 	std::vector<std::string> choices;
 	std::vector<std::string> history;
+	std::optional<z3::Bool> condition;
 };
 
 struct StrategyCase {
@@ -270,7 +328,7 @@ public:
 
 	std::vector<HistoryChoice> compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players) const;
 
-	std::vector<HistoryChoice> compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector) const;
+	std::vector<HistoryChoice> compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, const StrategyElement& strategy_element, std::vector<std::string> conditions_so_far) const;
 
 	std::vector<CeChoice> compute_wi_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const;
 
@@ -282,9 +340,9 @@ public:
 
 	const Node* compute_deviation_node(std::vector<std::string> actions_so_far) const;
 
-	std::vector<std::string> strat2hist(std::vector<std::string> &strategy) const;
+	std::vector<std::string> strat2hist(std::optional<Strategy> &strategy) const;
 
-	void prune_actions_from_strategy(std::vector<std::string> &strategy) const;
+	// void prune_actions_from_strategy(std::vector<std::string> &strategy) const;
 	
 	void reset_violation_cr() const;
 
@@ -560,6 +618,7 @@ struct HonestUtilityTuple {
 
 };
 
+
 // subtree node
 class Subtree : public Node {
 
@@ -600,7 +659,8 @@ class Subtree : public Node {
 		UtilityTuplesSet result;
 
 		for (const auto &utility_tuple: utilities){
-			result.insert(result.end(), utility_tuple);
+			UtilityTuple utility_tuple_struct(utility_tuple);
+			result.insert(result.end(), utility_tuple_struct);
 		}
 
 		return result; 
@@ -610,7 +670,6 @@ class Subtree : public Node {
 		utilities = {};
 	}
 };
-
 
 // leaf node
 class Leaf final : public Node {
@@ -644,9 +703,6 @@ class Branch final : public Node {
 	std::vector<Choice> choices;
 	// take this action
 	mutable std::string strategy;
-
-	mutable std::vector<std::vector<z3::Bool>> pr_strategies_cases;
-	mutable std::vector<std::string> pr_strategies_actions;
 
 	mutable uint64_t problematic_group;
 	mutable UtilityTuplesSet practical_utilities;
@@ -715,8 +771,6 @@ class Branch final : public Node {
 
 };
 
-
-
 // condition node
 class ConditionNode final : public Node {
 
@@ -725,9 +779,6 @@ class ConditionNode final : public Node {
 	std::vector<ConditionChoice> conditions;
 
 	mutable std::string strategy;
-
-	mutable std::vector<std::vector<z3::Bool>> pr_strategies_cases;
-	mutable std::vector<std::string> pr_strategies_actions;
 
 	mutable uint64_t problematic_group;
 	mutable UtilityTuplesSet practical_utilities;
@@ -1150,23 +1201,7 @@ struct Input {
 	void compute_strategy_case(std::vector<z3::Bool> _case, PropertyType property) const {
 		
 		if (property == PropertyType::Practicality){
-			bool is_honest = false;
-			if (root->is_branch()) {
-				is_honest = root->branch().honest;
-			} else if (root->is_condition_node()) {
-				is_honest = root->condition_node().honest;
-			}
-			if(is_honest) {
-				// the honest one has to be the practical one
-				// otw (if we call a subtree in default mode to obtain the strategies)
-				//  there can be more than one pr strategy if the subtree is not along the 
-				//  honest history 
-				if (root->is_branch()) {
-					assert(root->branch().practical_utilities.size()==1);
-				} else if (root->is_condition_node()) {
-					assert(root->condition_node().practical_utilities.size()==1);
-				}
-			}
+
 			UtilityTuplesSet pr_utils;
 			if (root->is_branch()) {
 				pr_utils = root->branch().practical_utilities;
@@ -1177,9 +1212,10 @@ struct Input {
 			for (const auto& pr_utility: pr_utils){
 				StrategyCase new_strat_case;
 				new_strat_case._case = _case;
-				std::vector<std::string> strategy_vector;
-				strategy_vector.insert(strategy_vector.begin(), pr_utility.strategy_vector.begin(), pr_utility.strategy_vector.end()); 
-				new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector);
+				// std::vector<std::string> strategy_vector;
+				// strategy_vector.insert(strategy_vector.begin(), pr_utility.strategy_vector.begin(), pr_utility.strategy_vector.end()); 
+				// new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, strategy_vector);
+				new_strat_case.strategy = root.get()->compute_pr_strategy(players, {}, pr_utility.strategy, {});
 				strategies.push_back(new_strat_case);
 			}
 
@@ -1199,27 +1235,52 @@ struct Input {
 		}
 	}
 
-	void print_strategies(const Options &options, bool is_wi) const {
+	void print_strategies(const Options &options, bool is_wi, bool is_pr) const {
 		std::cout << std::endl;
-		for (StrategyCase strategy_case : strategies) {
-			std::cout << "Strategy for case: " <<  strategy_case._case << std::endl;
-			for (HistoryChoice hist_choice : strategy_case.strategy){
-				std::cout
-					<< "\tPlayer "
-					<< hist_choice.player
-					<< " takes action "
-					<< hist_choice.choice
-					<< " after history "
-					<< hist_choice.history
-					<< std::endl;
+
+		if (is_pr) {
+			for (StrategyCase strategy_case : strategies) {
+				std::cout << "Strategies for case: " <<  strategy_case._case << std::endl;
+				for (HistoryChoice hist_choice : strategy_case.strategy){
+					std::cout
+						<< "\tPlayer "
+						<< hist_choice.player
+						<< " takes action "
+						<< hist_choice.choice
+						<< " after history "
+						<< hist_choice.history
+						<< " if conditions "
+						<< hist_choice.condition
+						<< " hold. "
+						<< std::endl;
+				}
+				if(options.supertree) {
+					std::cout << "\tYou need to run subtrees in default mode with option strategies for complete strategies." << std::endl;
+				}
 			}
-			if (is_wi) {
-				std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
-			}
-			if(options.supertree) {
-				std::cout << "\tYou need to run subtrees in default mode with option strategies for complete strategies." << std::endl;
+
+		} else {
+			for (StrategyCase strategy_case : strategies) {
+				std::cout << "Strategy for case: " <<  strategy_case._case << std::endl;
+				for (HistoryChoice hist_choice : strategy_case.strategy){
+					std::cout
+						<< "\tPlayer "
+						<< hist_choice.player
+						<< " takes action "
+						<< hist_choice.choice
+						<< " after history "
+						<< hist_choice.history
+						<< std::endl;
+				}
+				if (is_wi) {
+					std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
+				}
+				if(options.supertree) {
+					std::cout << "\tYou need to run subtrees in default mode with option strategies for complete strategies." << std::endl;
+				}
 			}
 		}
+
 	}
 
 	void compute_cecase(std::vector<size_t> player_group, PropertyType property) const {
@@ -1315,18 +1376,25 @@ struct Input {
 						assert(!options.subtree);
 						std::cout << "Practical histories that extend supertree counterexamples for case: " << ce_case._case <<  std::endl;
 						for(auto history : ce_case.counterexample) {
-							std::cout << history.choices << std::endl;	
+							if (history.condition.has_value()) {
+								std::cout << history.choices << " if " << history.condition.value() << std::endl;	
+							} else {
+								std::cout << history.choices << std::endl;
+							}
 						}
 					}
 				} else {
 					std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
 					std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
-					std::cout << "Practical histories:" << std::endl;
+					std::cout << "Practical histories after " << ce_case.counterexample[0].history << ":" << std::endl;
 					for(auto history : ce_case.counterexample) {
 						std::vector<std::string> history_to_print;
-						history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
 						history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
-						std::cout << history_to_print << std::endl;	
+						if (history.condition.has_value()) {
+							std::cout << history_to_print << " if " << history.condition.value() << std::endl;	
+						} else {
+							std::cout << history_to_print << std::endl;
+						}
 					}
 					if(options.supertree) {
 						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
