@@ -358,7 +358,7 @@ class HistoryTree:
 
     def json(self):
         return [
-            ch.json() if isinstance(ch, HistoryTreeCondition) else repr(ch)
+            [x.json() for x in ch] if isinstance(ch, list) else repr(ch)
             for ch in self.path
         ]
 
