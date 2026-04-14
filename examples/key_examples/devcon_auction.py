@@ -95,7 +95,9 @@ INITIAL_CONSTRAINTS.append(disjunction(*lottery_options_conjunctions))
 # pl2 == 0 or pl2 == 1 or pl2 == 2
 # pl0 != pl1 and pl0 != pl2 and pl1 != pl2
 
-
+# Bid indices should increase globally for each player
+last_bid_index = {player: -1 for player in PLAYERS}
+last_bid_index[PLAYERS[0]] = 0
 
 # leave the following empty unless you want to debug the protocol
 WEAK_IMMUNITY_CONSTRAINTS = []
@@ -117,7 +119,6 @@ initial_state = {
     # probably some general information
     # e.g.:
     "current_bid" : {},
-    "last_bid_index" : {},
     "highest_bidder" : PLAYERS[0],
     "bids_order" : [R, bid_0_player_0]
 }
@@ -125,10 +126,8 @@ initial_state = {
 for i, player in enumerate(PLAYERS):
     if i == 0:
         initial_state["current_bid"][player] = bid_0_player_0
-        initial_state["last_bid_index"][player] = 0
     else:
         initial_state["current_bid"][player] = 0
-        initial_state["last_bid_index"][player] = -1
 
 # to compute the last missing part, the game tree, the following functions have to be filled in
 
@@ -140,14 +139,13 @@ for i, player in enumerate(PLAYERS):
 
 # define a deep copy of the state
 def copy_state(state : Dict) -> Dict:
-    state_copy : Dict = {"current_bid" : {}, "last_bid_index" : {}, "bids_order" : []}
+    state_copy : Dict = {"current_bid" : {}, "bids_order" : []}
     # copy the basic data of the state
     state_copy["highest_bidder"] = state["highest_bidder"]
     state_copy["bids_order"] = list(state["bids_order"])
     # copy the player-wise values (if applicable)
     for player in PLAYERS:
         state_copy["current_bid"][player] = state["current_bid"][player]
-        state_copy["last_bid_index"][player] = state["last_bid_index"][player]
     return state_copy
 
 def determine_auction_winners(state : Dict, lottery: List[Player]):
@@ -213,6 +211,7 @@ def compute_available_actions(player_index : int, state: Dict, increment_zero : 
 def generate_tree(player_index: int, state: Dict, honest_history_prefix: List[Action], history: str):
     global increment_is_zero
     global HONEST_HISTORIES
+    global last_bid_index
     
     # decide whether a leaf was reached, i.e. whether we are in a final state
     if is_final(state, player_index):
@@ -243,7 +242,8 @@ def generate_tree(player_index: int, state: Dict, honest_history_prefix: List[Ac
                 state1["current_bid"][player] = R
             elif action == outbid:
                 highest_bid = state["current_bid"][state["highest_bidder"]]
-                bid = NameExpr(f"bid_{state['last_bid_index'][player] + 1}_player_{player_index}")
+                bid = NameExpr(f"bid_{last_bid_index[player] + 1}_player_{player_index}")
+                CONSTANTS.append(bid)
                 if increment_is_zero:
                     INITIAL_CONSTRAINTS.append(bid > highest_bid)
                 else:
@@ -251,7 +251,7 @@ def generate_tree(player_index: int, state: Dict, honest_history_prefix: List[Ac
                 state1["current_bid"][player] = bid
                 state1["highest_bidder"] = player
                 state1["bids_order"].append(bid)
-                state1["last_bid_index"][player] = state["last_bid_index"][player] + 1
+                last_bid_index[player] = last_bid_index[player] + 1
             elif action == bid_same:
                 highest_bid = state["current_bid"][state["highest_bidder"]]
                 state1["current_bid"][player] = highest_bid
@@ -259,9 +259,10 @@ def generate_tree(player_index: int, state: Dict, honest_history_prefix: List[Ac
                 bid = NameExpr(f"bid_{state['last_bid_index'][player] + 1}_player_{player_index}")
                 state1["current_bid"][player] = bid
                 highest_bid = state["current_bid"][state["highest_bidder"]]
+                CONSTANTS.append(bid)
                 INITIAL_CONSTRAINTS.append(bid > R)
                 INITIAL_CONSTRAINTS.append(highest_bid >= bid)
-                state1["last_bid_index"][player] = state["last_bid_index"][player] + 1
+                last_bid_index[player] = last_bid_index[player] + 1
                 state1["bids_order"].insert(int(repr(action).split("_")[-1]), bid)
                 # in the state we store this: the ordering of current bids. [R, bid_0_player_0, bid_0_player_1, bid_0_player_2]
                 # player3 has a turn. Suppose k = 10
