@@ -26,6 +26,8 @@ increment_is_zero = False # whether the increment is positive or zero
 playerss = [f'Player{i}' for i in range(N)]
 PLAYERS = players(*playerss)
 
+player_goals = {PLAYERS[i]: "lottery" if i >= k else "winIt" for i in range(N)} # we should investigate what happens here. 
+
 # define the actions, infinitesimals and constants as strings and name them for convenience, e.g.:
 bid_reserved, outbid, bid_same, bid_anything = ACTIONS = actions('bid_reserved', 'outbid', 'bid_same', 'bid_anything')
 ADDITIONAL_ACTIONS = set()
@@ -70,10 +72,32 @@ WEAKER_IMMUNITY_CONSTRAINTS = []
 COLLUSION_RESILIENCE_CONSTRAINTS = []
 PRACTICALITY_CONSTRAINTS = []
 
-#define the list of honest histories, as a list of lists of actions
-# e.g. one honest history: Action1, Action2, Action3
+# define the list of honest histories
+# honest behaviour is defined by which players are "in it for the lottery" (they bid reserved) and which players are "in it to win it", meaning they are targeting winning the auction as well
+# if a player is in it to win it, and is one of the fist k players, the honest action could also be "bid reserved". 
 HONEST_HISTORIES : List[HistoryTree] = []
-# [HistoryTree([bid_reserved, bid_reserved, bid_reserved])]
+
+# def generate_honest_behaviors(player_types: Dict): 
+#     honest_actions = []
+#     for i, player in enumerate(PLAYERS[1:]):
+#         if player_types[player] == "lottery":
+#             honest_actions.append(bid_reserved)
+#         else:
+#             honest_actions.append(outbid)
+#             if i+1 < k:
+#                 honest_actions.append(bid_anything) ...
+#     honest_conditions = []
+#     for conj in lottery_options_conjunctions:
+#         honest_conditions.append(HistoryTreeCondition(condition=conj, path=HistoryTree([])))
+#     honest_actions.append(honest_conditions)
+#     return HistoryTree(honest_actions)
+
+# one_honest_scenario = {PLAYERS[i] : "lottery" for i in range(N)}
+# HONEST_HISTORIES.append(generate_honest_behaviors(one_honest_scenario))
+# second_honest_scenario = {PLAYERS[i] : "winIt" for i in range(N)}
+# HONEST_HISTORIES.append(generate_honest_behaviors(second_honest_scenario))
+
+# print([h.json() for h in HONEST_HISTORIES])
 
 # honest utilities can be listed, if modeling used in an interleaving way with CheckMate
 HONEST_UTILITIES = [] 
@@ -86,10 +110,13 @@ initial_state = {
     "current_bid" : {},
     "last_bid_index" : {},
     "highest_bidder" : PLAYERS[0],
-    "bids_order" : [R, bid_0_player_0]
+    "bids_order" : [R, bid_0_player_0],
+    "player_goals" : {},
+    "honest_histories" : [[]]
 }
 # some player-wise information, e.g.
 for i, player in enumerate(PLAYERS):
+    initial_state["player_goals"][player] = player_goals[player]
     if i == 0:
         initial_state["current_bid"][player] = bid_0_player_0
         initial_state["last_bid_index"][player] = 0
@@ -177,22 +204,20 @@ def compute_available_actions(player_index : int, state: Dict, increment_zero : 
 
 
 # generate the game tree
-def generate_tree(player_index: int, state: Dict, history: str):
+def generate_tree(player_index: int, state: Dict, honest_history_prefix: List[Action], history: str):
     global increment_is_zero
+    global HONEST_HISTORIES
     
     # decide whether a leaf was reached, i.e. whether we are in a final state
     if is_final(state, player_index):
         condition_actions = {}
+        honest_history_conditions = []
         # here is where the lottery happens
         for i, permutation in enumerate(lottery_options_list):
-            print("history: ", history)
-            # print(state["bids_order"])
-            # print("lottery: ", compute_lottery(permutation))
-            # auction_winners, price = determine_auction_winners(state, compute_lottery(permutation))
-            # print("auction winners: ", auction_winners)
-            # print("price: ", price)
-            # print("utility: ", compute_utility(state, compute_lottery(permutation)))
             condition_actions[lottery_options_conjunctions[i]] = leaf(compute_utility(state, compute_lottery(permutation)))
+            honest_history_conditions.append(HistoryTreeCondition(lottery_options_conjunctions[i],HistoryTree([])))
+        path = honest_history_prefix + [honest_history_conditions]
+        HONEST_HISTORIES.append(HistoryTree(path))
         return condition(condition_actions)
     else:
         # otherwise, we are at a branch and have to compute which actions in ACTIONS is available right now
@@ -240,7 +265,7 @@ def generate_tree(player_index: int, state: Dict, history: str):
                 # - bid_anything3 : [R, bid_0_player_0, bid_0_player_1, bid_4_player_3, bid_0_player_2]
 
             # add available action and tree to the dictionary 
-            branch_actions[action] = generate_tree(player_index + 1, state1, history + str(player) + "." + str(action) + ";")
+            branch_actions[action] = generate_tree(player_index + 1, state1, honest_history_prefix + [action], history + str(player) + "." + str(action) + ";")
         
         return branch(player, branch_actions)
 
@@ -251,8 +276,10 @@ def generate_tree(player_index: int, state: Dict, history: str):
 
 
 # generate the game tree assuming the player listed first in PLAYERS has the first turn
-TREE = generate_tree(1, initial_state, "")
+TREE = generate_tree(1, initial_state, [], "")
 ACTIONS = ACTIONS + list(ADDITIONAL_ACTIONS)
+
+# print(HONEST_HISTORIES)
 
 # produce the json model
 finish(
