@@ -24,6 +24,7 @@ struct Lexer {
 		GE,
 		LT,
 		LE,
+		AND,
 		OR
 	};
 
@@ -123,6 +124,10 @@ struct Lexer {
 			remaining++;
 			unary = true;
 			return Token::OR;
+		} else if (*remaining == '&') {
+			remaining++;
+			unary = true;
+			return Token::AND;
 		} else {
 			std::cerr << "checkmate: unexpected character '" << *remaining << "' in expression " << current << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -145,13 +150,14 @@ struct Parser {
 		GE,
 		LE,
 		LT,
+		AND,
 		OR
 	};
 
 	// operator precedence classes, binding from loosest to tightest
 	enum class Precedence {
 		PAREN,
-		OR,
+		ANDOR,
 		COMPARISON,
 		PLUSMINUS,
 		MULTIPLY,
@@ -178,8 +184,10 @@ struct Parser {
 			case Operation::LT:
 			case Operation::LE:
 				return Precedence::COMPARISON;
+			case Operation::AND:
 			case Operation::OR:
-				return Precedence::OR;
+				return Precedence::ANDOR;
+				return Precedence::ANDOR;
 		}
 		assert(false);
 		UNREACHABLE;
@@ -296,11 +304,18 @@ struct Parser {
 				constraint_stack.push_back(left <= right);
 				break;
 			}
-			case Operation::OR:
+			case Operation::AND: {
+				auto right = pop_constraint();
+				auto left = pop_constraint();
+				constraint_stack.push_back(left && right);
+				break;
+			}
+			case Operation::OR: {
 				auto right = pop_constraint();
 				auto left = pop_constraint();
 				constraint_stack.push_back(left || right);
 				break;
+			}
 		}
 	}
 
@@ -372,8 +387,12 @@ struct Parser {
 				case Lexer::Token::LE:
 					operation(Operation::LE);
 					break;
+				case Lexer::Token::AND:
+					operation(Operation::AND);
+					break;
 				case Lexer::Token::OR:
 					operation(Operation::OR);
+					break;
 			}
 		}
 		// when there is no more input, we know all the operators have to be committed
@@ -817,7 +836,6 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 	// parse a JSON document from `path`
 	std::ifstream input(path);
 	json document;
-	Parser parser(utilities);
 	try {
 		input.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 		document = json::parse(input);
@@ -841,12 +859,6 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 		players.push_back(std::string(player));
 	sort(players.begin(), players.end());
 
-	// load honest histories automatically
-	for (const json &history_json : document["honest_histories"]) {
-		honest.push_back(parse_honest_history(parser, history_json));
-	}
-
-
 	// load real/infinitesimal identifiers
 	for (const json &real: document["constants"]) {
 		const std::string &name = real;
@@ -858,6 +870,14 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 		auto constant = z3::Real::constant(name);
 		utilities.insert({name, {z3::Real::ZERO, constant}});
 	}
+
+	Parser parser(utilities);
+	// load honest histories automatically
+	for (const json &history_json : document["honest_histories"]) {
+		honest.push_back(parse_honest_history(parser, history_json));
+	}
+
+
 
 	if(document["honest_utilities"].size() > 0 && supertree) {
 		std::cerr << "checkmate: honest utilities should not be specified in supertree mode " << std::endl;
