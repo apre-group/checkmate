@@ -4,15 +4,47 @@ import itertools
 """
 Descibe the protocol and your model here:
 
+We model the Devcon auction as described in https://notes.ethereum.org/@barnabe/S1eUmr72I
+
+The Devcon auction is a hybrid mechanism combining auction and lottery for ticket allocation. Bidders place bids above a reserve price R. The k highest bidders win auction tickets, while m additional tickets are distributed via lottery among remaining bidders. A random permutation determines payment: auction winners appearing before m lottery winners in the permutation pay the reserve price; others pay the (k+1)-th highest bid. All lottery winners pay the reserve price. The mechanism is incentive-compatible, encouraging truthful bidding. This design balances efficiency (rewarding highest bidders) with fairness (giving everyone above reserve price a chance through the lottery).
+
 Explain the Parameters
+
+The model has the following parameters thet can be adapted to generate different scenarios:
+- N: number of players
+- k: number of auction winners 
+- m: number of lottery winners 
+- increment_is_zero: whether the increment is positive or zero 
 
 Design Choices
 
+- The symbolic values representing a bid have the form bid_i_player_j, where i is the index of the bid of player j. E.g. bid_0_player_2 is the first bid of player 2, and bid_1_player_2 is the second bid of player 2.
+- We model the permutations of the lottery as symbolic variables pl0, pl1, pl2,... which represent the index of the player in the lottery. E.g. if pl0 == 2, pl1 == 0 and pl2 == 1, this means that player 2 is the first winner of the lottery, player 0 is the second winner of the lottery and player 1 is the third winner of the lottery. We also add constraints (to the set of inital constraints) to ensure that these variables represent a valid permutation.
+- We model the benefit of winning a devcon ticket as an infinitesimal alpha, and the opportunity const in case of not winning a devcon ticket as an infinitesimal epsilon. We assume that alpha is positive and epsilon is positive.
+- The increment is a non-negative symbolic variable, and we can set it to zero to model the case where there is no minimum increment for the auction.
+
 Assumptions
+
+- Our model does not include the possibility to ignore a bid. A player will always bid something. 
+- We do not model repeated bids by the same player, they only bid once. 
+- We do not model the possibility to top up a bid if someone outbids you.
 
 State
 
+The state of the game is represented as a dictionary with the following structure:
+initial_state = {
+    "current_bid" : a dictionary that maps each player to their current bid
+    "last_bid_index" : a dictionary that maps each player to the index of their last bid (starting from 0, -1 if no bid was placed)
+    "highest_bidder" : the player who currently has the highest bid
+    "bids_order" :  an ordered list of current bids, starting with R and then the bids of the players in the order the symbolic variables for bids compare to each other. E.g. [R, bid_0_player_0, bid_0_player_1, bid_0_player_2].
+    This is used to determine the winners of the auction at the end of the game, as the k players with the highest bids win. Also, when player is among the fist k players, they can bid anything, so their choice is recorded in the bids order. 
+}
+
+
 Precedence Choices
+
+The bids are given in the player order: Player1, Player2, Player3, ...
+We assume Player0 has already placed a bid player_0_bid_0, which is >= R.
 """
 
 # constants of the model, to be adapted to generate different scenarios, e.g. number of players
@@ -26,7 +58,6 @@ increment_is_zero = False # whether the increment is positive or zero
 playerss = [f'Player{i}' for i in range(N)]
 PLAYERS = players(*playerss)
 
-player_goals = {PLAYERS[i]: "lottery" if i >= k else "winIt" for i in range(N)} # we should investigate what happens here. 
 
 # define the actions, infinitesimals and constants as strings and name them for convenience, e.g.:
 bid_reserved, outbid, bid_same, bid_anything = ACTIONS = actions('bid_reserved', 'outbid', 'bid_same', 'bid_anything')
@@ -77,28 +108,6 @@ PRACTICALITY_CONSTRAINTS = []
 # if a player is in it to win it, and is one of the fist k players, the honest action could also be "bid reserved". 
 HONEST_HISTORIES : List[HistoryTree] = []
 
-# def generate_honest_behaviors(player_types: Dict): 
-#     honest_actions = []
-#     for i, player in enumerate(PLAYERS[1:]):
-#         if player_types[player] == "lottery":
-#             honest_actions.append(bid_reserved)
-#         else:
-#             honest_actions.append(outbid)
-#             if i+1 < k:
-#                 honest_actions.append(bid_anything) ...
-#     honest_conditions = []
-#     for conj in lottery_options_conjunctions:
-#         honest_conditions.append(HistoryTreeCondition(condition=conj, path=HistoryTree([])))
-#     honest_actions.append(honest_conditions)
-#     return HistoryTree(honest_actions)
-
-# one_honest_scenario = {PLAYERS[i] : "lottery" for i in range(N)}
-# HONEST_HISTORIES.append(generate_honest_behaviors(one_honest_scenario))
-# second_honest_scenario = {PLAYERS[i] : "winIt" for i in range(N)}
-# HONEST_HISTORIES.append(generate_honest_behaviors(second_honest_scenario))
-
-# print([h.json() for h in HONEST_HISTORIES])
-
 # honest utilities can be listed, if modeling used in an interleaving way with CheckMate
 HONEST_UTILITIES = [] 
 
@@ -110,13 +119,10 @@ initial_state = {
     "current_bid" : {},
     "last_bid_index" : {},
     "highest_bidder" : PLAYERS[0],
-    "bids_order" : [R, bid_0_player_0],
-    "player_goals" : {},
-    "honest_histories" : [[]]
+    "bids_order" : [R, bid_0_player_0]
 }
 # some player-wise information, e.g.
 for i, player in enumerate(PLAYERS):
-    initial_state["player_goals"][player] = player_goals[player]
     if i == 0:
         initial_state["current_bid"][player] = bid_0_player_0
         initial_state["last_bid_index"][player] = 0
