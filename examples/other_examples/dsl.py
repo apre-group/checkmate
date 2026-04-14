@@ -319,6 +319,7 @@ class Conjunction(Constraint):
         for elem in self.args:
             result = result + f" & {elem}"
         result = result[3:]
+        result = f"( {result} )"
         return result
 
 def conjunction(*args) -> Conjunction:
@@ -339,6 +340,7 @@ class Disjunction(Constraint):
         for elem in self.args:
             result = result + f" | {elem}"
         result = result[3:]
+        result = f"( {result} )"
         return result
 
 def disjunction(*args) -> Disjunction:
