@@ -1,0 +1,278 @@
+{
+    "players": [
+      "A",
+      "B",
+      "C"
+    ],
+    "actions": [
+      "C",
+      "E"
+    ],
+    "infinitesimals": [],
+    "constants": [
+      "inc",
+      "a0",
+      "b0",
+      "c0",
+      "plus",
+      "minus"
+    ],
+    "initial_constraints": [
+      "inc >= 0",
+      "a0 >= 0",
+      "b0 >= 0",
+      "c0 >= 0",
+      "plus >= 0",
+      "minus >= 0"
+    ],
+    "property_constraints": {
+      "weak_immunity": [],
+      "weaker_immunity": [],
+      "collusion_resilience": [],
+      "practicality": []
+    },
+    "honest_histories": [
+      [
+        "C",
+        "C",
+        "C",
+        "C",
+        "C",
+        "C",
+        "C",
+        "C"
+      ]
+    ],
+    "tree": {
+        "player": "B",
+        "children": [
+          {
+            "action": "E",
+            "child": {
+              "utility": [
+                {
+                  "player": "A",
+                  "value": "a0 - minus"
+                },
+                {
+                  "player": "B",
+                  "value": "b0 + plus"
+                },
+                {
+                  "player": "C",
+                  "value": "c0 - minus"
+                }
+              ]
+            }
+          },
+          {
+            "action": "C",
+            "child": {
+              "player": "C",
+              "children": [
+                {
+                  "action": "E",
+                  "child": {
+                    "utility": [
+                      {
+                        "player": "A",
+                        "value": "a0 - 2 * minus"
+                      },
+                      {
+                        "player": "B",
+                        "value": "b0 + plus - minus"
+                      },
+                      {
+                        "player": "C",
+                        "value": "c0 + plus - minus"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "action": "C",
+                  "child": {
+                    "player": "A",
+                    "children": [
+                      {
+                        "action": "E",
+                        "child": {
+                          "utility": [
+                            {
+                              "player": "A",
+                              "value": "a0 + plus - 2 * minus"
+                            },
+                            {
+                              "player": "B",
+                              "value": "b0 + plus - 2 * minus"
+                            },
+                            {
+                              "player": "C",
+                              "value": "c0 + plus - 2 * minus"
+                            }
+                          ]
+                        }
+                      },
+                      {
+                        "action": "C",
+                        "child": {
+                          "player": "B",
+                          "children": [
+                            {
+                              "action": "E",
+                              "child": {
+                                "utility": [
+                                  {
+                                    "player": "A",
+                                    "value": "a0 + plus - 3 * minus"
+                                  },
+                                  {
+                                    "player": "B",
+                                    "value": "b0 + 2 * plus - 2 * minus"
+                                  },
+                                  {
+                                    "player": "C",
+                                    "value": "c0 + plus - 3 * minus"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "action": "C",
+                              "child": {
+                                "player": "C",
+                                "children": [
+                                  {
+                                    "action": "E",
+                                    "child": {
+                                      "utility": [
+                                        {
+                                          "player": "A",
+                                          "value": "a0 + plus - 4 * minus"
+                                        },
+                                        {
+                                          "player": "B",
+                                          "value": "b0 + 2 * plus - 3 * minus"
+                                        },
+                                        {
+                                          "player": "C",
+                                          "value": "c0 + 2 * plus - 3 * minus"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "action": "C",
+                                    "child": {
+                                      "player": "A",
+                                      "children": [
+                                        {
+                                          "action": "E",
+                                          "child": {
+                                            "utility": [
+                                              {
+                                                "player": "A",
+                                                "value": "a0 + 2 * plus - 4 * minus"
+                                              },
+                                              {
+                                                "player": "B",
+                                                "value": "b0 + 2 * plus - 4 * minus"
+                                              },
+                                              {
+                                                "player": "C",
+                                                "value": "c0 + 2 * plus - 4 * minus"
+                                              }
+                                            ]
+                                          }
+                                        },
+                                        {
+                                          "action": "C",
+                                          "child": {
+                                            "player": "B",
+                                            "children": [
+                                              {
+                                                "action": "E",
+                                                "child": {
+                                                  "utility": [
+                                                    {
+                                                      "player": "A",
+                                                      "value": "a0 + 2 * plus - 5 * minus"
+                                                    },
+                                                    {
+                                                      "player": "B",
+                                                      "value": "b0 + 3 * plus - 4 * minus"
+                                                    },
+                                                    {
+                                                      "player": "C",
+                                                      "value": "c0 + 2 * plus - 5 * minus"
+                                                    }
+                                                  ]
+                                                }
+                                              },
+                                              {
+                                                "action": "C",
+                                                "child": {
+                                                  "player": "C",
+                                                  "children": [
+                                                    {
+                                                      "action": "E",
+                                                      "child": {
+                                                        "utility": [
+                                                          {
+                                                            "player": "A",
+                                                            "value": "a0 + 2 * plus - 6 * minus"
+                                                          },
+                                                          {
+                                                            "player": "B",
+                                                            "value": "b0 + 3 * plus - 5 * minus"
+                                                          },
+                                                          {
+                                                            "player": "C",
+                                                            "value": "c0 + 3 * plus - 5 * minus"
+                                                          }
+                                                        ]
+                                                      }
+                                                    },
+                                                    {
+                                                      "action": "C",
+                                                      "child": {
+                                                        "utility": [
+                                                          {
+                                                            "player": "A",
+                                                            "value": "a0 + 2 * plus - 4 * minus"
+                                                          },
+                                                          {
+                                                            "player": "B",
+                                                            "value": "2 * plus + a0 - 4 * minus"
+                                                          },
+                                                          {
+                                                            "player": "C",
+                                                            "value": "2 * plus + a0 - 4 * minus"
+                                                          }
+                                                        ]
+                                                      }
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+  }

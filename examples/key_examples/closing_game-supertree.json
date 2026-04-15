@@ -1,0 +1,1760 @@
+{
+  "players": [
+    "A",
+    "B"
+  ],
+  "actions": [
+    "H",
+    "D",
+    "C_h",
+    "C_c",
+    "S",
+    "I",
+    "P",
+    "U+",
+    "U-",
+    "A"
+  ],
+  "infinitesimals": [
+    "alpha",
+    "epsilon",
+    "rho"
+  ],
+  "constants": [
+    "a",
+    "b",
+    "c",
+    "f",
+    "d_A",
+    "d_B",
+    "p_A",
+    "p_B"
+  ],
+  "initial_constraints": [
+    "alpha > epsilon",
+    "epsilon > rho",
+    "rho > 0",
+    "a > 0",
+    "b > 0",
+    "c > 0",
+    "f > 0",
+    "d_A > 0",
+    "d_B > 0",
+    "p_A > 0",
+    "p_B > 0",
+    "a >= d_B",
+    "b >= d_A",
+    "a >= p_B",
+    "b >= p_A",
+    "b >= c"
+  ],
+  "property_constraints": {
+    "weak_immunity": [
+      "a >= f",
+      "b >= f"
+    ],
+    "weaker_immunity": [
+      "a >= f",
+      "b >= f"
+    ],
+    "collusion_resilience": [
+      "a + d_A - p_B >= f",
+      "b + d_B - p_A >= f"
+    ],
+    "practicality": [
+      "a + d_A - p_B >= f",
+      "b + d_B - p_A >= f",
+      "c != p_A"
+    ]
+  },
+  "honest_histories": [
+    [
+      "H"
+    ]
+  ],
+  "tree": {
+    "player": "A",
+    "children": [
+      {
+        "action": "H",
+        "child": {
+          "utility": [
+            {
+              "player": "A",
+              "value": "alpha - epsilon"
+            },
+            {
+              "player": "B",
+              "value": "alpha"
+            }
+          ]
+        }
+      },
+      {
+        "action": "C_h",
+        "child": {
+          "player": "B",
+          "children": [
+            {
+              "action": "U+",
+              "child": {
+                "subtree": {
+                  "collusion_resilience": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ],
+                  "honest_utility": [
+                    {
+                      "player": "A",
+                      "value": "0.0 + alpha - epsilon"
+                    },
+                    {
+                      "player": "B",
+                      "value": "0.0 + alpha"
+                    }
+                  ],
+                  "practicality": [
+                    {
+                      "case": [
+                        "-d_B >= b - p_A - f",
+                        "d_B >= p_A",
+                        "d_B > p_A"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "case": [
+                        "- d_B >= b - p_A - f",
+                        "d_B >= p_A",
+                        "d_B <= p_A"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "case": [
+                        "- d_B >= b - p_A - f",
+                        "d_B < p_A"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "case": [
+                        "- d_B < b - p_A - f"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha"
+                          }
+                        ]
+                      ]
+                    }
+                  ],
+                  "weak_immunity": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ],
+                  "weaker_immunity": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "action": "U-",
+              "child": {
+                "subtree": {
+                  "collusion_resilience": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "0.0 >= b + p_B - f",
+                          "0.0 > b + p_B - f"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ],
+                  "honest_utility": [
+                    {
+                      "player": "A",
+                      "value": "0.0 + alpha - epsilon"
+                    },
+                    {
+                      "player": "B",
+                      "value": "0.0 + alpha"
+                    }
+                  ],
+                  "practicality": [
+                    {
+                      "case": [
+                        "- d_A >= a - p_B - f",
+                        "- d_A >= - p_B"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + rho + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + rho + alpha - epsilon"
+                          }
+                        ],
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "case": [
+                        "- d_A >= a - p_B - f",
+                        "- d_A < - p_B"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + rho + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + rho + alpha - epsilon"
+                          }
+                        ],
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "case": [
+                        "- d_A < a - p_B - f"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha"
+                          }
+                        ]
+                      ]
+                    }
+                  ],
+                  "weak_immunity": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ],
+                  "weaker_immunity": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "action": "I",
+              "child": {
+                "player": "A",
+                "children": [
+                  {
+                    "action": "D",
+                    "child": {
+                      "player": "B",
+                      "children": [
+                        {
+                          "action": "I",
+                          "child": {
+                            "utility": [
+                              {
+                                "player": "A",
+                                "value": "d_A + alpha - epsilon"
+                              },
+                              {
+                                "player": "B",
+                                "value": "alpha - d_A"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "action": "P",
+                          "child": {
+                            "utility": [
+                              {
+                                "player": "A",
+                                "value": "-a"
+                              },
+                              {
+                                "player": "B",
+                                "value": "a + alpha - f"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "action": "U+",
+                    "child": {
+                      "subtree": {
+                        "collusion_resilience": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "0.0 >= a + p_A - f",
+                                "0.0 > a + p_A - f"
+                              ]
+                            ]
+                          }
+                        ],
+                        "honest_utility": [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha - epsilon"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha"
+                          }
+                        ],
+                        "practicality": [
+                          {
+                            "case": [
+                              "- d_B >= b - p_A - f",
+                              "d_B >= p_A",
+                              "d_B > p_A"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + rho + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + rho + alpha"
+                                }
+                              ]
+                            ]
+                          },
+                          {
+                            "case": [
+                              "- d_B >= b - p_A - f",
+                              "d_B >= p_A",
+                              "d_B <= p_A"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + rho + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + rho + alpha"
+                                }
+                              ]
+                            ]
+                          },
+                          {
+                            "case": [
+                              "- d_B >= b - p_A - f",
+                              "d_B < p_A"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + rho + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + rho + alpha"
+                                }
+                              ]
+                            ]
+                          },
+                          {
+                            "case": [
+                              "- d_B < b - p_A - f"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + rho + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + rho + alpha"
+                                }
+                              ]
+                            ]
+                          }
+                        ],
+                        "weak_immunity": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ],
+                        "weaker_immunity": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "action": "U-",
+                    "child": {
+                      "subtree": {
+                        "collusion_resilience": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ],
+                        "honest_utility": [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha - epsilon"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha"
+                          }
+                        ],
+                        "practicality": [
+                          {
+                            "case": [
+                              "- d_A >= a - p_B - f"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + alpha"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + alpha"
+                                }
+                              ],
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + alpha"
+                                }
+                              ]
+                            ]
+                          },
+                          {
+                            "case": [
+                              "- d_A < a - p_B - f"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + alpha"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + alpha"
+                                }
+                              ],
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + alpha"
+                                }
+                              ]
+                            ]
+                          }
+                        ],
+                        "weak_immunity": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ],
+                        "weaker_immunity": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "action": "I",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "-a"
+                        },
+                        {
+                          "player": "B",
+                          "value": "-b"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "action": "H",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "alpha - epsilon"
+                        },
+                        {
+                          "player": "B",
+                          "value": "alpha"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "action": "S",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "alpha"
+                  },
+                  {
+                    "player": "B",
+                    "value": "alpha"
+                  }
+                ]
+              }
+            },
+            {
+              "action": "D",
+              "child": {
+                "player": "A",
+                "children": [
+                  {
+                    "action": "P",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "b + alpha - f"
+                        },
+                        {
+                          "player": "B",
+                          "value": "-b"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "action": "I",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "alpha - d_B"
+                        },
+                        {
+                          "player": "B",
+                          "value": "d_B + alpha - epsilon"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "action": "H",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "alpha"
+                  },
+                  {
+                    "player": "B",
+                    "value": "alpha - epsilon"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "action": "D",
+        "child": {
+          "player": "B",
+          "children": [
+            {
+              "action": "I",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "d_A + alpha - epsilon"
+                  },
+                  {
+                    "player": "B",
+                    "value": "alpha - d_A"
+                  }
+                ]
+              }
+            },
+            {
+              "action": "P",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "-a"
+                  },
+                  {
+                    "player": "B",
+                    "value": "a + alpha - f"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "action": "C_c",
+        "child": {
+          "player": "B",
+          "children": [
+            {
+              "action": "H",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "alpha"
+                  },
+                  {
+                    "player": "B",
+                    "value": "alpha - epsilon"
+                  }
+                ]
+              }
+            },
+            {
+              "action": "D",
+              "child": {
+                "player": "A",
+                "children": [
+                  {
+                    "action": "P",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "b + alpha - f"
+                        },
+                        {
+                          "player": "B",
+                          "value": "-b"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "action": "I",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "alpha - d_B"
+                        },
+                        {
+                          "player": "B",
+                          "value": "d_B + alpha - epsilon"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "action": "S",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "c + alpha"
+                  },
+                  {
+                    "player": "B",
+                    "value": "alpha - c"
+                  }
+                ]
+              }
+            },
+            {
+              "action": "I",
+              "child": {
+                "player": "A",
+                "children": [
+                  {
+                    "action": "H",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "alpha - epsilon"
+                        },
+                        {
+                          "player": "B",
+                          "value": "alpha"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "action": "I",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "-a"
+                        },
+                        {
+                          "player": "B",
+                          "value": "-b"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "action": "U-",
+                    "child": {
+                      "subtree": {
+                        "collusion_resilience": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ],
+                        "honest_utility": [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha - epsilon"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha"
+                          }
+                        ],
+                        "practicality": [
+                          {
+                            "case": [
+                              "- d_A >= a - p_B - f"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + alpha"
+                                }
+                              ]
+                            ]
+                          },
+                          {
+                            "case": [
+                              "- d_A < a - p_B - f"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + alpha"
+                                }
+                              ]
+                            ]
+                          }
+                        ],
+                        "weak_immunity": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ],
+                        "weaker_immunity": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "action": "U+",
+                    "child": {
+                      "subtree": {
+                        "collusion_resilience": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "0.0 >= a + p_A - f",
+                                "0.0 > a + p_A - f"
+                              ],
+                              [
+                                "0.0 >= a + p_A - f",
+                                "0.0 <= a + p_A - f",
+                                "0.0 >= p_A - c",
+                                "0.0 > p_A - c"
+                              ],
+                              [
+                                "0.0 < a + p_A - f",
+                                "0.0 >= p_A - c",
+                                "0.0 > p_A - c"
+                              ]
+                            ]
+                          }
+                        ],
+                        "honest_utility": [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha - epsilon"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha"
+                          }
+                        ],
+                        "practicality": [
+                          {
+                            "case": [
+                              "- d_B >= b - p_A - f",
+                              "d_B >= p_A - c",
+                              "d_B > p_A - c",
+                              "0.0 >= p_A - c"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + rho + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + rho + alpha"
+                                }
+                              ],
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + alpha"
+                                }
+                              ]
+                            ]
+                          },
+                          {
+                            "case": [
+                              "- d_B >= b - p_A - f",
+                              "d_B >= p_A - c",
+                              "d_B > p_A - c",
+                              "0.0 < p_A - c"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + rho + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + rho + alpha"
+                                }
+                              ]
+                            ]
+                          },
+                          {
+                            "case": [
+                              "- d_B >= b - p_A - f",
+                              "d_B >= p_A - c",
+                              "d_B <= p_A - c"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + rho + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + rho + alpha"
+                                }
+                              ]
+                            ]
+                          },
+                          {
+                            "case": [
+                              "- d_B >= b - p_A - f",
+                              "d_B < p_A - c"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + rho + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + rho + alpha"
+                                }
+                              ]
+                            ]
+                          },
+                          {
+                            "case": [
+                              "- d_B < b - p_A - f",
+                              "0.0 >= p_A - c"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + alpha"
+                                }
+                              ]
+                            ]
+                          },
+                          {
+                            "case": [
+                              "- d_B < b - p_A - f",
+                              "0.0 < p_A - c"
+                            ],
+                            "utilities": [
+                              [
+                                {
+                                  "player": "A",
+                                  "value": "0.0 + rho + alpha - epsilon"
+                                },
+                                {
+                                  "player": "B",
+                                  "value": "0.0 + rho + alpha"
+                                }
+                              ]
+                            ]
+                          }
+                        ],
+                        "weak_immunity": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ],
+                        "weaker_immunity": [
+                          {
+                            "player_group": [
+                              "A"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
+                            "player_group": [
+                              "B"
+                            ],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "action": "D",
+                    "child": {
+                      "player": "B",
+                      "children": [
+                        {
+                          "action": "I",
+                          "child": {
+                            "utility": [
+                              {
+                                "player": "A",
+                                "value": "d_A + alpha - epsilon"
+                              },
+                              {
+                                "player": "B",
+                                "value": "alpha - d_A"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "action": "P",
+                          "child": {
+                            "utility": [
+                              {
+                                "player": "A",
+                                "value": "-a"
+                              },
+                              {
+                                "player": "B",
+                                "value": "a + alpha - f"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "action": "U-",
+              "child": {
+                "subtree": {
+                  "collusion_resilience": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "0.0 >= b + p_B - f",
+                          "0.0 > b + p_B - f"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ],
+                  "honest_utility": [
+                    {
+                      "player": "A",
+                      "value": "0.0 + alpha - epsilon"
+                    },
+                    {
+                      "player": "B",
+                      "value": "0.0 + alpha"
+                    }
+                  ],
+                  "practicality": [
+                    {
+                      "case": [
+                        "- d_A >= a - p_B - f",
+                        "- d_A >= - c - p_B"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + rho + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + rho + alpha - epsilon"
+                          }
+                        ],
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha - epsilon"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "case": [
+                        "- d_A >= a - p_B - f",
+                        "- d_A < - c - p_B"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + rho + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + rho + alpha - epsilon"
+                          }
+                        ],
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha - epsilon"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "case": [
+                        "- d_A < a - p_B - f"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha - epsilon"
+                          }
+                        ]
+                      ]
+                    }
+                  ],
+                  "weak_immunity": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ],
+                  "weaker_immunity": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "action": "U+",
+              "child": {
+                "subtree": {
+                  "collusion_resilience": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "0.0 >= c - p_A",
+                          "0.0 > c - p_A"
+                        ],
+                        [
+                          "0.0 >= c - p_A",
+                          "0.0 <= c - p_A",
+                          "0.0 >= b - p_A - f",
+                          "0.0 > b - p_A - f"
+                        ],
+                        [
+                          "0.0 < c - p_A",
+                          "0.0 >= b - p_A - f",
+                          "0.0 > b - p_A - f"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ],
+                  "honest_utility": [
+                    {
+                      "player": "A",
+                      "value": "0.0 + alpha - epsilon"
+                    },
+                    {
+                      "player": "B",
+                      "value": "0.0 + alpha"
+                    }
+                  ],
+                  "practicality": [
+                    {
+                      "case": [
+                        "- d_B >= b - p_A - f",
+                        "d_B >= p_A - c",
+                        "d_B > p_A - c",
+                        "0.0 >= p_A - c"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha - epsilon"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "case": [
+                        "- d_B >= b - p_A - f",
+                        "d_B >= p_A - c",
+                        "d_B > p_A - c",
+                        "0.0 < p_A - c"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha - epsilon"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "case": [
+                        "- d_B >= b - p_A - f",
+                        "d_B >= p_A - c",
+                        "d_B <= p_A - c"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha - epsilon"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "case": [
+                        "- d_B >= b - p_A - f",
+                        "d_B < p_A - c"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha - epsilon"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "case": [
+                        "- d_B < b - p_A - f",
+                        "0.0 >= p_A - c"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha - epsilon"
+                          }
+                        ]
+                      ]
+                    },
+                    {
+                      "case": [
+                        "- d_B < b - p_A - f",
+                        "0.0 < p_A - c"
+                      ],
+                      "utilities": [
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + alpha"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + alpha - epsilon"
+                          }
+                        ]
+                      ]
+                    }
+                  ],
+                  "weak_immunity": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ],
+                  "weaker_immunity": [
+                    {
+                      "player_group": [
+                        "A"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
+                      "player_group": [
+                        "B"
+                      ],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
