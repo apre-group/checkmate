@@ -416,6 +416,15 @@ namespace z3 {
 			return result;
 		}
 
+		Real operator/(Real other) const {
+			if (is(ZERO))
+				return ZERO;
+
+			Z3_ast result = Z3_mk_div(CONTEXT, ast, other.ast);
+			check_error();
+			return result;
+		}
+
 		Bool operator==(Real other) const {
 			Z3_ast result = Z3_mk_eq(CONTEXT, ast, other.ast);
 			check_error();
@@ -611,6 +620,10 @@ namespace z3 {
 			auto result = solve(assumptions, others...);
 			assumptions.pop_back();
 			return result;
+		}
+
+		friend std::ostream &operator<<(std::ostream &out, const Solver &solver) {
+			return out << Z3_solver_to_string(CONTEXT, solver.solver);
 		}
 
 	private:
