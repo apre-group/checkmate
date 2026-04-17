@@ -641,12 +641,14 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 						_case.push_back(parse_case(parser, _case_e));
 					}
 				}
-				std::vector<std::vector<Utility>> utilities = {};
+				std::vector<Cond_Utility> utilities = {};
 
 				for (const json& utility_tuple: pr["utilities"]) {
+
+					
 					using PlayerUtility = std::pair<std::string, Utility>;
 					std::vector<PlayerUtility> player_utilities;
-					for (const json &utility: utility_tuple) {
+					for (const json &utility: utility_tuple["utility"]) {
 						const json &value = utility["value"];
 						// parse a utility expression
 						if (value.is_string()) {
@@ -682,8 +684,15 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 					for (auto &player_utility: player_utilities)
 						pr_utility.push_back(player_utility.second);
 
+					const json &pr_condition_json = utility_tuple["condition"];
+					assert(pr_condition_json.is_string());
+					const std::string &string = pr_condition_json;
+				
+					z3::Bool pr_condition = parser.parse_constraint(string.c_str());
+
+					Cond_Utility cond_utility {pr_utility, pr_condition};
 					//std::cout << pr_utility << std::endl;
-					utilities.push_back(pr_utility);
+					utilities.push_back(cond_utility);
 				}
 
 				PracticalitySubtreeResult pr_sub_result { _case, utilities };
@@ -832,7 +841,7 @@ static HonestUtilityElement parse_honest_utility_element(Parser &parser, const j
 
 
 
-Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , stop_log(false) {
+Input::Input(const char *path, bool supertree) : sat_cases(), strategies() , stop_log(false) {
 	// parse a JSON document from `path`
 	std::ifstream input(path);
 	json document;

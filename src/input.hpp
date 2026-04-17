@@ -88,7 +88,7 @@ struct UtilityTuple {
 	const std::vector<Utility> &leaf;
 	// mutable std::vector<std::string> strategy_vector;
 	mutable std::optional<Strategy> strategy; 
-	z3::Bool condition;
+	mutable z3::Bool condition;
 
 
 	// GCC doesn't like copy-assign without explicit copy constructor
@@ -213,11 +213,6 @@ struct CeCase {
 	std::vector<CeChoice> counterexample; 
 };
 
-struct UtilityCase {
-	std::vector<z3::Bool> _case;
-	std::vector<std::vector<Utility>> utilities; 
-};
-
 struct HonestLeaf {
 	z3::Bool condition;
 	const Node* leaf;
@@ -236,6 +231,7 @@ inline std::ostream& operator<<(std::ostream& os, const CondHonestUtility& chu) 
 		os << chu.utility_tuple[i];
 	}
 	os << "]";
+	os << " if " << chu.condition;
 	return os;
 }
 
@@ -324,6 +320,10 @@ public:
 
 	virtual UtilityTuplesSet get_utilities() const = 0;
 
+	virtual z3::Bool get_weakestpreconditions() const = 0;
+
+	virtual void reset_weakest_preconditions() const = 0;
+
 	std::vector<HistoryChoice> compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
 
 	std::vector<HistoryChoice> compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players) const;
@@ -389,9 +389,16 @@ struct SubtreeResult {
 	std::vector<std::vector<z3::Bool>> satisfied_in_case;
 };
 
+struct Cond_Utility {
+	std::vector<Utility> utility_tuple;
+	z3::Bool condition;
+
+	Cond_Utility(const std::vector<Utility>& utilities, const z3::Bool& cond) : utility_tuple(utilities), condition(cond) {}
+};
+
 struct PracticalitySubtreeResult {
 	std::vector<z3::Bool> _case;
-	std::vector<std::vector<Utility>> utilities;
+	std::vector<Cond_Utility> utilities;
 };
 
 // Forward declaration for recursive honest utility structure
@@ -624,7 +631,8 @@ class Subtree : public Node {
 
 	public:
 	mutable uint64_t problematic_group = 0;
-	mutable std::vector<std::vector<Utility>> utilities;
+	mutable std::vector<UtilityTuple> utilities;
+	mutable z3::Bool weakest_preconditions = z3::Bool(true);
 
 	NodeType type() const override { return NodeType::SUBTREE; }
 
@@ -654,6 +662,14 @@ class Subtree : public Node {
 		problematic_group = is_cr ? 1 : 0;
 	}
 
+	virtual void reset_weakest_preconditions() const override {
+		weakest_preconditions = z3::Bool(true);
+	}
+
+	virtual z3::Bool get_weakestpreconditions() const override {
+		return weakest_preconditions;
+	}
+
 	virtual UtilityTuplesSet get_utilities() const override {
 		
 		UtilityTuplesSet result;
@@ -679,10 +695,16 @@ class Leaf final : public Node {
 	std::vector<Utility> utilities;
 
 	mutable uint64_t problematic_group;
+	mutable z3::Bool weakest_preconditions = z3::Bool(true);
 
 	NodeType type() const override { return NodeType::LEAF; }
 
 	virtual UtilityTuplesSet get_utilities() const override {return {utilities}; }
+	virtual z3::Bool get_weakestpreconditions() const override { return weakest_preconditions; }
+
+	virtual void reset_weakest_preconditions() const override {
+		weakest_preconditions = z3::Bool(true);
+	}
 
 	void reset_reason() const {
 		::new (&reason) z3::Bool();
@@ -707,10 +729,22 @@ class Branch final : public Node {
 	mutable uint64_t problematic_group;
 	mutable UtilityTuplesSet practical_utilities;
 	mutable std::vector<std::string> counterexample_choices;
+	mutable z3::Bool weakest_preconditions = z3::Bool(false);
 
 	NodeType type() const override { return NodeType::BRANCH; }
 
 	Branch(unsigned player) : player(player), counterexample_choices({}) {}
+
+	virtual z3::Bool get_weakestpreconditions() const override {
+		return weakest_preconditions;
+	}
+
+	virtual void reset_weakest_preconditions() const override {
+		weakest_preconditions = z3::Bool(false);
+		for (const auto& choice: choices) {
+			choice.node->reset_weakest_preconditions();
+		}
+	}
 
 	virtual UtilityTuplesSet get_utilities() const override {return practical_utilities;}
 
@@ -783,10 +817,22 @@ class ConditionNode final : public Node {
 	mutable uint64_t problematic_group;
 	mutable UtilityTuplesSet practical_utilities;
 	mutable std::vector<std::string> counterexample_choices;
+	mutable z3::Bool weakest_preconditions = z3::Bool(false);
 
 	NodeType type() const override { return NodeType::CONDITION_NODE; }
 
 	ConditionNode() : counterexample_choices({}) {}
+
+	virtual z3::Bool get_weakestpreconditions() const override {
+		return weakest_preconditions;
+	}
+
+	virtual void reset_weakest_preconditions() const override {
+		weakest_preconditions = z3::Bool(false);
+		for (const auto& choice: conditions) {
+			choice.node->reset_weakest_preconditions();
+		}
+	}
 
 	virtual UtilityTuplesSet get_utilities() const override {return practical_utilities;}
 
@@ -1114,19 +1160,19 @@ struct Input {
 	// practicality initial constraints
 	z3::Bool practicality_constraint;
 
-	mutable std::vector<std::vector<z3::Bool>> unsat_cases;
+	mutable std::vector<std::vector<z3::Bool>> sat_cases; // disjunction of conjunctions
 
 	mutable std::vector<StrategyCase> strategies;
 
 	mutable std::vector<CeCase> counterexamples;
+
+	mutable std::vector<z3::Bool> weakest_precondition;
 
 	mutable bool stop_log;
 
 	mutable Node *reset_point;
 
 	mutable std::vector<bool> solved_for_group;
-
-	mutable std::vector<UtilityCase> utilities_pr_nohistory;
 
 	// root: NB must be a branch or condition node
 	// is asserted when loading the tree
@@ -1170,8 +1216,8 @@ struct Input {
 		reset_point = root.get();
 	}
 
-	void reset_unsat_cases() const {
-		unsat_cases.clear();
+	void reset_sat_cases() const {
+		sat_cases.clear();
 	}
 
 	void stop_logging() const {
@@ -1409,14 +1455,14 @@ struct Input {
 		
 	}
 
-	void add_unsat_case(std::vector<z3::Bool> _case) const {
-		unsat_cases.push_back(_case);
+	void add_sat_case(std::vector<z3::Bool> _case) const {
+		sat_cases.push_back(_case);
 	}
 
-	std::vector<std::vector<z3::Bool>> precondition_simplify() const {
+	std::vector<std::vector<z3::Bool>> precondition_simplify() const { // disj of conjunctions
 
 		std::vector<std::vector<z3::Bool>> simp;
-		for (const std::vector<z3::Bool> &case_: unsat_cases) {
+		for (const std::vector<z3::Bool> &case_: sat_cases) {
 			std::vector<z3::Bool> copy;
 			for (const z3::Bool &atom: case_) {
 				copy.push_back(atom);
