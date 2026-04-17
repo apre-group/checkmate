@@ -612,6 +612,10 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 } 
 
 bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, std::bitset<Input::MAX_PLAYERS> group, std::vector<CondHonestTotalUtility> all_honest_total, unsigned players, uint64_t group_nr, bool consider_prob_groups) {
+	return false;
+}
+
+z3::Bool collusion_resilience_rec_commentedout(const Input &input, z3::Solver &solver, const Options &options, Node *node, std::bitset<Input::MAX_PLAYERS> group, std::vector<CondHonestTotalUtility> all_honest_total, unsigned players, uint64_t group_nr, bool consider_prob_groups) {
 	
 	count_cr_repetitions++;
 	if(!node->checked_cr) {
@@ -623,65 +627,88 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		const auto &leaf = node->leaf();
 
 
-		if  ((group_nr < leaf.problematic_group) && consider_prob_groups){
-			return true;
-		}
-
-		// compute the total utility for the player group...
-		Utility group_utility{z3::Real::ZERO, z3::Real::ZERO};
-		
-		for (size_t player = 0; player < players; player++)
-			if (group[player])
-				group_utility = group_utility + leaf.utilities[player];
-
-		z3::Bool reason;
-
-		// ..and compare it to all honest total utilities that are possible given the current case (i.e. all honest total utilities for which the condition can be satisfied under the current case)
-		for (const auto &honest_total : all_honest_total) {
-			// if the condition for this honest total is satisfied, we need to check that the group utility is smaller than this honest total
-			if (solver.solve({honest_total.condition}) == z3::Result::SAT) {
-				solver.push();
-				solver.assert_(honest_total.condition);
-
-				z3::Bool condition = honest_total.utility >= group_utility;	
-
-				if(options.count_calls) {
-					calls_cr++;
-				}
-				if (solver.solve({condition}) == z3::Result::UNSAT) {
-
-					if(options.strategies) {
-						node->violates_cr[group_nr - 1] = true;
-					}
-					return false;
-				}
-
-				if(options.count_calls) {
-					calls_cr++;
-				}
-				if (solver.solve({!condition}) == z3::Result::SAT) {
-					if (reason.null()){
-						reason = get_split_approx(solver, honest_total.utility, group_utility);
-					}
-				}
-
-				solver.pop();
-			}
-		}
-
-		if (!reason.null()) {
-			leaf.reason = reason;
-			input.set_reset_point(leaf);
+		if (leaf.honest) {
+			// if we are along the honest history, we want to take the honest action, so we only need "to check" that branch for collusion resilience
 			if (consider_prob_groups) {
-				leaf.problematic_group = group_nr;
+				leaf.problematic_group = group_nr + 1;
 			}
-			return false;
-		}
+			return true;
+		} else { // not along honest
 
-		if (consider_prob_groups) {
-			leaf.problematic_group = group_nr + 1;
+			if  ((group_nr < leaf.problematic_group) && consider_prob_groups){
+				return true;
+			}
+
+			// compute the total utility for the player group...
+			Utility group_utility{z3::Real::ZERO, z3::Real::ZERO};
+			
+			for (size_t player = 0; player < players; player++)
+				if (group[player])
+					group_utility = group_utility + leaf.utilities[player];
+
+			z3::Bool reason;
+			z3::Bool result = false;
+			bool fails_one_honest = false;
+
+			// ..and compare it to all honest total utilities that are possible given the current case (i.e. all honest total utilities for which the condition can be satisfied under the current case)
+			for (const auto &honest_total : all_honest_total) {
+				// if the condition for this honest total is satisfiable, we need to check that the group utility is smaller than this honest total
+				if (solver.solve({honest_total.condition}) == z3::Result::SAT) {
+					solver.push();
+					solver.assert_(honest_total.condition);
+
+					z3::Bool condition = honest_total.utility >= group_utility;	
+
+					if(options.count_calls) {
+						calls_cr++;
+					}
+					if (solver.solve({condition}) == z3::Result::UNSAT) {
+
+						if(options.strategies) { // TODO think about strategies and counterexamples
+							node->violates_cr[group_nr - 1] = true;
+						}
+						fails_one_honest = true;
+					} else {
+
+						if(options.count_calls) {
+							calls_cr++;
+						}
+						if (solver.solve({!condition}) == z3::Result::SAT) {
+							fails_one_honest = true;
+							if (reason.null()){
+								reason = get_split_approx(solver, honest_total.utility, group_utility);
+							}
+						} else {
+							if (honest_total.condition.is(z3::Bool(true))) { // honest history has no condition nodes, so there is just 1 honest_total
+								return true;
+							}
+							result = result || honest_total.condition;
+						}
+					}
+
+					solver.pop();
+				}
+			}
+
+			if(!fails_one_honest){
+				result = true;
+				if (consider_prob_groups) {
+					leaf.problematic_group = group_nr + 1;
+				}
+			}
+
+			if (!reason.null()) {
+				leaf.reason = reason;
+				input.set_reset_point(leaf);
+				if (consider_prob_groups) {
+					leaf.problematic_group = group_nr;
+				}
+				return result;
+			}
+
+
+			return result;
 		}
-		return true;
 
 	} else if (node->is_subtree()){
 
@@ -792,49 +819,110 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 			return true;
 		}
 
-		// we cannot control which condition will become true, so all branches (that are possible given the current case)
-		// should be collusion resilient for the analyzed player group
-		bool result = true;
-		z3::Bool reason;
-		unsigned reset_index;
-		unsigned i = 0;
-		for (const ConditionChoice &choice: cond_node.conditions) {
-			// only consider condition if it is compatible with the current case
-			if (solver.solve({choice.condition}) == z3::Result::SAT) {
-				// add condition as assumption for recursive call, and remove it afterwards (solver.pop())
-				solver.push();
-				solver.assert_(choice.condition);
-				if (!collusion_resilience_rec(input, solver, options, choice.node.get(), group, all_honest_total, players, group_nr, consider_prob_groups)) {
-					if (choice.node->reason.null()){
-						if (options.counterexamples) {
-							z3::Bool current_condition = choice.condition;
-							cond_node.counterexample_choices.push_back(current_condition.to_string());
-						}
-						if (!options.all_counterexamples){
-							return false;
+		if (cond_node.honest) {
+			// we cannot control which condition will become true, so all branches (that are possible given the current case)
+			// should be collusion resilient for the analyzed player group
+			bool result = true;
+			z3::Bool reason;
+			unsigned reset_index;
+			unsigned i = 0;
+			for (const ConditionChoice &choice: cond_node.conditions) {
+				// only consider condition if it is compatible with the current case
+				if (solver.solve({choice.condition}) == z3::Result::SAT) {
+					// add condition as assumption for recursive call, and remove it afterwards (solver.pop())
+					solver.push();
+					solver.assert_(choice.condition);
+					z3::Bool child_result = collusion_resilience_rec(input, solver, options, choice.node.get(), group, all_honest_total, players, group_nr, consider_prob_groups);
+					if (child_result.is(z3::Bool(false))) {
+						if (choice.node->reason.null()){
+							if (options.counterexamples) { // TODO counterexamples and strategies
+								z3::Bool current_condition = choice.condition;
+								cond_node.counterexample_choices.push_back(current_condition.to_string());
+							}
+							if (!options.all_counterexamples){
+								return false;
+							} else {
+								result = false;
+							}
 						} else {
+							if (result && reason.null()){
+								reason = choice.node->reason;
+								reset_index = i;
+							}
 							result = false;
-						}
+						}	
 					} else {
-						if (result && reason.null()){
-							reason = choice.node->reason;
-							reset_index = i;
-						}
-						result = false;
-					}	
+						assert(child_result.is(z3::Bool(true))); // if not false, result has to be true since along honest only yes/no answers possible
+					}
+					solver.pop();
+					i++;
 				}
-				solver.pop();
-				i++;
 			}
+			if (!reason.null()) {
+				cond_node.reason = reason;
+				input.set_reset_point(*cond_node.conditions[reset_index].node);
+			}
+			if (result && consider_prob_groups) {
+				cond_node.problematic_group = group_nr + 1;
+			}
+			return result;
+		} else { // we are off the honest history
+
+			// we cannot control which condition will become true, so all branches (that are possible given the current case)
+			// should be collusion resilient for the analyzed player group
+			z3::Bool result = false;
+			bool one_not_true = false;
+			z3::Bool reason;
+			unsigned reset_index;
+			unsigned i = 0;
+			for (const ConditionChoice &choice: cond_node.conditions) {
+				// only consider condition if it is compatible with the current case
+				if (solver.solve({choice.condition}) == z3::Result::SAT) {
+					// add condition as assumption for recursive call, and remove it afterwards (solver.pop())
+					solver.push();
+					solver.assert_(choice.condition);
+					z3::Bool child_result = collusion_resilience_rec(input, solver, options, choice.node.get(), group, all_honest_total, players, group_nr, consider_prob_groups);
+					if (!child_result.is(z3::Bool(true))) { // for each child that is not actually true, we collect the result and reason (if not null)
+						one_not_true = true;
+						if (!child_result.is(z3::Bool(false))) {
+							result = result || (child_result && choice.condition);
+						}
+						
+						if (choice.node->reason.null()){ // TODO counterexamples and strategies
+							if (options.counterexamples) {
+								z3::Bool current_condition = choice.condition;
+								cond_node.counterexample_choices.push_back(current_condition.to_string());
+							}
+							// if (!options.all_counterexamples){
+							// 	return false;
+							// } else {
+							// 	result = false;
+							// }
+						} else {
+							if (reason.null()){
+								reason = choice.node->reason;
+								reset_index = i;
+							}
+						}	
+					} else {
+						result = result || choice.condition; // if true, we can add just the condition to the result
+					}
+					solver.pop();
+					i++;
+				}
+			}
+			if (!reason.null()) {
+				cond_node.reason = reason;
+				input.set_reset_point(*cond_node.conditions[reset_index].node);
+			}
+			if (!one_not_true) { // if all children are actually true, then we are actually true as well
+				result = true;
+				if (consider_prob_groups) {
+					cond_node.problematic_group = group_nr + 1;
+				}
+			}
+			return result;
 		}
-		if (!reason.null()) {
-			cond_node.reason = reason;
-			input.set_reset_point(*cond_node.conditions[reset_index].node);
-		}
-		if (result && consider_prob_groups) {
-			cond_node.problematic_group = group_nr + 1;
-		}
-		return result;
 		
 	
 	} else { // we deal with a branch
@@ -1100,7 +1188,7 @@ bool practicality_rec(const Input &input, const Options &options, z3::Solver &so
 		for (const auto& utilities : children) {
 			for (const auto& utility : utilities) {
 				UtilityTuple to_add(utility.leaf, utility.condition && children_conditions[i]);
-				Strategy new_strategy(children_conditions[i].to_string());
+				Strategy new_strategy(children_conditions[i].to_string()); 
 				new_strategy.children_strategies = {utility.strategy};
 				to_add.strategy = new_strategy;
 				practical_utilities.insert(to_add);
