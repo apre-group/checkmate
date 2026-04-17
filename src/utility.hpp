@@ -34,6 +34,14 @@ struct Utility {
 		return {real * other.real, infinitesimal * other.real + real * other.infinitesimal};
 	}
 
+	Utility operator/(Utility other) const {
+		if (!other.infinitesimal.is(z3::Real::ZERO)) {
+			std::cerr << "division by infinitesimals not supported" << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		return {real / other.real, infinitesimal / other.real};
+	}
+
 	Utility operator-() const {
 		return {-real, -infinitesimal};
 	}

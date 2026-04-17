@@ -17,6 +17,7 @@ struct Lexer {
 		PLUS,
 		MINUS,
 		MULTIPLY,
+		DIVIDE,
 		NEGATE,
 		EQ,
 		NE,
@@ -94,6 +95,10 @@ struct Lexer {
 			remaining++;
 			unary = true;
 			return Token::MULTIPLY;
+		} else if (*remaining == '/') {
+			remaining++;
+			unary = true;
+			return Token::DIVIDE;
 		} else if (*remaining == '=') {
 			remaining++;
 			unary = true;
@@ -143,6 +148,7 @@ struct Parser {
 		PLUS,
 		MINUS,
 		MULTIPLY,
+		DIVIDE,
 		NEGATE,
 		EQ,
 		NE,
@@ -160,6 +166,7 @@ struct Parser {
 		ANDOR,
 		COMPARISON,
 		PLUSMINUS,
+		DIVIDE,
 		MULTIPLY,
 		NEGATE,
 	};
@@ -174,6 +181,8 @@ struct Parser {
 				return Precedence::PLUSMINUS;
 			case Operation::MULTIPLY:
 				return Precedence::MULTIPLY;
+			case Operation::DIVIDE:
+				return Precedence::DIVIDE;
 			case Operation::NEGATE:
 				return Precedence::NEGATE;
 			case Operation::EQ:
@@ -261,6 +270,12 @@ struct Parser {
 				auto right = pop_utility();
 				auto left = pop_utility();
 				utility_stack.push_back(left * right);
+				break;
+			}
+			case Operation::DIVIDE: {
+				auto right = pop_utility();
+				auto left = pop_utility();
+				utility_stack.push_back(left / right);
 				break;
 			}
 			case Operation::NEGATE: {
@@ -365,6 +380,9 @@ struct Parser {
 					break;
 				case Lexer::Token::MULTIPLY:
 					operation(Operation::MULTIPLY);
+					break;
+				case Lexer::Token::DIVIDE:
+					operation(Operation::DIVIDE);
 					break;
 				case Lexer::Token::NEGATE:
 					operation(Operation::NEGATE);
