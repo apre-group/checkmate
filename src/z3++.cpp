@@ -74,10 +74,25 @@ namespace z3 {
 			return out;
 		case Bool::Operator::EQ:
 		case Bool::Operator::NE:
+			// EQ and NE can compare either Bools or Reals
+			// Check the sort of the first argument
+			{
+				Z3_app app = Z3_to_app(CONTEXT, expr.ast);
+				Z3_ast first_arg = Z3_get_app_arg(CONTEXT, app, 0);
+				Z3_sort arg_sort = Z3_get_sort(CONTEXT, first_arg);
+				check_error();
+				
+				if (arg_sort == Expression::BOOL_SORT) {
+					return out << '(' << expr.bool_child(0) << ' ' << op << ' ' << expr.bool_child(1) << ')';
+				} else {
+					return out << '(' << expr.real_child(0) << ' ' << op << ' ' << expr.real_child(1) << ')';
+				}
+			}
 		case Bool::Operator::LT:
 		case Bool::Operator::LE:
 		case Bool::Operator::GT:
 		case Bool::Operator::GE:
+			// These only compare Reals
 			return out << '(' << expr.real_child(0) << ' ' << op << ' ' << expr.real_child(1) << ')';
 		}
 		assert(false);

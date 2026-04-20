@@ -1293,7 +1293,8 @@ std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> pl
 		}
 		
 	}
-				
+	
+	return choices;
 }
 
 

@@ -37,6 +37,8 @@ namespace z3 {
 	class Expression {
 		// Solver wants to access `ast`
 		friend Solver;
+		// operator<< for Bool needs to access BOOL_SORT
+		friend std::ostream &operator<<(std::ostream &, Bool);
 
 	public:
 		Expression() = default;

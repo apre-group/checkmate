@@ -392,8 +392,11 @@ struct SubtreeResult {
 struct Cond_Utility {
 	std::vector<Utility> utility_tuple;
 	z3::Bool condition;
+	std::vector<std::string> history_vector;
 
 	Cond_Utility(const std::vector<Utility>& utilities, const z3::Bool& cond) : utility_tuple(utilities), condition(cond) {}
+
+	Cond_Utility(const std::vector<Utility>& utilities, const z3::Bool& cond, const std::vector<std::string>& history) : utility_tuple(utilities), condition(cond), history_vector(history) {}
 };
 
 struct PracticalitySubtreeResult {

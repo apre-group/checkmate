@@ -500,6 +500,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 							cond_node.counterexample_choices.push_back(current_condition.to_string());
 						}
 						if (!options.all_counterexamples && !options.preconditions && !options.subtree){
+							solver.pop();
 							return false;
 						} else {
 							result = false;
@@ -586,7 +587,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					if (consider_prob_groups) {
 							branch.problematic_group = player + 1;
 						}
-					branch.weakest_preconditions = true;
+					branch.weakest_preconditions = z3::Bool(true);
 					return true;
 				}
 				if (choice.node->reason.null()){
@@ -653,7 +654,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				branch.reason = reason;
 				input.set_reset_point(*branch.choices[reset_index].node);
 			} else if ((options.preconditions || options.subtree) && wp_is_false) {
-				branch.weakest_preconditions = false;
+				branch.weakest_preconditions = z3::Bool(false);
 			}
 			if (result && consider_prob_groups) {
 				branch.problematic_group = player + 1;
@@ -662,11 +663,13 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		}
 	}
 
+	assert(false); // should not reach here
+	return false;
 } 
 
 
 z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, std::bitset<Input::MAX_PLAYERS> group, std::vector<CondHonestTotalUtility> all_honest_total, unsigned players, uint64_t group_nr, bool consider_prob_groups) {
-	
+
 	count_cr_repetitions++;
 	if(!node->checked_cr) {
 		count_cr++;
@@ -684,7 +687,6 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 			}
 			return true;
 		} else { // not along honest
-
 			if  ((group_nr < leaf.problematic_group) && consider_prob_groups){
 				return true;
 			}
@@ -730,6 +732,7 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 							}
 						} else {
 							if (honest_total.condition.is(z3::Bool(true))) { // honest history has no condition nodes, so there is just 1 honest_total
+								solver.pop();
 								return true;
 							}
 							result = result || honest_total.condition;
@@ -746,7 +749,6 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 					leaf.problematic_group = group_nr + 1;
 				}
 			}
-
 			if (!reason.null()) {
 				leaf.reason = reason;
 				input.set_reset_point(leaf);
@@ -755,13 +757,11 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 				}
 				return result;
 			}
-
 			leaf.weakest_preconditions = result;
 			return result;
 		}
 
 	} else if (node->is_subtree()){
-
 		const auto &subtree = node->subtree();
 
 		if  ((group_nr < subtree.problematic_group) && consider_prob_groups){
@@ -863,7 +863,6 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 			}		
 		}
 	} else if (node->is_condition_node()) {
-
 		const auto &cond_node = node->condition_node();
 
 		if  ((group_nr < cond_node.problematic_group) && consider_prob_groups){
@@ -893,6 +892,7 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 								cond_node.counterexample_choices.push_back(current_condition.to_string());
 							}
 							if (!options.all_counterexamples && !options.preconditions && !options.subtree){
+								solver.pop();
 								return false;
 							} else {
 								result = false;
@@ -927,7 +927,7 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 				cond_node.problematic_group = group_nr + 1;
 			}
 			if (none_violated && ( options.preconditions || options.subtree) ) {
-				cond_node.weakest_preconditions = true;
+				cond_node.weakest_preconditions = z3::Bool(true);
 			}
 			return result;
 		} else { // we are off the honest history
@@ -1098,6 +1098,8 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 			if (!group[branch.player]) {  // not a deviator and off honest 
 				// we can take any strategy we please as long as it's collusion resilient
 				// if options.strategies is set, we have to consider all branches, otherwise we can stop after the first cr one
+				
+				
 				if (options.strategies){ // TODO think about strategies and counterexamples
 					z3::Bool result = false;
 					bool one_true = false;
@@ -1152,8 +1154,7 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 							}
 							return true;
 						} else if (choice.node->reason.null()) { // TODO counterexamples and strategies
-
-							choice.node->violates_cr[group_nr - 1] = true;
+							// choice.node->violates_cr[group_nr - 1] = true; // TODO COMMENT BACK IN
 						}
 						if (!child_result.is(z3::Bool(false))) {
 							result = result || child_result;
@@ -1235,6 +1236,9 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 		}
 
 	}
+
+	assert(false); // should not reach here
+	return false;
 }
 
 bool practicality_rec(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far, bool consider_prob_groups) {
@@ -1367,6 +1371,7 @@ bool practicality_rec(const Input &input, const Options &options, z3::Solver &so
 					
 					if(!options.all_counterexamples || !cond_node.reason.null()) {
 						if (!(cond_node.reason.null() && (options.preconditions || options.subtree))) {
+							solver.pop();
 							return false;
 						}
 						result = false;
@@ -1814,7 +1819,6 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 
 		std::vector<CondHonestUtility> all_honest_utilities;
 		// lookup the leaves for this history
-
 		if(history < input.honest.size()) {
 			std::vector<HonestLeaf> honest_leaves = get_honest_leaves(input.root.get(), input.honest[history]);
 			for (const HonestLeaf& honest_leaf : honest_leaves) {
@@ -1837,7 +1841,6 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			
 		}
 		
-
 		// sneaky hack follows: all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
 		// done this way more for concision than efficiency
 		bool result = true;
@@ -1870,7 +1873,6 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 					cond_total.utility = group_total;
 					all_honest_total.push_back(cond_total);
 				}
-	
 				// problematic groups are only considered when we haven't found a case split point yet
 				z3::Bool cr_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, all_honest_total, input.players.size(), binary_counter, false);
 				bool collusion_resilient_for_group;
@@ -2156,28 +2158,30 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 			assert(input.root->is_condition_node());
 			input.root->condition_node().reset_reason();
 		}
-		if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
-			if (input.reset_point->is_branch()) {
-				input.reset_point->branch().reset_strategy();
-			} else {
-				assert(input.reset_point->is_condition_node());
-				input.reset_point->condition_node().reset_strategy();
-			}
-			// auto &current_reset_branch = current_reset_point->branch();
-			// current_reset_branch.reset_strategy();
+		if (input.reset_point->is_branch()) {
+			input.reset_point->branch().reset_strategy();
+		} else if (input.reset_point->is_condition_node()) {
+			input.reset_point->condition_node().reset_strategy();
 		}
 
 		solver.push();
-
+		// std::cout << std::endl;
+		// std::cout << solver << std::endl;
 		solver.assert_(condition);
-		assert (solver.solve() != z3::Result::UNSAT);
+		// std::cout << "\tTrying case: " << condition << std::endl;
 		std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
 		new_current_case.push_back(condition);
-
+		// std::cout << solver << std::endl;
+		// std::cout << "\tCurrent case: " << new_current_case << std::endl;
+		assert (solver.solve() != z3::Result::UNSAT);
 
 		bool attempt = property_rec(solver, options, input, property, new_current_case, history, subtree_results_pr);
 
 		solver.pop();
+		// std::cout << "\tBacktracking from case: " << condition << std::endl;
+		// std::cout << solver << std::endl;
+		// std::cout << std::endl;
+
 
 		if (property != PropertyType::Practicality) {
 			input.weakest_precondition = weakest_precondition_storage;
@@ -2261,7 +2265,7 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 			}
 			// Note: subtree leaves should not occur in subtree mode according to the TODO comment
 		}
-		z3::Bool cr_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, all_honest_total, input.players.size(), group_nr, true);
+		z3::Bool cr_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, all_honest_total, input.players.size(), group_nr, false);
 		if (cr_result.is(z3::Bool(true))) {
 			property_result = true;
 		} else {
@@ -2293,7 +2297,7 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 		if (!input.stop_log){
 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
 		}
-		if (std::none_of(input.weakest_precondition.begin(), input.weakest_precondition.end(), [](const z3::Bool& b){ return b.is(z3::Bool(false)); })) {
+		if (!input.root->get_weakestpreconditions().is(z3::Bool(false))) {
 			std::vector<z3::Bool> new_sat_case = current_case;
 			new_sat_case.push_back(input.root->get_weakestpreconditions());
 
@@ -2326,19 +2330,19 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 		} else {
 			assert(input.root->is_condition_node());
 			input.root->condition_node().reset_reason();
+			
 		}
-		if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
-			auto &current_reset_branch = current_reset_point->branch();
-			current_reset_branch.reset_strategy();
+		if (input.reset_point->is_branch()) {
+			input.reset_point->branch().reset_strategy();
+		} else if (input.reset_point->is_condition_node()) {
+			input.reset_point->condition_node().reset_strategy();
 		}
-
 		solver.push();
 
 		solver.assert_(condition);
 		assert (solver.solve() != z3::Result::UNSAT);
 		std::vector<z3::Bool> new_current_case(current_case.begin(), current_case.end());
 		new_current_case.push_back(condition);
-
 
 		bool attempt = property_rec_subtree(solver, options, input, property, new_current_case, history, group_nr, satisfied_in_case);
 
@@ -2393,7 +2397,7 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 		if (!input.stop_log){
 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
 		}
-		if (std::none_of(input.weakest_precondition.begin(), input.weakest_precondition.end(), [](const z3::Bool& b){ return b.is(z3::Bool(false)); })) {
+		if (!input.root->get_weakestpreconditions().is(z3::Bool(false))) {
 			std::vector<z3::Bool> new_sat_case = current_case;
 			new_sat_case.push_back(input.root->get_weakestpreconditions());
 
@@ -2412,8 +2416,6 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 		std::cout << "\tSplitting on: " << split << std::endl;
 	}
 
-	auto &current_reset_point = input.reset_point;
-
 
 	bool result = true;
 
@@ -2425,9 +2427,10 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 		} else if (input.root->is_condition_node()){
 			input.root->condition_node().reset_reason();
 		}
-		if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
-			auto &current_reset_branch = current_reset_point->branch();
-			current_reset_branch.reset_strategy();
+		if (input.reset_point->is_branch()) {
+			input.reset_point->branch().reset_strategy();
+		} else if (input.reset_point->is_condition_node()) {
+			input.reset_point->condition_node().reset_strategy();
 		}
 
 		solver.push();
@@ -2483,11 +2486,14 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 			subtree_result_pr.utilities = {};
 			if (input.root->is_branch()) {
 				for (auto elem: input.root->branch().practical_utilities) {
-					subtree_result_pr.utilities.push_back(Cond_Utility(elem.leaf, elem.condition));
+					std::vector<std::string> history_vec = input.root->strat2hist(elem.strategy);
+					subtree_result_pr.utilities.push_back(Cond_Utility(elem.leaf, elem.condition, history_vec));
 				}
 			} else if (input.root->is_condition_node()){
 				for (auto elem: input.root->condition_node().practical_utilities) {
-					subtree_result_pr.utilities.push_back(Cond_Utility(elem.leaf,elem.condition));
+					std::vector<std::string> history_vec = input.root->strat2hist(elem.strategy);
+					subtree_result_pr.utilities.push_back(Cond_Utility(elem.leaf,elem.condition, history_vec));
+
 				}
 			}
 
@@ -2510,7 +2516,7 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
 		}
 		if (property != PropertyType::Practicality) {
-			if (std::none_of(input.weakest_precondition.begin(), input.weakest_precondition.end(), [](const z3::Bool& b){ return b.is(z3::Bool(false)); })) {
+			if (!input.root->get_weakestpreconditions().is(z3::Bool(false))){
 				std::vector<z3::Bool> new_sat_case = current_case;
 				new_sat_case.push_back(input.root->get_weakestpreconditions());
 
@@ -2532,8 +2538,6 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 	if (!input.stop_log){
 		std::cout << "\tSplitting on: " << split << std::endl;
 	}
-
-	auto &current_reset_point = input.reset_point;	
 	
 	bool result = true;
 
@@ -2546,9 +2550,10 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 			assert(input.root->is_condition_node());
 			input.root->condition_node().reset_reason();
 		}
-		if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
-			auto &current_reset_branch = current_reset_point->branch();
-			current_reset_branch.reset_strategy();
+		if (input.reset_point->is_branch()) {
+			input.reset_point->branch().reset_strategy();
+		} else if (input.reset_point->is_condition_node()) {
+			input.reset_point->condition_node().reset_strategy();
 		}
 
 		solver.push();
@@ -2608,7 +2613,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 		std::cout << "Is history " << input.honest[history] << " " << prop_name << "?" << std::endl;
 	} else {
 		if(property == PropertyType::Practicality) {
-			std::cout << "Computing practical histories/strategies." << std::endl;
+			std::cout << "Computing practical histories." << std::endl;
 		} else if (property == PropertyType::CollusionResilience) {
 			// see comment in analyze properties
 			// if history >= input.honest.size() then we are running subtree in default mode
@@ -2627,6 +2632,14 @@ void property(const Options &options, const Input &input, PropertyType property,
 		if (property_rec(solver, options, input, property, std::vector<z3::Bool>(), history, satisfied_in_case)) {
 			if(history < input.honest.size()) {
 				std::cout << "YES, it is " << prop_name << "." << std::endl;
+			} else {
+				for (UtilityTuple utility : input.root->get_utilities()) {
+					if (solver.solve({!utility.condition}) == z3::Result::UNSAT) {
+						std::cout << "History " <<  input.root->strat2hist(utility.strategy) << " is practical." << std::endl;
+					} else {
+						std::cout << "History " <<  input.root->strat2hist(utility.strategy) << " is practical if " <<  utility.condition.simplify() << " holds." << std::endl;
+					}
+				}
 			}
 			prop_holds = true;
 		} else { 
@@ -2951,7 +2964,7 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 		std::vector<std::vector<z3::Bool>> satisfied_in_case;
 		std::vector<PracticalitySubtreeResult> subtree_results_pr = {};
 
-		std::cout << "What are the subtree's practical utilities?" << std::endl;
+		std::cout << "Computing the subtree's practical histories." << std::endl;
 		bool pr_result = property_rec_nohistory(solver, options, input, property, std::vector<z3::Bool>(), 0, satisfied_in_case, subtree_results_pr);
 
 		assert(pr_result);
@@ -2968,9 +2981,14 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 		for(auto &utilityCase : subtree_results_pr) {
 			std::cout << "Case: " << utilityCase._case << std::endl;
 			for(auto utility : utilityCase.utilities) {
-				std::cout << "\t" << utility.utility_tuple << " if  " << utility.condition << std::endl;
+				if (solver.solve({!utility.condition}) == z3::Result::UNSAT) {
+					std::cout << "\t History " <<  utility.history_vector << " is practical." << std::endl;
+				} else {
+					std::cout << "\t History " <<  utility.history_vector << " is practical if " <<  utility.condition.simplify() << " holds." << std::endl;
+				}
 			}
 		}
+
 
 		subtree.practicality.insert(subtree.practicality.end(), subtree_results_pr.begin(), subtree_results_pr.end());
 	} else { 
