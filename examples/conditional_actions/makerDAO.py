@@ -77,7 +77,7 @@ PRACTICALITY_CONSTRAINTS = []
 
 #define the list of honest histories, as a list of lists of actions
 # e.g. one honest history: Action1, Action2, Action3
-HONEST_HISTORIES : List[List[Action]] = [[Action1, Action2, Action3]]
+HONEST_HISTORIES : List[HistoryTree] = []
 
 # honest utilities can be listed, if modeling used in an interleaving way with CheckMate
 HONEST_UTILITIES = [] 
@@ -85,8 +85,9 @@ HONEST_UTILITIES = []
 
 # define the initial state as a dictionary
 initial_state = {
-    "bids": {Player('B'+str(i)): None for i in range(1, N+1)},
-    "debt_left" : True
+    "bids": {i : None for i in range(1, N+1)},
+    "debt_left" : True,
+    "tab_left" : (art + dart) * (1 + stability_fee) * (1 + chop)
 }
 # some player-wise information, e.g.
 # for player in PLAYERS:
@@ -105,14 +106,11 @@ initial_state = {
 def copy_state(state : Dict) -> Dict:
     state_copy : Dict = {}
     # copy the basic data of the state
-    # e.g.:
-    # state_copy["time_orderings"] = state["time_orderings"][:]
-    
-    # copy the player-wise values (if applicable)
-    for player in PLAYERS:
-        state_copy[player] = {}
-        # e.g.:
-        # state_copy[player]["amount_to_unlock"] = state[player]["amount_to_unlock"]
+    state_copy["tab_left"] = state["tab_left"]
+    state_copy["debt_left"] = state["debt_left"]
+    state_copy["bids"] = {}
+    for bidder, bid in state["bids"].items():
+        state_copy["bids"][bidder] = bid
     return state_copy
 
 
@@ -120,27 +118,28 @@ def copy_state(state : Dict) -> Dict:
 def compute_utility(state : Dict) -> Dict:
     ut : Dict = {player: 0 for player in PLAYERS}
     tab = (art + dart) * (1 + stability_fee) * (1 + chop)
-    ut[L] = tip + chip * tab - gas
-    sum_of_bids = sum(bid for bid in state["bids"].values() if bid is not None)
+    ut[L] = tip * prETH2 + chip * tab - gas * prETH2
     # actual utility of V : if auction closed: (ink + dink - tab/prAuction)*prETH2 + art + dart
-    # V had: (ink + dink)*prETH - (art + dart)*(1 + stability_fee)
-    # actual utility of V: if auction in limbo: - (ink + dink) * prETH2 
-    # relative utility of V: if auction closed : - tab/prAuction*prETH2 (art + dart)*(2 + stability_fee) 
-    ut[V] = - (tab - sum_of_bids)
+    # V had: (ink + dink)*prETH2 - (art + dart)*(stability_fee)
+    # actual utility of V: if auction in limbo: art + dart
+    # relative utility of V: if auction closed : - tab/prAuction*prETH2 + (art + dart)*(1 + stability_fee) 
+    # trying to understand this: - ((art + dart) * (1 + stability_fee) * (1 + chop)* prETH2)/prAuction   + (art + dart)*( 1+ stability_fee) 
+    # relative utility of V: if auction in limbo : - (ink + dink)*prETH2 + (art + dart) * (1 + stability_fee)
+    if state["debt_left"]:
+        # auction in limbo
+        ut[V] = - (ink + dink)*prETH2 + (art + dart) * (1 + stability_fee)
+    else:
+        # auction closed
+        ut[V] = - (div_expr(tab, prAuction)) * prETH2 + (art + dart) * (1 + stability_fee) 
+
     for i in range(1, N+1):
-        bidder = Player(f"B{i}")
+        bidder = i
         if state["bids"][bidder] is None:
-            ut[bidder] = 0
+            ut[PLAYERS[i+1]] = 0
         else:
             bid = state["bids"][bidder]
-            ut[bidder] = (bid / prAuction) * (prETH2 - prAuction)
+            ut[PLAYERS[i+1]] = (div_expr(bid, prAuction)) * (prETH2 - prAuction)
     return ut
-
-
-# define who the next player is
-def next_player(state : Dict) -> Player:
-    #return a player
-    pass
 
 
 # deciding whether a final state was reached
@@ -156,13 +155,13 @@ def is_final(state : Dict):
 
 
 # computes subset of ACTIONS that is possible to take at the given point in the game
-def compute_available_actions(player : Player, state : Dict, history : str) -> List[Action]:
+def compute_available_actions(state : Dict, history : str) -> List[Action]:
     # compute list of available actions and return it
-    pass
+    return [buy_all, buy_some] 
 
 
 # generate the game tree
-def generate_auction(player: Player, state: Dict, history: str):
+def generate_auction(bidder_index: int, state: Dict, history: str):
 
     # decide whether a leaf was reached, i.e. whether we are in a final state
     if is_final(state):
@@ -174,7 +173,7 @@ def generate_auction(player: Player, state: Dict, history: str):
         branch_actions = {} # dictionary that contains an available action as key and the tree this action leads to as value
 
         # compute an available actions
-        available_actions : List[Action] = compute_available_actions(player, state, history)
+        available_actions : List[Action] = compute_available_actions(state, history)
 
         # for each available action at a time, compute it subtree
         for action in available_actions:
@@ -182,12 +181,22 @@ def generate_auction(player: Player, state: Dict, history: str):
             # copy the state and adapt it according to the taken action
             # e.g.:
             state1 = copy_state(state)
-            state1["some_key"]= "some_value"
+            if action == buy_all:
+                state1["bids"][bidder_index] = state1["tab_left"]
+                state1["tab_left"] = 0
+                state1["debt_left"] = False
+                branch_actions[action] = generate_auction(bidder_index + 1, state1, history + str(Player('B'+str(bidder_index))) + "." + str(action) + ";")
+            elif action == buy_some:
+                bid = NameExpr("bid"+str(bidder_index))
+                CONSTANTS.append(bid)
+                INITIAL_CONSTRAINTS.append(bid >= 0)
+                INITIAL_CONSTRAINTS.append(bid < state["tab_left"])
+                state1["bids"][bidder_index] = bid
+                state1["tab_left"] = state["tab_left"] - bid
+                # debt is not fully covered, so it is still left, but the amount left is reduced
+                branch_actions[action] = generate_auction(bidder_index + 1, state1, history + str(Player('B'+str(bidder_index))) + "." + str(action) + ";")
 
-            # add available action and tree to the dictionary 
-            branch_actions[action] = generate_tree(next_player(state1), state1, history + str(player) + "." + str(action) + ";")
-        
-        return branch(player, branch_actions)
+        return branch(Player("B"+str(bidder_index)), branch_actions)
 
 
 #################################################################################################################
@@ -226,16 +235,16 @@ CONSTANTS.append(prAuction)
 INITIAL_CONSTRAINTS.append(prAuction>0)
 profitable = prAuction < prETH2
 non_profitable = prAuction >= prETH2
-tab = 
+# tab = 
 ut_non_profitable = {V: (-ink -dink) * prETH2 + (art + dart) , 
-                     L: tip + chip * (art + dart) * (1 + stability_fee) * (1 + chop) - gas}
+                     L: tip * prETH2 + chip * (art + dart) * (1 + stability_fee) * (1 + chop) - gas*prETH2}
 for i in range(1, N+1):
     ut_non_profitable[Player('B'+str(i))] = 0
 
 
 branch_actions_unsafe[bark] = condition({
     non_profitable : leaf(ut_non_profitable), 
-    profitable : generate_auction(Player("B1"), initial_state, "V.frob,unsafe,L.bark,profitable")})
+    profitable : generate_auction(1, initial_state, "V.frob,unsafe,L.bark,profitable")})
 
 
 # putting it all together in the frob action
