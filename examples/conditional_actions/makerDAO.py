@@ -179,7 +179,7 @@ def compute_utility(state : Dict) -> Dict:
         ut[V] = - (ink + dink)*prETH2 + (art + dart) * (1 + stability_fee)
     else:
         # auction closed
-        ut[V] = - (div_expr(tab, prAuction)) * prETH2 + (art + dart) * (1 + stability_fee) 
+        ut[V] = - (tab / prAuction) * prETH2 + (art + dart) * (1 + stability_fee) 
 
     for i in range(1, N+1):
         bidder = i
