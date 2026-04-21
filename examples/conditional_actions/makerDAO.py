@@ -7,6 +7,11 @@ from dsl import *
 """
 Descibe the protocol and your model here:
 
+This is a simplified model of the MakerDAO protocol (details here: https://docs.makerdao.com/smart-contract-modules/dai-module and here: https://makerdao.com/en/whitepaper/#sky-protocol-auctions), which is a decentralized lending protocol on Ethereum. In this protocol, users can lock up collateral (in this case ETH, we call the collateral "ink") in a vault and borrow DAI (which is a dollar stablecoin, we call the debt "art") against it. The vault owner can choose to close the vault and pay back the debt at any time - we call this action "frob_close", or they can increase/reduce the amount of collateral and/or debt in the vault - we call this action "frob" with the deltas called dink and dart. The vault has a liquidation ratio, which specifies how much the value of the collateral must be compared to the amount of DAI borrowed. 
+
+If the value of the collateral falls too much compared to the amount of DAI borrowed, the vault can enter into liquidation, if one of the agents, called a dog, barks. In this case, a Dutch auction for the collateral is triggered, where liquidators (in the model we call them bidders) can buy the collateral at a discount (once the price drops such that it is profitable compared to the market price of ETH). The goal of the auction is to raise tab = total_debt * rate * (1 + chop) of money to cover the debt and the fees, where chop is the liquidation penalty.
+If the auction closes successfully, the remainder of the collateral is returned to the vault owner. Otherwise the remaining collateral stays locked. 
+
 Explain the Parameters
 
 ink = the amount of collateral locked in the vault
@@ -18,19 +23,38 @@ tab = the total DAI the auction must recover total_debt * rate * (1 + chop)
 chop = liquidation penalty (multiplier on the total debt)
 stability_fee = the fee that the vault owner pays to keep the vault open, as a fraction of the total debt per time unit
 prETH = initial price of ETH in DAI (which is 1:1 to dollar)
-
+prETH1 = price of ETH in DAI after the price change that triggers the auction
+prETH2 = price of ETH in DAI after the price change that happens during the auction
+prAuction = the price at which the auction closes, which is determined by the bidders in the auction
 
 Design Choices
+
+The model can be generated for any number of bidders, one can modify this by changing the parameter N. We model the auction as a sequential auction, where bidders can choose to buy some or all of the collateral.
 
 Assumptions
 
 * L = dog plus clipper
-* V = vault owner
+* V = vault owner. We assume that the vault owner V is not one of the bidders. 
 * The rate will not change with time, but will be kept at (1 + stability_fee) (instead of being compounded) for simplicity
+* We assume all bidders are buying collateral at the same price, which is prAuction, for simplicity.
+* After the prices change and tab is set, we assume the total amount of collateral (ink + dink) is sufficient to cover the tab at auction price prAucion. Specifically: 
+tab = (art + dart) * (1 + stability_fee) * (1 + chop)
+ink + dink - tab/prAuction >= 0
 
 State
 
+The state captures the bidding phase. It contains:
+    "bids": a dictionary that maps bidder index to the bid, None if bid was not yet placed.
+    "debt_left" : bool, whether or not there is any debt left
+    "tab_left" : an expression of the remaining tab that is open for bidding, starting with (art + dart) * (1 + stability_fee) * (1 + chop)
+
 Precedence Choices
+
+The model starts with V choosing frob_close or frob. Then the price of ETH changes and if the auction is started and is profitable, the bidders take their turn one after the other in the order of their index: B1, B2, B3, etc. 
+
+Honest Behavior
+
+The only fixed honest behavior is that the player L will bark if the vault is unsafe. All other options can be honest and we list all of them as honest behaviors - one by one. 
 """
 
 # protocol parameters
@@ -46,7 +70,7 @@ for i in range(1, N+1):
 # define the actions, infinitesimals and constants as strings and name them for convenience, e.g.:
 frob_close, frob, bark, no_bark, buy_all, buy_some = ACTIONS = actions('frob_close', 'frob', 'bark', 'no_bark', 'buy_all', 'buy_some') # TO DO: fill in the actions
 alpha, beta = INFINITESIMALS = infinitesimals('alpha', 'beta')
-ink, art, lr, tip, chip, chop, stability_fee, prETH, dink, dart, gas  = CONSTANTS = constants('ink', 'art', 'lr', 'tip', 'chip', 'chop', 'stability_fee', 'prETH', 'dink', 'dart', 'gas')
+ink, art, lr, tip, chip, chop, stability_fee, prETH, prETH1, prETH2, prAuction, dink, dart, gas  = CONSTANTS = constants('ink', 'art', 'lr', 'tip', 'chip', 'chop', 'stability_fee', 'prETH', 'prETH1', 'prETH2', 'prAuction', 'dink', 'dart', 'gas')
 
 # list your assumptions and design choices as iniital constraints (if applicable),
 # the following expressions are supported: +, -, *, /, real numbers, >, >=, <, <=, ==, != (inequality), disjunction(*args) (or)
@@ -63,6 +87,9 @@ INITIAL_CONSTRAINTS = [
     stability_fee >= 0,
     stability_fee < 1,
     prETH > 0,
+    prETH1 > 0,
+    prETH2 > 0,
+    prAuction > 0,
     alpha > 0,
     beta > 0,
     ink * prETH > lr * art * (1 + stability_fee),
@@ -75,9 +102,31 @@ WEAKER_IMMUNITY_CONSTRAINTS = []
 COLLUSION_RESILIENCE_CONSTRAINTS = []
 PRACTICALITY_CONSTRAINTS = []
 
-#define the list of honest histories, as a list of lists of actions
-# e.g. one honest history: Action1, Action2, Action3
-HONEST_HISTORIES : List[HistoryTree] = []
+#define the list of honest histories, as a list of lists of HonestTrees
+HONEST_HISTORIES : List[HistoryTree] = [HistoryTree([frob_close])]
+
+def generate_honest_history_with_prefix(suffix: HistoryTree):
+    unsafe : Constraint = (ink + dink) * prETH1 < lr * (1 + stability_fee)
+    safe : Constraint = (ink + dink) * prETH1 >= lr * (1 + stability_fee) 
+    profitable = prAuction < prETH2
+    non_profitable = prAuction >= prETH2
+    honest_prefix = HistoryTree([frob, [HistoryTreeCondition(safe, HistoryTree([])),
+                                        HistoryTreeCondition(unsafe, HistoryTree([bark, [
+                                            HistoryTreeCondition(non_profitable, HistoryTree([])),
+                                            HistoryTreeCondition(profitable, suffix)
+                                        ]]))]])
+    return honest_prefix
+
+def generate_honest_histories() -> List[HistoryTree]:
+    # honest_histories = [[buy_all],[buy_some, buy_all], [buy_some, buy_some, buy_all]]
+    honest_histories = []
+    for i in range(N):
+        honest_histories.append([buy_some] * i + [buy_all])
+    honest_histories.append([buy_some] * N)
+    return [generate_honest_history_with_prefix(HistoryTree(history)) for history in honest_histories]
+
+HONEST_HISTORIES = HONEST_HISTORIES + generate_honest_histories()
+
 
 # honest utilities can be listed, if modeling used in an interleaving way with CheckMate
 HONEST_UTILITIES = [] 
@@ -138,7 +187,7 @@ def compute_utility(state : Dict) -> Dict:
             ut[PLAYERS[i+1]] = 0
         else:
             bid = state["bids"][bidder]
-            ut[PLAYERS[i+1]] = (div_expr(bid, prAuction)) * (prETH2 - prAuction)
+            ut[PLAYERS[i+1]] = (bid / prAuction) * (prETH2 - prAuction)
     return ut
 
 
@@ -211,9 +260,6 @@ for i in range(1, N+1):
 initial_branches[frob_close] = leaf(ut_close)
 
 # introduce dink and dart with frob, and then price change
-prETH1 = NameExpr("prETH1")
-CONSTANTS.append(prETH1)
-INITIAL_CONSTRAINTS.append(prETH1>0)
 unsafe : Constraint = (ink + dink) * prETH1 < lr * (1 + stability_fee)
 safe : Constraint = (ink + dink) * prETH1 >= lr * (1 + stability_fee) 
 ut_safe = {V: beta, L: 0}
@@ -227,12 +273,6 @@ branch_actions_unsafe[no_bark] = leaf(ut_no_bark)
 
 # after bark the price of ETH can change such that 
 # the auction is never profitable
-prETH2 = NameExpr("prETH2")
-CONSTANTS.append(prETH2)
-INITIAL_CONSTRAINTS.append(prETH2>0)
-prAuction = NameExpr("prAuction")
-CONSTANTS.append(prAuction)
-INITIAL_CONSTRAINTS.append(prAuction>0)
 profitable = prAuction < prETH2
 non_profitable = prAuction >= prETH2
 # tab = 
