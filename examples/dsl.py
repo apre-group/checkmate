@@ -47,7 +47,7 @@ class Expr:
         return mul_expr(other, self)
 
     def __truediv__(self, other: LExpr) -> LExpr:
-        return div_expr(other, self)
+        return div_expr(self, other)
 
     def __rtruediv__(self, other: LExpr) -> LExpr:
         return div_expr(other, self)
