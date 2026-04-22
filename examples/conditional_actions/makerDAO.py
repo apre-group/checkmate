@@ -7,6 +7,11 @@ from dsl import *
 """
 Descibe the protocol and your model here:
 
+This is a simplified model of the MakerDAO protocol (details here: https://docs.makerdao.com/smart-contract-modules/dai-module and here: https://makerdao.com/en/whitepaper/#sky-protocol-auctions), which is a decentralized lending protocol on Ethereum. In this protocol, users can lock up collateral (in this case ETH, we call the collateral "ink") in a vault and borrow DAI (which is a dollar stablecoin, we call the debt "art") against it. The vault owner can choose to close the vault and pay back the debt at any time - we call this action "frob_close", or they can increase/reduce the amount of collateral and/or debt in the vault - we call this action "frob" with the deltas called dink and dart. The vault has a liquidation ratio, which specifies how much the value of the collateral must be compared to the amount of DAI borrowed. 
+
+If the value of the collateral falls too much compared to the amount of DAI borrowed, the vault can enter into liquidation, if one of the agents, called a dog, barks. In this case, a Dutch auction for the collateral is triggered, where liquidators (in the model we call them bidders) can buy the collateral at a discount (once the price drops such that it is profitable compared to the market price of ETH). The goal of the auction is to raise tab = total_debt * rate * (1 + chop) of money to cover the debt and the fees, where chop is the liquidation penalty.
+If the auction closes successfully, the remainder of the collateral is returned to the vault owner. Otherwise the remaining collateral stays locked. 
+
 Explain the Parameters
 
 ink = the amount of collateral locked in the vault
@@ -18,19 +23,38 @@ tab = the total DAI the auction must recover total_debt * rate * (1 + chop)
 chop = liquidation penalty (multiplier on the total debt)
 stability_fee = the fee that the vault owner pays to keep the vault open, as a fraction of the total debt per time unit
 prETH = initial price of ETH in DAI (which is 1:1 to dollar)
-
+prETH1 = price of ETH in DAI after the price change that triggers the auction
+prETH2 = price of ETH in DAI after the price change that happens during the auction
+prAuction = the price at which the auction closes, which is determined by the bidders in the auction
 
 Design Choices
+
+The model can be generated for any number of bidders, one can modify this by changing the parameter N. We model the auction as a sequential auction, where bidders can choose to buy some or all of the collateral.
 
 Assumptions
 
 * L = dog plus clipper
-* V = vault owner
+* V = vault owner. We assume that the vault owner V is not one of the bidders. 
 * The rate will not change with time, but will be kept at (1 + stability_fee) (instead of being compounded) for simplicity
+* We assume all bidders are buying collateral at the same price, which is prAuction, for simplicity.
+* After the prices change and tab is set, we assume the total amount of collateral (ink + dink) is sufficient to cover the tab at auction price prAucion. Specifically: 
+tab = (art + dart) * (1 + stability_fee) * (1 + chop)
+ink + dink - tab/prAuction >= 0
 
 State
 
+The state captures the bidding phase. It contains:
+    "bids": a dictionary that maps bidder index to the bid, None if bid was not yet placed.
+    "debt_left" : bool, whether or not there is any debt left
+    "tab_left" : an expression of the remaining tab that is open for bidding, starting with (art + dart) * (1 + stability_fee) * (1 + chop)
+
 Precedence Choices
+
+The model starts with V choosing frob_close or frob. Then the price of ETH changes and if the auction is started and is profitable, the bidders take their turn one after the other in the order of their index: B1, B2, B3, etc. 
+
+Honest Behavior
+
+The only fixed honest behavior is that the player L will bark if the vault is unsafe. All other options can be honest and we list all of them as honest behaviors - one by one. 
 """
 
 # protocol parameters
@@ -46,7 +70,7 @@ for i in range(1, N+1):
 # define the actions, infinitesimals and constants as strings and name them for convenience, e.g.:
 frob_close, frob, bark, no_bark, buy_all, buy_some = ACTIONS = actions('frob_close', 'frob', 'bark', 'no_bark', 'buy_all', 'buy_some') # TO DO: fill in the actions
 alpha, beta = INFINITESIMALS = infinitesimals('alpha', 'beta')
-ink, art, lr, tip, chip, chop, stability_fee, prETH, dink, dart, gas  = CONSTANTS = constants('ink', 'art', 'lr', 'tip', 'chip', 'chop', 'stability_fee', 'prETH', 'dink', 'dart', 'gas')
+ink, art, lr, tip, chip, chop, stability_fee, prETH, prETH1, prETH2, prAuction, dink, dart, gas  = CONSTANTS = constants('ink', 'art', 'lr', 'tip', 'chip', 'chop', 'stability_fee', 'prETH', 'prETH1', 'prETH2', 'prAuction', 'dink', 'dart', 'gas')
 
 # list your assumptions and design choices as iniital constraints (if applicable),
 # the following expressions are supported: +, -, *, /, real numbers, >, >=, <, <=, ==, != (inequality), disjunction(*args) (or)
@@ -63,6 +87,9 @@ INITIAL_CONSTRAINTS = [
     stability_fee >= 0,
     stability_fee < 1,
     prETH > 0,
+    prETH1 > 0,
+    prETH2 > 0,
+    prAuction > 0,
     alpha > 0,
     beta > 0,
     ink * prETH > lr * art * (1 + stability_fee),
@@ -75,9 +102,31 @@ WEAKER_IMMUNITY_CONSTRAINTS = []
 COLLUSION_RESILIENCE_CONSTRAINTS = []
 PRACTICALITY_CONSTRAINTS = []
 
-#define the list of honest histories, as a list of lists of actions
-# e.g. one honest history: Action1, Action2, Action3
-HONEST_HISTORIES : List[List[Action]] = [[Action1, Action2, Action3]]
+#define the list of honest histories, as a list of lists of HonestTrees
+HONEST_HISTORIES : List[HistoryTree] = [HistoryTree([frob_close])]
+
+def generate_honest_history_with_prefix(suffix: HistoryTree):
+    unsafe : Constraint = (ink + dink) * prETH1 < lr * (1 + stability_fee)
+    safe : Constraint = (ink + dink) * prETH1 >= lr * (1 + stability_fee) 
+    profitable = prAuction < prETH2
+    non_profitable = prAuction >= prETH2
+    honest_prefix = HistoryTree([frob, [HistoryTreeCondition(safe, HistoryTree([])),
+                                        HistoryTreeCondition(unsafe, HistoryTree([bark, [
+                                            HistoryTreeCondition(non_profitable, HistoryTree([])),
+                                            HistoryTreeCondition(profitable, suffix)
+                                        ]]))]])
+    return honest_prefix
+
+def generate_honest_histories() -> List[HistoryTree]:
+    # honest_histories = [[buy_all],[buy_some, buy_all], [buy_some, buy_some, buy_all]]
+    honest_histories = []
+    for i in range(N):
+        honest_histories.append([buy_some] * i + [buy_all])
+    honest_histories.append([buy_some] * N)
+    return [generate_honest_history_with_prefix(HistoryTree(history)) for history in honest_histories]
+
+HONEST_HISTORIES = HONEST_HISTORIES + generate_honest_histories()
+
 
 # honest utilities can be listed, if modeling used in an interleaving way with CheckMate
 HONEST_UTILITIES = [] 
@@ -85,8 +134,9 @@ HONEST_UTILITIES = []
 
 # define the initial state as a dictionary
 initial_state = {
-    "bids": {Player('B'+str(i)): None for i in range(1, N+1)},
-    "debt_left" : True
+    "bids": {i : None for i in range(1, N+1)},
+    "debt_left" : True,
+    "tab_left" : (art + dart) * (1 + stability_fee) * (1 + chop)
 }
 # some player-wise information, e.g.
 # for player in PLAYERS:
@@ -105,14 +155,11 @@ initial_state = {
 def copy_state(state : Dict) -> Dict:
     state_copy : Dict = {}
     # copy the basic data of the state
-    # e.g.:
-    # state_copy["time_orderings"] = state["time_orderings"][:]
-    
-    # copy the player-wise values (if applicable)
-    for player in PLAYERS:
-        state_copy[player] = {}
-        # e.g.:
-        # state_copy[player]["amount_to_unlock"] = state[player]["amount_to_unlock"]
+    state_copy["tab_left"] = state["tab_left"]
+    state_copy["debt_left"] = state["debt_left"]
+    state_copy["bids"] = {}
+    for bidder, bid in state["bids"].items():
+        state_copy["bids"][bidder] = bid
     return state_copy
 
 
@@ -120,27 +167,28 @@ def copy_state(state : Dict) -> Dict:
 def compute_utility(state : Dict) -> Dict:
     ut : Dict = {player: 0 for player in PLAYERS}
     tab = (art + dart) * (1 + stability_fee) * (1 + chop)
-    ut[L] = tip + chip * tab - gas
-    sum_of_bids = sum(bid for bid in state["bids"].values() if bid is not None)
+    ut[L] = tip * prETH2 + chip * tab - gas * prETH2
     # actual utility of V : if auction closed: (ink + dink - tab/prAuction)*prETH2 + art + dart
-    # V had: (ink + dink)*prETH - (art + dart)*(1 + stability_fee)
-    # actual utility of V: if auction in limbo: - (ink + dink) * prETH2 
-    # relative utility of V: if auction closed : - tab/prAuction*prETH2 (art + dart)*(2 + stability_fee) 
-    ut[V] = - (tab - sum_of_bids)
+    # V had: (ink + dink)*prETH2 - (art + dart)*(stability_fee)
+    # actual utility of V: if auction in limbo: art + dart
+    # relative utility of V: if auction closed : - tab/prAuction*prETH2 + (art + dart)*(1 + stability_fee) 
+    # trying to understand this: - ((art + dart) * (1 + stability_fee) * (1 + chop)* prETH2)/prAuction   + (art + dart)*( 1+ stability_fee) 
+    # relative utility of V: if auction in limbo : - (ink + dink)*prETH2 + (art + dart) * (1 + stability_fee)
+    if state["debt_left"]:
+        # auction in limbo
+        ut[V] = - (ink + dink)*prETH2 + (art + dart) * (1 + stability_fee)
+    else:
+        # auction closed
+        ut[V] = - (tab / prAuction) * prETH2 + (art + dart) * (1 + stability_fee) 
+
     for i in range(1, N+1):
-        bidder = Player(f"B{i}")
+        bidder = i
         if state["bids"][bidder] is None:
-            ut[bidder] = 0
+            ut[PLAYERS[i+1]] = 0
         else:
             bid = state["bids"][bidder]
-            ut[bidder] = (bid / prAuction) * (prETH2 - prAuction)
+            ut[PLAYERS[i+1]] = (bid / prAuction) * (prETH2 - prAuction)
     return ut
-
-
-# define who the next player is
-def next_player(state : Dict) -> Player:
-    #return a player
-    pass
 
 
 # deciding whether a final state was reached
@@ -156,13 +204,13 @@ def is_final(state : Dict):
 
 
 # computes subset of ACTIONS that is possible to take at the given point in the game
-def compute_available_actions(player : Player, state : Dict, history : str) -> List[Action]:
+def compute_available_actions(state : Dict, history : str) -> List[Action]:
     # compute list of available actions and return it
-    pass
+    return [buy_all, buy_some] 
 
 
 # generate the game tree
-def generate_auction(player: Player, state: Dict, history: str):
+def generate_auction(bidder_index: int, state: Dict, history: str):
 
     # decide whether a leaf was reached, i.e. whether we are in a final state
     if is_final(state):
@@ -174,7 +222,7 @@ def generate_auction(player: Player, state: Dict, history: str):
         branch_actions = {} # dictionary that contains an available action as key and the tree this action leads to as value
 
         # compute an available actions
-        available_actions : List[Action] = compute_available_actions(player, state, history)
+        available_actions : List[Action] = compute_available_actions(state, history)
 
         # for each available action at a time, compute it subtree
         for action in available_actions:
@@ -182,12 +230,22 @@ def generate_auction(player: Player, state: Dict, history: str):
             # copy the state and adapt it according to the taken action
             # e.g.:
             state1 = copy_state(state)
-            state1["some_key"]= "some_value"
+            if action == buy_all:
+                state1["bids"][bidder_index] = state1["tab_left"]
+                state1["tab_left"] = 0
+                state1["debt_left"] = False
+                branch_actions[action] = generate_auction(bidder_index + 1, state1, history + str(Player('B'+str(bidder_index))) + "." + str(action) + ";")
+            elif action == buy_some:
+                bid = NameExpr("bid"+str(bidder_index))
+                CONSTANTS.append(bid)
+                INITIAL_CONSTRAINTS.append(bid >= 0)
+                INITIAL_CONSTRAINTS.append(bid < state["tab_left"])
+                state1["bids"][bidder_index] = bid
+                state1["tab_left"] = state["tab_left"] - bid
+                # debt is not fully covered, so it is still left, but the amount left is reduced
+                branch_actions[action] = generate_auction(bidder_index + 1, state1, history + str(Player('B'+str(bidder_index))) + "." + str(action) + ";")
 
-            # add available action and tree to the dictionary 
-            branch_actions[action] = generate_tree(next_player(state1), state1, history + str(player) + "." + str(action) + ";")
-        
-        return branch(player, branch_actions)
+        return branch(Player("B"+str(bidder_index)), branch_actions)
 
 
 #################################################################################################################
@@ -202,9 +260,6 @@ for i in range(1, N+1):
 initial_branches[frob_close] = leaf(ut_close)
 
 # introduce dink and dart with frob, and then price change
-prETH1 = NameExpr("prETH1")
-CONSTANTS.append(prETH1)
-INITIAL_CONSTRAINTS.append(prETH1>0)
 unsafe : Constraint = (ink + dink) * prETH1 < lr * (1 + stability_fee)
 safe : Constraint = (ink + dink) * prETH1 >= lr * (1 + stability_fee) 
 ut_safe = {V: beta, L: 0}
@@ -218,24 +273,18 @@ branch_actions_unsafe[no_bark] = leaf(ut_no_bark)
 
 # after bark the price of ETH can change such that 
 # the auction is never profitable
-prETH2 = NameExpr("prETH2")
-CONSTANTS.append(prETH2)
-INITIAL_CONSTRAINTS.append(prETH2>0)
-prAuction = NameExpr("prAuction")
-CONSTANTS.append(prAuction)
-INITIAL_CONSTRAINTS.append(prAuction>0)
 profitable = prAuction < prETH2
 non_profitable = prAuction >= prETH2
-tab = 
+# tab = 
 ut_non_profitable = {V: (-ink -dink) * prETH2 + (art + dart) , 
-                     L: tip + chip * (art + dart) * (1 + stability_fee) * (1 + chop) - gas}
+                     L: tip * prETH2 + chip * (art + dart) * (1 + stability_fee) * (1 + chop) - gas*prETH2}
 for i in range(1, N+1):
     ut_non_profitable[Player('B'+str(i))] = 0
 
 
 branch_actions_unsafe[bark] = condition({
     non_profitable : leaf(ut_non_profitable), 
-    profitable : generate_auction(Player("B1"), initial_state, "V.frob,unsafe,L.bark,profitable")})
+    profitable : generate_auction(1, initial_state, "V.frob,unsafe,L.bark,profitable")})
 
 
 # putting it all together in the frob action
