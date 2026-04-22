@@ -1449,21 +1449,24 @@ std::vector<CeChoice> Node::compute_cr_ce(std::vector<std::string> players, std:
 				}
 			}
 		} else if (this->is_condition_node()) {
-			assert(!this->condition_node().counterexample_choices.empty());
-				CeChoice ce_choice;
-				ce_choice.player = std::nullopt; // no player associated with condition nodes
-				ce_choice.choices = this->condition_node().counterexample_choices;
-				ce_choice.history = actions_so_far;
+			assert(this->condition_node().counterexample_choices.size()>0);
+			CeChoice ce_choice;
+			ce_choice.player = std::nullopt; // no player associated with condition nodes
+			ce_choice.choices = this->condition_node().counterexample_choices;
+			ce_choice.history = actions_so_far;
 
-				counterexample.push_back(ce_choice);
+			counterexample.push_back(ce_choice);
 
-				for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
+			for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
 				z3::Bool condition = cond_choice.condition;
 				int cnt = std::count(this->condition_node().counterexample_choices.begin(), this->condition_node().counterexample_choices.end(), condition.to_string());
 				if (cnt > 0) {
 					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(condition.to_string());
+					std::vector<CeChoice> child_ce = cond_choice.node->compute_cr_ce(players, updated_actions, player_group);
+					counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
 					}
-				}
+			}
 		}
 		return counterexample;
 	}
@@ -1539,7 +1542,9 @@ std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, std::vecto
 		cechoice.choices = {};
 		
 		std::vector<std::string> result_hist = strat2hist(utility.strategy);
-		cechoice.choices.insert(cechoice.choices.end(), result_hist.begin(), result_hist.end());
+		for (auto &action: result_hist) {
+			cechoice.choices.push_back(CondAction(action));
+		}
 		cechoice.condition = utility.condition;
 		
 		std::vector<std::string> updated_history;
@@ -1834,16 +1839,16 @@ void Branch::restore_problematic_groups(std::vector<uint64_t> &pg) const {
 	return;
 }
 
-std::vector<std::vector<std::string>> Branch::store_counterexample_choices() const {
+std::vector<std::vector<CondAction>> Branch::store_counterexample_choices() const {
 
-	std::vector<std::vector<std::string>> counterexample_choices_vector = {counterexample_choices};
+	std::vector<std::vector<CondAction>> counterexample_choices_vector = {counterexample_choices};
 
 	for (const auto& child: choices){
 		if (child.node->is_branch()) {
-			std::vector<std::vector<std::string>> child_ces = child.node->branch().store_counterexample_choices();
+			std::vector<std::vector<CondAction>> child_ces = child.node->branch().store_counterexample_choices();
 			counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
 		} else if (child.node->is_condition_node()) {
-			std::vector<std::vector<std::string>> child_ces = child.node->condition_node().store_counterexample_choices();
+			std::vector<std::vector<CondAction>> child_ces = child.node->condition_node().store_counterexample_choices();
 			counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
 		}
 	}
@@ -1851,7 +1856,7 @@ std::vector<std::vector<std::string>> Branch::store_counterexample_choices() con
 	return counterexample_choices_vector;
 }
 
-void Branch::restore_counterexample_choices(std::vector<std::vector<std::string>> &ces) const {
+void Branch::restore_counterexample_choices(std::vector<std::vector<CondAction>> &ces) const {
 
 	if (ces.size() == 0) {
 		return;

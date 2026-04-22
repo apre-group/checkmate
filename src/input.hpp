@@ -202,9 +202,36 @@ struct Strat_Choice{
 	Strat_Choice(const std::string a, const z3::Bool c) : action(a), condition(c) {}
 };
 
+struct CondAction {
+	std::string action;
+	std::optional<z3::Bool> condition;
+
+	CondAction(const std::string a) : action(a) {}
+	CondAction(const std::string a, const z3::Bool c) : action(a) {
+		condition = c;
+	}
+	
+	bool operator==(const std::string& str) const {
+		return action == str;
+	}
+	
+	bool operator==(const CondAction& other) const {
+		return action == other.action;
+	}
+};
+
+inline std::ostream& operator<<(std::ostream& os, const CondAction& caction) {
+	if (caction.condition.has_value()) {
+		os << caction.action << ", if " << caction.condition.value();
+	} else {
+		os << caction.action;
+	}
+	return os;
+}
+
 struct CeChoice{
 	std::optional<std::string> player;
-	std::vector<std::string> choices;
+	std::vector<CondAction> choices;
 	std::vector<std::string> history;
 	std::optional<z3::Bool> condition;
 };
@@ -739,7 +766,7 @@ class Branch final : public Node {
 
 	mutable uint64_t problematic_group;
 	mutable UtilityTuplesSet practical_utilities;
-	mutable std::vector<std::string> counterexample_choices;
+	mutable std::vector<CondAction> counterexample_choices;
 	mutable z3::Bool weakest_preconditions = z3::Bool(false);
 
 	NodeType type() const override { return NodeType::BRANCH; }
@@ -798,9 +825,9 @@ class Branch final : public Node {
 
 	void restore_problematic_groups(std::vector<uint64_t> &pg) const;
 
-	std::vector<std::vector<std::string>> store_counterexample_choices() const;
+	std::vector<std::vector<CondAction>> store_counterexample_choices() const;
 
-	void restore_counterexample_choices(std::vector<std::vector<std::string>> &ces) const;
+	void restore_counterexample_choices(std::vector<std::vector<CondAction>> &ces) const;
 
 	void mark_honest(const HonestHistory &history) const;
 	
@@ -827,7 +854,7 @@ class ConditionNode final : public Node {
 
 	mutable uint64_t problematic_group;
 	mutable UtilityTuplesSet practical_utilities;
-	mutable std::vector<std::string> counterexample_choices;
+	mutable std::vector<CondAction> counterexample_choices;
 	mutable z3::Bool weakest_preconditions = z3::Bool(false);
 
 	NodeType type() const override { return NodeType::CONDITION_NODE; }
@@ -972,16 +999,16 @@ class ConditionNode final : public Node {
 	}
 
 
-	std::vector<std::vector<std::string>> store_counterexample_choices() const {
+	std::vector<std::vector<CondAction>> store_counterexample_choices() const {
 
-		std::vector<std::vector<std::string>> counterexample_choices_vector = {counterexample_choices};
+		std::vector<std::vector<CondAction>> counterexample_choices_vector = {counterexample_choices};
 
 		for (const auto& child: conditions){
 			if (child.node->is_branch()) {
-				std::vector<std::vector<std::string>> child_ces = child.node->branch().store_counterexample_choices();
+				std::vector<std::vector<CondAction>> child_ces = child.node->branch().store_counterexample_choices();
 				counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
 			} else if (child.node->is_condition_node()) {
-				std::vector<std::vector<std::string>> child_ces = child.node->condition_node().store_counterexample_choices();
+				std::vector<std::vector<CondAction>> child_ces = child.node->condition_node().store_counterexample_choices();
 				counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
 			}
 		}
@@ -989,7 +1016,7 @@ class ConditionNode final : public Node {
 		return counterexample_choices_vector;
 	}
 
-	void restore_counterexample_choices(std::vector<std::vector<std::string>> &ces) const {
+	void restore_counterexample_choices(std::vector<std::vector<CondAction>> &ces) const {
 
 		if (ces.size() == 0) {
 			return;
@@ -1403,7 +1430,7 @@ struct Input {
 								<< "\tPlayer "
 								<< ce_choice.player.value()
 								<< " takes one of the actions "
-								<< ce_choice.choices
+								<< ce_choice.choices 
 								<< " after history "
 								<< ce_choice.history
 								<< std::endl;
@@ -1422,7 +1449,7 @@ struct Input {
 				}
 				
 			}
-		} else {
+		} else { // practicality counterexamples
 			for (CeCase ce_case : counterexamples){
 				no_counterexamples++;
 				if(ce_case.player_group.size() == 0) {
@@ -1434,10 +1461,14 @@ struct Input {
 						assert(!options.subtree);
 						std::cout << "Practical histories that extend supertree counterexamples for case: " << ce_case._case <<  std::endl;
 						for(auto history : ce_case.counterexample) {
+							std::vector<std::string> history_to_print;
+							for (const auto& choice: history.choices) {
+								history_to_print.push_back(choice.action);
+							}
 							if (history.condition.has_value()) {
-								std::cout << history.choices << " if " << history.condition.value() << std::endl;	
+								std::cout << history_to_print << " if " << history.condition.value() << std::endl;	
 							} else {
-								std::cout << history.choices << std::endl;
+								std::cout << history_to_print << std::endl;
 							}
 						}
 					}
@@ -1447,7 +1478,9 @@ struct Input {
 					std::cout << "Practical histories after " << ce_case.counterexample[0].history << ":" << std::endl;
 					for(auto history : ce_case.counterexample) {
 						std::vector<std::string> history_to_print;
-						history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
+						for (const auto& choice: history.choices) {
+							history_to_print.push_back(choice.action);
+						}
 						if (history.condition.has_value()) {
 							std::cout << history_to_print << " if " << history.condition.value() << std::endl;	
 						} else {

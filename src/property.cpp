@@ -501,7 +501,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					if (choice.node->reason.null()){
 						if (options.counterexamples) {
 							z3::Bool current_condition = choice.condition;
-							cond_node.counterexample_choices.push_back(current_condition.to_string());
+							cond_node.counterexample_choices.push_back(CondAction(current_condition.to_string()));
 						}
 						if (!options.all_counterexamples && !options.preconditions && !options.subtree){
 							solver.pop();
@@ -634,7 +634,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 							}
 						}
 						if (options.counterexamples) {
-							branch.counterexample_choices.push_back(choice.action);
+							branch.counterexample_choices.push_back(CondAction(choice.action));
 						}
 						if (!options.all_counterexamples){
 							if (wp_is_false) {
@@ -912,9 +912,9 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 					if (child_result.is(z3::Bool(false))) {
 						none_violated = false;
 						if (choice.node->reason.null()){
-							if (options.counterexamples) { // TODO counterexamples
+							if (options.counterexamples) { 
 								z3::Bool current_condition = choice.condition;
-								cond_node.counterexample_choices.push_back(current_condition.to_string());
+								cond_node.counterexample_choices.push_back(CondAction(current_condition.to_string()));
 							}
 							if (options.strategies) {
 								cond_node.violates_cr[group_nr - 1] = z3::Bool(true);
@@ -981,10 +981,14 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 							result = result || (child_result && choice.condition);
 						}
 						
-						if (choice.node->reason.null()){ // TODO counterexamples
+						if (choice.node->reason.null()){
 							if (options.counterexamples) {
 								z3::Bool current_condition = choice.condition;
-								cond_node.counterexample_choices.push_back(current_condition.to_string());
+								if (child_result.is(z3::Bool(false))) {
+									cond_node.counterexample_choices.push_back(CondAction(current_condition.to_string()));
+								} else {
+									cond_node.counterexample_choices.push_back(CondAction(current_condition.to_string(), child_result.invert()));
+								}
 							}
 							if (options.strategies) {
 								if (child_result.is(z3::Bool(false))) {
@@ -1112,7 +1116,7 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 								branch.violates_cr[group_nr - 1] = z3::Bool(true);
 							}
 							if (options.counterexamples) {
-								branch.counterexample_choices.push_back(choice.action);
+								branch.counterexample_choices.push_back(CondAction(choice.action));
 							}
 							if (!options.all_counterexamples){
 								if (wp_is_false) {
@@ -1220,7 +1224,6 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 							}
 							return true;
 						} 
-						// TODO counterexamples
 						if (!child_result.is(z3::Bool(false))) {
 							result = result || child_result;
 						}
@@ -1257,8 +1260,8 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 								if (options.strategies) {
 									branch.violates_cr[group_nr - 1] = z3::Bool(true);
 								}
-								if (options.counterexamples) { // TODO counterexamples
-									branch.counterexample_choices.push_back(choice.action);
+								if (options.counterexamples) { 
+									branch.counterexample_choices.push_back(CondAction(choice.action));
 								}
 								if (!options.all_counterexamples){
 									branch.weakest_preconditions = z3::Bool(false);
@@ -1282,6 +1285,9 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 							}
 							if (choice.node->reason.null() && options.strategies) {
 								violation_condition.push_back(choice.node->violates_cr[group_nr - 1]); // violated in this condition
+							}
+							if (options.counterexamples && choice.node->reason.null()) {
+								branch.counterexample_choices.push_back(CondAction(choice.action, child_result.invert()));
 							}
 
 						}
@@ -2069,7 +2075,10 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			const auto& practical_utilities = input.root->is_branch() ? input.root->branch().practical_utilities : input.root->condition_node().practical_utilities;
 			for(const auto& pr_utility : practical_utilities) {
 				CeChoice ce_choice;
-				ce_choice.choices = input.root->strat2hist(pr_utility.strategy);
+				std::vector<std::string> choices = input.root->strat2hist(pr_utility.strategy);
+				for (const auto& choice : choices) {
+					ce_choice.choices.push_back(CondAction(choice));
+				}
 				ce_choice.condition = pr_utility.condition;
 				pr_choices.push_back(ce_choice);
 			}
@@ -2216,7 +2225,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		}
 	}
 
-	std::vector<std::vector<std::string>> ce_storage;
+	std::vector<std::vector<CondAction>> ce_storage;
 	if (options.counterexamples && property != PropertyType::Practicality) {
 		if (input.root->is_branch()) {
 			ce_storage = input.root->branch().store_counterexample_choices();
