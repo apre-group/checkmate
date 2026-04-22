@@ -709,7 +709,6 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 					z3::Bool pr_condition = parser.parse_constraint(string.c_str());
 
 					Cond_Utility cond_utility {pr_utility, pr_condition};
-					//std::cout << pr_utility << std::endl;
 					utilities.push_back(cond_utility);
 				}
 
@@ -933,6 +932,7 @@ Input::Input(const char *path, bool supertree) : sat_cases(), strategies() , sto
 	}
 	initial_constraint = z3::Bool::conjunction(conjuncts);
 
+
 	// weak immunity constraints
 	conjuncts.clear();
 	for (const json &weak_immunity_constraint: document["property_constraints"]["weak_immunity"]) {
@@ -940,6 +940,7 @@ Input::Input(const char *path, bool supertree) : sat_cases(), strategies() , sto
 		conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
 	}
 	weak_immunity_constraint = z3::Bool::conjunction(conjuncts);
+	
 
 	// weaker immunity constraints
 	conjuncts.clear();
@@ -947,7 +948,8 @@ Input::Input(const char *path, bool supertree) : sat_cases(), strategies() , sto
 		const std::string &constraint = weaker_immunity_constraint;
 		conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
 	}
-	weaker_immunity_constraint = conjunction(conjuncts);
+	weaker_immunity_constraint = z3::Bool::conjunction(conjuncts);
+	
 
 	// collusion resilience constraints
 	conjuncts.clear();
@@ -1022,7 +1024,7 @@ bool Node::cr_against_all() const {
 
 	for(auto violates_colluding_group : violates_cr) {
 
-		if(violates_colluding_group) {
+		if(!violates_colluding_group.is(z3::Bool(false))) {
 			cr_against_all = false;
 		}
 	}
@@ -1042,7 +1044,9 @@ std::vector<bool> convertToBinary(uint n)
 	return bit_reps;
 }
 
-bool Node::cr_against_supergroups_of(std::vector<uint> deviating_players) const {
+z3::Bool Node::cr_against_supergroups_of(std::vector<uint> deviating_players, z3::Solver &solver) const {
+
+	std::vector<z3::Bool> cr_conditions = {};
 
 	for(uint64_t i=0; i < violates_cr.size(); i++) {
 		std::vector<bool> bin_rep = convertToBinary(i+1);
@@ -1059,13 +1063,23 @@ bool Node::cr_against_supergroups_of(std::vector<uint> deviating_players) const 
 			}			
 		}
 
-		if(all_deviating_deviate && violates_cr[i]) {
-			return false;
+		if(all_deviating_deviate) {
+			cr_conditions.push_back(violates_cr[i].invert());
 		}
 
 	}
+	z3::Bool cr_if;
+	if (cr_conditions.size() == 0) {
+		cr_if = z3::Bool(true);
+		return cr_if;
+	} else {
+		cr_if = z3::Bool::conjunction(cr_conditions);
+	}
 
-	return true;
+	if (solver.solve(cr_conditions) == z3::Result::SAT) {
+		return cr_if.simplify();
+	}
+	return z3::Bool(false);
 
 }
 
@@ -1087,15 +1101,16 @@ void Node::add_violation_cr() const {
 	return;
 }
 
-std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players) const {
+std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players, std::vector<std::string> conditions_so_far, z3::Solver &solver) const {
 
 		if (this -> is_leaf() || this->is_subtree()){
 			return {};
 		}
 		std::vector<HistoryChoice> strategy;
-		std::string strategy_choice;
+		std::vector<Strat_Choice> strategy_choice;
 
 		if (this->is_branch()) {
+			
 			if (honest) {
 				for (const Choice &choice: this->branch().choices) {
 
@@ -1105,48 +1120,60 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> pl
 						hist_choice.player = players[this->branch().player];
 						hist_choice.choice = choice.action;
 						hist_choice.history = actions_so_far;
-						strategy_choice = choice.action;
+						strategy_choice.push_back(Strat_Choice(choice.action, z3::Bool(true)));
 
 						strategy.push_back(hist_choice);
 						break;
 					}
 				}
 			} else {
-				bool have_found_cr = false;
 				for (const Choice &choice: this->branch().choices) {
-
-					if (choice.node->cr_against_supergroups_of(deviating_players)){
-						if(!have_found_cr) {
-							have_found_cr = true;
-							HistoryChoice hist_choice;
-							hist_choice.player = players[this->branch().player];
-							hist_choice.choice = choice.action;
-							hist_choice.history = actions_so_far;
-							strategy_choice = choice.action;
-
-							strategy.push_back(hist_choice);
+					z3::Bool cr_condition = choice.node->cr_against_supergroups_of(deviating_players, solver);
+					if (!cr_condition.is(z3::Bool(false))){ 
+						
+						HistoryChoice hist_choice;
+						hist_choice.player = players[this->branch().player];
+						hist_choice.choice = choice.action;
+						hist_choice.history = actions_so_far;
+						hist_choice.condition = conditions_so_far;
+						if (!cr_condition.is(z3::Bool(true))) {
+							hist_choice.condition.push_back(cr_condition.to_string());
 						}
+					
+						strategy_choice.push_back(Strat_Choice(choice.action, cr_condition)); 
+						strategy.push_back(hist_choice);
 					}
 
 				}
-				assert(have_found_cr);
 			}
-			
-			for (const Choice &choice: this->branch().choices) {
-				std::vector<uint> new_deviating_players;
-				new_deviating_players.insert(new_deviating_players.end(), deviating_players.begin(), deviating_players.end());
+			for (const Strat_Choice& strat_choice: strategy_choice) {
+				for (const Choice &choice: this->branch().choices) {
+					std::vector<uint> new_deviating_players;
+					new_deviating_players.insert(new_deviating_players.end(), deviating_players.begin(), deviating_players.end());
 
-				int cnt = std::count(deviating_players.begin(), deviating_players.end(), this->branch().player + 1);
-				if((choice.action != strategy_choice) && (cnt == 0)) {
-					new_deviating_players.push_back(this->branch().player + 1);
+					int cnt = std::count(deviating_players.begin(), deviating_players.end(), this->branch().player + 1);
+					if((choice.action != strat_choice.action) && (cnt == 0)) {
+						new_deviating_players.push_back(this->branch().player + 1);
+					}
+
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(choice.action);
+					std::vector<std::string> updated_conditions(conditions_so_far.begin(), conditions_so_far.end());
+					if (!strat_choice.condition.is(z3::Bool(true))) {
+						updated_conditions.push_back(strat_choice.condition.to_string());
+					}
+					solver.push();
+					solver.assert_(strat_choice.condition);
+					std::vector<HistoryChoice> child_strategy = choice.node->compute_cr_strategy(players, updated_actions, new_deviating_players, updated_conditions, solver); 
+					strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+					solver.pop();
 				}
 
-				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-				updated_actions.push_back(choice.action);
-
-				std::vector<HistoryChoice> child_strategy = choice.node->compute_cr_strategy(players, updated_actions, new_deviating_players); 
-				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
 			}
+			
+
+
+
 		} else if (this->is_condition_node()) {
 			// For condition nodes, recursively compute cr_strategy for all conditional branches
 			for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
@@ -1155,7 +1182,7 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> pl
 				z3::Bool condition = cond_choice.condition;
 				updated_actions.push_back(condition.to_string()); // Add the condition to the history for tracking purposes
 
-				std::vector<HistoryChoice> child_strategy = cond_choice.node->compute_cr_strategy(players, updated_actions, deviating_players);
+				std::vector<HistoryChoice> child_strategy = cond_choice.node->compute_cr_strategy(players, updated_actions, deviating_players, conditions_so_far, solver);
 				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
 			}
 		}
@@ -1236,7 +1263,10 @@ std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> pl
 				Strategy& given_strategy = condition_strategy.strategy.value();
 
 				std::vector<std::string> updated_conditions(conditions_so_far.begin(), conditions_so_far.end());
-				updated_conditions.push_back(condition_strategy.condition.to_string()); 
+				z3::Bool simpl_cond = condition_strategy.condition.simplify();
+				if (!simpl_cond.is(z3::Bool(true))) {
+					updated_conditions.push_back(simpl_cond.to_string());
+				}
 
 				HistoryChoice hist_choice;
 				hist_choice.player = players[this->branch().player];
@@ -1269,7 +1299,10 @@ std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> pl
 				Strategy& given_strategy = condition_strategy.strategy.value();
 
 				std::vector<std::string> updated_conditions(conditions_so_far.begin(), conditions_so_far.end());
-				updated_conditions.push_back(condition_strategy.condition.to_string()); 
+				z3::Bool simpl_cond = condition_strategy.condition.simplify();
+				if (!simpl_cond.is(z3::Bool(true))) {
+					updated_conditions.push_back(simpl_cond.to_string());
+				}
 
 				std::string current_condition = given_strategy.root_action;
 				assert(given_strategy.children_strategies.size() == 1); // should only be one child strategy since only one condition should make the utility practical
@@ -1616,28 +1649,28 @@ void Node::reset_violation_cr() const {
 	return;
 }
 
-std::vector<std::vector<bool>> Node::store_violation_cr() const {
+std::vector<std::vector<z3::Bool>> Node::store_violation_cr() const {
 
-	std::vector<std::vector<bool>> violation = {violates_cr};
+	std::vector<std::vector<z3::Bool>> violation = {violates_cr};
 
 	if (!this->is_branch()){
 
 		for (const auto& child: this->branch().choices){
-			std::vector<std::vector<bool>> child_violation = child.node->store_violation_cr();
+			std::vector<std::vector<z3::Bool>> child_violation = child.node->store_violation_cr();
 			violation.insert(violation.end(), child_violation.begin(), child_violation.end());
 		}
 
 	} else if (this->is_condition_node()) {
 
 		for (const auto& cond_choice: this->condition_node().conditions) {
-			std::vector<std::vector<bool>> child_violation = cond_choice.node->store_violation_cr();
+			std::vector<std::vector<z3::Bool>> child_violation = cond_choice.node->store_violation_cr();
 			violation.insert(violation.end(), child_violation.begin(), child_violation.end());
 		}
 	}
 	return violation;
 }
 
-void Node::restore_violation_cr(std::vector<std::vector<bool>> &violation) const {
+void Node::restore_violation_cr(std::vector<std::vector<z3::Bool>> &violation) const {
 
 	assert(violation.size()>0);
 	violates_cr = violation[0];

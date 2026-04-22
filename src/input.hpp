@@ -195,6 +195,13 @@ struct HistoryChoice{
 	std::vector<std::string> condition;
 };
 
+struct Strat_Choice{
+	std::string action;
+	z3::Bool condition;
+
+	Strat_Choice(const std::string a, const z3::Bool c) : action(a), condition(c) {}
+};
+
 struct CeChoice{
 	std::optional<std::string> player;
 	std::vector<std::string> choices;
@@ -316,7 +323,8 @@ public:
 	// null if didn't fail or no case split would help
 	mutable z3::Bool reason;
 
-	mutable std::vector<bool> violates_cr; // set to true as soon as its not cr for one deviating group
+
+	mutable std::vector<z3::Bool> violates_cr; // set to true as soon as its not cr for one deviating group
 
 	virtual UtilityTuplesSet get_utilities() const = 0;
 
@@ -326,7 +334,7 @@ public:
 
 	std::vector<HistoryChoice> compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
 
-	std::vector<HistoryChoice> compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players) const;
+	std::vector<HistoryChoice> compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players, std::vector<std::string> conditions_so_far, z3::Solver &solver) const;
 
 	std::vector<HistoryChoice> compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, const StrategyElement& strategy_element, std::vector<std::string> conditions_so_far) const;
 
@@ -346,13 +354,13 @@ public:
 	
 	void reset_violation_cr() const;
 
-	std::vector<std::vector<bool>> store_violation_cr() const;
+	std::vector<std::vector<z3::Bool>> store_violation_cr() const;
 
 	bool cr_against_all() const;
 
-	bool cr_against_supergroups_of(std::vector<uint> deviating_players) const;
+	z3::Bool cr_against_supergroups_of(std::vector<uint> deviating_players, z3::Solver &solver) const;
 
-	void restore_violation_cr(std::vector<std::vector<bool>> &violation) const;
+	void restore_violation_cr(std::vector<std::vector<z3::Bool>> &violation) const;
 
 	void add_violation_cr() const;
 
@@ -1247,7 +1255,7 @@ struct Input {
 		}
 	}
 
-	void compute_strategy_case(std::vector<z3::Bool> _case, PropertyType property) const {
+	void compute_strategy_case(std::vector<z3::Bool> _case, PropertyType property, z3::Solver &solver) const {
 		
 		if (property == PropertyType::Practicality){
 
@@ -1274,7 +1282,8 @@ struct Input {
 			new_strat_case._case = _case;
 
 			if (property == PropertyType::CollusionResilience) {
-				new_strat_case.strategy = root.get()->compute_cr_strategy(players, {}, {});
+				// solver already has the correct case and init_constriants
+				new_strat_case.strategy = root.get()->compute_cr_strategy(players, {}, {}, {}, solver);
 			} else {
 				new_strat_case.strategy = root.get()->compute_strategy(players, {});
 			}
@@ -1287,7 +1296,7 @@ struct Input {
 	void print_strategies(const Options &options, bool is_wi, bool is_pr) const {
 		std::cout << std::endl;
 
-		if (is_pr) {
+		if (!is_wi) {
 			for (StrategyCase strategy_case : strategies) {
 				std::cout << "Strategies for case: " <<  strategy_case._case << std::endl;
 				for (HistoryChoice hist_choice : strategy_case.strategy){

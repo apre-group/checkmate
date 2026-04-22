@@ -259,7 +259,11 @@ namespace z3 {
 			Z3_decl_kind decl_kind = Z3_get_decl_kind(CONTEXT, func_decl);
 
 			Bool new_expr;
-			if (decl_kind == Z3_OP_LT) {
+			if (decl_kind == Z3_OP_TRUE) {
+				new_expr = Z3_mk_false(CONTEXT);
+			} else if (decl_kind == Z3_OP_FALSE) {
+				new_expr = Z3_mk_true(CONTEXT);
+			} else if (decl_kind == Z3_OP_LT) {
 				new_expr = Z3_mk_ge(CONTEXT, args[0], args[1]);
 			} else if (decl_kind == Z3_OP_LE) {
 				new_expr = Z3_mk_gt(CONTEXT, args[0], args[1]);
