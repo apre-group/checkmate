@@ -1,3 +1,7 @@
+# import the dsl and add the parent directory to the path to be able to import it
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from dsl import *
 
 """
