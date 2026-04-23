@@ -1453,25 +1453,26 @@ struct Input {
 			for (CeCase ce_case : counterexamples){
 				no_counterexamples++;
 				if(ce_case.player_group.size() == 0) {
-					if(options.supertree) {
+					// if(options.supertree) {
+					assert(!options.subtree);
 						// user should check ce in subtree mode manually
 						std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
 						std::cout << "The subtree after history " << ce_case.counterexample[0].history << " is not practical. Run subtree in default mode with option counterexamples." << std::endl;
-					} else {
-						assert(!options.subtree);
-						std::cout << "Practical histories that extend supertree counterexamples for case: " << ce_case._case <<  std::endl;
-						for(auto history : ce_case.counterexample) {
-							std::vector<std::string> history_to_print;
-							for (const auto& choice: history.choices) {
-								history_to_print.push_back(choice.action);
-							}
-							if (history.condition.has_value()) {
-								std::cout << history_to_print << " if " << history.condition.value() << std::endl;	
-							} else {
-								std::cout << history_to_print << std::endl;
-							}
-						}
-					}
+					// } else {
+					// 	assert(!options.subtree);
+					// 	std::cout << "Practical histories that extend supertree counterexamples for case: " << ce_case._case <<  std::endl;
+					// 	for(auto history : ce_case.counterexample) {
+					// 		std::vector<std::string> history_to_print;
+					// 		for (const auto& choice: history.choices) {
+					// 			history_to_print.push_back(choice.action);
+					// 		}
+					// 		if (history.condition.has_value()) {
+					// 			std::cout << history_to_print << " if " << history.condition.value() << std::endl;	
+					// 		} else {
+					// 			std::cout << history_to_print << std::endl;
+					// 		}
+					// 	}
+					// }
 				} else {
 					std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
 					std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
