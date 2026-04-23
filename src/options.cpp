@@ -15,7 +15,6 @@ const char *USAGE = R"(usage: checkmate PATH
 	--preconditions
 	--strategies
 	--subtree
-	--supertree
 	--count_nodes
 	--count_calls
 )";
@@ -65,8 +64,6 @@ Options::Options(char **argv) {
 			strategies = true;
 		else if (!strcmp(*argv, "--subtree"))
 			subtree = true;
-		else if (!strcmp(*argv, "--supertree"))
-			supertree = true;
 		else if (!strcmp(*argv, "--count_nodes"))
 			count_nodes = true;
 		else if (!strcmp(*argv, "--count_calls"))
@@ -75,9 +72,6 @@ Options::Options(char **argv) {
 			bail("unknown option");
 		argv++;
 	}
-
-	if (subtree && supertree)
-		bail("cannot combine subtree and supertree mode");
 
 	if(subtree) {
 		if(counterexamples || all_counterexamples || strategies || preconditions) {

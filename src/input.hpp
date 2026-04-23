@@ -1175,7 +1175,7 @@ struct Action {
 
 struct Input {
 	// parse an input from `path`, exiting if malformed
-	Input(const char *path, bool supertree);
+	Input(const char *path);
 
 	// list of players in alphabetical order
 	std::vector<std::string> players;
@@ -1339,9 +1339,9 @@ struct Input {
 						<< " hold. "
 						<< std::endl;
 				}
-				if(options.supertree) {
-					std::cout << "\tYou need to run subtrees in default mode with option strategies for complete strategies." << std::endl;
-				}
+				
+				std::cout << "\tFor subtrees: You need to run subtrees in default mode with option strategies for complete strategies." << std::endl;
+				
 			}
 
 		} else {
@@ -1360,9 +1360,9 @@ struct Input {
 				if (is_wi) {
 					std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
 				}
-				if(options.supertree) {
-					std::cout << "\tYou need to run subtrees in default mode with option strategies for complete strategies." << std::endl;
-				}
+				
+				std::cout << "\tFor subtrees: You need to run subtrees in default mode with option strategies for complete strategies." << std::endl;
+				
 			}
 		}
 
@@ -1404,18 +1404,14 @@ struct Input {
 				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
 				if(ce_case.counterexample.size() == 0) {
 					if(is_wi) {
-						if(options.supertree) {
-							std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history. Run subtree along honest history in default mode with option counterexamples." << std::endl;
-						} else {
-							std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history." << std::endl;
-						}
+						
+						std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history. For subtrees: Run subtree along honest history in default mode with option counterexamples to obtain the full counterexample." << std::endl;
+						
 					}
 					else if(is_cr) {
-						if(options.supertree) {
-							std::cout << "Group " << ce_case.player_group << " can deviate profitably. Run subtree along honest history in default mode with option counterexamples." << std::endl;
-						} else {
-							std::cout << "Group " << ce_case.player_group << " can deviate profitably." << std::endl;
-						}
+						
+						std::cout << "Group " << ce_case.player_group << " can deviate profitably. For subtrees: Run subtree along honest history in default mode with option counterexamples to obtain the full counterexample." << std::endl;
+						
 					}
 				} else {
 					if(is_wi){
@@ -1443,9 +1439,9 @@ struct Input {
 								<< std::endl;
 						}
 					}
-					if(options.supertree) {
-						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
-					}
+					
+					std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
+					
 				}
 				
 			}
@@ -1453,7 +1449,6 @@ struct Input {
 			for (CeCase ce_case : counterexamples){
 				no_counterexamples++;
 				if(ce_case.player_group.size() == 0) {
-					// if(options.supertree) {
 					assert(!options.subtree);
 						// user should check ce in subtree mode manually
 						std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
@@ -1488,9 +1483,9 @@ struct Input {
 							std::cout << history_to_print << std::endl;
 						}
 					}
-					if(options.supertree) {
-						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
-					}
+					
+					std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
+					
 				}
 			}
 		}

@@ -4,13 +4,13 @@
 
 int main(int, char **argv) {
 	Options options(argv);
-	Input input(options.input_path, options.supertree);
+	Input input(options.input_path);
 
 	if (options.subtree){
 		// analyse properties in subtree mode
 		analyse_properties_subtree(options, input);
 	} else {
-		// analyse properties in default mode or supertree mode
+		// analyse properties in default mode 
 		analyse_properties(options, input);
 	}
 

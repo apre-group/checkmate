@@ -489,6 +489,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		z3::Bool reason;
 		unsigned reset_index;
 		bool none_violated = true;
+		std::vector<z3::Bool> prec_vec;
 		unsigned i = 0;
 		for (const ConditionChoice &choice: cond_node.conditions) {
 			// only consider condition if it is compatible with the current case
@@ -510,7 +511,8 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 							result = false;
 							if (options.preconditions || options.subtree) {
 								if (!choice.node->get_weakestpreconditions().is(z3::Bool(false))) {
-									cond_node.weakest_preconditions = cond_node.weakest_preconditions || (choice.condition && choice.node->get_weakestpreconditions());
+									prec_vec.push_back(choice.condition && choice.node->get_weakestpreconditions());
+									// cond_node.weakest_preconditions = cond_node.weakest_preconditions || (choice.condition && choice.node->get_weakestpreconditions());
 								}
 							}
 						}
@@ -523,7 +525,8 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					}	
 				} else {
 					if (options.preconditions || options.subtree) {
-						cond_node.weakest_preconditions = cond_node.weakest_preconditions || choice.condition;
+						prec_vec.push_back(choice.condition);
+						 // cond_node.weakest_preconditions = cond_node.weakest_preconditions || choice.condition;
 					}
 				}
 				solver.pop();
@@ -541,7 +544,14 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		if (none_violated && ( options.preconditions || options.subtree) ) {
 			cond_node.weakest_preconditions = z3::Bool(true);
 		}
-		if (options.preconditions || options.subtree) {
+		else if (options.preconditions || options.subtree) {
+			if (prec_vec.size() == 0 ){
+				cond_node.weakest_preconditions = z3::Bool(false);
+			} else if (prec_vec.size() == 1) {
+				cond_node.weakest_preconditions = prec_vec[0];
+			} else {
+				cond_node.weakest_preconditions = z3::disjunction(prec_vec);
+			}
 			cond_node.weakest_preconditions = cond_node.weakest_preconditions.simplify();
 		}
 		return result;
@@ -587,6 +597,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			z3::Bool reason;
 			unsigned reset_index;
 			unsigned i = 0;
+			std::vector<z3::Bool> prec_vec;
 			for (const Choice &choice: branch.choices) {
 				if (weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker, consider_prob_groups)) {
 					// set chosen action, needed for printing strategy
@@ -600,7 +611,8 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				if (choice.node->reason.null()){
 					if (options.preconditions || options.subtree) {
 						if (!choice.node->get_weakestpreconditions().is(z3::Bool(false))) {
-							branch.weakest_preconditions = branch.weakest_preconditions ||  choice.node->get_weakestpreconditions();
+							prec_vec.push_back(choice.node->get_weakestpreconditions());
+							// branch.weakest_preconditions = branch.weakest_preconditions ||  choice.node->get_weakestpreconditions();
 						}
 					}
 				}
@@ -616,6 +628,13 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 					input.set_reset_point(*branch.choices[reset_index].node);
 			}	
 			if (options.preconditions || options.subtree) {
+				if (prec_vec.size() == 0 ){
+					branch.weakest_preconditions = z3::Bool(false);
+				} else if (prec_vec.size() == 1) {
+					branch.weakest_preconditions = prec_vec[0];
+				} else {
+					branch.weakest_preconditions = z3::disjunction(prec_vec);
+				}
 				branch.weakest_preconditions = branch.weakest_preconditions.simplify();
 			}
 			return false;
@@ -628,13 +647,15 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 			unsigned reset_index;
 			unsigned i = 0;
 			branch.weakest_preconditions = z3::Bool(true);
+			std::vector<z3::Bool> prec_vec;
 			bool wp_is_false = false;
 			for (const Choice &choice: branch.choices) {
 				if (!weak_immunity_rec(input, solver, options, choice.node.get(), player, weaker, consider_prob_groups)) {
 					if (choice.node->reason.null()){
 						if (options.preconditions || options.subtree) {
 							if (!choice.node->get_weakestpreconditions().is(z3::Bool(false))) {
-								branch.weakest_preconditions = branch.weakest_preconditions && choice.node->get_weakestpreconditions();
+								prec_vec.push_back(choice.node->get_weakestpreconditions());
+								// branch.weakest_preconditions = branch.weakest_preconditions && choice.node->get_weakestpreconditions();
 							} else {
 								wp_is_false = true;
 							}
@@ -670,6 +691,13 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				branch.problematic_group = player + 1;
 			}
 			if (options.preconditions || options.subtree) {
+				if (prec_vec.size() == 0 ){
+					branch.weakest_preconditions = z3::Bool(true);
+				} else if (prec_vec.size() == 1) {
+					branch.weakest_preconditions = prec_vec[0];
+				} else {
+					branch.weakest_preconditions = z3::conjunction(prec_vec);
+				}
 				branch.weakest_preconditions = branch.weakest_preconditions.simplify();
 			}	
 			return result;
@@ -713,6 +741,7 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 
 			z3::Bool reason;
 			z3::Bool result = false;
+			std::vector<z3::Bool> result_vec;
 			bool fails_one_honest = false;
 			std::vector<z3::Bool> violation_conditions; // conditions under which the group utility is not smaller than an honest total utility
 
@@ -749,12 +778,21 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 								solver.pop();
 								return true;
 							}
-							result = result || honest_total.condition;
+							result_vec.push_back(honest_total.condition); 
+							// result = result || honest_total.condition;
 						}
 					}
 
 					solver.pop();
 				}
+			}
+
+			if (result_vec.size() == 0) {
+				result = z3::Bool(false);
+			} else if (result_vec.size() == 1) {
+				result = result_vec[0];
+			} else {
+				result = z3::disjunction(result_vec);
 			}
 
 			if(!fails_one_honest){
@@ -773,7 +811,7 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 					}
 				}
 			}
-		
+
 			if (!reason.null()) {
 				leaf.reason = reason;
 				input.set_reset_point(leaf);
@@ -911,6 +949,7 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 			unsigned reset_index;
 			unsigned i = 0;
 			bool none_violated = true;
+			std::vector<z3::Bool> prec_vec;
 			for (const ConditionChoice &choice: cond_node.conditions) {
 				// only consider condition if it is compatible with the current case
 				if (solver.solve({choice.condition}) == z3::Result::SAT) {
@@ -935,7 +974,8 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 								result = false;
 								if (options.preconditions || options.subtree) {
 									if (!choice.node->get_weakestpreconditions().is(z3::Bool(false))) {
-										cond_node.weakest_preconditions = cond_node.weakest_preconditions || (choice.condition && choice.node->get_weakestpreconditions());
+										prec_vec.push_back(choice.condition && choice.node->get_weakestpreconditions());
+										// cond_node.weakest_preconditions = cond_node.weakest_preconditions || (choice.condition && choice.node->get_weakestpreconditions());
 									}
 								}
 							}
@@ -949,7 +989,8 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 					} else {
 						assert(child_result.is(z3::Bool(true))); // if not false, result has to be true since along honest only yes/no answers possible
 						if (options.preconditions || options.subtree) {
-							cond_node.weakest_preconditions = cond_node.weakest_preconditions || choice.condition;
+							prec_vec.push_back(choice.condition);
+							// cond_node.weakest_preconditions = cond_node.weakest_preconditions || choice.condition;
 						}
 					}
 					solver.pop();
@@ -966,8 +1007,15 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 			if (none_violated && ( options.preconditions || options.subtree) ) {
 				cond_node.weakest_preconditions = z3::Bool(true);
 			}
-			if (options.preconditions || options.subtree) {
-				 cond_node.weakest_preconditions = cond_node.weakest_preconditions.simplify();
+			else if (options.preconditions || options.subtree) {
+				if (prec_vec.size() == 0 ){
+					cond_node.weakest_preconditions = z3::Bool(false);
+				} else if (prec_vec.size() == 1) {
+					cond_node.weakest_preconditions = prec_vec[0];
+				} else {
+					cond_node.weakest_preconditions = z3::disjunction(prec_vec);
+				}
+				cond_node.weakest_preconditions = cond_node.weakest_preconditions.simplify();
 			}
 			return result;
 		} else { // we are off the honest history
@@ -1102,6 +1150,7 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 				unsigned reset_index;
 				unsigned i = 0;
 				branch.weakest_preconditions = z3::Bool(true);
+				std::vector<z3::Bool> prec_vec;
 				bool wp_is_false = false;
 				for (const Choice &choice: branch.choices) {
 					z3::Bool child_result = collusion_resilience_rec(input, solver, options, choice.node.get(), group, all_honest_total, players, group_nr, consider_prob_groups);
@@ -1127,7 +1176,8 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 						if (choice.node->reason.null()) {
 							if (options.preconditions || options.subtree) {
 								if (!choice.node->get_weakestpreconditions().is(z3::Bool(false))) {
-									branch.weakest_preconditions = branch.weakest_preconditions && choice.node->get_weakestpreconditions();
+									prec_vec.push_back(choice.node->get_weakestpreconditions());
+									// branch.weakest_preconditions = branch.weakest_preconditions && choice.node->get_weakestpreconditions();
 								} else {
 									wp_is_false = true;
 								}
@@ -1163,7 +1213,14 @@ z3::Bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const 
 				else if ((options.preconditions || options.subtree) && wp_is_false) {
 					branch.weakest_preconditions = z3::Bool(false);
 				}
-				if (options.preconditions || options.subtree) {
+				else if (options.preconditions || options.subtree) {
+					if (prec_vec.size() == 0 ){
+						branch.weakest_preconditions = z3::Bool(true);
+					} else if (prec_vec.size() == 1) {
+						branch.weakest_preconditions = prec_vec[0];
+					} else {
+						branch.weakest_preconditions = z3::conjunction(prec_vec);
+					}
 					branch.weakest_preconditions = branch.weakest_preconditions.simplify();
 				}
 				if (result && consider_prob_groups) {
@@ -2535,7 +2592,11 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 	if (cr_result.is(z3::Bool(true))) {
 		property_result = true;
 	} else {
-		property_result = false;
+		if (solver.solve({!cr_result}) == z3::Result::UNSAT){
+			property_result = true; // equiv to true also true
+		} else {
+			property_result = false;
+		}
 	}
 
 	// property holds under current split
@@ -2576,6 +2637,7 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 		std::cout << "\tSplitting on: " << split << std::endl;
 	}
 
+	auto &current_reset_point = input.reset_point;
 
 	bool result = true;
 

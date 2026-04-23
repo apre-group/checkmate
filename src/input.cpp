@@ -460,7 +460,7 @@ static HonestUtilityElement parse_honest_utility_element(Parser &parser, const j
  * TODO does not check all aspects
  * (hoping to have new input format based on s-expressions, which would be much easier to parse)
  */
-static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const json &node, bool supertree) {
+static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const json &node) {
 	// branch
 	if (node.contains("children")) {
 		// do linear-time lookup for the index of the node's player in the input player list
@@ -473,7 +473,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 
 		std::unique_ptr<Branch> branch(new Branch(player));
 		for (const json &child: node["children"]) {
-			auto loaded = load_tree(input, parser, child["child"], supertree);
+			auto loaded = load_tree(input, parser, child["child"]);
 
 			branch->choices.push_back({child["action"], std::move(loaded)});
 		}
@@ -489,7 +489,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 			z3::Bool condition = parser.parse_constraint(condition_str.c_str());
 			
 			// load the child subtree
-			auto loaded = load_tree(input, parser, cond["child"], supertree);
+			auto loaded = load_tree(input, parser, cond["child"]);
 			
 			condition_node->conditions.push_back({condition, std::move(loaded)});
 		}
@@ -541,13 +541,6 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 
 	// subtree summary
 	if (node.contains("subtree")) {
-
-		// Remove the check below for the purpose of allowing nesting of subtrees in subtress 
-		/*if (!supertree) {
-			// subtree nodes can only occur in supertree mode!
-			std::cerr << "checkmate: unexpected subtree node; call in --supertree mode " << node << std::endl;
-			std::exit(EXIT_FAILURE);
-		}*/
 
 		std::vector<SubtreeResult> weak_immunity = {};
 		std::vector<SubtreeResult> weaker_immunity = {};
@@ -702,11 +695,14 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 					for (auto &player_utility: player_utilities)
 						pr_utility.push_back(player_utility.second);
 
-					const json &pr_condition_json = utility_tuple["condition"];
-					assert(pr_condition_json.is_string());
-					const std::string &string = pr_condition_json;
-				
-					z3::Bool pr_condition = parser.parse_constraint(string.c_str());
+					z3::Bool pr_condition = true;
+					if (utility_tuple["condition"] != "true") {
+						const json &pr_condition_json = utility_tuple["condition"];
+						assert(pr_condition_json.is_string());
+						const std::string &string = pr_condition_json;
+					
+						pr_condition = parser.parse_constraint(string.c_str());
+					}
 
 					Cond_Utility cond_utility {pr_utility, pr_condition};
 					utilities.push_back(cond_utility);
@@ -858,7 +854,7 @@ static HonestUtilityElement parse_honest_utility_element(Parser &parser, const j
 
 
 
-Input::Input(const char *path, bool supertree) : sat_cases(), strategies() , stop_log(false) {
+Input::Input(const char *path) : sat_cases(), strategies() , stop_log(false) {
 	// parse a JSON document from `path`
 	std::ifstream input(path);
 	json document;
@@ -904,11 +900,6 @@ Input::Input(const char *path, bool supertree) : sat_cases(), strategies() , sto
 	}
 
 
-
-	if(document["honest_utilities"].size() > 0 && supertree) {
-		std::cerr << "checkmate: honest utilities should not be specified in supertree mode " << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
 
 	// load honest utilities
 	for (const auto &utility_dict : document["honest_utilities"]) {
@@ -969,7 +960,7 @@ Input::Input(const char *path, bool supertree) : sat_cases(), strategies() , sto
 
 
 	// load the game tree and leak it so we can downcast to Branch or ConditionNode
-	auto node = load_tree(*this, parser, document["tree"], supertree).release();
+	auto node = load_tree(*this, parser, document["tree"]).release();
 
 	if (node->is_leaf() || node->is_subtree()) {
 		std::cerr << "checkmate: root node is a leaf or a subtree (?!) - exiting" << std::endl;
