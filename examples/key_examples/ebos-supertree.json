@@ -44,12 +44,22 @@
                     "subtree": {
                         "collusion_resilience": [
                             {
+                                "player_group": [],
+                                "satisfied_in_case": [
+                                    [
+                                        "((d + f) >= (p - d))",
+                                        "(((d + f) + (d + f)) >= ((p - d) + (d + p)))"
+                                    ]
+                                ]
+                            },
+                            {
                                 "player_group": [
                                     "B"
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "d + f >= p - d"
+                                        "((d + f) >= (p - d))",
+                                        "(((d + f) + (d + f)) >= ((p - d) + (d + p)))"
                                     ]
                                 ]
                             },
@@ -59,7 +69,7 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "true"
+                                        "(((d + f) + (d + f)) >= ((p - d) + (d + p)))"
                                     ]
                                 ]
                             },
@@ -70,7 +80,7 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "d + f + d + f >= p - d + d + p"
+                                        "(((d + f) + (d + f)) >= ((p - d) + (d + p)))"
                                     ]
                                 ]
                             },
@@ -80,7 +90,10 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "d + f >= p - d"
+                                        "(((d + f) + (d + f)) >= ((p - d) + a))",
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + (d + p)) + a))",
+                                        "((d + f) >= (p - d))",
+                                        "(((d + f) + (d + f)) >= ((p - d) + (d + p)))"
                                     ]
                                 ]
                             },
@@ -91,8 +104,10 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "d + f + d + f >= p - d + a",
-                                        "d + f + d + f >= p - d + p - d"
+                                        "(((d + f) + (d + f)) >= ((p - d) + a))",
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + (d + p)) + a))",
+                                        "(((d + f) + (d + f)) >= ((p - d) + (p - d)))",
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + (d + p)) + (p - d)))"
                                     ]
                                 ]
                             },
@@ -103,7 +118,8 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "d + f + d + f >= a + p - d"
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + (d + p)) + a))",
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + (d + p)) + (p - d)))"
                                     ]
                                 ]
                             },
@@ -115,8 +131,8 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "d + f + d + f + d + f >= p - d + d + p + a",
-                                        "d + f + d + f + d + f >= p - d + d + p + p - d"
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + (d + p)) + a))",
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + (d + p)) + (p - d)))"
                                     ]
                                 ]
                             },
@@ -126,7 +142,9 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "true"
+                                        "(((d + f) + (d + f)) >= ((p - d) + a))",
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + (d + p)) + a))",
+                                        "(((d + f) + (d + f)) >= ((p - d) + (d + p)))"
                                     ]
                                 ]
                             },
@@ -137,7 +155,9 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "d + f + d + f >= p - d + a"
+                                        "(((d + f) + (d + f)) >= ((p - d) + a))",
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + (d + p)) + a))",
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + (p - d)) + (d + p)))"
                                     ]
                                 ]
                             },
@@ -148,7 +168,7 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "true"
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + (d + p)) + a))"
                                     ]
                                 ]
                             },
@@ -160,7 +180,7 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "d + f + d + f + d + f >= p - d + d + p + a"
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + (d + p)) + a))"
                                     ]
                                 ]
                             },
@@ -171,7 +191,8 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "d + f + d + f >= p - d + d + p"
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + a) + a))",
+                                        "(((d + f) + (d + f)) >= ((p - d) + (d + p)))"
                                     ]
                                 ]
                             },
@@ -183,9 +204,9 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "d + f + d + f + d + f >= p - d + a + a",
-                                        "d + f + d + f + d + f >= a + p - d + d + p",
-                                        "d + f + d + f + d + f >= p - d + p - d + d + p"
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + a) + a))",
+                                        "((((d + f) + (d + f)) + (d + f)) >= ((a + (p - d)) + (d + p)))",
+                                        "((((d + f) + (d + f)) + (d + f)) >= (((p - d) + (p - d)) + (d + p)))"
                                     ]
                                 ]
                             },
@@ -197,7 +218,7 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "d + f + d + f + d + f >= a + p - d + d + p"
+                                        "((((d + f) + (d + f)) + (d + f)) >= ((a + (p - d)) + (d + p)))"
                                     ]
                                 ]
                             }
@@ -205,43 +226,43 @@
                         "honest_utility": [
                             {
                                 "player": "B",
-                                "value": "d + f + 0.0"
+                                "value": "(d + f) + 0.0"
                             },
                             {
                                 "player": "G",
-                                "value": "d + f + 0.0"
+                                "value": "(d + f) + 0.0"
                             },
                             {
                                 "player": "M",
-                                "value": "d + f + 0.0"
+                                "value": "(d + f) + 0.0"
                             },
                             {
                                 "player": "W",
-                                "value": "d + f + 0.0"
+                                "value": "(d + f) + 0.0"
                             }
                         ],
                         "practicality": [
                             {
                                 "case": [
-                                    "d + f >= p - d"
+                                    "((d + f) >= (p - d))"
                                 ],
                                 "utilities": [
                                     [
                                         {
                                             "player": "B",
-                                            "value": "d + f + 0.0"
+                                            "value": "(d + f) + 0.0"
                                         },
                                         {
                                             "player": "G",
-                                            "value": "d + f + 0.0"
+                                            "value": "(d + f) + 0.0"
                                         },
                                         {
                                             "player": "M",
-                                            "value": "d + f + 0.0"
+                                            "value": "(d + f) + 0.0"
                                         },
                                         {
                                             "player": "W",
-                                            "value": "d + f + 0.0"
+                                            "value": "(d + f) + 0.0"
                                         }
                                     ]
                                 ]

@@ -148,12 +148,24 @@
                                                         "subtree": {
                                                             "collusion_resilience": [
                                                                 {
+                                                                    "player_group": [],
+                                                                    "satisfied_in_case": [
+                                                                        [
+                                                                            "((b_C + b_D) >= (c_C + c_D))",
+                                                                            "((b_B + b_D) >= ((- d) + c_D))",
+                                                                            "((b_B + b_C) >= ((- d) + c_C))"
+                                                                        ]
+                                                                    ]
+                                                                },
+                                                                {
                                                                     "player_group": [
                                                                         "A"
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                                                                            "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))",
+                                                                            "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -163,7 +175,8 @@
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((b_B + b_D) >= ((- d) + c_D))",
+                                                                            "((b_B + b_C) >= ((- d) + c_C))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -174,7 +187,8 @@
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))",
+                                                                            "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -184,7 +198,8 @@
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((b_C + b_D) >= (c_C + c_D))",
+                                                                            "((b_B + b_C) >= ((- d) + c_C))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -195,7 +210,8 @@
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                                                                            "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -228,7 +244,8 @@
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((b_C + b_D) >= (c_C + c_D))",
+                                                                            "((b_B + b_D) >= ((- d) + c_D))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -239,7 +256,8 @@
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                                                                            "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -532,7 +550,9 @@
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                                                                            "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))",
+                                                                            "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -542,7 +562,8 @@
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((b_B + b_D) >= ((- d) + c_D))",
+                                                                            "((b_B + b_C) >= ((- d) + c_C))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -553,7 +574,8 @@
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))",
+                                                                            "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -563,7 +585,8 @@
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((b_C + b_D) >= (c_C + c_D))",
+                                                                            "((b_B + b_C) >= ((- d) + c_C))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -574,7 +597,8 @@
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                                                                            "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -607,7 +631,8 @@
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((b_C + b_D) >= (c_C + c_D))",
+                                                                            "((b_B + b_D) >= ((- d) + c_D))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -618,7 +643,8 @@
                                                                     ],
                                                                     "satisfied_in_case": [
                                                                         [
-                                                                            "true"
+                                                                            "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                                                                            "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))"
                                                                         ]
                                                                     ]
                                                                 },
@@ -714,24 +740,6 @@
                                                                             },
                                                                             {
                                                                                 "player": "B",
-                                                                                "value": "b_B + 0.0"
-                                                                            },
-                                                                            {
-                                                                                "player": "C",
-                                                                                "value": "b_C + 0.0"
-                                                                            },
-                                                                            {
-                                                                                "player": "D",
-                                                                                "value": "b_D + 0.0"
-                                                                            }
-                                                                        ],
-                                                                        [
-                                                                            {
-                                                                                "player": "A",
-                                                                                "value": "(- d) + 0.0"
-                                                                            },
-                                                                            {
-                                                                                "player": "B",
                                                                                 "value": "(- d) + 0.0"
                                                                             },
                                                                             {
@@ -741,6 +749,24 @@
                                                                             {
                                                                                 "player": "D",
                                                                                 "value": "c_D + 0.0"
+                                                                            }
+                                                                        ],
+                                                                        [
+                                                                            {
+                                                                                "player": "A",
+                                                                                "value": "(- d) + 0.0"
+                                                                            },
+                                                                            {
+                                                                                "player": "B",
+                                                                                "value": "b_B + 0.0"
+                                                                            },
+                                                                            {
+                                                                                "player": "C",
+                                                                                "value": "b_C + 0.0"
+                                                                            },
+                                                                            {
+                                                                                "player": "D",
+                                                                                "value": "b_D + 0.0"
                                                                             }
                                                                         ]
                                                                     ]
@@ -759,24 +785,6 @@
                                                                             },
                                                                             {
                                                                                 "player": "B",
-                                                                                "value": "b_B + 0.0"
-                                                                            },
-                                                                            {
-                                                                                "player": "C",
-                                                                                "value": "b_C + 0.0"
-                                                                            },
-                                                                            {
-                                                                                "player": "D",
-                                                                                "value": "b_D + 0.0"
-                                                                            }
-                                                                        ],
-                                                                        [
-                                                                            {
-                                                                                "player": "A",
-                                                                                "value": "(- d) + 0.0"
-                                                                            },
-                                                                            {
-                                                                                "player": "B",
                                                                                 "value": "(- d) + 0.0"
                                                                             },
                                                                             {
@@ -786,6 +794,24 @@
                                                                             {
                                                                                 "player": "D",
                                                                                 "value": "c_D + 0.0"
+                                                                            }
+                                                                        ],
+                                                                        [
+                                                                            {
+                                                                                "player": "A",
+                                                                                "value": "(- d) + 0.0"
+                                                                            },
+                                                                            {
+                                                                                "player": "B",
+                                                                                "value": "b_B + 0.0"
+                                                                            },
+                                                                            {
+                                                                                "player": "C",
+                                                                                "value": "b_C + 0.0"
+                                                                            },
+                                                                            {
+                                                                                "player": "D",
+                                                                                "value": "b_D + 0.0"
                                                                             }
                                                                         ]
                                                                     ]
@@ -805,24 +831,6 @@
                                                                             },
                                                                             {
                                                                                 "player": "B",
-                                                                                "value": "b_B + 0.0"
-                                                                            },
-                                                                            {
-                                                                                "player": "C",
-                                                                                "value": "b_C + 0.0"
-                                                                            },
-                                                                            {
-                                                                                "player": "D",
-                                                                                "value": "b_D + 0.0"
-                                                                            }
-                                                                        ],
-                                                                        [
-                                                                            {
-                                                                                "player": "A",
-                                                                                "value": "(- d) + 0.0"
-                                                                            },
-                                                                            {
-                                                                                "player": "B",
                                                                                 "value": "(- d) + 0.0"
                                                                             },
                                                                             {
@@ -832,6 +840,24 @@
                                                                             {
                                                                                 "player": "D",
                                                                                 "value": "c_D + 0.0"
+                                                                            }
+                                                                        ],
+                                                                        [
+                                                                            {
+                                                                                "player": "A",
+                                                                                "value": "(- d) + 0.0"
+                                                                            },
+                                                                            {
+                                                                                "player": "B",
+                                                                                "value": "b_B + 0.0"
+                                                                            },
+                                                                            {
+                                                                                "player": "C",
+                                                                                "value": "b_C + 0.0"
+                                                                            },
+                                                                            {
+                                                                                "player": "D",
+                                                                                "value": "b_D + 0.0"
                                                                             }
                                                                         ]
                                                                     ]
@@ -1002,7 +1028,9 @@
                                                         ],
                                                         "satisfied_in_case": [
                                                             [
-                                                                "true"
+                                                                "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                                                                "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))",
+                                                                "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
                                                             ]
                                                         ]
                                                     },
@@ -1012,7 +1040,8 @@
                                                         ],
                                                         "satisfied_in_case": [
                                                             [
-                                                                "true"
+                                                                "((b_B + b_D) >= ((- d) + c_D))",
+                                                                "((b_B + b_C) >= ((- d) + c_C))"
                                                             ]
                                                         ]
                                                     },
@@ -1023,7 +1052,8 @@
                                                         ],
                                                         "satisfied_in_case": [
                                                             [
-                                                                "true"
+                                                                "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))",
+                                                                "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
                                                             ]
                                                         ]
                                                     },
@@ -1033,7 +1063,8 @@
                                                         ],
                                                         "satisfied_in_case": [
                                                             [
-                                                                "true"
+                                                                "((b_C + b_D) >= (c_C + c_D))",
+                                                                "((b_B + b_C) >= ((- d) + c_C))"
                                                             ]
                                                         ]
                                                     },
@@ -1044,7 +1075,8 @@
                                                         ],
                                                         "satisfied_in_case": [
                                                             [
-                                                                "true"
+                                                                "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                                                                "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
                                                             ]
                                                         ]
                                                     },
@@ -1077,7 +1109,8 @@
                                                         ],
                                                         "satisfied_in_case": [
                                                             [
-                                                                "true"
+                                                                "((b_C + b_D) >= (c_C + c_D))",
+                                                                "((b_B + b_D) >= ((- d) + c_D))"
                                                             ]
                                                         ]
                                                     },
@@ -1088,7 +1121,8 @@
                                                         ],
                                                         "satisfied_in_case": [
                                                             [
-                                                                "true"
+                                                                "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                                                                "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))"
                                                             ]
                                                         ]
                                                     },
@@ -1184,24 +1218,6 @@
                                                                 },
                                                                 {
                                                                     "player": "B",
-                                                                    "value": "b_B + 0.0"
-                                                                },
-                                                                {
-                                                                    "player": "C",
-                                                                    "value": "b_C + 0.0"
-                                                                },
-                                                                {
-                                                                    "player": "D",
-                                                                    "value": "b_D + 0.0"
-                                                                }
-                                                            ],
-                                                            [
-                                                                {
-                                                                    "player": "A",
-                                                                    "value": "(- d) + 0.0"
-                                                                },
-                                                                {
-                                                                    "player": "B",
                                                                     "value": "(- d) + 0.0"
                                                                 },
                                                                 {
@@ -1211,6 +1227,24 @@
                                                                 {
                                                                     "player": "D",
                                                                     "value": "c_D + 0.0"
+                                                                }
+                                                            ],
+                                                            [
+                                                                {
+                                                                    "player": "A",
+                                                                    "value": "(- d) + 0.0"
+                                                                },
+                                                                {
+                                                                    "player": "B",
+                                                                    "value": "b_B + 0.0"
+                                                                },
+                                                                {
+                                                                    "player": "C",
+                                                                    "value": "b_C + 0.0"
+                                                                },
+                                                                {
+                                                                    "player": "D",
+                                                                    "value": "b_D + 0.0"
                                                                 }
                                                             ]
                                                         ]
@@ -1229,24 +1263,6 @@
                                                                 },
                                                                 {
                                                                     "player": "B",
-                                                                    "value": "b_B + 0.0"
-                                                                },
-                                                                {
-                                                                    "player": "C",
-                                                                    "value": "b_C + 0.0"
-                                                                },
-                                                                {
-                                                                    "player": "D",
-                                                                    "value": "b_D + 0.0"
-                                                                }
-                                                            ],
-                                                            [
-                                                                {
-                                                                    "player": "A",
-                                                                    "value": "(- d) + 0.0"
-                                                                },
-                                                                {
-                                                                    "player": "B",
                                                                     "value": "(- d) + 0.0"
                                                                 },
                                                                 {
@@ -1256,6 +1272,24 @@
                                                                 {
                                                                     "player": "D",
                                                                     "value": "c_D + 0.0"
+                                                                }
+                                                            ],
+                                                            [
+                                                                {
+                                                                    "player": "A",
+                                                                    "value": "(- d) + 0.0"
+                                                                },
+                                                                {
+                                                                    "player": "B",
+                                                                    "value": "b_B + 0.0"
+                                                                },
+                                                                {
+                                                                    "player": "C",
+                                                                    "value": "b_C + 0.0"
+                                                                },
+                                                                {
+                                                                    "player": "D",
+                                                                    "value": "b_D + 0.0"
                                                                 }
                                                             ]
                                                         ]
@@ -1275,24 +1309,6 @@
                                                                 },
                                                                 {
                                                                     "player": "B",
-                                                                    "value": "b_B + 0.0"
-                                                                },
-                                                                {
-                                                                    "player": "C",
-                                                                    "value": "b_C + 0.0"
-                                                                },
-                                                                {
-                                                                    "player": "D",
-                                                                    "value": "b_D + 0.0"
-                                                                }
-                                                            ],
-                                                            [
-                                                                {
-                                                                    "player": "A",
-                                                                    "value": "(- d) + 0.0"
-                                                                },
-                                                                {
-                                                                    "player": "B",
                                                                     "value": "(- d) + 0.0"
                                                                 },
                                                                 {
@@ -1302,6 +1318,24 @@
                                                                 {
                                                                     "player": "D",
                                                                     "value": "c_D + 0.0"
+                                                                }
+                                                            ],
+                                                            [
+                                                                {
+                                                                    "player": "A",
+                                                                    "value": "(- d) + 0.0"
+                                                                },
+                                                                {
+                                                                    "player": "B",
+                                                                    "value": "b_B + 0.0"
+                                                                },
+                                                                {
+                                                                    "player": "C",
+                                                                    "value": "b_C + 0.0"
+                                                                },
+                                                                {
+                                                                    "player": "D",
+                                                                    "value": "b_D + 0.0"
                                                                 }
                                                             ]
                                                         ]
@@ -1472,7 +1506,9 @@
                                             ],
                                             "satisfied_in_case": [
                                                 [
-                                                    "true"
+                                                    "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                                                    "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))",
+                                                    "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
                                                 ]
                                             ]
                                         },
@@ -1482,7 +1518,8 @@
                                             ],
                                             "satisfied_in_case": [
                                                 [
-                                                    "true"
+                                                    "((b_B + b_D) >= ((- d) + c_D))",
+                                                    "((b_B + b_C) >= ((- d) + c_C))"
                                                 ]
                                             ]
                                         },
@@ -1493,7 +1530,8 @@
                                             ],
                                             "satisfied_in_case": [
                                                 [
-                                                    "true"
+                                                    "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))",
+                                                    "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
                                                 ]
                                             ]
                                         },
@@ -1503,7 +1541,8 @@
                                             ],
                                             "satisfied_in_case": [
                                                 [
-                                                    "true"
+                                                    "((b_C + b_D) >= (c_C + c_D))",
+                                                    "((b_B + b_C) >= ((- d) + c_C))"
                                                 ]
                                             ]
                                         },
@@ -1514,7 +1553,8 @@
                                             ],
                                             "satisfied_in_case": [
                                                 [
-                                                    "true"
+                                                    "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                                                    "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
                                                 ]
                                             ]
                                         },
@@ -1547,7 +1587,8 @@
                                             ],
                                             "satisfied_in_case": [
                                                 [
-                                                    "true"
+                                                    "((b_C + b_D) >= (c_C + c_D))",
+                                                    "((b_B + b_D) >= ((- d) + c_D))"
                                                 ]
                                             ]
                                         },
@@ -1558,7 +1599,8 @@
                                             ],
                                             "satisfied_in_case": [
                                                 [
-                                                    "true"
+                                                    "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                                                    "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))"
                                                 ]
                                             ]
                                         },
@@ -1654,24 +1696,6 @@
                                                     },
                                                     {
                                                         "player": "B",
-                                                        "value": "b_B + 0.0"
-                                                    },
-                                                    {
-                                                        "player": "C",
-                                                        "value": "b_C + 0.0"
-                                                    },
-                                                    {
-                                                        "player": "D",
-                                                        "value": "b_D + 0.0"
-                                                    }
-                                                ],
-                                                [
-                                                    {
-                                                        "player": "A",
-                                                        "value": "(- d) + 0.0"
-                                                    },
-                                                    {
-                                                        "player": "B",
                                                         "value": "(- d) + 0.0"
                                                     },
                                                     {
@@ -1681,6 +1705,24 @@
                                                     {
                                                         "player": "D",
                                                         "value": "c_D + 0.0"
+                                                    }
+                                                ],
+                                                [
+                                                    {
+                                                        "player": "A",
+                                                        "value": "(- d) + 0.0"
+                                                    },
+                                                    {
+                                                        "player": "B",
+                                                        "value": "b_B + 0.0"
+                                                    },
+                                                    {
+                                                        "player": "C",
+                                                        "value": "b_C + 0.0"
+                                                    },
+                                                    {
+                                                        "player": "D",
+                                                        "value": "b_D + 0.0"
                                                     }
                                                 ]
                                             ]
@@ -1699,24 +1741,6 @@
                                                     },
                                                     {
                                                         "player": "B",
-                                                        "value": "b_B + 0.0"
-                                                    },
-                                                    {
-                                                        "player": "C",
-                                                        "value": "b_C + 0.0"
-                                                    },
-                                                    {
-                                                        "player": "D",
-                                                        "value": "b_D + 0.0"
-                                                    }
-                                                ],
-                                                [
-                                                    {
-                                                        "player": "A",
-                                                        "value": "(- d) + 0.0"
-                                                    },
-                                                    {
-                                                        "player": "B",
                                                         "value": "(- d) + 0.0"
                                                     },
                                                     {
@@ -1726,6 +1750,24 @@
                                                     {
                                                         "player": "D",
                                                         "value": "c_D + 0.0"
+                                                    }
+                                                ],
+                                                [
+                                                    {
+                                                        "player": "A",
+                                                        "value": "(- d) + 0.0"
+                                                    },
+                                                    {
+                                                        "player": "B",
+                                                        "value": "b_B + 0.0"
+                                                    },
+                                                    {
+                                                        "player": "C",
+                                                        "value": "b_C + 0.0"
+                                                    },
+                                                    {
+                                                        "player": "D",
+                                                        "value": "b_D + 0.0"
                                                     }
                                                 ]
                                             ]
@@ -1745,24 +1787,6 @@
                                                     },
                                                     {
                                                         "player": "B",
-                                                        "value": "b_B + 0.0"
-                                                    },
-                                                    {
-                                                        "player": "C",
-                                                        "value": "b_C + 0.0"
-                                                    },
-                                                    {
-                                                        "player": "D",
-                                                        "value": "b_D + 0.0"
-                                                    }
-                                                ],
-                                                [
-                                                    {
-                                                        "player": "A",
-                                                        "value": "(- d) + 0.0"
-                                                    },
-                                                    {
-                                                        "player": "B",
                                                         "value": "(- d) + 0.0"
                                                     },
                                                     {
@@ -1772,6 +1796,24 @@
                                                     {
                                                         "player": "D",
                                                         "value": "c_D + 0.0"
+                                                    }
+                                                ],
+                                                [
+                                                    {
+                                                        "player": "A",
+                                                        "value": "(- d) + 0.0"
+                                                    },
+                                                    {
+                                                        "player": "B",
+                                                        "value": "b_B + 0.0"
+                                                    },
+                                                    {
+                                                        "player": "C",
+                                                        "value": "b_C + 0.0"
+                                                    },
+                                                    {
+                                                        "player": "D",
+                                                        "value": "b_D + 0.0"
                                                     }
                                                 ]
                                             ]

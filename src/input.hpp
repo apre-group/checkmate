@@ -171,13 +171,11 @@ public:
 	// null if didn't fail or no case split would help
 	mutable z3::Bool reason;
 
-	mutable std::vector<bool> violates_cr; // set to true as soon as its not cr for one deviating group
-
 	virtual UtilityTuplesSet get_utilities() const = 0;
 
 	std::vector<HistoryChoice> compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
 
-	std::vector<HistoryChoice> compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players) const;
+	std::vector<HistoryChoice> compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, uint64_t deviating_players) const;
 
 	std::vector<HistoryChoice> compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<std::string>& strategy_vector) const;
 
@@ -195,17 +193,11 @@ public:
 
 	void prune_actions_from_strategy(std::vector<std::string> &strategy) const;
 	
-	void reset_violation_cr() const;
+	void reset_satisfies_cr(size_t number_groups) const;
 
-	std::vector<std::vector<bool>> store_violation_cr() const;
+	std::vector<std::vector<std::string>> store_satisfies_cr() const;
 
-	bool cr_against_all() const;
-
-	bool cr_against_supergroups_of(std::vector<uint> deviating_players) const;
-
-	void restore_violation_cr(std::vector<std::vector<bool>> &violation) const;
-
-	void add_violation_cr() const;
+	void restore_satisfies_cr(std::vector<std::vector<std::string>> &satisfies) const;
 
 	void reset_count_check(bool wi, bool weri, bool cr, bool pr) const;
 
@@ -265,8 +257,8 @@ class Subtree : public Node {
 		::new (&reason) z3::Bool();
 	}
 
-	void reset_problematic_group(bool is_cr) const {
-		problematic_group = is_cr ? 1 : 0;
+	void reset_problematic_group() const {
+		problematic_group = 0;
 	}
 
 	virtual UtilityTuplesSet get_utilities() const override {
@@ -303,8 +295,8 @@ class Leaf final : public Node {
 		::new (&reason) z3::Bool();
 	}
 
-	void reset_problematic_group(bool is_cr) const {
-		problematic_group = is_cr ? 1 : 0;
+	void reset_problematic_group() const {
+		problematic_group = 0;
 	}
 };
 
@@ -321,6 +313,10 @@ class Branch final : public Node {
 
 	mutable std::vector<std::vector<z3::Bool>> pr_strategies_cases;
 	mutable std::vector<std::string> pr_strategies_actions;
+
+	// for collusion resilience strategies: indexed by player group (as bitset, all groups except the group of all players),
+	// the action that made the branch collusion resilient for that group, empty if none recorded
+	mutable std::vector<std::string> satisfies_cr;
 
 	mutable uint64_t problematic_group;
 	mutable UtilityTuplesSet practical_utilities;
@@ -538,15 +534,15 @@ class Branch final : public Node {
 				choice.node->branch().reset_strategy();
 	}
 
-	void reset_problematic_group(bool is_cr) const {
-		problematic_group = is_cr ? 1 : 0;
+	void reset_problematic_group() const {
+		problematic_group = 0;
 		for(auto &choice: choices)
 			if(!choice.node->is_leaf() && !choice.node->is_subtree()) {
-				choice.node->branch().reset_problematic_group(is_cr);
+				choice.node->branch().reset_problematic_group();
 			} else if (choice.node->is_leaf()){
-				choice.node->leaf().reset_problematic_group(is_cr);
+				choice.node->leaf().reset_problematic_group();
 			} else {
-				choice.node->subtree().reset_problematic_group(is_cr);
+				choice.node->subtree().reset_problematic_group();
 			}
 	}
 
@@ -704,7 +700,7 @@ struct Input {
 			new_strat_case._case = _case;
 
 			if (property == PropertyType::CollusionResilience) {
-				new_strat_case.strategy = root.get()->compute_cr_strategy(players, {}, {});
+				new_strat_case.strategy = root.get()->compute_cr_strategy(players, {}, 0);
 			} else {
 				new_strat_case.strategy = root.get()->compute_strategy(players, {});
 			}

@@ -887,122 +887,46 @@ std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> playe
 		return strategy;
 	}
 
-bool Node::cr_against_all() const {
-	bool cr_against_all = true;
-
-	for(auto violates_colluding_group : violates_cr) {
-
-		if(violates_colluding_group) {
-			cr_against_all = false;
-		}
-	}
-
-	return cr_against_all;
-}
-
-std::vector<bool> convertToBinary(uint n)
-{
-	std::vector<bool> bit_reps;
-
-    if (n / 2 != 0) {
-        bit_reps = convertToBinary(n / 2);
-    }
-
-	bit_reps.push_back(n % 2 == 1);
-	return bit_reps;
-}
-
-
-bool Node::cr_against_supergroups_of(std::vector<uint> deviating_players) const {
-
-	for(uint64_t i=0; i < violates_cr.size(); i++) {
-		std::vector<bool> bin_rep = convertToBinary(i+1);
-
-		bool all_deviating_deviate = true;
-
-		for(auto player: deviating_players) {
-			if(player > bin_rep.size()) {
-				all_deviating_deviate = false;
-			} else {
-				if(!bin_rep[player-1]) {
-					all_deviating_deviate = false;
-				}
-			}			
-		}
-
-		if(all_deviating_deviate && violates_cr[i]) {
-			return false;
-		}
-
-	}
-
-	return true;
-
-}
-
-void Node::add_violation_cr() const {
-	violates_cr.push_back(false);
-
-	if (!this->is_leaf() && !this->is_subtree()){
-
-		for (const auto& child: this->branch().choices){
-			child.node->add_violation_cr();
-		}
-	}
-	return;
-}
-
-std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players) const {
+std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, uint64_t deviating_players) const {
 
 		if (this -> is_leaf() || this->is_subtree()){
 			return {};
 		}
-		std::vector<HistoryChoice> strategy;
+		const Branch &branch = this->branch();
+		const uint64_t all_players = players.size() == 64 ? -1ull : (1ull << players.size()) - 1;
+
 		std::string strategy_choice;
-
-		if (honest) {
-			for (const Choice &choice: this->branch().choices) {
-
-				if (choice.node->honest) {
-					assert(choice.node->cr_against_all());
-					HistoryChoice hist_choice;
-					hist_choice.player = players[this->branch().player];
-					hist_choice.choice = choice.action;
-					hist_choice.history = actions_so_far;
-					strategy_choice = choice.action;
-
-					strategy.push_back(hist_choice);
+		if (deviating_players == all_players) {
+			// the group of all players is not considered, so any action is fine
+			strategy_choice = branch.choices[0].action;
+		} else {
+			// take the action recorded for the deviating players
+			// if there is none (the check skips choices that are already collusion resilient for a subgroup),
+			// take the one recorded for a subgroup: being collusion resilient for a group
+			// implies being collusion resilient for all its supergroups
+			for (uint64_t group = deviating_players; ; group = (group - 1) & deviating_players) {
+				if (!branch.satisfies_cr[group].empty()) {
+					strategy_choice = branch.satisfies_cr[group];
 					break;
 				}
+				if (group == 0)
+					break;
 			}
-		} else {
-			bool have_found_cr = false;
-			for (const Choice &choice: this->branch().choices) {
-
-				if (choice.node->cr_against_supergroups_of(deviating_players)){
-					if(!have_found_cr) {
-						have_found_cr = true;
-						HistoryChoice hist_choice;
-						hist_choice.player = players[this->branch().player];
-						hist_choice.choice = choice.action;
-						hist_choice.history = actions_so_far;
-						strategy_choice = choice.action;
-
-						strategy.push_back(hist_choice);
-					}
-				}
-
-			}
-			assert(have_found_cr);
 		}
-		
-		for (const Choice &choice: this->branch().choices) {
-			std::vector<uint> new_deviating_players;
-			new_deviating_players.insert(new_deviating_players.end(), deviating_players.begin(), deviating_players.end());
+		assert(!strategy_choice.empty());
 
-			int cnt = std::count(deviating_players.begin(), deviating_players.end(), this->branch().player + 1);
-			if((choice.action != strategy_choice) && (cnt == 0)) {
-				new_deviating_players.push_back(this->branch().player + 1);
+		std::vector<HistoryChoice> strategy;
+		HistoryChoice hist_choice;
+		hist_choice.player = players[branch.player];
+		hist_choice.choice = strategy_choice;
+		hist_choice.history = actions_so_far;
+		strategy.push_back(hist_choice);
+
+		for (const Choice &choice: branch.choices) {
+			// taking another action than the strategy, the player deviates
+			uint64_t new_deviating_players = deviating_players;
+			if (choice.action != strategy_choice) {
+				new_deviating_players |= 1ull << branch.player;
 			}
 
 	 		std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
@@ -1267,46 +1191,44 @@ void Node::prune_actions_from_strategy(std::vector<std::string> &strategy) const
 	}
 }
 
-void Node::reset_violation_cr() const {
-		violates_cr = {};
+void Node::reset_satisfies_cr(size_t number_groups) const {
 
-		if (!this->is_leaf() && !this->is_subtree()){
-
-			for (const auto& child: this->branch().choices){
-				child.node->reset_violation_cr();
-			}
-		}
+	if (this->is_leaf() || this->is_subtree()){
 		return;
-}
-
-std::vector<std::vector<bool>> Node::store_violation_cr() const {
-
-	std::vector<std::vector<bool>> violation = {violates_cr};
-
-	if (!this->is_leaf() && !this->is_subtree()){
-
-		for (const auto& child: this->branch().choices){
-			std::vector<std::vector<bool>> child_violation = child.node->store_violation_cr();
-			violation.insert(violation.end(), child_violation.begin(), child_violation.end());
-		}
-	} 
-	return violation;
-}
-
-void Node::restore_violation_cr(std::vector<std::vector<bool>> &violation) const {
-
-	assert(violation.size()>0);
-	violates_cr = violation[0];
-	violation.erase(violation.begin());
-
-	if (!this->is_leaf() && !this->is_subtree()){
-
-		for (const auto& child: this->branch().choices){
-			child.node->restore_violation_cr(violation);
-		}
 	}
 
-	return;
+	this->branch().satisfies_cr.assign(number_groups, "");
+	for (const auto& child: this->branch().choices){
+		child.node->reset_satisfies_cr(number_groups);
+	}
+}
+
+std::vector<std::vector<std::string>> Node::store_satisfies_cr() const {
+
+	if (this->is_leaf() || this->is_subtree()){
+		return {};
+	}
+
+	std::vector<std::vector<std::string>> satisfies = {this->branch().satisfies_cr};
+	for (const auto& child: this->branch().choices){
+		std::vector<std::vector<std::string>> child_satisfies = child.node->store_satisfies_cr();
+		satisfies.insert(satisfies.end(), child_satisfies.begin(), child_satisfies.end());
+	}
+	return satisfies;
+}
+
+void Node::restore_satisfies_cr(std::vector<std::vector<std::string>> &satisfies) const {
+
+	if (this->is_leaf() || this->is_subtree()){
+		return;
+	}
+
+	assert(satisfies.size()>0);
+	this->branch().satisfies_cr = satisfies[0];
+	satisfies.erase(satisfies.begin());
+	for (const auto& child: this->branch().choices){
+		child.node->restore_satisfies_cr(satisfies);
+	}
 }
 
 void Node::reset_count_check(bool wi, bool weri, bool cr, bool pr) const {

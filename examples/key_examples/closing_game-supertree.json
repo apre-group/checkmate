@@ -124,7 +124,7 @@
                   "honest_utility": [
                     {
                       "player": "A",
-                      "value": "0.0 + alpha - epsilon"
+                      "value": "0.0 + (alpha - epsilon)"
                     },
                     {
                       "player": "B",
@@ -134,9 +134,9 @@
                   "practicality": [
                     {
                       "case": [
-                        "-d_B >= b - p_A - f",
-                        "d_B >= p_A",
-                        "d_B > p_A"
+                        "((- d_B) >= ((b - p_A) - f))",
+                        "(d_B >= p_A)",
+                        "(d_B > p_A)"
                       ],
                       "utilities": [
                         [
@@ -153,9 +153,9 @@
                     },
                     {
                       "case": [
-                        "- d_B >= b - p_A - f",
-                        "d_B >= p_A",
-                        "d_B <= p_A"
+                        "((- d_B) >= ((b - p_A) - f))",
+                        "(d_B >= p_A)",
+                        "(d_B <= p_A)"
                       ],
                       "utilities": [
                         [
@@ -172,8 +172,8 @@
                     },
                     {
                       "case": [
-                        "- d_B >= b - p_A - f",
-                        "d_B < p_A"
+                        "((- d_B) >= ((b - p_A) - f))",
+                        "(d_B < p_A)"
                       ],
                       "utilities": [
                         [
@@ -190,7 +190,7 @@
                     },
                     {
                       "case": [
-                        "- d_B < b - p_A - f"
+                        "((- d_B) < ((b - p_A) - f))"
                       ],
                       "utilities": [
                         [
@@ -264,8 +264,8 @@
                       ],
                       "satisfied_in_case": [
                         [
-                          "0.0 >= b + p_B - f",
-                          "0.0 > b + p_B - f"
+                          "(0.0 >= ((b + p_B) - f))",
+                          "(0.0 > ((b + p_B) - f))"
                         ]
                       ]
                     },
@@ -283,7 +283,7 @@
                   "honest_utility": [
                     {
                       "player": "A",
-                      "value": "0.0 + alpha - epsilon"
+                      "value": "0.0 + (alpha - epsilon)"
                     },
                     {
                       "player": "B",
@@ -293,18 +293,18 @@
                   "practicality": [
                     {
                       "case": [
-                        "- d_A >= a - p_B - f",
-                        "- d_A >= - p_B"
+                        "((- d_A) >= ((a - p_B) - f))",
+                        "((- d_A) >= (- p_B))"
                       ],
                       "utilities": [
                         [
                           {
                             "player": "A",
-                            "value": "0.0 + rho + alpha"
+                            "value": "0.0 + (rho + alpha)"
                           },
                           {
                             "player": "B",
-                            "value": "0.0 + rho + alpha - epsilon"
+                            "value": "0.0 + ((rho + alpha) - epsilon)"
                           }
                         ],
                         [
@@ -321,18 +321,18 @@
                     },
                     {
                       "case": [
-                        "- d_A >= a - p_B - f",
-                        "- d_A < - p_B"
+                        "((- d_A) >= ((a - p_B) - f))",
+                        "((- d_A) < (- p_B))"
                       ],
                       "utilities": [
                         [
                           {
                             "player": "A",
-                            "value": "0.0 + rho + alpha"
+                            "value": "0.0 + (rho + alpha)"
                           },
                           {
                             "player": "B",
-                            "value": "0.0 + rho + alpha - epsilon"
+                            "value": "0.0 + ((rho + alpha) - epsilon)"
                           }
                         ],
                         [
@@ -349,7 +349,7 @@
                     },
                     {
                       "case": [
-                        "- d_A < a - p_B - f"
+                        "((- d_A) < ((a - p_B) - f))"
                       ],
                       "utilities": [
                         [
@@ -476,8 +476,8 @@
                             ],
                             "satisfied_in_case": [
                               [
-                                "0.0 >= a + p_A - f",
-                                "0.0 > a + p_A - f"
+                                "(0.0 >= ((a + p_A) - f))",
+                                "(0.0 > ((a + p_A) - f))"
                               ]
                             ]
                           }
@@ -485,7 +485,7 @@
                         "honest_utility": [
                           {
                             "player": "A",
-                            "value": "0.0 + alpha - epsilon"
+                            "value": "0.0 + (alpha - epsilon)"
                           },
                           {
                             "player": "B",
@@ -495,73 +495,73 @@
                         "practicality": [
                           {
                             "case": [
-                              "- d_B >= b - p_A - f",
-                              "d_B >= p_A",
-                              "d_B > p_A"
+                              "((- d_B) >= ((b - p_A) - f))",
+                              "(d_B >= p_A)",
+                              "(d_B > p_A)"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + rho + alpha - epsilon"
+                                  "value": "0.0 + ((rho + alpha) - epsilon)"
                                 },
                                 {
                                   "player": "B",
-                                  "value": "0.0 + rho + alpha"
+                                  "value": "0.0 + (rho + alpha)"
                                 }
                               ]
                             ]
                           },
                           {
                             "case": [
-                              "- d_B >= b - p_A - f",
-                              "d_B >= p_A",
-                              "d_B <= p_A"
+                              "((- d_B) >= ((b - p_A) - f))",
+                              "(d_B >= p_A)",
+                              "(d_B <= p_A)"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + rho + alpha - epsilon"
+                                  "value": "0.0 + ((rho + alpha) - epsilon)"
                                 },
                                 {
                                   "player": "B",
-                                  "value": "0.0 + rho + alpha"
+                                  "value": "0.0 + (rho + alpha)"
                                 }
                               ]
                             ]
                           },
                           {
                             "case": [
-                              "- d_B >= b - p_A - f",
-                              "d_B < p_A"
+                              "((- d_B) >= ((b - p_A) - f))",
+                              "(d_B < p_A)"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + rho + alpha - epsilon"
+                                  "value": "0.0 + ((rho + alpha) - epsilon)"
                                 },
                                 {
                                   "player": "B",
-                                  "value": "0.0 + rho + alpha"
+                                  "value": "0.0 + (rho + alpha)"
                                 }
                               ]
                             ]
                           },
                           {
                             "case": [
-                              "- d_B < b - p_A - f"
+                              "((- d_B) < ((b - p_A) - f))"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + rho + alpha - epsilon"
+                                  "value": "0.0 + ((rho + alpha) - epsilon)"
                                 },
                                 {
                                   "player": "B",
-                                  "value": "0.0 + rho + alpha"
+                                  "value": "0.0 + (rho + alpha)"
                                 }
                               ]
                             ]
@@ -643,7 +643,7 @@
                         "honest_utility": [
                           {
                             "player": "A",
-                            "value": "0.0 + alpha - epsilon"
+                            "value": "0.0 + (alpha - epsilon)"
                           },
                           {
                             "player": "B",
@@ -653,13 +653,13 @@
                         "practicality": [
                           {
                             "case": [
-                              "- d_A >= a - p_B - f"
+                              "((- d_A) >= ((a - p_B) - f))"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + alpha"
+                                  "value": "0.0 + (alpha - epsilon)"
                                 },
                                 {
                                   "player": "B",
@@ -669,7 +669,7 @@
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + alpha - epsilon"
+                                  "value": "0.0 + alpha"
                                 },
                                 {
                                   "player": "B",
@@ -680,13 +680,13 @@
                           },
                           {
                             "case": [
-                              "- d_A < a - p_B - f"
+                              "((- d_A) < ((a - p_B) - f))"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + alpha"
+                                  "value": "0.0 + (alpha - epsilon)"
                                 },
                                 {
                                   "player": "B",
@@ -696,7 +696,7 @@
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + alpha - epsilon"
+                                  "value": "0.0 + alpha"
                                 },
                                 {
                                   "player": "B",
@@ -1032,7 +1032,7 @@
                         "honest_utility": [
                           {
                             "player": "A",
-                            "value": "0.0 + alpha - epsilon"
+                            "value": "0.0 + (alpha - epsilon)"
                           },
                           {
                             "player": "B",
@@ -1042,13 +1042,13 @@
                         "practicality": [
                           {
                             "case": [
-                              "- d_A >= a - p_B - f"
+                              "((- d_A) >= ((a - p_B) - f))"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + alpha - epsilon"
+                                  "value": "0.0 + (alpha - epsilon)"
                                 },
                                 {
                                   "player": "B",
@@ -1059,13 +1059,13 @@
                           },
                           {
                             "case": [
-                              "- d_A < a - p_B - f"
+                              "((- d_A) < ((a - p_B) - f))"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + alpha - epsilon"
+                                  "value": "0.0 + (alpha - epsilon)"
                                 },
                                 {
                                   "player": "B",
@@ -1143,19 +1143,19 @@
                             ],
                             "satisfied_in_case": [
                               [
-                                "0.0 >= a + p_A - f",
-                                "0.0 > a + p_A - f"
+                                "(0.0 >= ((a + p_A) - f))",
+                                "(0.0 > ((a + p_A) - f))"
                               ],
                               [
-                                "0.0 >= a + p_A - f",
-                                "0.0 <= a + p_A - f",
-                                "0.0 >= p_A - c",
-                                "0.0 > p_A - c"
+                                "(0.0 >= ((a + p_A) - f))",
+                                "(0.0 <= ((a + p_A) - f))",
+                                "(0.0 >= (p_A - c))",
+                                "(0.0 > (p_A - c))"
                               ],
                               [
-                                "0.0 < a + p_A - f",
-                                "0.0 >= p_A - c",
-                                "0.0 > p_A - c"
+                                "(0.0 < ((a + p_A) - f))",
+                                "(0.0 >= (p_A - c))",
+                                "(0.0 > (p_A - c))"
                               ]
                             ]
                           }
@@ -1163,7 +1163,7 @@
                         "honest_utility": [
                           {
                             "player": "A",
-                            "value": "0.0 + alpha - epsilon"
+                            "value": "0.0 + (alpha - epsilon)"
                           },
                           {
                             "player": "B",
@@ -1173,26 +1173,26 @@
                         "practicality": [
                           {
                             "case": [
-                              "- d_B >= b - p_A - f",
-                              "d_B >= p_A - c",
-                              "d_B > p_A - c",
-                              "0.0 >= p_A - c"
+                              "((- d_B) >= ((b - p_A) - f))",
+                              "(d_B >= (p_A - c))",
+                              "(d_B > (p_A - c))",
+                              "(0.0 >= (p_A - c))"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + rho + alpha - epsilon"
+                                  "value": "0.0 + ((rho + alpha) - epsilon)"
                                 },
                                 {
                                   "player": "B",
-                                  "value": "0.0 + rho + alpha"
+                                  "value": "0.0 + (rho + alpha)"
                                 }
                               ],
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + alpha - epsilon"
+                                  "value": "0.0 + (alpha - epsilon)"
                                 },
                                 {
                                   "player": "B",
@@ -1203,71 +1203,71 @@
                           },
                           {
                             "case": [
-                              "- d_B >= b - p_A - f",
-                              "d_B >= p_A - c",
-                              "d_B > p_A - c",
-                              "0.0 < p_A - c"
+                              "((- d_B) >= ((b - p_A) - f))",
+                              "(d_B >= (p_A - c))",
+                              "(d_B > (p_A - c))",
+                              "(0.0 < (p_A - c))"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + rho + alpha - epsilon"
+                                  "value": "0.0 + ((rho + alpha) - epsilon)"
                                 },
                                 {
                                   "player": "B",
-                                  "value": "0.0 + rho + alpha"
+                                  "value": "0.0 + (rho + alpha)"
                                 }
                               ]
                             ]
                           },
                           {
                             "case": [
-                              "- d_B >= b - p_A - f",
-                              "d_B >= p_A - c",
-                              "d_B <= p_A - c"
+                              "((- d_B) >= ((b - p_A) - f))",
+                              "(d_B >= (p_A - c))",
+                              "(d_B <= (p_A - c))"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + rho + alpha - epsilon"
+                                  "value": "0.0 + ((rho + alpha) - epsilon)"
                                 },
                                 {
                                   "player": "B",
-                                  "value": "0.0 + rho + alpha"
+                                  "value": "0.0 + (rho + alpha)"
                                 }
                               ]
                             ]
                           },
                           {
                             "case": [
-                              "- d_B >= b - p_A - f",
-                              "d_B < p_A - c"
+                              "((- d_B) >= ((b - p_A) - f))",
+                              "(d_B < (p_A - c))"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + rho + alpha - epsilon"
+                                  "value": "0.0 + ((rho + alpha) - epsilon)"
                                 },
                                 {
                                   "player": "B",
-                                  "value": "0.0 + rho + alpha"
+                                  "value": "0.0 + (rho + alpha)"
                                 }
                               ]
                             ]
                           },
                           {
                             "case": [
-                              "- d_B < b - p_A - f",
-                              "0.0 >= p_A - c"
+                              "((- d_B) < ((b - p_A) - f))",
+                              "(0.0 >= (p_A - c))"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + alpha - epsilon"
+                                  "value": "0.0 + (alpha - epsilon)"
                                 },
                                 {
                                   "player": "B",
@@ -1278,18 +1278,18 @@
                           },
                           {
                             "case": [
-                              "- d_B < b - p_A - f",
-                              "0.0 < p_A - c"
+                              "((- d_B) < ((b - p_A) - f))",
+                              "(0.0 < (p_A - c))"
                             ],
                             "utilities": [
                               [
                                 {
                                   "player": "A",
-                                  "value": "0.0 + rho + alpha - epsilon"
+                                  "value": "0.0 + ((rho + alpha) - epsilon)"
                                 },
                                 {
                                   "player": "B",
-                                  "value": "0.0 + rho + alpha"
+                                  "value": "0.0 + (rho + alpha)"
                                 }
                               ]
                             ]
@@ -1394,8 +1394,8 @@
                       ],
                       "satisfied_in_case": [
                         [
-                          "0.0 >= b + p_B - f",
-                          "0.0 > b + p_B - f"
+                          "(0.0 >= ((b + p_B) - f))",
+                          "(0.0 > ((b + p_B) - f))"
                         ]
                       ]
                     },
@@ -1413,7 +1413,7 @@
                   "honest_utility": [
                     {
                       "player": "A",
-                      "value": "0.0 + alpha - epsilon"
+                      "value": "0.0 + (alpha - epsilon)"
                     },
                     {
                       "player": "B",
@@ -1423,20 +1423,10 @@
                   "practicality": [
                     {
                       "case": [
-                        "- d_A >= a - p_B - f",
-                        "- d_A >= - c - p_B"
+                        "((- d_A) >= ((a - p_B) - f))",
+                        "((- d_A) >= ((- c) - p_B))"
                       ],
                       "utilities": [
-                        [
-                          {
-                            "player": "A",
-                            "value": "0.0 + rho + alpha"
-                          },
-                          {
-                            "player": "B",
-                            "value": "0.0 + rho + alpha - epsilon"
-                          }
-                        ],
                         [
                           {
                             "player": "A",
@@ -1444,27 +1434,27 @@
                           },
                           {
                             "player": "B",
-                            "value": "0.0 + alpha - epsilon"
+                            "value": "0.0 + (alpha - epsilon)"
+                          }
+                        ],
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + (rho + alpha)"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + ((rho + alpha) - epsilon)"
                           }
                         ]
                       ]
                     },
                     {
                       "case": [
-                        "- d_A >= a - p_B - f",
-                        "- d_A < - c - p_B"
+                        "((- d_A) >= ((a - p_B) - f))",
+                        "((- d_A) < ((- c) - p_B))"
                       ],
                       "utilities": [
-                        [
-                          {
-                            "player": "A",
-                            "value": "0.0 + rho + alpha"
-                          },
-                          {
-                            "player": "B",
-                            "value": "0.0 + rho + alpha - epsilon"
-                          }
-                        ],
                         [
                           {
                             "player": "A",
@@ -1472,14 +1462,24 @@
                           },
                           {
                             "player": "B",
-                            "value": "0.0 + alpha - epsilon"
+                            "value": "0.0 + (alpha - epsilon)"
+                          }
+                        ],
+                        [
+                          {
+                            "player": "A",
+                            "value": "0.0 + (rho + alpha)"
+                          },
+                          {
+                            "player": "B",
+                            "value": "0.0 + ((rho + alpha) - epsilon)"
                           }
                         ]
                       ]
                     },
                     {
                       "case": [
-                        "- d_A < a - p_B - f"
+                        "((- d_A) < ((a - p_B) - f))"
                       ],
                       "utilities": [
                         [
@@ -1489,7 +1489,7 @@
                           },
                           {
                             "player": "B",
-                            "value": "0.0 + alpha - epsilon"
+                            "value": "0.0 + (alpha - epsilon)"
                           }
                         ]
                       ]
@@ -1553,19 +1553,19 @@
                       ],
                       "satisfied_in_case": [
                         [
-                          "0.0 >= c - p_A",
-                          "0.0 > c - p_A"
+                          "(0.0 >= (c - p_A))",
+                          "(0.0 > (c - p_A))"
                         ],
                         [
-                          "0.0 >= c - p_A",
-                          "0.0 <= c - p_A",
-                          "0.0 >= b - p_A - f",
-                          "0.0 > b - p_A - f"
+                          "(0.0 >= (c - p_A))",
+                          "(0.0 <= (c - p_A))",
+                          "(0.0 >= ((b - p_A) - f))",
+                          "(0.0 > ((b - p_A) - f))"
                         ],
                         [
-                          "0.0 < c - p_A",
-                          "0.0 >= b - p_A - f",
-                          "0.0 > b - p_A - f"
+                          "(0.0 < (c - p_A))",
+                          "(0.0 >= ((b - p_A) - f))",
+                          "(0.0 > ((b - p_A) - f))"
                         ]
                       ]
                     },
@@ -1583,7 +1583,7 @@
                   "honest_utility": [
                     {
                       "player": "A",
-                      "value": "0.0 + alpha - epsilon"
+                      "value": "0.0 + (alpha - epsilon)"
                     },
                     {
                       "player": "B",
@@ -1593,10 +1593,10 @@
                   "practicality": [
                     {
                       "case": [
-                        "- d_B >= b - p_A - f",
-                        "d_B >= p_A - c",
-                        "d_B > p_A - c",
-                        "0.0 >= p_A - c"
+                        "((- d_B) >= ((b - p_A) - f))",
+                        "(d_B >= (p_A - c))",
+                        "(d_B > (p_A - c))",
+                        "(0.0 >= (p_A - c))"
                       ],
                       "utilities": [
                         [
@@ -1606,17 +1606,17 @@
                           },
                           {
                             "player": "B",
-                            "value": "0.0 + alpha - epsilon"
+                            "value": "0.0 + (alpha - epsilon)"
                           }
                         ]
                       ]
                     },
                     {
                       "case": [
-                        "- d_B >= b - p_A - f",
-                        "d_B >= p_A - c",
-                        "d_B > p_A - c",
-                        "0.0 < p_A - c"
+                        "((- d_B) >= ((b - p_A) - f))",
+                        "(d_B >= (p_A - c))",
+                        "(d_B > (p_A - c))",
+                        "(0.0 < (p_A - c))"
                       ],
                       "utilities": [
                         [
@@ -1626,16 +1626,16 @@
                           },
                           {
                             "player": "B",
-                            "value": "0.0 + alpha - epsilon"
+                            "value": "0.0 + (alpha - epsilon)"
                           }
                         ]
                       ]
                     },
                     {
                       "case": [
-                        "- d_B >= b - p_A - f",
-                        "d_B >= p_A - c",
-                        "d_B <= p_A - c"
+                        "((- d_B) >= ((b - p_A) - f))",
+                        "(d_B >= (p_A - c))",
+                        "(d_B <= (p_A - c))"
                       ],
                       "utilities": [
                         [
@@ -1645,15 +1645,15 @@
                           },
                           {
                             "player": "B",
-                            "value": "0.0 + alpha - epsilon"
+                            "value": "0.0 + (alpha - epsilon)"
                           }
                         ]
                       ]
                     },
                     {
                       "case": [
-                        "- d_B >= b - p_A - f",
-                        "d_B < p_A - c"
+                        "((- d_B) >= ((b - p_A) - f))",
+                        "(d_B < (p_A - c))"
                       ],
                       "utilities": [
                         [
@@ -1663,15 +1663,15 @@
                           },
                           {
                             "player": "B",
-                            "value": "0.0 + alpha - epsilon"
+                            "value": "0.0 + (alpha - epsilon)"
                           }
                         ]
                       ]
                     },
                     {
                       "case": [
-                        "- d_B < b - p_A - f",
-                        "0.0 >= p_A - c"
+                        "((- d_B) < ((b - p_A) - f))",
+                        "(0.0 >= (p_A - c))"
                       ],
                       "utilities": [
                         [
@@ -1681,15 +1681,15 @@
                           },
                           {
                             "player": "B",
-                            "value": "0.0 + alpha - epsilon"
+                            "value": "0.0 + (alpha - epsilon)"
                           }
                         ]
                       ]
                     },
                     {
                       "case": [
-                        "- d_B < b - p_A - f",
-                        "0.0 < p_A - c"
+                        "((- d_B) < ((b - p_A) - f))",
+                        "(0.0 < (p_A - c))"
                       ],
                       "utilities": [
                         [
@@ -1699,7 +1699,7 @@
                           },
                           {
                             "player": "B",
-                            "value": "0.0 + alpha - epsilon"
+                            "value": "0.0 + (alpha - epsilon)"
                           }
                         ]
                       ]

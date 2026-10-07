@@ -64,12 +64,34 @@
                     "subtree": {
                         "collusion_resilience": [
                             {
+                                "player_group": [],
+                                "satisfied_in_case": [
+                                    [
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= ((c0 + (3.0 * plus)) - (5.0 * minus)))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (3.0 * plus)) - (5.0 * minus)) + ((c0 + (3.0 * plus)) - (5.0 * minus))))",
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= ((b0 + (3.0 * plus)) - (4.0 * minus)))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + (2.0 * plus)) - (4.0 * minus)) + ((c0 + (2.0 * plus)) - (4.0 * minus))))",
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= ((c0 + (2.0 * plus)) - (3.0 * minus)))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (2.0 * plus)) - (3.0 * minus)) + ((c0 + (2.0 * plus)) - (3.0 * minus))))",
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= ((b0 + (2.0 * plus)) - (2.0 * minus)))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + plus) - (3.0 * minus)) + ((b0 + (2.0 * plus)) - (2.0 * minus))))",
+                                        "(((a0 + (2.0 * plus)) - (4.0 * minus)) >= ((a0 + plus) - (2.0 * minus)))"
+                                    ]
+                                ]
+                            },
+                            {
                                 "player_group": [
                                     "A"
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "a0 + 2.0 * plus - 4.0 * minus >= a0 + plus - 2.0 * minus"
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + (2.0 * plus)) - (6.0 * minus)) + ((c0 + (3.0 * plus)) - (5.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + (2.0 * plus)) - (5.0 * minus)) + ((b0 + (3.0 * plus)) - (4.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + (2.0 * plus)) - (4.0 * minus)) + ((b0 + (2.0 * plus)) - (4.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + (2.0 * plus)) - (4.0 * minus)) + ((c0 + (2.0 * plus)) - (4.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + plus) - (4.0 * minus)) + ((c0 + (2.0 * plus)) - (3.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + plus) - (3.0 * minus)) + ((b0 + (2.0 * plus)) - (2.0 * minus))))",
+                                        "(((a0 + (2.0 * plus)) - (4.0 * minus)) >= ((a0 + plus) - (2.0 * minus)))"
                                     ]
                                 ]
                             },
@@ -79,9 +101,18 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "2.0 * plus + a0 - 4.0 * minus >= b0 + plus",
-                                        "2.0 * plus + a0 - 4.0 * minus >= b0 + 2.0 * plus - 2.0 * minus",
-                                        "2.0 * plus + a0 - 4.0 * minus >= b0 + 3.0 * plus - 4.0 * minus"
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (3.0 * plus)) - (5.0 * minus)) + ((c0 + (3.0 * plus)) - (5.0 * minus))))",
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= ((b0 + (3.0 * plus)) - (4.0 * minus)))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (3.0 * plus)) - (4.0 * minus)) + ((c0 + (2.0 * plus)) - (5.0 * minus))))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (2.0 * plus)) - (3.0 * minus)) + ((c0 + (2.0 * plus)) - (3.0 * minus))))",
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= ((b0 + (2.0 * plus)) - (2.0 * minus)))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + plus) - (3.0 * minus)) + ((b0 + (2.0 * plus)) - (2.0 * minus))))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (2.0 * plus)) - (2.0 * minus)) + ((c0 + plus) - (3.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + plus) - (2.0 * minus)) + ((b0 + plus) - (2.0 * minus))))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + plus) - minus) + ((c0 + plus) - minus)))",
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= (b0 + plus))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= ((a0 - minus) + (b0 + plus)))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= ((b0 + plus) + (c0 - minus)))"
                                     ]
                                 ]
                             },
@@ -92,11 +123,11 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "a0 + 2.0 * plus - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= a0 - minus + b0 + plus",
-                                        "a0 + 2.0 * plus - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= a0 + plus - 2.0 * minus + b0 + plus - 2.0 * minus",
-                                        "a0 + 2.0 * plus - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= a0 + plus - 3.0 * minus + b0 + 2.0 * plus - 2.0 * minus",
-                                        "a0 + 2.0 * plus - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= a0 + 2.0 * plus - 4.0 * minus + b0 + 2.0 * plus - 4.0 * minus",
-                                        "a0 + 2.0 * plus - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= a0 + 2.0 * plus - 5.0 * minus + b0 + 3.0 * plus - 4.0 * minus"
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + (2.0 * plus)) - (5.0 * minus)) + ((b0 + (3.0 * plus)) - (4.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + (2.0 * plus)) - (4.0 * minus)) + ((b0 + (2.0 * plus)) - (4.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + plus) - (3.0 * minus)) + ((b0 + (2.0 * plus)) - (2.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + plus) - (2.0 * minus)) + ((b0 + plus) - (2.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= ((a0 - minus) + (b0 + plus)))"
                                     ]
                                 ]
                             },
@@ -106,9 +137,18 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "2.0 * plus + a0 - 4.0 * minus >= c0 + plus - minus",
-                                        "2.0 * plus + a0 - 4.0 * minus >= c0 + 2.0 * plus - 3.0 * minus",
-                                        "2.0 * plus + a0 - 4.0 * minus >= c0 + 3.0 * plus - 5.0 * minus"
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= ((c0 + (3.0 * plus)) - (5.0 * minus)))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (3.0 * plus)) - (5.0 * minus)) + ((c0 + (3.0 * plus)) - (5.0 * minus))))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (3.0 * plus)) - (4.0 * minus)) + ((c0 + (2.0 * plus)) - (5.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + (2.0 * plus)) - (4.0 * minus)) + ((c0 + (2.0 * plus)) - (4.0 * minus))))",
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= ((c0 + (2.0 * plus)) - (3.0 * minus)))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (2.0 * plus)) - (3.0 * minus)) + ((c0 + (2.0 * plus)) - (3.0 * minus))))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (2.0 * plus)) - (2.0 * minus)) + ((c0 + plus) - (3.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + plus) - (2.0 * minus)) + ((c0 + plus) - (2.0 * minus))))",
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= ((c0 + plus) - minus))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= ((a0 - (2.0 * minus)) + ((c0 + plus) - minus)))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + plus) - minus) + ((c0 + plus) - minus)))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= ((b0 + plus) + (c0 - minus)))"
                                     ]
                                 ]
                             },
@@ -119,11 +159,11 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "a0 + 2.0 * plus - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= a0 - 2.0 * minus + c0 + plus - minus",
-                                        "a0 + 2.0 * plus - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= a0 + plus - 2.0 * minus + c0 + plus - 2.0 * minus",
-                                        "a0 + 2.0 * plus - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= a0 + plus - 4.0 * minus + c0 + 2.0 * plus - 3.0 * minus",
-                                        "a0 + 2.0 * plus - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= a0 + 2.0 * plus - 4.0 * minus + c0 + 2.0 * plus - 4.0 * minus",
-                                        "a0 + 2.0 * plus - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= a0 + 2.0 * plus - 6.0 * minus + c0 + 3.0 * plus - 5.0 * minus"
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + (2.0 * plus)) - (6.0 * minus)) + ((c0 + (3.0 * plus)) - (5.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + (2.0 * plus)) - (4.0 * minus)) + ((c0 + (2.0 * plus)) - (4.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + plus) - (4.0 * minus)) + ((c0 + (2.0 * plus)) - (3.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((a0 + plus) - (2.0 * minus)) + ((c0 + plus) - (2.0 * minus))))",
+                                        "((((a0 + (2.0 * plus)) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= ((a0 - (2.0 * minus)) + ((c0 + plus) - minus)))"
                                     ]
                                 ]
                             },
@@ -134,12 +174,12 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "2.0 * plus + a0 - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= b0 + plus + c0 - minus",
-                                        "2.0 * plus + a0 - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= b0 + plus - minus + c0 + plus - minus",
-                                        "2.0 * plus + a0 - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= b0 + 2.0 * plus - 2.0 * minus + c0 + plus - 3.0 * minus",
-                                        "2.0 * plus + a0 - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= b0 + 2.0 * plus - 3.0 * minus + c0 + 2.0 * plus - 3.0 * minus",
-                                        "2.0 * plus + a0 - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= b0 + 3.0 * plus - 4.0 * minus + c0 + 2.0 * plus - 5.0 * minus",
-                                        "2.0 * plus + a0 - 4.0 * minus + 2.0 * plus + a0 - 4.0 * minus >= b0 + 3.0 * plus - 5.0 * minus + c0 + 3.0 * plus - 5.0 * minus"
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (3.0 * plus)) - (5.0 * minus)) + ((c0 + (3.0 * plus)) - (5.0 * minus))))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (3.0 * plus)) - (4.0 * minus)) + ((c0 + (2.0 * plus)) - (5.0 * minus))))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (2.0 * plus)) - (3.0 * minus)) + ((c0 + (2.0 * plus)) - (3.0 * minus))))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + (2.0 * plus)) - (2.0 * minus)) + ((c0 + plus) - (3.0 * minus))))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= (((b0 + plus) - minus) + ((c0 + plus) - minus)))",
+                                        "(((((2.0 * plus) + a0) - (4.0 * minus)) + (((2.0 * plus) + a0) - (4.0 * minus))) >= ((b0 + plus) + (c0 - minus)))"
                                     ]
                                 ]
                             }
@@ -147,39 +187,39 @@
                         "honest_utility": [
                             {
                                 "player": "A",
-                                "value": "a0 + 2.0 * plus -  4.0 * minus + 0.0"
+                                "value": "((a0 + (2.0 * plus)) - (4.0 * minus)) + 0.0"
                             },
                             {
                                 "player": "B",
-                                "value": "2.0 * plus + a0 - 4.0 * minus + 0.0"
+                                "value": "(((2.0 * plus) + a0) - (4.0 * minus)) + 0.0"
                             },
                             {
                                 "player": "C",
-                                "value": "2.0 * plus + a0 - 4.0 * minus + 0.0"
+                                "value": "(((2.0 * plus) + a0) - (4.0 * minus)) + 0.0"
                             }
                         ],
                         "practicality": [
                             {
                                 "case": [
-                                    "2.0 * plus + a0 - 4.0 * minus >= c0 + 3.0 * plus - 5.0 * minus",
-                                    "2.0 * plus + a0 - 4.0 * minus >= b0 + 3.0 * plus - 4.0 * minus",
-                                    "2.0 * plus + a0 - 4.0 * minus >= c0 + 2.0 * plus - 3.0 * minus",
-                                    "2.0 * plus + a0 - 4.0 * minus >= b0 + 2.0 * plus - 2.0 * minus",
-                                    "a0 + 2.0 * plus - 4.0 * minus >= a0 + plus - 2.0 * minus"
+                                    "((((2.0 * plus) + a0) - (4.0 * minus)) >= ((c0 + (3.0 * plus)) - (5.0 * minus)))",
+                                    "((((2.0 * plus) + a0) - (4.0 * minus)) >= ((b0 + (3.0 * plus)) - (4.0 * minus)))",
+                                    "((((2.0 * plus) + a0) - (4.0 * minus)) >= ((c0 + (2.0 * plus)) - (3.0 * minus)))",
+                                    "((((2.0 * plus) + a0) - (4.0 * minus)) >= ((b0 + (2.0 * plus)) - (2.0 * minus)))",
+                                    "(((a0 + (2.0 * plus)) - (4.0 * minus)) >= ((a0 + plus) - (2.0 * minus)))"
                                 ],
                                 "utilities": [
                                     [
                                         {
                                             "player": "A",
-                                            "value": "a0 + 2.0 * plus -  4.0 * minus + 0.0"
+                                            "value": "((a0 + (2.0 * plus)) - (4.0 * minus)) + 0.0"
                                         },
                                         {
                                             "player": "B",
-                                            "value": "2.0 * plus + a0 - 4.0 * minus + 0.0"
+                                            "value": "(((2.0 * plus) + a0) - (4.0 * minus)) + 0.0"
                                         },
                                         {
                                             "player": "C",
-                                            "value": "2.0 * plus + a0 - 4.0 * minus + 0.0"
+                                            "value": "(((2.0 * plus) + a0) - (4.0 * minus)) + 0.0"
                                         }
                                     ]
                                 ]
@@ -192,12 +232,12 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "a0 - minus >= 0.0",
-                                        "a0 - 2.0 * minus >= 0.0",
-                                        "a0 + plus - 3.0 * minus >= 0.0",
-                                        "a0 + plus - 4.0 * minus >= 0.0",
-                                        "a0 + 2.0 * plus - 5.0 * minus >= 0.0",
-                                        "a0 + 2.0 * plus - 6.0 * minus >= 0.0"
+                                        "((a0 - minus) >= 0.0)",
+                                        "((a0 - (2.0 * minus)) >= 0.0)",
+                                        "(((a0 + plus) - (3.0 * minus)) >= 0.0)",
+                                        "(((a0 + plus) - (4.0 * minus)) >= 0.0)",
+                                        "(((a0 + (2.0 * plus)) - (5.0 * minus)) >= 0.0)",
+                                        "(((a0 + (2.0 * plus)) - (6.0 * minus)) >= 0.0)"
                                     ]
                                 ]
                             },
@@ -207,12 +247,12 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "b0 + plus - minus >= 0.0",
-                                        "b0 + plus - 2.0 * minus >= 0.0",
-                                        "b0 + 2.0 * plus - 3.0 * minus >= 0.0",
-                                        "b0 + 2.0 * plus - 4.0 * minus >= 0.0",
-                                        "b0 + 3.0 * plus - 5.0 * minus >= 0.0",
-                                        "2.0 * plus + a0 - 4.0 * minus >= 0.0"
+                                        "(((b0 + plus) - minus) >= 0.0)",
+                                        "(((b0 + plus) - (2.0 * minus)) >= 0.0)",
+                                        "(((b0 + (2.0 * plus)) - (3.0 * minus)) >= 0.0)",
+                                        "(((b0 + (2.0 * plus)) - (4.0 * minus)) >= 0.0)",
+                                        "(((b0 + (3.0 * plus)) - (5.0 * minus)) >= 0.0)",
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= 0.0)"
                                     ]
                                 ]
                             },
@@ -222,12 +262,12 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "c0 - minus >= 0.0",
-                                        "c0 + plus - 2.0 * minus >= 0.0",
-                                        "c0 + plus - 3.0 * minus >= 0.0",
-                                        "c0 + 2.0 * plus - 4.0 * minus >= 0.0",
-                                        "c0 + 2.0 * plus - 5.0 * minus >= 0.0",
-                                        "2.0 * plus + a0 - 4.0 * minus >= 0.0"
+                                        "((c0 - minus) >= 0.0)",
+                                        "(((c0 + plus) - (2.0 * minus)) >= 0.0)",
+                                        "(((c0 + plus) - (3.0 * minus)) >= 0.0)",
+                                        "(((c0 + (2.0 * plus)) - (4.0 * minus)) >= 0.0)",
+                                        "(((c0 + (2.0 * plus)) - (5.0 * minus)) >= 0.0)",
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= 0.0)"
                                     ]
                                 ]
                             }
@@ -239,12 +279,12 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "a0 - minus >= 0.0",
-                                        "a0 - 2.0 * minus >= 0.0",
-                                        "a0 + plus - 3.0 * minus >= 0.0",
-                                        "a0 + plus - 4.0 * minus >= 0.0",
-                                        "a0 + 2.0 * plus - 5.0 * minus >= 0.0",
-                                        "a0 + 2.0 * plus - 6.0 * minus >= 0.0"
+                                        "((a0 - minus) >= 0.0)",
+                                        "((a0 - (2.0 * minus)) >= 0.0)",
+                                        "(((a0 + plus) - (3.0 * minus)) >= 0.0)",
+                                        "(((a0 + plus) - (4.0 * minus)) >= 0.0)",
+                                        "(((a0 + (2.0 * plus)) - (5.0 * minus)) >= 0.0)",
+                                        "(((a0 + (2.0 * plus)) - (6.0 * minus)) >= 0.0)"
                                     ]
                                 ]
                             },
@@ -254,12 +294,12 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "b0 + plus - minus >= 0.0",
-                                        "b0 + plus - 2.0 * minus >= 0.0",
-                                        "b0 + 2.0 * plus - 3.0 * minus >= 0.0",
-                                        "b0 + 2.0 * plus - 4.0 * minus >= 0.0",
-                                        "b0 + 3.0 * plus - 5.0 * minus >= 0.0",
-                                        "2.0 * plus + a0 - 4.0 * minus >= 0.0"
+                                        "(((b0 + plus) - minus) >= 0.0)",
+                                        "(((b0 + plus) - (2.0 * minus)) >= 0.0)",
+                                        "(((b0 + (2.0 * plus)) - (3.0 * minus)) >= 0.0)",
+                                        "(((b0 + (2.0 * plus)) - (4.0 * minus)) >= 0.0)",
+                                        "(((b0 + (3.0 * plus)) - (5.0 * minus)) >= 0.0)",
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= 0.0)"
                                     ]
                                 ]
                             },
@@ -269,12 +309,12 @@
                                 ],
                                 "satisfied_in_case": [
                                     [
-                                        "c0 - minus >= 0.0",
-                                        "c0 + plus - 2.0 * minus >= 0.0",
-                                        "c0 + plus - 3.0 * minus >= 0.0",
-                                        "c0 + 2.0 * plus - 4.0 * minus >= 0.0",
-                                        "c0 + 2.0 * plus - 5.0 * minus >= 0.0",
-                                        "2.0 * plus + a0 - 4.0 * minus >= 0.0"
+                                        "((c0 - minus) >= 0.0)",
+                                        "(((c0 + plus) - (2.0 * minus)) >= 0.0)",
+                                        "(((c0 + plus) - (3.0 * minus)) >= 0.0)",
+                                        "(((c0 + (2.0 * plus)) - (4.0 * minus)) >= 0.0)",
+                                        "(((c0 + (2.0 * plus)) - (5.0 * minus)) >= 0.0)",
+                                        "((((2.0 * plus) + a0) - (4.0 * minus)) >= 0.0)"
                                     ]
                                 ]
                             }
