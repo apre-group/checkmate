@@ -1,6 +1,7 @@
 #ifndef __checkmate_input__
 #define __checkmate_input__
 
+#include <algorithm>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -127,6 +128,16 @@ inline bool are_compatible_cases(const std::vector<z3::Bool> _case1, const std::
 	return compatible_cases;
 }
 
+// a remembered result of a collusion resilience check (see Input::enter_case for validity)
+struct CrMemo {
+	enum Status : char { UNKNOWN, HOLDS, VIOLATED, UNDECIDED };
+	Status status = UNKNOWN;
+	// the case the result was computed in
+	size_t case_id = 0;
+	// the case split, if UNDECIDED
+	z3::Bool reason;
+};
+
 class Node {
 public:
 	virtual NodeType type() const = 0;
@@ -170,6 +181,9 @@ public:
 	// the reason that a check for a property failed:
 	// null if didn't fail or no case split would help
 	mutable z3::Bool reason;
+
+	// collusion resilience results of this node, indexed by player group (as bitset), HOLDS or VIOLATED only
+	mutable std::vector<CrMemo> cr_memo;
 
 	virtual UtilityTuplesSet get_utilities() const = 0;
 
@@ -286,6 +300,10 @@ class Leaf final : public Node {
 	std::vector<Utility> utilities;
 
 	mutable uint64_t problematic_group;
+
+	// collusion resilience results of the comparison with the honest utility,
+	// indexed by player group (as bitset)
+	mutable std::vector<CrMemo> cr_supergroup_memo;
 
 	NodeType type() const override { return NodeType::LEAF; }
 
@@ -617,6 +635,49 @@ struct Input {
 	// maximum number of players currently supported
 	// no reason there couldn't be more, but convenient for implementation (cf collusion resilience)
 	static const size_t MAX_PLAYERS = 64;
+
+	// cases for remembering results: every case split enters a new case and leaves it afterwards,
+	// case ids are never reused, so results of cases that were left can never be valid again
+	mutable std::vector<bool> active_cases = {true};
+	mutable std::vector<size_t> case_stack = {0};
+
+	// start over, e.g. for a new honest history or solver: no remembered result is valid anymore
+	void reset_cases() const {
+		std::fill(active_cases.begin(), active_cases.end(), false);
+		active_cases.push_back(true);
+		case_stack = {active_cases.size() - 1};
+	}
+
+	void enter_case() const {
+		active_cases.push_back(true);
+		case_stack.push_back(active_cases.size() - 1);
+	}
+
+	void leave_case() const {
+		active_cases[case_stack.back()] = false;
+		case_stack.pop_back();
+	}
+
+	CrMemo memo(CrMemo::Status status, z3::Bool reason = z3::Bool()) const {
+		CrMemo result;
+		result.status = status;
+		result.case_id = case_stack.back();
+		result.reason = reason;
+		return result;
+	}
+
+	// results that hold in any case (HOLDS, VIOLATED) stay valid in all refinements of the case they were computed in,
+	// UNDECIDED results only in exactly that case
+	bool memo_valid(const CrMemo &memo) const {
+		switch (memo.status) {
+			case CrMemo::UNKNOWN:
+				return false;
+			case CrMemo::UNDECIDED:
+				return memo.case_id == case_stack.back();
+			default:
+				return active_cases[memo.case_id];
+		}
+	}
 
 	void reset_solved_for() const {
 		solved_for_group = {};

@@ -520,21 +520,12 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 
 } 
 
-bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, std::bitset<Input::MAX_PLAYERS> group, const std::vector<Utility> &honest_utility, unsigned players, uint64_t group_nr, bool consider_prob_groups) {
-	
-	count_cr_repetitions++;
-	if(!node->checked_cr) {
-		count_cr++;
-		node->checked_cr = true;
-	}
+bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, std::bitset<Input::MAX_PLAYERS> group, const std::vector<Utility> &honest_utility, unsigned players, uint64_t group_nr);
+
+bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, const Options &options, Node *node, std::bitset<Input::MAX_PLAYERS> group, const std::vector<Utility> &honest_utility, unsigned players, uint64_t group_nr) {
 	
 	if (node->is_leaf()) {
 		const auto &leaf = node->leaf();
-
-
-		if  ((group_nr < leaf.problematic_group) && consider_prob_groups){
-			return true;
-		}
 
 		// the honest utility is the utility of the honest leaf, so no group can gain anything there
 		if (leaf.honest) {
@@ -546,12 +537,25 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		// enumerate all subsets `extra` of the players outside of group, except the full one
 		const uint64_t all_players = players == 64 ? -1ull : (1ull << players) - 1;
 		const uint64_t outside = all_players & ~group.to_ullong();
+		if (leaf.cr_supergroup_memo.empty()) {
+			leaf.cr_supergroup_memo.resize(all_players);
+		}
 		z3::Bool reason;
 		for (uint64_t extra = 0; extra != outside; extra = (extra - outside) & outside) {
 			std::bitset<Input::MAX_PLAYERS> supergroup = group.to_ullong() | extra;
 			// the empty group cannot gain anything
 			if (supergroup.none())
 				continue;
+
+			// look up whether this supergroup was already compared for another group
+			CrMemo &memo = leaf.cr_supergroup_memo[supergroup.to_ullong()];
+			if (input.memo_valid(memo)) {
+				if (memo.status == CrMemo::VIOLATED)
+					return false;
+				if (memo.status == CrMemo::UNDECIDED && reason.null())
+					reason = memo.reason;
+				continue;
+			}
 
 			// compute the honest and the leaf total utility for the supergroup...
 			Utility honest_total{z3::Real::ZERO, z3::Real::ZERO};
@@ -569,31 +573,29 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 			if(options.count_calls) {
 				calls_cr++;
 			}
-			if (solver.solve({!condition}) == z3::Result::UNSAT)
+			if (solver.solve({!condition}) == z3::Result::UNSAT) {
+				memo = input.memo(CrMemo::HOLDS);
 				continue;
+			}
 
 			if(options.count_calls) {
 				calls_cr++;
 			}
-			if (solver.solve({condition}) == z3::Result::UNSAT)
+			if (solver.solve({condition}) == z3::Result::UNSAT) {
+				memo = input.memo(CrMemo::VIOLATED);
 				return false;
+			}
 
 			// undecided for this supergroup: remember the first case split,
 			// but keep looking for a supergroup that violates the property in any case
+			memo = input.memo(CrMemo::UNDECIDED, get_split_approx(solver, honest_total, group_utility));
 			if (reason.null())
-				reason = get_split_approx(solver, honest_total, group_utility);
+				reason = memo.reason;
 		}
 
-		if (reason.null()) {
-			if (consider_prob_groups) {
-				leaf.problematic_group = group_nr + 1;
-			}
+		if (reason.null())
 			return true;
-		}
 
-		if (consider_prob_groups) {
-			leaf.problematic_group = group_nr;
-		}
 		leaf.reason = reason;
 		input.set_reset_point(leaf);
 		return false;
@@ -601,10 +603,6 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 	} else if (node->is_subtree()){
 
 		const auto &subtree = node->subtree();
-
-		if  ((group_nr < subtree.problematic_group) && consider_prob_groups){
-			return true;
-		}
 
 		// look up current player_group:
 		// 		if disj_of_cases (in satisfied_for_case) that is equivalent to current case or weaker we return true 
@@ -664,12 +662,8 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		bool found = satisfied_for(group_nr, disj_of_cases);
 
 		// satisfied without any case split
-		if (found && disj_of_cases.null()) {
-			if (consider_prob_groups) {
-				subtree.problematic_group = group_nr + 1;
-			}
+		if (found && disj_of_cases.null())
 			return true;
-		}
 
 		if (found) {
 
@@ -684,9 +678,6 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 			z3::Result z3_result_implied = solver.solve({!disj_of_cases});
 
 			if (z3_result_implied == z3::Result::UNSAT) {
-				if (consider_prob_groups) {
-					subtree.problematic_group = group_nr + 1;
-				}
 				return true;
 			} else {
 
@@ -704,9 +695,6 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					subtree.reason = disj_of_cases;
 				}
 
-				if (consider_prob_groups) {
-					subtree.problematic_group = group_nr;
-				}
 				input.set_reset_point(subtree);
 				return false;
 			}
@@ -715,10 +703,6 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 
 	const auto &branch = node->branch();
 
-	if  ((group_nr < branch.problematic_group) && consider_prob_groups ){
-		return true;
-	}
-	
 	// else we deal with a branch:
 	// one choice (the honest one if the branch is honest, otherwise any) must be collusion resilient for group,
 	// all other choices are deviations of branch.player, so they must be collusion resilient for group together with branch.player
@@ -727,15 +711,12 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 	uint64_t supergroup_nr = supergroup.to_ullong();
 	// the group of all players is not considered, so it trivially satisfies the property
 	bool supergroup_trivial = supergroup.count() == players;
-	// problematic groups rely on the groups being checked in increasing order,
-	// so they can only be used if the group does not grow
-	bool supergroup_prob = consider_prob_groups && supergroup_nr == group_nr;
 
 	// first reason (case split) found in a child, if any
 	z3::Bool reason;
 	Node *reset_node = nullptr;
-	auto check = [&](const Choice &choice, std::bitset<Input::MAX_PLAYERS> check_group, uint64_t check_group_nr, bool check_prob) {
-		bool result = collusion_resilience_rec(input, solver, options, choice.node.get(), check_group, honest_utility, players, check_group_nr, check_prob);
+	auto check = [&](const Choice &choice, std::bitset<Input::MAX_PLAYERS> check_group, uint64_t check_group_nr) {
+		bool result = collusion_resilience_rec(input, solver, options, choice.node.get(), check_group, honest_utility, players, check_group_nr);
 		if (!result && reason.null() && !choice.node->reason.null()) {
 			reason = choice.node->reason;
 			reset_node = choice.node.get();
@@ -758,7 +739,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		if (honest_choice && &choice != honest_choice)
 			continue;
 
-		if (check(choice, group, group_nr, consider_prob_groups)) {
+		if (check(choice, group, group_nr)) {
 			passed_group[i] = true;
 			found_choice = &choice;
 			break;
@@ -770,16 +751,14 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 	// if branch.player is already in group, supergroup is group,
 	// so choices that failed for group need not be checked again
 	bool same_group = supergroup_nr == group_nr;
-	// if no choice passed for group but a case split might help,
-	// still look for a deviation that is violated in any case: then the case split is not needed
 	bool result = found_choice != nullptr;
 	bool violated = false;
-	if ((found_choice || !reason.null()) && !supergroup_trivial) {
+	if (found_choice && !supergroup_trivial) {
 		for (size_t i = 0; i < branch.choices.size(); i++) {
 			const Choice &choice = branch.choices[i];
 			if (passed_group[i])
 				continue;
-			if (!(same_group && failed_group[i]) && check(choice, supergroup, supergroup_nr, supergroup_prob))
+			if (!(same_group && failed_group[i]) && check(choice, supergroup, supergroup_nr))
 				continue;
 
 			result = false;
@@ -793,12 +772,25 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 					return false;
 			}
 		}
+	} else if (!reason.null() && !supergroup_trivial && !options.counterexamples) {
+		// no choice passed for group but a case split might help:
+		// if a deviation is already known to be violated in any case, the case split is not needed
+		// (only look this up, checking the deviations costs more than the case split saves)
+		for (size_t i = 0; i < branch.choices.size(); i++) {
+			const Choice &choice = branch.choices[i];
+			bool known_violated = same_group && failed_group[i] && choice.node->reason.null();
+			if (!known_violated && !choice.node->cr_memo.empty()) {
+				const CrMemo &memo = choice.node->cr_memo[supergroup_nr];
+				known_violated = input.memo_valid(memo) && memo.status == CrMemo::VIOLATED;
+			}
+			if (known_violated) {
+				violated = true;
+				break;
+			}
+		}
 	}
 
 	if (result) {
-		if (consider_prob_groups) {
-			branch.problematic_group = group_nr + 1;
-		}
 		// record the action taken by group, needed for printing strategy
 		if (options.strategies) {
 			branch.satisfies_cr[group_nr] = found_choice->action;
@@ -812,6 +804,42 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		input.set_reset_point(*reset_node);
 	}
 	return false;
+}
+
+bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Options &options, Node *node, std::bitset<Input::MAX_PLAYERS> group, const std::vector<Utility> &honest_utility, unsigned players, uint64_t group_nr) {
+
+	count_cr_repetitions++;
+	if(!node->checked_cr) {
+		count_cr++;
+		node->checked_cr = true;
+	}
+
+	// a reason left from an earlier check of this node (e.g. for another group) must not be mistaken for this one's
+	node->reason = z3::Bool();
+
+	// look up a result from this case or a coarser one
+	if (node->cr_memo.empty()) {
+		const uint64_t all_players = players == 64 ? -1ull : (1ull << players) - 1;
+		node->cr_memo.resize(all_players);
+	}
+	CrMemo &memo = node->cr_memo[group_nr];
+	if (input.memo_valid(memo)) {
+		if (memo.status == CrMemo::HOLDS)
+			return true;
+		// counterexamples are collected while checking violated choices, so these have to be checked again
+		if (memo.status == CrMemo::VIOLATED && !options.counterexamples)
+			return false;
+	}
+
+	bool result = collusion_resilience_rec_uncached(input, solver, options, node, group, honest_utility, players, group_nr);
+
+	// remember results that hold in any case, i.e. true or false without a case split
+	if (result) {
+		memo = input.memo(CrMemo::HOLDS);
+	} else if (node->reason.null()) {
+		memo = input.memo(CrMemo::VIOLATED);
+	}
+	return result;
 }
 
 bool practicality_rec_old(const Input &input, const Options &options, z3::Solver &solver, Node *node, std::vector<std::string> actions_so_far, bool consider_prob_groups) {
@@ -1228,7 +1256,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		
 
 		// being collusion resilient for the empty group means being collusion resilient against all groups
-		bool result = collusion_resilience_rec(input, solver, options, input.root.get(), 0, utility, input.players.size(), 0, true);
+		bool result = collusion_resilience_rec(input, solver, options, input.root.get(), 0, utility, input.players.size(), 0);
 
 		// violated in any case: report the groups that can deviate profitably as counterexamples
 		if (!result && input.root->reason.null() && options.counterexamples) {
@@ -1237,7 +1265,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			for (uint64_t group_nr = 1; group_nr < -1ull >> (64 - input.players.size()); group_nr++) {
 				std::bitset<Input::MAX_PLAYERS> group = group_nr;
 				input.root->reset_reason();
-				bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, utility, input.players.size(), group_nr, false);
+				bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, utility, input.players.size(), group_nr);
 				if (!collusion_resilient_for_group && input.root->reason.null()) {
 					std::vector<size_t> pl;
 					for (size_t player = 0; player < input.players.size(); player++) {
@@ -1379,6 +1407,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		}
 
 		solver.push();
+		input.enter_case();
 
 		solver.assert_(condition);
 		assert (solver.solve() != z3::Result::UNSAT);
@@ -1389,6 +1418,7 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		bool attempt = property_rec(solver, options, input, property, new_current_case, history, subtree_results_pr);
 
 		solver.pop();
+		input.leave_case();
 
 		if (property != PropertyType::Practicality) {
 			// reset the branch.problematic_group for all branches to presplit state, such that the other case split starts at the same point
@@ -1437,7 +1467,7 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 		// in subtree mode there cannot be subtrees in the input;
 		const Leaf &honest_leaf = honest_leaf_pre.leaf();
 		group = group_nr;
-		property_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_leaf.utilities, input.players.size(), group_nr, false);
+		property_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_leaf.utilities, input.players.size(), group_nr);
 	} else {
 		assert(property != PropertyType::Practicality);
 		assert(group_nr > 0); // set to i+1 in previous fct
@@ -1484,6 +1514,7 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 		}
 
 		solver.push();
+		input.enter_case();
 
 		solver.assert_(condition);
 		assert (solver.solve() != z3::Result::UNSAT);
@@ -1494,6 +1525,7 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 		bool attempt = property_rec_subtree(solver, options, input, property, new_current_case, history, group_nr, satisfied_in_case);
 
 		solver.pop();
+		input.leave_case();
 
 		if (!attempt){
 			result = false;
@@ -1511,7 +1543,7 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 
 	bool property_result;
 	std::bitset<Input::MAX_PLAYERS> group = group_nr;
-	property_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_utility, input.players.size(), group_nr, false);
+	property_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_utility, input.players.size(), group_nr);
 
 	// property holds under current split
 	if (property_result) {
@@ -1552,6 +1584,7 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 		}
 
 		solver.push();
+		input.enter_case();
 
 		solver.assert_(condition);
 		assert (solver.solve() != z3::Result::UNSAT);
@@ -1562,6 +1595,7 @@ bool property_rec_utility(z3::Solver &solver, const Options &options, const Inpu
 		bool attempt = property_rec_utility(solver, options, input, property, new_current_case, honest_utility, group_nr, satisfied_in_case);
 
 		solver.pop();
+		input.leave_case();
 
 		if (!attempt){
 			result = false;
@@ -1649,6 +1683,7 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 		}
 
 		solver.push();
+		input.enter_case();
 
 		solver.assert_(condition);
 		assert (solver.solve() != z3::Result::UNSAT);
@@ -1659,6 +1694,7 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 		bool attempt = property_rec_nohistory(solver, options, input, property, new_current_case, player_nr, satisfied_in_case, subtree_results_pr);
 
 		solver.pop();
+		input.leave_case();
 
 		if (!attempt){
 			result = false;
@@ -1671,6 +1707,8 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 void property(const Options &options, const Input &input, PropertyType property, size_t history) {
 	/* determine if the input has some property for the current honest history */
 	Solver solver;
+	// remembered results depend on the solver and the honest utility
+	input.reset_cases();
 	solver.assert_(input.initial_constraint);
 	std::string prop_name;
 	bool prop_holds;
@@ -1782,6 +1820,8 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 	
 	/* determine if the input has some property for the current honest history */
 	Solver solver;
+	// remembered results depend on the solver and the honest utility
+	input.reset_cases();
 	solver.assert_(input.initial_constraint);
 	std::string prop_name;
 
@@ -1907,6 +1947,8 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 	assert(property == PropertyType::CollusionResilience);
 
 	Solver solver;
+	// remembered results depend on the solver and the honest utility
+	input.reset_cases();
 	solver.assert_(input.initial_constraint);
 
 	solver.assert_(input.collusion_resilience_constraint);
@@ -1963,6 +2005,8 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 	
 
 	Solver solver;
+	// remembered results depend on the solver and the honest utility
+	input.reset_cases();
 	solver.assert_(input.initial_constraint);
 	std::string prop_name;
 
