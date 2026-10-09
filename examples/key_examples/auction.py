@@ -20,12 +20,9 @@ initial_state['lowest_possible'] = L
 for player in ps:
     initial_state[player] = dict()
 
-honest = ["E", "E", "I", "I"]
+honest = ["L", "E", "I", "I"]
 
 HONEST_HISTORIES = [[Action(a) for a in honest]]
-
-global COUNT
-COUNT = 0
 
 
 def copy_state(state: Dict) -> Dict:
@@ -72,7 +69,6 @@ def still_possible(lowest: Action, current: Action) -> bool:
 
 
 def generate_tree(state: Dict, history: List[str]) -> Tree:
-    global COUNT
 
     children = dict()
     if len(history) < 4:
@@ -81,7 +77,6 @@ def generate_tree(state: Dict, history: List[str]) -> Tree:
             new_state = copy_state(state)
             if child == I:
                 if history == []:
-                    COUNT = COUNT +1 
                     children[child] = leaf(compute_utility(state, False))
                 else: 
                     children[child] = generate_tree(new_state, history + ['I'])
@@ -102,29 +97,23 @@ def generate_tree(state: Dict, history: List[str]) -> Tree:
                         INITIAL_CONSTRAINTS.append(current_price > v)
                     new_state['paid_price'] = current_price
                 else:
-                    if len(history) == 0:
-                        new_state["lowest_possible"] = E
-                    else:
-                        new_state['lowest_possible'] = H
+                    new_state['lowest_possible'] = H
                     new_state['paid_price'] = v
 
 
                 new_state['has_item'] = player
                 children[child] = generate_tree(new_state, history + [child.value])
-        COUNT = COUNT + 1        
+                
         tree = branch(player, children)
 
     else:
         assert len(history) == 4
-        COUNT = COUNT + 1
         tree = leaf(compute_utility(state, True))
 
     return tree
 
 
 auction_tree = generate_tree(initial_state, [])
-
-#print(COUNT)
 
 TREE = auction_tree
 
@@ -139,6 +128,7 @@ finish(
     COLLUSION_RESILIENCE_CONSTRAINTS,
     PRACTICALITY_CONSTRAINTS,
     HONEST_HISTORIES,
+    [],
     TREE
 )
 

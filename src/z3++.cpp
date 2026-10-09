@@ -1,14 +1,6 @@
-#include <iostream>
-#include <unordered_set>
-
-#include "utils.hpp"
 #include "z3++.hpp"
 
-static unsigned THRESHOLD = 5;
-
-
 namespace z3 {
-
 	// the only Z3 context - mostly just hangs out here to be passed to the Z3 API
 	Z3_context CONTEXT;
 
@@ -30,92 +22,65 @@ namespace z3 {
 	Z3_sort Expression::BOOL_SORT = Z3_mk_bool_sort(CONTEXT);
 	Z3_sort Expression::REAL_SORT = Z3_mk_real_sort(CONTEXT);
 
-	Bool Bool::FALSE = Bool::value(false);
-	Bool Bool::TRUE = Bool::value(true);
-
-	unsigned Bool::FRESH_INDEX = 0;
-	std::vector<int> Bool::ONES;
-
 	Real Real::ZERO = Real::value(0);
-	Real Real::ONE = Real::value(1);
 
-	// MARCO algorithm for unsat cores
-	// https://sun.iwu.edu/~mliffito/marco-viz/
-	bool MinimalCores::next_core() {
-		unsigned count = 0;
-		unsigned seeds_count = 0;
-		while (map.solve() == Result::SAT) {
-			seeds_count++;
-			if (seeds_count > max_unsat ){
-				std::cout<< "\tall counterexamples generation: Maximum unsat core iteration exceeded, pass option --max_unsat N, default N = 10" << std::endl;
-				return false;
+	// TODO keep track of precedence
+	std::ostream &operator<<(std::ostream &out, z3::Real expr) {
+		auto op = expr.op();
+		switch(op) {
+		case Real::Operator::NUMERAL:
+		case Real::Operator::CONSTANT:
+			out << Z3_ast_to_string(CONTEXT, expr.ast);
+			check_error();
+			return out;
+		case Real::Operator::MIN:
+			return out << '(' << op << ' ' << expr.real_child(0) << ')';
+		case Real::Operator::ADD:
+		case Real::Operator::SUB:
+		case Real::Operator::MUL:
+		case Real::Operator::DIV:
+			out << '(';
+			for(unsigned i = 0; i < expr.num_args(); i++) {
+				if(i)
+					out << ' ' << op << ' ';
+				out << expr.real_child(i);
 			}
-			auto model = map.model();
-			std::vector<Bool> seed;
-			// std::cout<< labels.size() << std::endl;
-			
-			for (auto label: labels)
-				if (!model.assigns<false>(label))
-					seed.push_back(label);
-			std::unordered_set<Bool> relevant(seed.begin(), seed.end());
-			// the seed doesn't say enough to cause unsat
-			if (solver.solve(seed) == Result::SAT) {
-				// std::cout << "stuck in while" << std::endl;
-				// grow it as much as possible...
-				std::vector<Bool> complement;
-				for (auto label: labels) {
-					if (relevant.count(label))
-						continue;
-					seed.push_back(label);
-					if (solver.solve(seed) == Result::UNSAT) {
-						complement.push_back(label);
-						seed.pop_back();
-					}
-				}
-				// ...then assert that one of the other labels must be true
-				map.assert_(disjunction(complement));
-			}
-				// the seed contains an unsat core
-			else {
-				// get what Z3 thinks is an unsat core
-				core.clear();
-				for (auto label: solver.unsat_core())
-					if (relevant.count(label))
-						core.push_back(label);
-
-				// NB currently buggy, seems to sometimes return an insufficient unsat core
-				if (solver.solve(core) == Result::SAT) {
-					std::cout << "\t(Z3 bug, retrying...)" << std::endl;
-					count++;
-
-					// try again?
-					if (count >= THRESHOLD){
-						return false;
-					}	
-					continue;				
-				}
-				// minimising the unsat core does not seem to pay off, most of the time
-				// put behind a command-line option?
-				/*
-				// shrink it...
-				for(unsigned i = 0; i < core.size();) {
-					auto discard = core[i];
-					auto end = core[core.size() - 1];
-					core[i] = end;
-					core.pop_back();
-					if(solver.solve(core) == Result::SAT) {
-						core.push_back(end);
-						core[i++] = discard;
-					}
-				}
-				std::cout << "minimised to: " << core.size() << std::endl;
-				*/
-				// ...then assert that we want a different core next time
-				map.assert_(!conjunction(core));
-				return true;
-			}
+			out << ')';
+			return out;
 		}
-		return false;
+		assert(false);
+		UNREACHABLE;
 	}
 
+	// TODO keep track of precedence
+	std::ostream &operator<<(std::ostream &out, z3::Bool expr) {
+		auto op = expr.op();
+		switch(op) {
+		case Bool::Operator::TRUE:
+			return out << "true";
+		case Bool::Operator::FALSE:
+			return out << "false";
+		case Bool::Operator::NOT:
+			return out << "!(" << expr.bool_child(0) << ")";
+		case Bool::Operator::AND:
+		case Bool::Operator::OR:
+			out << '(';
+			for(unsigned i = 0; i < expr.num_args(); i++) {
+				if(i)
+					out << ' ' << op << ' ';
+				out << expr.bool_child(i);
+			}
+			out << ')';
+			return out;
+		case Bool::Operator::EQ:
+		case Bool::Operator::NE:
+		case Bool::Operator::LT:
+		case Bool::Operator::LE:
+		case Bool::Operator::GT:
+		case Bool::Operator::GE:
+			return out << '(' << expr.real_child(0) << ' ' << op << ' ' << expr.real_child(1) << ')';
+		}
+		assert(false);
+		UNREACHABLE;
+	}
 }
