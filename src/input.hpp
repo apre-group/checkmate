@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 
 #include "utility.hpp"
@@ -413,6 +414,8 @@ struct ConditionChoice {
 	z3::Bool condition;
 	// end up in this subtree
 	std::unique_ptr<Node> node;
+	// optional name of the condition edge
+	std::string name = "";
 
 	friend std::ostream &operator<<(std::ostream &out, const ConditionChoice &choice) {
 		return out << choice.condition;
@@ -849,6 +852,8 @@ class ConditionNode final : public Node {
 	public:
 	// available conditional branches
 	std::vector<ConditionChoice> conditions;
+	// unknown constants revealed at this node: those occurring in the conditions plus any declared in "reveals"
+	std::vector<std::string> revealed;
 
 	mutable std::string strategy;
 
@@ -1186,6 +1191,8 @@ struct Input {
 
 	// a real or infinitesimal utility for each string
 	std::unordered_map<std::string, Utility> utilities;
+	// constants and infinitesimals whose value is unknown at the root
+	std::unordered_set<std::string> unknowns;
 
 	// global initial constraints
 	z3::Bool initial_constraint;

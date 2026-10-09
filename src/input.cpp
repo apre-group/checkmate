@@ -26,7 +26,8 @@ struct Lexer {
 		LT,
 		LE,
 		AND,
-		OR
+		OR,
+		IMPLIES
 	};
 
 	// should the next '-' be negation or subtraction?
@@ -99,6 +100,10 @@ struct Lexer {
 			remaining++;
 			unary = true;
 			return Token::DIVIDE;
+		} else if (*remaining == '=' && remaining[1] == '>') {
+			remaining += 2;
+			unary = true;
+			return Token::IMPLIES;
 		} else if (*remaining == '=') {
 			remaining++;
 			unary = true;
@@ -157,12 +162,14 @@ struct Parser {
 		LE,
 		LT,
 		AND,
-		OR
+		OR,
+		IMPLIES
 	};
 
 	// operator precedence classes, binding from loosest to tightest
 	enum class Precedence {
 		PAREN,
+		IMPLIES,
 		ANDOR,
 		COMPARISON,
 		PLUSMINUS,
@@ -196,7 +203,8 @@ struct Parser {
 			case Operation::AND:
 			case Operation::OR:
 				return Precedence::ANDOR;
-				return Precedence::ANDOR;
+			case Operation::IMPLIES:
+				return Precedence::IMPLIES;
 		}
 		assert(false);
 		UNREACHABLE;
@@ -209,6 +217,8 @@ struct Parser {
 	const std::unordered_map<std::string, Utility> &identifiers;
 	// lexer for tokenisation
 	Lexer lexer;
+	// identifiers occurring in the most recently parsed expression
+	std::unordered_set<std::string> identifiers_used;
 
 	// stack of operations
 	std::vector<Operation> operation_stack;
@@ -331,12 +341,25 @@ struct Parser {
 				constraint_stack.push_back(left || right);
 				break;
 			}
+			case Operation::IMPLIES: {
+				auto right = pop_constraint();
+				auto left = pop_constraint();
+				constraint_stack.push_back(left.implies(right));
+				break;
+			}
 		}
 	}
 
 	// handle a new `operation`, committing higher-precedence operations and then pushing it on `operation_stack`
 	void operation(Operation operation) {
-		while (!operation_stack.empty() && precedence(operation_stack.back()) >= precedence(operation))
+		// implication is right-associative, everything else left-associative
+		while (
+			!operation_stack.empty() && (
+				operation == Operation::IMPLIES
+					? precedence(operation_stack.back()) > precedence(operation)
+					: precedence(operation_stack.back()) >= precedence(operation)
+			)
+		)
 			commit(pop_operation());
 		operation_stack.push_back(operation);
 	}
@@ -344,6 +367,7 @@ struct Parser {
 	// parse either a utility term or a Boolean expression, leaving it in the stack
 	void parse(const char *start) {
 		lexer.start(start);
+		identifiers_used.clear();
 		while (lexer.has_more()) {
 			Lexer::Token token = lexer.next();
 			switch (token) {
@@ -359,6 +383,7 @@ struct Parser {
 						std::cerr << "checkmate: undeclared constant " << lexer.buffer << std::endl;
 						std::exit(EXIT_FAILURE);
 					}
+					identifiers_used.insert(lexer.buffer);
 					utility_stack.push_back(utility);
 					break;
 				}
@@ -411,6 +436,9 @@ struct Parser {
 				case Lexer::Token::OR:
 					operation(Operation::OR);
 					break;
+				case Lexer::Token::IMPLIES:
+					operation(Operation::IMPLIES);
+					break;
 			}
 		}
 		// when there is no more input, we know all the operators have to be committed
@@ -455,12 +483,13 @@ static HonestUtilityElement parse_honest_utility_element(Parser &parser, const j
 /*
  * load a tree from a JSON document `node`, assuming a certain format
  * - `input` is the input parsed so far
+ * - `known` are the constants known at this point of the game: leaf utilities may only use these
  * - `action_constraints` are filled out as we go
  *
  * TODO does not check all aspects
  * (hoping to have new input format based on s-expressions, which would be much easier to parse)
  */
-static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const json &node) {
+static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const json &node, const std::unordered_set<std::string> &known) {
 	// branch
 	if (node.contains("children")) {
 		// do linear-time lookup for the index of the node's player in the input player list
@@ -473,7 +502,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 
 		std::unique_ptr<Branch> branch(new Branch(player));
 		for (const json &child: node["children"]) {
-			auto loaded = load_tree(input, parser, child["child"]);
+			auto loaded = load_tree(input, parser, child["child"], known);
 
 			branch->choices.push_back({child["action"], std::move(loaded)});
 		}
@@ -483,15 +512,44 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 	// condition node
 	if (node.contains("condition")) {
 		std::unique_ptr<ConditionNode> condition_node(new ConditionNode());
+
+		// parse the condition constraints first: unknowns occurring in any of them are revealed
+		std::vector<z3::Bool> conditions;
+		std::unordered_set<std::string> revealed;
 		for (const json &cond: node["condition"]) {
-			// parse the condition constraint
 			const std::string &condition_str = cond["constraint"];
-			z3::Bool condition = parser.parse_constraint(condition_str.c_str());
-			
+			conditions.push_back(parser.parse_constraint(condition_str.c_str()));
+			for (const std::string &identifier: parser.identifiers_used)
+				if (input.unknowns.count(identifier))
+					revealed.insert(identifier);
+		}
+		// additionally revealed constants, e.g. those determined by the conditions' constants
+		if (node.contains("reveals"))
+			for (const json &reveal: node["reveals"]) {
+				const std::string &name = reveal;
+				if (!input.utilities.count(name)) {
+					std::cerr << "checkmate: condition node reveals undeclared constant " << name << std::endl;
+					std::exit(EXIT_FAILURE);
+				}
+				if (!input.unknowns.count(name)) {
+					std::cerr << "checkmate: condition node reveals " << name << ", which is not declared unknown" << std::endl;
+					std::exit(EXIT_FAILURE);
+				}
+				revealed.insert(name);
+			}
+
+		std::unordered_set<std::string> child_known(known);
+		for (const std::string &name: revealed)
+			if (child_known.insert(name).second)
+				condition_node->revealed.push_back(name);
+		sort(condition_node->revealed.begin(), condition_node->revealed.end());
+
+		size_t index = 0;
+		for (const json &cond: node["condition"]) {
 			// load the child subtree
-			auto loaded = load_tree(input, parser, cond["child"]);
-			
-			condition_node->conditions.push_back({condition, std::move(loaded)});
+			auto loaded = load_tree(input, parser, cond["child"], child_known);
+			std::string name = cond.contains("name") ? std::string(cond["name"]) : "";
+			condition_node->conditions.push_back({conditions[index++], std::move(loaded), name});
 		}
 		return condition_node;
 	}
@@ -510,6 +568,13 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 												   utility["player"],
 												   parser.parse_utility(string.c_str())
 										   });
+				// utilities may only depend on constants known at this point of the game
+				for (const std::string &identifier: parser.identifiers_used)
+					if (!known.count(identifier)) {
+						std::cerr << "checkmate: utility " << string << " of player " << std::string(utility["player"])
+							<< " uses " << identifier << ", which is still unknown at this leaf" << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
 			}
 				// numeric utility, assumed real
 			else if (value.is_number_unsigned()) {
@@ -882,16 +947,39 @@ Input::Input(const char *path) : sat_cases(), strategies() , stop_log(false) {
 	sort(players.begin(), players.end());
 
 	// load real/infinitesimal identifiers
-	for (const json &real: document["constants"]) {
-		const std::string &name = real;
-		auto constant = z3::Real::constant(name);
-		utilities.insert({name, {constant, z3::Real::ZERO}});
-	}
-	for (const json &infinitesimal: document["infinitesimals"]) {
-		const std::string &name = infinitesimal;
-		auto constant = z3::Real::constant(name);
-		utilities.insert({name, {z3::Real::ZERO, constant}});
-	}
+	// either a plain list (all known) or an object {"known": [...], "unknown": [...]}
+	std::unordered_set<std::string> known;
+	auto load_identifiers = [&](const json &declaration, bool infinitesimal) {
+		auto declare = [&](const json &identifier, bool is_known) {
+			const std::string &name = identifier;
+			if (utilities.count(name)) {
+				std::cerr << "checkmate: constant " << name << " declared more than once" << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+			auto constant = z3::Real::constant(name);
+			if (infinitesimal)
+				utilities.insert({name, {z3::Real::ZERO, constant}});
+			else
+				utilities.insert({name, {constant, z3::Real::ZERO}});
+			if (is_known)
+				known.insert(name);
+			else
+				unknowns.insert(name);
+		};
+		if (declaration.is_object()) {
+			if (declaration.contains("known"))
+				for (const json &identifier: declaration["known"])
+					declare(identifier, true);
+			if (declaration.contains("unknown"))
+				for (const json &identifier: declaration["unknown"])
+					declare(identifier, false);
+		}
+		else
+			for (const json &identifier: declaration)
+				declare(identifier, true);
+	};
+	load_identifiers(document["constants"], false);
+	load_identifiers(document["infinitesimals"], true);
 
 	Parser parser(utilities);
 	// load honest histories automatically
@@ -960,7 +1048,7 @@ Input::Input(const char *path) : sat_cases(), strategies() , stop_log(false) {
 
 
 	// load the game tree and leak it so we can downcast to Branch or ConditionNode
-	auto node = load_tree(*this, parser, document["tree"]).release();
+	auto node = load_tree(*this, parser, document["tree"], known).release();
 
 	if (node->is_leaf() || node->is_subtree()) {
 		std::cerr << "checkmate: root node is a leaf or a subtree (?!) - exiting" << std::endl;
