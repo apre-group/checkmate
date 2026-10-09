@@ -24,7 +24,11 @@ M, L, A = PLAYERS = players('M', 'L', 'A')
 
 I, pp, npp, le, lne, burn = ACTIONS = actions('I', 'pp', 'npp', 'le', 'lne', 'burn')
 alpha, eps, pi, gas = INFINITESIMALS = infinitesimals('alpha', 'epsilon', 'pi', 'gas')
-l, priceBTC, priceFLR, priceBTCinit, priceFLRinit, mfee, crf, nBackedAssets, n, amt, cInit, cr, premium = CONSTANTS = constants('l', 'priceBTC', 'priceFLR', 'priceBTCinit', 'priceFLRinit', 'mfee', 'crf', 'nBackedAssets', 'n', 'amt', 'cInit', 'cr', 'premium')
+l, priceBTCinit, priceFLRinit, mfee, crf, nBackedAssets, cInit, cr, premium = CONSTANTS = constants('l', 'priceBTCinit', 'priceFLRinit', 'mfee', 'crf', 'nBackedAssets', 'cInit', 'cr', 'premium')
+# the prices after the price change are not known at the start of the game, they are revealed at the condition node
+# together with the amounts n and amt, which depend on them
+priceBTC, priceFLR, n, amt = UNKNOWN_CONSTANTS = unknown_constants('priceBTC', 'priceFLR', 'n', 'amt')
+CONSTANTS += UNKNOWN_CONSTANTS
 
 # list your assumptions and design choices as iniital constraints (if applicable),
 # the following expressions are supported: +, -, *, /, real numbers, >, >=, <, <=, ==, != (inequality), disjunction(*args) (or)
@@ -50,10 +54,17 @@ INITIAL_CONSTRAINTS = [
     alpha * l > 2 * gas,
     mfee > 0,
     amt >= 0, # amount to be liquidated cannot be negative
-    n > amt, # n is the amount that needs to be liquidated to reach the safety threshold
+    # n is the amount that needs to be liquidated to reach the safety threshold,
+    # it is positive exactly in liquidation, and then amt does not liquidate enough
+    conjunction(n >= 0, implies(n > 0, amt < n)),
     n <= nBackedAssets, # n cannot be more than the total number of assets that are currently backed
     cInit * priceFLR >= cr * l * priceBTC, # we assume we  can reach safety threshold after liquidations
-    ((l + nBackedAssets) * priceBTCinit) > cr * cInit, # conditions for minting to be possible
+    cInit * priceFLRinit >= cr * (nBackedAssets + l) * priceBTCinit, # the agent is safe before the price change, so minting is possible
+    # math:
+    # cInit*priceFLR >= cr * (nBackedAssets + l - n)* priceBTC
+    # n = (cr * (nBackedAssets + l)* priceBTC - cInit*priceFLR) / (cr* priceBTC)
+    n * cr * priceBTC == cr * (nBackedAssets + l) * priceBTC - cInit * priceFLR,
+    0 >= n * priceBTC * premium + (- mfee - 1) * l * priceBTC - crf * l * priceFLR,
 ]
 
 
@@ -69,7 +80,7 @@ HONEST_HISTORIES  = [HistoryTree([pp])]
 
 # honest utilities can be listed, if modeling used in an interleaving way with CheckMate
 # TO DO
-HONEST_UTILITIES = [] 
+HONEST_UTILITIES = [HonestUtility({M: alpha * l - 2 * gas, L: 0, A: mfee * l * priceBTCinit - eps})]
 
 
 # define the initial state as a dictionary
@@ -180,12 +191,7 @@ def further_actions_A(state : Dict) -> Tree:
 def liquidation(state : Dict) -> Tree:
     branch_liquidation = {}
 
-    # liquidate enough
-    # math: 
-    # state["collateral"]*priceFLR >= cr * (state["number_backed_assets"]+ l - n)* priceBTC>
-    # n = cr * ((state["number_backed_assets"] + l)* priceBTC - state["collateral"]*priceFLR) / (cr* priceBTC)
-    INITIAL_CONSTRAINTS.append(n * cr* priceBTC == cr * ((state["number_backed_assets"] + l)* priceBTC - state["collateral"]*priceFLR) )
-
+    # liquidate enough (n is defined in the initial constraints)
     state1 = copy_state(state)
     state1["number_backed_assets"] = state["number_backed_assets"] - n
     state1["collateral"] = state["collateral"] - n * priceBTC / priceFLR
@@ -194,7 +200,7 @@ def liquidation(state : Dict) -> Tree:
     branch_liquidation[le] = further_actions_A(state1)
 
     # liquidate not enough
-    # we already have n > amt in the initial constraints, so we can just use amt here
+    # we already have amt < n in liquidation in the initial constraints, so we can just use amt here
 
     state2 = copy_state(state)
     state2["number_backed_assets"] = state["number_backed_assets"] - amt
@@ -214,13 +220,14 @@ def conditional_node(state : Dict) -> Tree:
     # liquidation is possible
     liq = state["collateral"]*priceFLR < cr * (state["number_backed_assets"] + l)* priceBTC
 
-    branch_conditional_node[liq] = liquidation(state1)
+    branch_conditional_node[named('liq', liq)] = liquidation(state1)
 
     # liquidation is not possible
     no_liq = state["collateral"]*priceFLR >= cr * (state["number_backed_assets"] +l)* priceBTC
-    branch_conditional_node[no_liq] = further_actions_A(state1)
+    branch_conditional_node[named('nliq', no_liq)] = further_actions_A(state1)
 
-    return condition(branch_conditional_node)
+    # the price change reveals priceBTC and priceFLR, and with them n and amt
+    return condition(branch_conditional_node, reveals=[priceBTC, priceFLR, n, amt])
 
 
 # generate the game tree
