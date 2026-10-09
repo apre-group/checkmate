@@ -24,7 +24,7 @@ The model has the following parameters thet can be adapted to generate different
 Design Choices
 
 - The symbolic values representing a bid have the form bid_i_player_j, where i is the index of the bid of player j. E.g. bid_0_player_2 is the first bid of player 2, and bid_1_player_2 is the second bid of player 2.
-- We model the permutations of the lottery as symbolic variables pl0, pl1, pl2,... which represent the index of the player in the lottery. E.g. if pl0 == 2, pl1 == 0 and pl2 == 1, this means that player 2 is the first winner of the lottery, player 0 is the second winner of the lottery and player 1 is the third winner of the lottery. We also add constraints (to the set of inital constraints) to ensure that these variables represent a valid permutation.
+- We model the permutations of the lottery as symbolic variables pl0, pl1, pl2,... which represent the index of the player in the lottery. E.g. if pl0 == 2, pl1 == 0 and pl2 == 1, this means that player 2 is the first winner of the lottery, player 0 is the second winner of the lottery and player 1 is the third winner of the lottery. We also add constraints (to the set of inital constraints) to ensure that these variables represent a valid permutation. The outcome of the lottery is not known while bidding: pl0, pl1, pl2,... are unknown at the start of the game and revealed by the lottery, a condition node after all bids are placed.
 - We model the benefit of winning a devcon ticket as an infinitesimal alpha, and the opportunity const in case of not winning a devcon ticket as an infinitesimal epsilon. We assume that alpha is positive and epsilon is positive.
 - The increment is a non-negative symbolic variable, and we can set it to zero to model the case where there is no minimum increment for the auction.
 
@@ -68,7 +68,8 @@ PLAYERS = players(*playerss)
 bid_reserved, outbid, bid_same, bid_anything = ACTIONS = actions('bid_reserved', 'outbid', 'bid_same', 'bid_anything')
 ADDITIONAL_ACTIONS = set()
 alpha, epsilon = INFINITESIMALS = infinitesimals('alpha', 'epsilon')
-player_constants = [NameExpr(f'pl{i}')for i in range(N)]
+# the lottery permutation is unknown during bidding, it is revealed by the lottery
+player_constants = unknown_constants(*[f'pl{i}' for i in range(N)])
 R, increment, bid_0_player_0 = CONSTANTS = constants('R', 'increment', 'bid_0_player_0') 
 for player_const in player_constants:
     CONSTANTS.append(player_const)
@@ -228,7 +229,8 @@ def generate_tree(player_index: int, state: Dict, honest_history_prefix: List[Ac
             honest_history_conditions.append(HistoryTreeCondition(lottery_options_conjunctions[i],HistoryTree([])))
         path = honest_history_prefix + [honest_history_conditions]
         HONEST_HISTORIES.append(HistoryTree(path))
-        return condition(condition_actions)
+        # the lottery reveals the permutation
+        return condition(condition_actions, reveals=player_constants)
     else:
         # otherwise, we are at a branch and have to compute which actions in ACTIONS is available right now
         branch_actions = {} # dictionary that contains an available action as key and the tree this action leads to as value

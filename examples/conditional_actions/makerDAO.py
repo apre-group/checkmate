@@ -23,8 +23,8 @@ tab = the total DAI the auction must recover total_debt * rate * (1 + chop)
 chop = liquidation penalty (multiplier on the total debt)
 stability_fee = the fee that the vault owner pays to keep the vault open, as a fraction of the total debt per time unit
 prETH = initial price of ETH in DAI (which is 1:1 to dollar)
-prETH1 = price of ETH in DAI after the price change that triggers the auction
-prETH2 = price of ETH in DAI after the price change that happens during the auction
+prETH1 = price of ETH in DAI after the price change that triggers the auction (unknown at the start, revealed when the vault becomes safe/unsafe)
+prETH2 = price of ETH in DAI after the price change that happens during the auction (unknown at the start, revealed when the auction becomes profitable/non-profitable)
 prAuction = the price at which the auction closes, which is determined by the bidders in the auction
 
 Design Choices
@@ -70,7 +70,10 @@ for i in range(1, N+1):
 # define the actions, infinitesimals and constants as strings and name them for convenience, e.g.:
 frob_close, frob, bark, no_bark, buy_all, buy_some = ACTIONS = actions('frob_close', 'frob', 'bark', 'no_bark', 'buy_all', 'buy_some') # TO DO: fill in the actions
 alpha, beta = INFINITESIMALS = infinitesimals('alpha', 'beta')
-ink, art, lr, tip, chip, chop, stability_fee, prETH, prETH1, prETH2, prAuction, dink, dart, gas  = CONSTANTS = constants('ink', 'art', 'lr', 'tip', 'chip', 'chop', 'stability_fee', 'prETH', 'prETH1', 'prETH2', 'prAuction', 'dink', 'dart', 'gas')
+ink, art, lr, tip, chip, chop, stability_fee, prETH, prAuction, dink, dart, gas  = CONSTANTS = constants('ink', 'art', 'lr', 'tip', 'chip', 'chop', 'stability_fee', 'prETH', 'prAuction', 'dink', 'dart', 'gas')
+# future prices of ETH are not known at the start of the game, they are revealed at the condition nodes
+prETH1, prETH2 = UNKNOWN_CONSTANTS = unknown_constants('prETH1', 'prETH2')
+CONSTANTS += UNKNOWN_CONSTANTS
 
 # list your assumptions and design choices as iniital constraints (if applicable),
 # the following expressions are supported: +, -, *, /, real numbers, >, >=, <, <=, ==, != (inequality), disjunction(*args) (or)
@@ -282,17 +285,21 @@ for i in range(1, N+1):
     ut_non_profitable[Player('B'+str(i))] = 0
 
 
+# the price change during the auction reveals prETH2
 branch_actions_unsafe[bark] = condition({
-    non_profitable : leaf(ut_non_profitable), 
-    profitable : generate_auction(1, initial_state, "V.frob,unsafe,L.bark,profitable")})
+    named('non_profitable', non_profitable) : leaf(ut_non_profitable), 
+    named('profitable', profitable) : generate_auction(1, initial_state, "V.frob,unsafe,L.bark,profitable")},
+    reveals=[prETH2])
 
 
 # putting it all together in the frob action
+# the price change after frob reveals prETH1
 initial_branches[frob] = condition(
     {
-    safe : leaf(ut_safe),
-    unsafe : branch(L, branch_actions_unsafe)
-    }
+    named('safe', safe) : leaf(ut_safe),
+    named('unsafe', unsafe) : branch(L, branch_actions_unsafe)
+    },
+    reveals=[prETH1]
 )
 
 TREE = branch(Player("V"), initial_branches)
