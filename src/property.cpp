@@ -541,6 +541,8 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 			leaf.cr_supergroup_memo.resize(all_players);
 		}
 		z3::Bool reason;
+		// with counterexamples all supergroups are compared, as the counterexample reports all that gain
+		bool violated = false;
 		for (uint64_t extra = 0; extra != outside; extra = (extra - outside) & outside) {
 			std::bitset<Input::MAX_PLAYERS> supergroup = group.to_ullong() | extra;
 			// the empty group cannot gain anything
@@ -550,8 +552,11 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 			// look up whether this supergroup was already compared for another group
 			CrMemo &memo = leaf.cr_supergroup_memo[supergroup.to_ullong()];
 			if (input.memo_valid(memo)) {
-				if (memo.status == CrMemo::VIOLATED)
-					return false;
+				if (memo.status == CrMemo::VIOLATED) {
+					if (!options.counterexamples)
+						return false;
+					violated = true;
+				}
 				if (memo.status == CrMemo::UNDECIDED && reason.null())
 					reason = memo.reason;
 				continue;
@@ -583,7 +588,10 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 			}
 			if (solver.solve({condition}) == z3::Result::UNSAT) {
 				memo = input.memo(CrMemo::VIOLATED);
-				return false;
+				if (!options.counterexamples)
+					return false;
+				violated = true;
+				continue;
 			}
 
 			// undecided for this supergroup: remember the first case split,
@@ -592,6 +600,9 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 			if (reason.null())
 				reason = memo.reason;
 		}
+
+		if (violated)
+			return false;
 
 		if (reason.null())
 			return true;
@@ -712,6 +723,17 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 	// the group of all players is not considered, so it trivially satisfies the property
 	bool supergroup_trivial = supergroup.count() == players;
 
+	// counterexamples: start the records for group afresh
+	if (options.counterexamples) {
+		if (branch.cr_no_choice.empty()) {
+			const uint64_t all_players = players == 64 ? -1ull : (1ull << players) - 1;
+			branch.cr_violating_deviations.resize(all_players);
+			branch.cr_no_choice.resize(all_players);
+		}
+		branch.cr_violating_deviations[group_nr].clear();
+		branch.cr_no_choice[group_nr] = false;
+	}
+
 	// first reason (case split) found in a child, if any
 	z3::Bool reason;
 	Node *reset_node = nullptr;
@@ -734,6 +756,7 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 	std::vector<bool> passed_group(branch.choices.size(), false);
 	std::vector<bool> failed_group(branch.choices.size(), false);
 	const Choice *found_choice = nullptr;
+	bool all_candidates_violated = true;
 	for (size_t i = 0; i < branch.choices.size(); i++) {
 		const Choice &choice = branch.choices[i];
 		if (honest_choice && &choice != honest_choice)
@@ -745,6 +768,12 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 			break;
 		}
 		failed_group[i] = true;
+		if (!choice.node->reason.null())
+			all_candidates_violated = false;
+	}
+	// counterexamples: no choice group may take is collusion resilient in any case
+	if (options.counterexamples && !found_choice && all_candidates_violated) {
+		branch.cr_no_choice[group_nr] = true;
 	}
 
 	// check the deviations for supergroup
@@ -753,10 +782,12 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 	bool same_group = supergroup_nr == group_nr;
 	bool result = found_choice != nullptr;
 	bool violated = false;
-	if (found_choice && !supergroup_trivial) {
+	// with counterexamples also without a passing choice: a counterexample may need the player
+	// to deviate even if no choice is collusion resilient for group
+	if ((found_choice || options.counterexamples) && !supergroup_trivial) {
 		for (size_t i = 0; i < branch.choices.size(); i++) {
 			const Choice &choice = branch.choices[i];
-			if (passed_group[i])
+			if (passed_group[i] || &choice == honest_choice)
 				continue;
 			if (!(same_group && failed_group[i]) && check(choice, supergroup, supergroup_nr))
 				continue;
@@ -765,8 +796,9 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 			// violated in any case: no need to split cases
 			if (choice.node->reason.null()) {
 				violated = true;
+				// counterexamples: one violating deviation suffices, all_counterexamples: record all
 				if (options.counterexamples) {
-					branch.counterexample_choices.push_back(choice.action);
+					branch.cr_violating_deviations[group_nr].push_back(choice.action);
 				}
 				if (!options.all_counterexamples)
 					return false;
@@ -1258,31 +1290,9 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 		// being collusion resilient for the empty group means being collusion resilient against all groups
 		bool result = collusion_resilience_rec(input, solver, options, input.root.get(), 0, utility, input.players.size(), 0);
 
-		// violated in any case: report the groups that can deviate profitably as counterexamples
+		// violated in any case: reconstruct the counterexamples from what collusion_resilience_rec recorded
 		if (!result && input.root->reason.null() && options.counterexamples) {
-			input.root->reset_counterexample_choices();
-			// all possible subgroups of n players can be implemented by counting through from 1 to (2^n - 2)
-			for (uint64_t group_nr = 1; group_nr < -1ull >> (64 - input.players.size()); group_nr++) {
-				std::bitset<Input::MAX_PLAYERS> group = group_nr;
-				input.root->reset_reason();
-				bool collusion_resilient_for_group = collusion_resilience_rec(input, solver, options, input.root.get(), group, utility, input.players.size(), group_nr);
-				if (!collusion_resilient_for_group && input.root->reason.null()) {
-					std::vector<size_t> pl;
-					for (size_t player = 0; player < input.players.size(); player++) {
-						if (group[player]) {
-							pl.push_back(player);
-						}
-					}
-					input.compute_cecase(pl, property);
-					if (!options.all_counterexamples) {
-						input.root->reset_counterexample_choices();
-						break;
-					}
-				}
-				input.root->reset_counterexample_choices();
-			}
-			// the property is violated in any case, so no reason must remain
-			input.root->reset_reason();
+			input.compute_cr_cecases(options.all_counterexamples);
 		}
 		return result;
 	}

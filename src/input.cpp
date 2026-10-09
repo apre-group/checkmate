@@ -1,5 +1,8 @@
 #include <fstream>
 #include <iostream>
+#include <iterator>
+#include <set>
+#include <tuple>
 #include "json.hpp"
 
 #include "input.hpp"
@@ -418,7 +421,7 @@ static z3::Bool parse_case(Parser &parser, const std::string &_case) {
  * TODO does not check all aspects
  * (hoping to have new input format based on s-expressions, which would be much easier to parse)
  */
-static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const json &node, bool supertree) {
+static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const json &node, bool &has_subtrees) {
 	// branch
 	if (node.contains("children")) {
 		// do linear-time lookup for the index of the node's player in the input player list
@@ -431,7 +434,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 
 		std::unique_ptr<Branch> branch(new Branch(player));
 		for (const json &child: node["children"]) {
-			auto loaded = load_tree(input, parser, child["child"], supertree);
+			auto loaded = load_tree(input, parser, child["child"], has_subtrees);
 
 			branch->choices.push_back({child["action"], std::move(loaded)});
 		}
@@ -483,13 +486,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 
 	// subtree summary
 	if (node.contains("subtree")) {
-
-		// Remove the check below for the purpose of allowing nesting of subtrees in subtress 
-		/*if (!supertree) {
-			// subtree nodes can only occur in supertree mode!
-			std::cerr << "checkmate: unexpected subtree node; call in --supertree mode " << node << std::endl;
-			std::exit(EXIT_FAILURE);
-		}*/
+		has_subtrees = true;
 
 		std::vector<SubtreeResult> weak_immunity = {};
 		std::vector<SubtreeResult> weaker_immunity = {};
@@ -706,7 +703,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 
 
 
-Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , stop_log(false) {
+Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 	// parse a JSON document from `path`
 	std::ifstream input(path);
 	json document;
@@ -748,11 +745,6 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 		const std::string &name = infinitesimal;
 		auto constant = z3::Real::constant(name);
 		utilities.insert({name, {z3::Real::ZERO, constant}});
-	}
-
-	if(document["honest_utilities"].size() > 0 && supertree) {
-		std::cerr << "checkmate: honest utility should not be specified in supertree mode " << std::endl;
-		std::exit(EXIT_FAILURE);
 	}
 
 	// load honest utilities
@@ -851,7 +843,7 @@ Input::Input(const char *path, bool supertree) : unsat_cases(), strategies() , s
 
 
 	// load the game tree and leak it so we can downcast to Branch
-	auto node = load_tree(*this, parser, document["tree"], supertree).release();
+	auto node = load_tree(*this, parser, document["tree"], has_subtrees).release();
 
 	if (node->is_leaf() || node->is_subtree()) {
 		std::cerr << "checkmate: root node is a leaf or a subtree (?!) - exiting" << std::endl;
@@ -1015,58 +1007,189 @@ std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std:
 		return counterexample;
 	}
 
-std::vector<CeChoice> Node::compute_cr_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
+// a collusion resilience counterexample while reconstructing it: sets, so that identical ones compare equal
+struct CrCounterexample {
+	// history, player, action
+	std::set<std::tuple<std::vector<std::string>, std::string, std::string>> deviations;
+	// history, subtree?, groups
+	std::set<std::tuple<std::vector<std::string>, bool, std::vector<std::vector<std::string>>>> leaves;
 
-		if (this->is_leaf() || this->is_subtree()){
-			return {};
-		}
-		std::vector<CeChoice> counterexample;
-
-		assert(player_group.size() >= 1);
-
-
-		int cnt = std::count(player_group.begin(), player_group.end(), this->branch().player);
-		if (cnt == 0) {
-			if (honest){
-				for (auto& child: this->branch().choices){
-					if (child.node->honest) {
-						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-	 					updated_actions.push_back(child.action);
-						counterexample = child.node->compute_cr_ce(players, updated_actions, player_group);
-						break;
-					}
-				}
-			} else {
-				for (auto& child: this->branch().choices){
-						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-	 					updated_actions.push_back(child.action);
-						std::vector<CeChoice> child_counterexample = child.node->compute_cr_ce(players, updated_actions, player_group);
-						counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
-				}
-			}
-		} else {
-			assert(!this->branch().counterexample_choices.empty());
-			CeChoice ce_choice;
-			ce_choice.player = players[this->branch().player];
-			ce_choice.choices = this->branch().counterexample_choices;
-			ce_choice.history = actions_so_far;
-
-			counterexample.push_back(ce_choice);
-
-			for (const Choice &choice: this->branch().choices) {
-
-				int cnt = std::count(this->branch().counterexample_choices.begin(), this->branch().counterexample_choices.end(), choice.action);
-				if (cnt > 0) {
-					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
-					updated_actions.push_back(choice.action);
-					std::vector<CeChoice> child_ce = choice.node->compute_cr_ce(players, updated_actions, player_group);
-					counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
-				}
-			}
-		}
-		return counterexample;
+	bool operator<(const CrCounterexample &other) const {
+		return std::tie(deviations, leaves) < std::tie(other.deviations, other.leaves);
 	}
 
+	void merge(const CrCounterexample &other) {
+		deviations.insert(other.deviations.begin(), other.deviations.end());
+		leaves.insert(other.leaves.begin(), other.leaves.end());
+	}
+};
+
+// all_counterexamples: combining counterexamples can grow exponentially, so at most this many are kept per case
+static const size_t MAX_CR_COUNTEREXAMPLES = 100;
+
+// keep at most MAX_CR_COUNTEREXAMPLES, remembering if some were dropped
+static void cap_counterexamples(std::set<CrCounterexample> &counterexamples, bool &truncated) {
+	if (counterexamples.size() > MAX_CR_COUNTEREXAMPLES) {
+		counterexamples.erase(std::next(counterexamples.begin(), MAX_CR_COUNTEREXAMPLES), counterexamples.end());
+		truncated = true;
+	}
+}
+
+static std::vector<std::string> group_names(const Input &input, uint64_t group) {
+	std::vector<std::string> names;
+	for (size_t player = 0; player < input.players.size(); player++) {
+		if (group >> player & 1) {
+			names.push_back(input.players[player]);
+		}
+	}
+	return names;
+}
+
+// walk the tree like compute_cr_strategy, with `group` the players that deviated so far and
+// `honest` the players that stay honest (never deviate) in this counterexample;
+// returns only actual counterexamples: every leaf reached has a profiting group without honest players
+// - a deviating player picks a choice violating collusion resilience for group
+// - an honest player may take any choice group cannot avoid (the honest one at honest branches, all choices otherwise),
+//   so the counterexample has to cover all of them; if group can avoid them, there is no counterexample
+// - a player that is neither becomes honest (if no choice is collusion resilient for group, except along the honest history)
+//   or a deviator (taking a choice violating collusion resilience for group together with the player)
+// - at a leaf, report the supergroups of group without honest players that gain more than on the honest history
+// without `all`, only the first counterexample found is returned
+static std::set<CrCounterexample> cr_counterexamples(const Input &input, const Node *node, std::vector<std::string> history, uint64_t group, uint64_t honest, bool all, bool &truncated) {
+
+	if (node->is_leaf()) {
+		const Leaf &leaf = node->leaf();
+		const uint64_t all_players = input.players.size() == 64 ? -1ull : (1ull << input.players.size()) - 1;
+		const uint64_t outside = all_players & ~group & ~honest;
+		std::vector<std::vector<std::string>> groups;
+		for (uint64_t extra = 0; ; extra = (extra - outside) & outside) {
+			uint64_t supergroup = group | extra;
+			if (supergroup != 0 && supergroup != all_players && !leaf.cr_supergroup_memo.empty()) {
+				const CrMemo &memo = leaf.cr_supergroup_memo[supergroup];
+				if (input.memo_valid(memo) && memo.status == CrMemo::VIOLATED) {
+					groups.push_back(group_names(input, supergroup));
+				}
+			}
+			if (extra == outside)
+				break;
+		}
+		// no group without honest players profits: not a counterexample
+		if (groups.empty())
+			return {};
+		CrCounterexample counterexample;
+		counterexample.leaves.insert({history, false, groups});
+		return {counterexample};
+	}
+
+	if (node->is_subtree()) {
+		CrCounterexample counterexample;
+		counterexample.leaves.insert({history, true, {group_names(input, group)}});
+		return {counterexample};
+	}
+
+	const Branch &branch = node->branch();
+	const uint64_t player = 1ull << branch.player;
+	auto child_history = [&](const Choice &choice) {
+		std::vector<std::string> updated = history;
+		updated.push_back(choice.action);
+		return updated;
+	};
+	bool no_choice = group < branch.cr_no_choice.size() && branch.cr_no_choice[group];
+	std::vector<std::string> no_deviations;
+	const std::vector<std::string> &violating_deviations = group < branch.cr_violating_deviations.size() ? branch.cr_violating_deviations[group] : no_deviations;
+
+	std::set<CrCounterexample> result;
+
+	// the player takes `choice`, deviating there: one counterexample per counterexample after it
+	auto deviate = [&](const Choice &choice, uint64_t new_group) {
+		for (CrCounterexample counterexample: cr_counterexamples(input, choice.node.get(), child_history(choice), new_group, honest, all, truncated)) {
+			counterexample.deviations.insert({history, input.players[branch.player], choice.action});
+			result.insert(counterexample);
+		}
+		cap_counterexamples(result, truncated);
+	};
+
+	// the player is honest: one counterexample for every combination of counterexamples of the choices it may take
+	auto stay_honest = [&](uint64_t new_honest) {
+		std::set<CrCounterexample> combined = {CrCounterexample()};
+		for (const Choice &choice: branch.choices) {
+			if (branch.honest && !choice.node->honest)
+				continue;
+			std::set<CrCounterexample> next;
+			for (const CrCounterexample &child: cr_counterexamples(input, choice.node.get(), child_history(choice), group, new_honest, all, truncated)) {
+				for (CrCounterexample counterexample: combined) {
+					if (next.size() > MAX_CR_COUNTEREXAMPLES)
+						break;
+					counterexample.merge(child);
+					next.insert(counterexample);
+				}
+			}
+			cap_counterexamples(next, truncated);
+			combined = next;
+			// some choice has no counterexample: the player could take it
+			if (combined.empty())
+				return;
+		}
+		result.insert(combined.begin(), combined.end());
+		cap_counterexamples(result, truncated);
+	};
+
+	if (group & player) {
+		// the player deviates already: it picks a violating choice (all choices violate if no choice is collusion resilient)
+		for (const Choice &choice: branch.choices) {
+			bool violating = no_choice || std::find(violating_deviations.begin(), violating_deviations.end(), choice.action) != violating_deviations.end();
+			if (violating) {
+				deviate(choice, group);
+				if (!all && !result.empty())
+					break;
+			}
+		}
+	} else if (honest & player) {
+		if (no_choice)
+			stay_honest(honest);
+	} else {
+		// taking the honest action along the honest history does not make a player honest:
+		// group members take it as well
+		if (no_choice)
+			stay_honest(branch.honest ? honest : honest | player);
+		for (const std::string &action: violating_deviations) {
+			if (!all && !result.empty())
+				break;
+			deviate(branch.get_choice(action), group | player);
+		}
+	}
+
+	// without `all`, only the first counterexample
+	if (!all && result.size() > 1) {
+		result.erase(std::next(result.begin()), result.end());
+	}
+	return result;
+}
+
+void Input::compute_cr_cecases(bool all) const {
+	bool truncated = false;
+	for (const CrCounterexample &counterexample: cr_counterexamples(*this, root.get(), {}, 0, 0, all, truncated)) {
+		CeCase ce_case;
+		for (const auto &deviation: counterexample.deviations) {
+			CeChoice ce_choice;
+			ce_choice.history = std::get<0>(deviation);
+			ce_choice.player = std::get<1>(deviation);
+			ce_choice.choices = {std::get<2>(deviation)};
+			ce_case.counterexample.push_back(ce_choice);
+		}
+		for (const auto &leaf: counterexample.leaves) {
+			CrLeafViolation violation;
+			violation.history = std::get<0>(leaf);
+			violation.subtree = std::get<1>(leaf);
+			violation.groups = std::get<2>(leaf);
+			ce_case.cr_leaves.push_back(violation);
+		}
+		counterexamples.push_back(ce_case);
+	}
+	if (truncated) {
+		counterexamples.back().cr_more_omitted = true;
+	}
+}
 
 CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::string current_action, UtilityTuplesSet practical_utilities) const {
 	
