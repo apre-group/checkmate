@@ -8,7 +8,7 @@ It can analyze the following properties:
 * collusion resilience
 * practicality
 
-The modeling of protocols as games is discussed in [1] and [4], and the manual analysis of security properties in [4].
+The modeling of protocols as games is discussed in [1] and [5], and the manual analysis of security properties in [5].
 This and other related materials are listed below.
 
 For **weak immunity**, CheckMate checks for every player whether there is a strategy along the honest history
@@ -97,7 +97,7 @@ There are several options:
 * `--subtree` is used for [compositional analysis](#compositional-analysis). It cannot be combined with `--counterexamples`, `--all_counterexamples`, `--strategies` or `--preconditions`.
 * `--count_nodes` and `--count_calls`: For experiments, report the number of checked tree nodes and of SMT solver calls per analyzed property.
 
-For instance, to run a security analysis on the Closing Game [4] with counterexample generation, but only considering weak immunity and collusion resilience, execute the following from the repository root:
+For instance, to run a security analysis on the Closing Game [5] with counterexample generation, but only considering weak immunity and collusion resilience, execute the following from the repository root:
 
 ```shell
 python3 examples/key_examples/closing_game.py > closing_game.json
@@ -172,7 +172,7 @@ Collusion resilience results of subtrees must have been computed with the curren
 Smaller examples are provided directly as JSON files, such as `market_entry_game.json`.
 Others, such as the auction benchmark, are provided in forms of scripts that generate the benchmark - this may be more involved for extremely large games that generate temporary subtrees for analysis.
 
-Important benchmarks include `closing_game.py` that models the Closing Game proposed in [4] for the closing phase of the [Bitcoin Lightning protocol](https://lightning.network/lightning-network-paper.pdf) as well as `routing_game-three.py`, which models the routing module of the Lightning protocol [4] for three users.
+Important benchmarks include `closing_game.py` that models the Closing Game proposed in [5] for the closing phase of the [Bitcoin Lightning protocol](https://lightning.network/lightning-network-paper.pdf) as well as `routing_game-three.py`, which models the routing module of the Lightning protocol [5] for three users.
 `routing_game-subtree-supertree.py` generates (compositionally, over several hours and with intermediate files) a supertree for four users, included for reference as `routing_game-four-supertree.json`.
 Its collusion resilience subtree results were computed with an older version of CheckMate; regenerate it with the script before analyzing it.
 
@@ -186,14 +186,17 @@ Game Modeling of Blockchain Protocols (iFM 2025).
 [[2]](https://doi.org/10.1145/3763120) Ivana Bocevska, Anja Petković Komel, Laura Kovács, Sophie Rain, Michael Rawson.
 Divide and Conquer: A Compositional Approach to Game-Theoretic Security (OOPSLA 2025).
 
-[[3]](https://dl.acm.org/doi/10.1145/3576915.3623183) Lea Salome Brugger, Laura Kovács, Anja Petković Komel, Sophie Rain, Michael Rawson.
+[[3]](https://easychair.org/publications/paper/6ZDH) Sophie Rain, Lea Salome Brugger, Anja Petković Komel, Laura Kovács, Michael Rawson.
+Scaling CheckMate for Game-Theoretic Security (LPAR 2024).
+
+[[4]](https://dl.acm.org/doi/10.1145/3576915.3623183) Lea Salome Brugger, Laura Kovács, Anja Petković Komel, Sophie Rain, Michael Rawson.
 CheckMate: Automated Game-Theoretic Security Reasoning (CCS 2023).
 
-[[4]](https://doi.org/10.48550/arXiv.2109.07429) Sophie Rain, Georgia Avarikioti, Laura Kovács, Matteo Maffei.
+[[5]](https://doi.org/10.48550/arXiv.2109.07429) Sophie Rain, Georgia Avarikioti, Laura Kovács, Matteo Maffei.
 Towards a Game-Theoretic Security Analysis of Off-Chain Protocols (CSF 2023).
 
-[[5]](https://doi.org/10.34726/hss.2022.104340) Lea Salome Brugger.
+[[6]](https://doi.org/10.34726/hss.2022.104340) Lea Salome Brugger.
 Automating Proofs of Game-Theoretic Security Properties of Off-Chain Protocols (Diploma Thesis, 2022).
 
-[[6]](https://easychair.org/smart-program/FLoC2022/FMBC-2022-08-11.html#talk:201081) Lea Salome Brugger, Laura Kovács, Anja Petković Komel, Sophie Rain, Michael Rawson.
+[[7]](https://easychair.org/smart-program/FLoC2022/FMBC-2022-08-11.html#talk:201081) Lea Salome Brugger, Laura Kovács, Anja Petković Komel, Sophie Rain, Michael Rawson.
 Automating Security Analysis of Off-Chain Protocols (Talk at [FMBC 2022](https://fmbc.gitlab.io/2022/)).
