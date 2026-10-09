@@ -80,9 +80,12 @@ class Expr:
 
 class NameExpr(Expr):
     name: str
+    # is the value known to all players from the start of the game?
+    known: bool
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, known: bool = True):
         self.name = name
+        self.known = known
 
     def __repr__(self):
         return self.name
@@ -350,6 +353,37 @@ def disjunction(*args) -> Disjunction:
     return Disjunction(arg_list)
 
 
+class Implication(Constraint):
+    premise: Constraint
+    conclusion: Constraint
+
+    def __init__(self, premise: Constraint, conclusion: Constraint):
+        self.premise = premise
+        self.conclusion = conclusion
+
+    def __repr__(self):
+        return f"( {self.premise} => {self.conclusion} )"
+
+def implies(premise: Constraint, conclusion: Constraint) -> Implication:
+    return Implication(premise, conclusion)
+
+
+class NamedConstraint(Constraint):
+    """A condition edge constraint together with a name for the edge"""
+    name: str
+    constraint: Constraint
+
+    def __init__(self, name: str, constraint: Constraint):
+        self.name = name
+        self.constraint = constraint
+
+    def __repr__(self):
+        return repr(self.constraint)
+
+def named(name: str, constraint: Constraint) -> NamedConstraint:
+    return NamedConstraint(name, constraint)
+
+
 
 class HistoryTree:
 
@@ -474,25 +508,38 @@ def leaf(utilities: Dict[Player, LExpr]) -> Leaf:
     return Leaf(utilities)
 
 class Condition(Tree):
-    def __init__(self, conditions: Dict[Constraint, Tree]):
+    def __init__(self, conditions: Dict[Constraint, Tree], reveals: List[NameExpr] = None):
         self.conditions = conditions
+        # unknowns revealed besides those occurring in the conditions
+        self.reveals = reveals or []
+        known = [repr(constant) for constant in self.reveals if constant.known]
+        if known:
+            raise ValueError(f"condition reveals constants that are not unknown: {', '.join(known)}")
 
     def json(self):
-        return {
-            'condition': [
-                {'constraint': constraint.json(), 'child': child}
-                for constraint, child in self.conditions.items()
-            ]
-        }
+        result = {}
+        if self.reveals:
+            result['reveals'] = [repr(constant) for constant in self.reveals]
+        result['condition'] = []
+        for constraint, child in self.conditions.items():
+            edge = {}
+            if isinstance(constraint, NamedConstraint):
+                edge['name'] = constraint.name
+            edge['constraint'] = constraint.json()
+            edge['child'] = child
+            result['condition'].append(edge)
+        return result
 
     def graphviz(self):
-        print(f'\tn{id(self)} [label="Condition"];')
+        reveals = f"\\nreveals {', '.join(map(repr, self.reveals))}" if self.reveals else ''
+        print(f'\tn{id(self)} [label="Condition{reveals}"];')
         for constraint, child in self.conditions.items():
             child.graphviz()
-            print(f'\tn{id(self)} -> n{id(child)} [label="{constraint}"];')
+            label = f"{constraint.name}: {constraint}" if isinstance(constraint, NamedConstraint) else f"{constraint}"
+            print(f'\tn{id(self)} -> n{id(child)} [label="{label}"];')
 
-def condition(conditions: Dict[Constraint, Tree]) -> Condition:
-    return Condition(conditions)
+def condition(conditions: Dict[Constraint, Tree], reveals: List[NameExpr] = None) -> Condition:
+    return Condition(conditions, reveals)
 
 class Branch(Tree):
     def __init__(self, player: Player, actions: Dict[Action, Tree], condition: Constraint=Truth()):
@@ -531,11 +578,29 @@ def infinitesimals(*infs: str) -> List[Expr]:
     return [NameExpr(inf) for inf in infs]
 
 
+def unknown_infinitesimals(*infs: str) -> List[Expr]:
+    return [NameExpr(inf, known=False) for inf in infs]
+
+
 def constants(*constants: str) -> List[Expr]:
     return [NameExpr(constant) for constant in constants]
 
 
+def unknown_constants(*constants: str) -> List[Expr]:
+    return [NameExpr(constant, known=False) for constant in constants]
 
+
+
+
+
+def declarations(names: List[NameExpr]):
+    """plain list if everything is known, otherwise split into known and unknown"""
+    if all(name.known for name in names):
+        return names
+    return {
+        'known': [name for name in names if name.known],
+        'unknown': [name for name in names if not name.known]
+    }
 
 
 def finish(
@@ -563,8 +628,8 @@ def finish(
         json.dump({
             'players': players,
             'actions': actions,
-            'infinitesimals': infinitesimals,
-            'constants': constants,
+            'infinitesimals': declarations(infinitesimals),
+            'constants': declarations(constants),
             'initial_constraints': initial_constraints,
             'property_constraints': {
                 'weak_immunity': weak_immunity_constraints,
@@ -581,8 +646,8 @@ def finish(
         json.dump({
             'players': players,
             'actions': actions,
-            'infinitesimals': infinitesimals,
-            'constants': constants,
+            'infinitesimals': declarations(infinitesimals),
+            'constants': declarations(constants),
             'initial_constraints': initial_constraints,
             'property_constraints': {
                 'weak_immunity': weak_immunity_constraints,
