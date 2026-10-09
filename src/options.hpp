@@ -28,8 +28,10 @@ struct Options {
 	bool preconditions = false;
 	// provide witness strategy in case property satisfied
 	bool strategies = false;
-	// provide maximum interation for all counterexamples generation
-	unsigned int max_unsat = 10;
+
+	// options for "compositionality feature"
+	// reason over a subtree, to be plugged into a supertree later
+	bool subtree = false;
 
 	// used for experiments
 	bool count_nodes = false;

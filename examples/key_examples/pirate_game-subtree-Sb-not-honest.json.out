@@ -1,0 +1,472 @@
+{
+    "subtree": {
+        "collusion_resilience": [
+            {
+                "player_group": [
+                    "A"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                        "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))",
+                        "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "B"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "((b_B + b_D) >= ((- d) + c_D))",
+                        "((b_B + b_C) >= ((- d) + c_C))"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "A",
+                    "B"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))",
+                        "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "C"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "((b_C + b_D) >= (c_C + c_D))",
+                        "((b_B + b_C) >= ((- d) + c_C))"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "A",
+                    "C"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                        "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "B",
+                    "C"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "((b_B + b_C) >= ((- d) + c_C))"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "A",
+                    "B",
+                    "C"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "((((- d) + b_B) + b_C) >= (((- d) + (- d)) + c_C))"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "D"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "((b_C + b_D) >= (c_C + c_D))",
+                        "((b_B + b_D) >= ((- d) + c_D))"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "A",
+                    "D"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))",
+                        "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "B",
+                    "D"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "((b_B + b_D) >= ((- d) + c_D))"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "A",
+                    "B",
+                    "D"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "((((- d) + b_B) + b_D) >= (((- d) + (- d)) + c_D))"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "C",
+                    "D"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "((b_C + b_D) >= (c_C + c_D))"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "A",
+                    "C",
+                    "D"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "((((- d) + b_C) + b_D) >= (((- d) + c_C) + c_D))"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "B",
+                    "C",
+                    "D"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "true"
+                    ]
+                ]
+            }
+        ],
+        "honest_utility": [
+            {
+                "player": "A",
+                "value": "(- d) + 0.0"
+            },
+            {
+                "player": "B",
+                "value": "b_B + 0.0"
+            },
+            {
+                "player": "C",
+                "value": "b_C + 0.0"
+            },
+            {
+                "player": "D",
+                "value": "b_D + 0.0"
+            }
+        ],
+        "practicality": [
+            {
+                "case": [
+                    "(c_D >= b_D)",
+                    "(b_D >= c_D)",
+                    "(b_C >= c_C)"
+                ],
+                "utilities": [
+                    [
+                        {
+                            "player": "A",
+                            "value": "(- d) + 0.0"
+                        },
+                        {
+                            "player": "B",
+                            "value": "(- d) + 0.0"
+                        },
+                        {
+                            "player": "C",
+                            "value": "c_C + 0.0"
+                        },
+                        {
+                            "player": "D",
+                            "value": "c_D + 0.0"
+                        }
+                    ],
+                    [
+                        {
+                            "player": "A",
+                            "value": "(- d) + 0.0"
+                        },
+                        {
+                            "player": "B",
+                            "value": "b_B + 0.0"
+                        },
+                        {
+                            "player": "C",
+                            "value": "b_C + 0.0"
+                        },
+                        {
+                            "player": "D",
+                            "value": "b_D + 0.0"
+                        }
+                    ]
+                ]
+            },
+            {
+                "case": [
+                    "(c_D >= b_D)",
+                    "(b_D >= c_D)",
+                    "(b_C < c_C)"
+                ],
+                "utilities": [
+                    [
+                        {
+                            "player": "A",
+                            "value": "(- d) + 0.0"
+                        },
+                        {
+                            "player": "B",
+                            "value": "(- d) + 0.0"
+                        },
+                        {
+                            "player": "C",
+                            "value": "c_C + 0.0"
+                        },
+                        {
+                            "player": "D",
+                            "value": "c_D + 0.0"
+                        }
+                    ],
+                    [
+                        {
+                            "player": "A",
+                            "value": "(- d) + 0.0"
+                        },
+                        {
+                            "player": "B",
+                            "value": "b_B + 0.0"
+                        },
+                        {
+                            "player": "C",
+                            "value": "b_C + 0.0"
+                        },
+                        {
+                            "player": "D",
+                            "value": "b_D + 0.0"
+                        }
+                    ]
+                ]
+            },
+            {
+                "case": [
+                    "(c_D >= b_D)",
+                    "(b_D < c_D)",
+                    "(c_C >= b_C)",
+                    "(b_C >= c_C)"
+                ],
+                "utilities": [
+                    [
+                        {
+                            "player": "A",
+                            "value": "(- d) + 0.0"
+                        },
+                        {
+                            "player": "B",
+                            "value": "(- d) + 0.0"
+                        },
+                        {
+                            "player": "C",
+                            "value": "c_C + 0.0"
+                        },
+                        {
+                            "player": "D",
+                            "value": "c_D + 0.0"
+                        }
+                    ],
+                    [
+                        {
+                            "player": "A",
+                            "value": "(- d) + 0.0"
+                        },
+                        {
+                            "player": "B",
+                            "value": "b_B + 0.0"
+                        },
+                        {
+                            "player": "C",
+                            "value": "b_C + 0.0"
+                        },
+                        {
+                            "player": "D",
+                            "value": "b_D + 0.0"
+                        }
+                    ]
+                ]
+            },
+            {
+                "case": [
+                    "(c_D >= b_D)",
+                    "(b_D < c_D)",
+                    "(c_C >= b_C)",
+                    "(b_C < c_C)"
+                ],
+                "utilities": [
+                    [
+                        {
+                            "player": "A",
+                            "value": "(- d) + 0.0"
+                        },
+                        {
+                            "player": "B",
+                            "value": "(- d) + 0.0"
+                        },
+                        {
+                            "player": "C",
+                            "value": "c_C + 0.0"
+                        },
+                        {
+                            "player": "D",
+                            "value": "c_D + 0.0"
+                        }
+                    ]
+                ]
+            },
+            {
+                "case": [
+                    "(c_D >= b_D)",
+                    "(b_D < c_D)",
+                    "(c_C < b_C)"
+                ],
+                "utilities": [
+                    [
+                        {
+                            "player": "A",
+                            "value": "(- d) + 0.0"
+                        },
+                        {
+                            "player": "B",
+                            "value": "b_B + 0.0"
+                        },
+                        {
+                            "player": "C",
+                            "value": "b_C + 0.0"
+                        },
+                        {
+                            "player": "D",
+                            "value": "b_D + 0.0"
+                        }
+                    ]
+                ]
+            },
+            {
+                "case": [
+                    "(c_D < b_D)"
+                ],
+                "utilities": [
+                    [
+                        {
+                            "player": "A",
+                            "value": "(- d) + 0.0"
+                        },
+                        {
+                            "player": "B",
+                            "value": "b_B + 0.0"
+                        },
+                        {
+                            "player": "C",
+                            "value": "b_C + 0.0"
+                        },
+                        {
+                            "player": "D",
+                            "value": "b_D + 0.0"
+                        }
+                    ]
+                ]
+            }
+        ],
+        "weak_immunity": [
+            {
+                "player_group": [
+                    "A"
+                ],
+                "satisfied_in_case": []
+            },
+            {
+                "player_group": [
+                    "B"
+                ],
+                "satisfied_in_case": []
+            },
+            {
+                "player_group": [
+                    "C"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "true"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "D"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "true"
+                    ]
+                ]
+            }
+        ],
+        "weaker_immunity": [
+            {
+                "player_group": [
+                    "A"
+                ],
+                "satisfied_in_case": []
+            },
+            {
+                "player_group": [
+                    "B"
+                ],
+                "satisfied_in_case": []
+            },
+            {
+                "player_group": [
+                    "C"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "true"
+                    ]
+                ]
+            },
+            {
+                "player_group": [
+                    "D"
+                ],
+                "satisfied_in_case": [
+                    [
+                        "true"
+                    ]
+                ]
+            }
+        ]
+    }
+}

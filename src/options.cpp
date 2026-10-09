@@ -1,6 +1,5 @@
 #include <cstring>
 #include <iostream>
-#include <sstream>
 
 #include "options.hpp"
 
@@ -15,7 +14,7 @@ const char *USAGE = R"(usage: checkmate PATH
 	--all_cases
 	--preconditions
 	--strategies
-	--max_unsat N
+	--subtree
 	--count_nodes
 	--count_calls
 )";
@@ -63,14 +62,8 @@ Options::Options(char **argv) {
 			preconditions = true;
 		else if (!strcmp(*argv, "--strategies"))
 			strategies = true;
-		else if (!strcmp(*argv, "--max_unsat")) {
-			argv++; 
-			if(!*argv) bail("max_unsat expects an argument");
-			std::stringstream ss(*argv);
-			if (!(ss >> max_unsat)){
-				bail("max_unsat expects a positive integer");
-			}
-		}
+		else if (!strcmp(*argv, "--subtree"))
+			subtree = true;
 		else if (!strcmp(*argv, "--count_nodes"))
 			count_nodes = true;
 		else if (!strcmp(*argv, "--count_calls"))
@@ -78,6 +71,12 @@ Options::Options(char **argv) {
 		else
 			bail("unknown option");
 		argv++;
+	}
+
+	if(subtree) {
+		if(counterexamples || all_counterexamples || strategies || preconditions) {
+			bail("cannot combine subtree with any other option");
+		}
 	}
 
 	// analyze everything by default

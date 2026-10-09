@@ -3,17 +3,20 @@
 
 /**
  * Our own wrapper around the Z3 C API
- * 
+ *
  * Z3 has a similar C++ wrapper, but it doesn't suit our purposes very well.
  * This should be quite small and easy to maintain.
  **/
 
 #include <cassert>
-#include <ostream>
+#include <iostream>
 #include <string>
+#include <cctype>
+#include <sstream>
 #include <vector>
 #include <unordered_map>
 
+#include "utils.hpp"
 #include "z3.h"
 
 namespace z3 {
@@ -26,11 +29,8 @@ namespace z3 {
 	}
 
 	class Solver;
-
 	class Model;
-
 	class Bool;
-
 	class Real;
 
 	// base class for Real and Bool: trivially-copyable, just wraps a pointer
@@ -39,39 +39,36 @@ namespace z3 {
 		friend Solver;
 
 	public:
-		// default constructor very convenient - initialises `ast` to `nullptr`
-		Expression() : ast(nullptr) {}
+		Expression() = default;
 
 		// does this point to a valid expression?
-		inline bool null() const { return ast == nullptr; }
+		bool null() const { return ast == nullptr; }
 
 		// is this expression exactly the same as `other`?
-		inline bool is(Expression other) const { return ast == other.ast; }
+		bool is(Expression other) const { return ast == other.ast; }
 
 		// Z3's internal ID for this AST
-		inline unsigned id() const {
+		unsigned id() const {
 			unsigned result = Z3_get_ast_id(CONTEXT, ast);
 			check_error();
 			return result;
 		}
 
-		// invoke Z3's internal printer
-		friend std::ostream &operator<<(std::ostream &out, Expression expr) {
-			std::ostream &result = out << Z3_ast_to_string(CONTEXT, expr.ast);
+		// return number of arguments of the applied operator
+		unsigned num_args() const {
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			unsigned result = Z3_get_app_num_args(CONTEXT, app);
 			check_error();
 			return result;
 		}
 
-		// bool is_app() {
-		// 	bool app = Z3_is_app(CONTEXT, ast);
-		// 	check_error();
-		// 	return app;
-		// }
+		// the nth child of an operator application
+		Real real_child(unsigned n);
 
-
-	protected:
 		// wrap `ast`
 		Expression(Z3_ast ast) : ast(ast) {}
+
+	protected:
 
 		// are we of Boolean sort? moderately expensive so protected
 		bool is_bool() {
@@ -87,9 +84,8 @@ namespace z3 {
 			return sort == REAL_SORT;
 		}
 
-
 		// pointer to Z3 AST, possibly null if default-constructed
-		Z3_ast ast;
+		Z3_ast ast = nullptr;
 
 		// Z3's Boolean sort
 		static Z3_sort BOOL_SORT;
@@ -106,23 +102,14 @@ namespace z3 {
 		// Model wants to construct Booleans from models
 		friend Model;
 
+		friend std::ostream &operator<<(std::ostream &, Bool);
+
 	public:
 		Bool() : Expression() {}
 
-		// construct a fresh Boolean variable
-		static Bool fresh() {
-			Z3_symbol fresh = Z3_mk_int_symbol(CONTEXT, FRESH_INDEX++);
+		Bool(bool b) {
+			ast = b ? Z3_mk_true(CONTEXT) : Z3_mk_false(CONTEXT);
 			check_error();
-			Z3_ast constant = Z3_mk_const(CONTEXT, fresh, BOOL_SORT);
-			check_error();
-			return constant;
-		}
-
-		// construct true or false
-		static Bool value(bool value) {
-			Z3_ast result = value ? Z3_mk_true(CONTEXT) : Z3_mk_false(CONTEXT);
-			check_error();
-			return result;
 		}
 
 		Bool operator!() const {
@@ -132,13 +119,6 @@ namespace z3 {
 		}
 
 		Bool operator&&(Bool other) const {
-			if (is(FALSE) || other.is(FALSE))
-				return FALSE;
-			if (is(TRUE))
-				return other;
-			if (other.is(TRUE))
-				return *this;
-
 			Z3_ast conjuncts[2]{ast, other.ast};
 			Z3_ast result = Z3_mk_and(CONTEXT, 2, conjuncts);
 			check_error();
@@ -147,36 +127,29 @@ namespace z3 {
 
 		static Bool conjunction(const std::vector<Bool> &conjuncts) {
 			Z3_ast result = Z3_mk_and(
-					CONTEXT,
-					conjuncts.size(),
-					// safety: Z3_ast should have the same size/alignment as Bool
-					reinterpret_cast<const Z3_ast *>(conjuncts.data())
+				CONTEXT,
+				conjuncts.size(),
+				// safety: Z3_ast should have the same size/alignment as Bool
+				reinterpret_cast<const Z3_ast *>(conjuncts.data())
 			);
-			check_error();
-			return result;
-		}
-
-		Bool operator||(Bool other) const {
-			if (is(TRUE) || other.is(TRUE))
-				return TRUE;
-			if (is(FALSE))
-				return other;
-			if (other.is(FALSE))
-				return *this;
-
-			Z3_ast disjuncts[2]{ast, other.ast};
-			Z3_ast result = Z3_mk_or(CONTEXT, 2, disjuncts);
 			check_error();
 			return result;
 		}
 
 		static Bool disjunction(const std::vector<Bool> &disjuncts) {
 			Z3_ast result = Z3_mk_or(
-					CONTEXT,
-					disjuncts.size(),
-					// safety: Z3_ast should have the same size/alignment as Bool
-					reinterpret_cast<const Z3_ast *>(disjuncts.data())
+				CONTEXT,
+				disjuncts.size(),
+				// safety: Z3_ast should have the same size/alignment as Bool
+				reinterpret_cast<const Z3_ast *>(disjuncts.data())
 			);
+			check_error();
+			return result;
+		}
+
+		Bool operator||(Bool other) const {
+			Z3_ast disjuncts[2]{ast, other.ast};
+			Z3_ast result = Z3_mk_or(CONTEXT, 2, disjuncts);
 			check_error();
 			return result;
 		}
@@ -187,51 +160,76 @@ namespace z3 {
 			return result;
 		}
 
-		static Bool exactly_one(const std::vector<Bool> &exactly_one_of) {
-			while (ONES.size() < exactly_one_of.size())
-				ONES.push_back(1);
-			Z3_ast result = Z3_mk_pbeq(
-					CONTEXT,
-					exactly_one_of.size(),
-					// safety: Z3_ast should have the same size/alignment as Bool
-					reinterpret_cast<const Z3_ast *>(exactly_one_of.data()),
-					ONES.data(),
-					1
-			);
-			check_error();
-			return result;
-		}
-
-		static Bool forall(const std::vector<Real> &bind, Bool bound) {
-			Z3_ast result = Z3_mk_forall_const(
-					CONTEXT,
-					0,
-					bind.size(),
-					// safety: Z3_app should have the same size/alignment as Real
-					reinterpret_cast<const Z3_app *>(bind.data()),
-					0,
-					nullptr,
-					bound.ast
-			);
-			check_error();
-			return result;
-		}
-
-		// Boolean constants
-		static Bool FALSE, TRUE;
-
 		Bool simplify() {
 			Bool simp_exp = Z3_simplify(CONTEXT, ast);
 			return simp_exp;
 		}
 
+		enum class Operator {
+			TRUE,
+			FALSE,
+			NOT,
+			AND,
+			OR,
+			EQ,
+			NE,
+			LT,
+			LE,
+			GT,
+			GE
+		};
+
+		// what kind of operator we have
+		Operator op() const {
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			Z3_func_decl decl = Z3_get_app_decl(CONTEXT, app);
+			Z3_decl_kind kind = Z3_get_decl_kind(CONTEXT, decl);
+			check_error();
+			switch(kind) {
+			case Z3_OP_TRUE:
+				return Operator::TRUE;
+			case Z3_OP_FALSE:
+				return Operator::FALSE;
+			case Z3_OP_NOT:
+				return Operator::NOT;
+			case Z3_OP_AND:
+				return Operator::AND;
+			case Z3_OP_OR:
+				return Operator::OR;
+			case Z3_OP_EQ:
+				return Operator::EQ;
+			case Z3_OP_DISTINCT:
+				return Operator::NE;
+			case Z3_OP_LT:
+				return Operator::LT;
+			case Z3_OP_LE:
+				return Operator::LE;
+			case Z3_OP_GT:
+				return Operator::GT;
+			case Z3_OP_GE:
+				return Operator::GE;
+			default:
+				assert(false);
+				UNREACHABLE
+			}
+		}
+
+		// the nth child of an operator application
+		Bool bool_child(unsigned n) {
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			Z3_ast child = Z3_get_app_arg(CONTEXT, app, n);
+			check_error();
+			return child;
+		}
+
+		// TODO is this just checking that two things are syntactically identical?
 		bool is_equal(const Bool other) const {
 			Z3_app app = Z3_to_app(CONTEXT, ast);
 			Z3_ast ast_left = Z3_get_app_arg(CONTEXT, app, 0);
 			Z3_ast ast_right = Z3_get_app_arg(CONTEXT, app, 1);
 			Z3_func_decl func_decl = Z3_get_app_decl(CONTEXT, app);
 			Z3_decl_kind decl_kind = Z3_get_decl_kind(CONTEXT, func_decl);
-
+			
 			Z3_app other_app = Z3_to_app(CONTEXT, other.ast);
 			Z3_ast other_ast_left = Z3_get_app_arg(CONTEXT, other_app, 0);
 			Z3_ast other_ast_right = Z3_get_app_arg(CONTEXT, other_app, 1);
@@ -247,60 +245,102 @@ namespace z3 {
 
 		Bool invert() const {
 			Z3_app app = Z3_to_app(CONTEXT, ast);
-			Z3_ast ast_left = Z3_get_app_arg(CONTEXT, app, 0);
-			Z3_ast ast_right = Z3_get_app_arg(CONTEXT, app, 1);
-			Z3_ast args[2];
-			args[0] = ast_left;
-			args[1] = ast_right;
+			const unsigned int num_args =  Z3_get_app_num_args(CONTEXT, app);
+			Z3_ast* args = new Z3_ast[num_args];
+			//above line instead of: Z3_ast args[num_args]; cause that's not allowed in c++
+			for (unsigned int i = 0; i < num_args; i++) {
+				Z3_ast current_ast = Z3_get_app_arg(CONTEXT, app, i);
+				args[i] = current_ast;
+			}
 
 			Z3_func_decl func_decl = Z3_get_app_decl(CONTEXT, app);
 			Z3_decl_kind decl_kind = Z3_get_decl_kind(CONTEXT, func_decl);
 
 			Bool new_expr;
 			if (decl_kind == Z3_OP_LT) {
-				new_expr = Z3_mk_ge(CONTEXT, ast_left, ast_right);
+				new_expr = Z3_mk_ge(CONTEXT, args[0], args[1]);
 			} else if (decl_kind == Z3_OP_LE) {
-				new_expr = Z3_mk_gt(CONTEXT, ast_left, ast_right);
+				new_expr = Z3_mk_gt(CONTEXT, args[0], args[1]);
 			} else if (decl_kind == Z3_OP_GT) {
-				new_expr = Z3_mk_le(CONTEXT, ast_left, ast_right);
+				new_expr = Z3_mk_le(CONTEXT, args[0], args[1]);
 			} else if (decl_kind == Z3_OP_GE) {
-				new_expr = Z3_mk_lt(CONTEXT, ast_left, ast_right);
+				new_expr = Z3_mk_lt(CONTEXT, args[0], args[1]);
 			} else if (decl_kind == Z3_OP_EQ) {
-				new_expr = Z3_mk_distinct(CONTEXT, 2, args);
+				new_expr = Z3_mk_distinct(CONTEXT, num_args, args);
 			} else if (decl_kind == Z3_OP_DISTINCT) {
-				new_expr = Z3_mk_eq(CONTEXT, ast_left, ast_right);
+				new_expr = Z3_mk_eq(CONTEXT, args[0], args[1]);
+			} else if (decl_kind == Z3_OP_OR) {
+				std::vector<Bool> neg_args;
+				for (unsigned int i = 0; i < num_args; i++) {
+					Bool to_negate = args[i];
+					neg_args.push_back(to_negate.invert());
+				}
+				new_expr = conjunction(neg_args);
+			} else if (decl_kind == Z3_OP_AND) {
+				std::vector<Bool> neg_args;
+				for (unsigned int i = 0; i < num_args; i++) {
+					Bool to_negate = args[i];
+					neg_args.push_back(to_negate.invert());
+				}
+				new_expr = disjunction(neg_args);
 			} else {
+				std::cout << "unsupported z3 element of type " << decl_kind << std::endl;
+				delete[] args;
 				assert(false);
 			}
+			delete[] args;
 			check_error();
 			return new_expr;
 		}
 
 	private:
 		Bool(Z3_ast ast) : Expression(ast) { assert(is_bool()); }
-
-		// index for generating fresh names
-		static unsigned FRESH_INDEX;
-		// a vector of 1 values for `exactly_one`
-		static std::vector<int> ONES;
 	};
 	// we reinterpret_cast Bool to Z3_ast sometimes for performance reasons
 	static_assert(
-			sizeof(Bool) == sizeof(Z3_ast),
-			"the size of Bool must be equal to that of Z3_ast to allow cast magic"
+		sizeof(Bool) == sizeof(Z3_ast),
+		"the size of Bool must be equal to that of Z3_ast to allow cast magic"
 	);
 
-	// for ADL
-	inline Bool disjunction(const std::vector<Bool> &disjuncts) { return Bool::disjunction(disjuncts); }
+	inline std::ostream &operator<<(std::ostream &out, Bool::Operator op) {
+		using Operator = Bool::Operator;
+		switch(op) {
+		case Operator::TRUE:
+			return out << "true";
+		case Operator::FALSE:
+			return out << "false";
+		case Operator::NOT:
+			return out << "!";
+		case Operator::AND:
+			return out << "&";
+		case Operator::OR:
+			return out << "|";
+		case Operator::EQ:
+			return out << "=";
+		case Operator::NE:
+			return out << "!=";
+		case Operator::LT:
+			return out << "<";
+		case Operator::LE:
+			return out << "<=";
+		case Operator::GT:
+			return out << ">";
+		case Operator::GE:
+			return out << ">=";
+		}
+		assert(false);
+		UNREACHABLE;
+	}
 
 	inline Bool conjunction(const std::vector<Bool> &conjuncts) { return Bool::conjunction(conjuncts); }
 
-	inline Bool exactly_one(const std::vector<Bool> &exactly_one_of) { return Bool::exactly_one(exactly_one_of); }
+	inline Bool disjunction(const std::vector<Bool> &disjuncts) { return Bool::disjunction(disjuncts); }
 
-	inline Bool forall(const std::vector<Real> &bind, Bool bound) { return Bool::forall(bind, bound); }
 
 	// Expression of real sort by construction
 	class Real : public Expression {
+		friend Expression;
+		friend std::ostream &operator<<(std::ostream &, Real);
 	public:
 		Real() : Expression() {}
 
@@ -363,10 +403,6 @@ namespace z3 {
 		Real operator*(Real other) const {
 			if (is(ZERO) || other.is(ZERO))
 				return ZERO;
-			if (is(ONE))
-				return other;
-			if (other.is(ONE))
-				return *this;
 
 			Z3_ast args[2] = {ast, other.ast};
 			Z3_ast result = Z3_mk_mul(CONTEXT, 2, args);
@@ -411,12 +447,78 @@ namespace z3 {
 			return result;
 		}
 
-		// real constants
-		static Real ZERO, ONE;
+		// zero constant
+		static Real ZERO;
+
+		enum class Operator {
+			NUMERAL,
+			CONSTANT,
+			MIN,
+			ADD,
+			SUB,
+			MUL,
+			DIV
+		};
+
+		// what kind of operator we have
+		Operator op() const {
+			Z3_app app = Z3_to_app(CONTEXT, ast);
+			Z3_func_decl decl = Z3_get_app_decl(CONTEXT, app);
+			Z3_decl_kind kind = Z3_get_decl_kind(CONTEXT, decl);
+			check_error();
+			switch(kind) {
+			case Z3_OP_ANUM:
+				return Operator::NUMERAL;
+			case Z3_OP_UNINTERPRETED:
+				return Operator::CONSTANT;
+			case Z3_OP_UMINUS:
+				return Operator::MIN;
+			case Z3_OP_ADD:
+				return Operator::ADD;
+			case Z3_OP_SUB:
+				return Operator::SUB;
+			case Z3_OP_MUL:
+				return Operator::MUL;
+			case Z3_OP_DIV:
+				return Operator::DIV;
+			default:
+				assert(false);
+				UNREACHABLE
+			}
+		}
 
 	private:
 		Real(Z3_ast ast) : Expression(ast) { assert(is_real()); }
 	};
+
+	// the nth child of an operator application
+	inline Real Expression::real_child(unsigned n) {
+		Z3_app app = Z3_to_app(CONTEXT, ast);
+		Z3_ast child = Z3_get_app_arg(CONTEXT, app, n);
+		check_error();
+		return child;
+	}
+
+	inline std::ostream &operator<<(std::ostream &out, Real::Operator op) {
+		using Operator = Real::Operator;
+		switch(op) {
+		case Operator::NUMERAL:
+		case Operator::CONSTANT:
+			assert(false);
+			UNREACHABLE;
+		case Operator::MIN:
+		case Operator::SUB:
+			return out << '-';
+		case Operator::ADD:
+			return out << '+';
+		case Operator::MUL:
+			return out << '*';
+		case Operator::DIV:
+			return out << '/';
+		}
+		assert(false);
+		UNREACHABLE;
+	}
 
 	// possible results from a `solve()` call
 	enum class Result {
@@ -427,56 +529,6 @@ namespace z3 {
 	inline std::ostream &operator<<(std::ostream &out, Result result) {
 		return out << (result == Result::SAT ? "sat" : "unsat");
 	}
-
-	// wrapper around a Z3 model
-	class Model {
-	public:
-		Model() = default;
-
-		Model(Z3_model model) : model(model) {
-			Z3_model_inc_ref(CONTEXT, model);
-			check_error();
-		}
-
-		Model(Model &&other) noexcept {
-			model = other.model;
-			other.model = nullptr;
-		}
-
-		Model &operator=(Model &&other) {
-			if (model)
-				Z3_model_dec_ref(CONTEXT, model);
-			model = other.model;
-			other.model = nullptr;
-			return *this;
-		}
-
-		~Model() {
-			if (!model)
-				return;
-			Z3_model_dec_ref(CONTEXT, model);
-			check_error();
-		}
-
-		operator bool() const { return model != nullptr; }
-
-		template<bool polarity>
-		bool assigns(Bool domain) const {
-			Z3_ast ast;
-			Z3_model_eval(CONTEXT, model, domain.ast, false, &ast);
-			check_error();
-			Z3_app app = Z3_to_app(CONTEXT, ast);
-			check_error();
-			Z3_func_decl decl = Z3_get_app_decl(CONTEXT, app);
-			check_error();
-			Z3_decl_kind kind = Z3_get_decl_kind(CONTEXT, decl);
-			check_error();
-			return kind == (polarity ? Z3_OP_TRUE : Z3_OP_FALSE);
-		}
-
-	private:
-		Z3_model model = nullptr;
-	};
 
 	// wrapper around a Z3 solver object
 	class Solver {
@@ -509,12 +561,6 @@ namespace z3 {
 		// add to the current frame
 		void assert_(Bool assertion) {
 			Z3_solver_assert(CONTEXT, solver, assertion.ast);
-			check_error();
-		}
-
-		// same as assert_() but enable the assertion to appear in unsat cores
-		void assert_and_track(Bool assertion) {
-			Z3_solver_assert_and_track(CONTEXT, solver, assertion.ast, assertion.ast);
 			check_error();
 		}
 
@@ -561,40 +607,15 @@ namespace z3 {
 			return result;
 		}
 
-		// get a model - must have just returned sat
-		Model model() const {
-			Z3_model model = Z3_solver_get_model(CONTEXT, solver);
-			check_error();
-			return model;
-		}
-
-		// retrieve an unsat core - must have just returned unsat
-		std::vector<Bool> unsat_core() {
-			Z3_ast_vector core = Z3_solver_get_unsat_core(CONTEXT, solver);
-			check_error();
-			Z3_ast_vector_inc_ref(CONTEXT, core);
-			check_error();
-			unsigned length = Z3_ast_vector_size(CONTEXT, core);
-			std::vector<Bool> result;
-			for (unsigned i = 0; i < length; i++) {
-				Z3_ast item = Z3_ast_vector_get(CONTEXT, core, i);
-				check_error();
-				result.push_back(item);
-			}
-			Z3_ast_vector_dec_ref(CONTEXT, core);
-			check_error();
-			return result;
-		}
-
-		friend std::ostream &operator<<(std::ostream &out, const Solver &solver) {
-			return out << Z3_solver_to_string(CONTEXT, solver.solver);
-		}
-
 	private:
 		// wrapper solver
 		Z3_solver solver;
 	};
+
+	std::ostream &operator<<(std::ostream &out, z3::Real expr);
+	std::ostream &operator<<(std::ostream &out, z3::Bool expr);
 }
+
 
 // used in e.g. hash tables rather than operator==
 template<>
@@ -625,26 +646,5 @@ struct std::hash<z3::Real> {
 		return std::hash<unsigned>{}(expr.id());
 	}
 };
-
-namespace z3 {
-	class MinimalCores {
-	public:
-		MinimalCores(
-				Solver &solver,
-				const std::vector<Bool> &labels,
-				unsigned int max_unsat
-		) : solver(solver), labels(labels), max_unsat(max_unsat) {}
-
-		bool next_core();
-
-		std::vector<Bool> core;
-
-	private:
-		Solver &solver;
-		const std::vector<Bool> &labels;
-		Solver map;
-		unsigned int max_unsat;
-	};
-}
 
 #endif
