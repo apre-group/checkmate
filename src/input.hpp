@@ -2,6 +2,7 @@
 #define __checkmate_input__
 
 #include <algorithm>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -313,8 +314,8 @@ class Leaf final : public Node {
 	mutable uint64_t problematic_group;
 
 	// collusion resilience results of the comparison with the honest utility,
-	// indexed by player group (as bitset)
-	mutable std::vector<CrMemo> cr_supergroup_memo;
+	// indexed by player group (as bitset), shared by all leaves with the same utilities (see Input::cr_leaf_memo)
+	mutable std::vector<CrMemo> *cr_supergroup_memo = nullptr;
 
 	NodeType type() const override { return NodeType::LEAF; }
 
@@ -686,6 +687,26 @@ struct Input {
 		result.case_id = case_stack.back();
 		result.reason = reason;
 		return result;
+	}
+
+	// collusion resilience: leaves with the same utilities have the same comparisons with the honest utility,
+	// so they share their results (keyed by the IDs of the utilities, which live as long as the input)
+	mutable std::map<std::vector<unsigned>, std::vector<CrMemo>> cr_utility_memos;
+
+	std::vector<CrMemo> &cr_leaf_memo(const Leaf &leaf) const {
+		if (!leaf.cr_supergroup_memo) {
+			std::vector<unsigned> key;
+			for (const Utility &utility : leaf.utilities) {
+				key.push_back(utility.real.id());
+				key.push_back(utility.infinitesimal.id());
+			}
+			std::vector<CrMemo> &memo = cr_utility_memos[key];
+			if (memo.empty()) {
+				memo.resize(players.size() == 64 ? -1ull : (1ull << players.size()) - 1);
+			}
+			leaf.cr_supergroup_memo = &memo;
+		}
+		return *leaf.cr_supergroup_memo;
 	}
 
 	// results that hold in any case (HOLDS, VIOLATED) stay valid in all refinements of the case they were computed in,

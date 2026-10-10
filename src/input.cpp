@@ -1064,8 +1064,8 @@ static std::set<CrCounterexample> cr_counterexamples(const Input &input, const N
 		std::vector<std::vector<std::string>> groups;
 		for (uint64_t extra = 0; ; extra = (extra - outside) & outside) {
 			uint64_t supergroup = group | extra;
-			if (supergroup != 0 && supergroup != all_players && !leaf.cr_supergroup_memo.empty()) {
-				const CrMemo &memo = leaf.cr_supergroup_memo[supergroup];
+			if (supergroup != 0 && supergroup != all_players) {
+				const CrMemo &memo = input.cr_leaf_memo(leaf)[supergroup];
 				if (input.memo_valid(memo) && memo.status == CrMemo::VIOLATED) {
 					groups.push_back(group_names(input, supergroup));
 				}

@@ -537,9 +537,7 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 		// enumerate all subsets `extra` of the players outside of group, except the full one
 		const uint64_t all_players = players == 64 ? -1ull : (1ull << players) - 1;
 		const uint64_t outside = all_players & ~group.to_ullong();
-		if (leaf.cr_supergroup_memo.empty()) {
-			leaf.cr_supergroup_memo.resize(all_players);
-		}
+		std::vector<CrMemo> &supergroup_memo = input.cr_leaf_memo(leaf);
 		z3::Bool reason;
 		// with counterexamples all supergroups are compared, as the counterexample reports all that gain
 		bool violated = false;
@@ -550,7 +548,7 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 				continue;
 
 			// look up whether this supergroup was already compared for another group
-			CrMemo &memo = leaf.cr_supergroup_memo[supergroup.to_ullong()];
+			CrMemo &memo = supergroup_memo[supergroup.to_ullong()];
 			if (input.memo_valid(memo)) {
 				if (memo.status == CrMemo::VIOLATED) {
 					if (!options.counterexamples)
