@@ -174,7 +174,8 @@ Others, such as the auction benchmark, are provided in forms of scripts that gen
 
 Important benchmarks include `closing_game.py` that models the Closing Game proposed in [5] for the closing phase of the [Bitcoin Lightning protocol](https://lightning.network/lightning-network-paper.pdf) as well as `routing_game-three.py`, which models the routing module of the Lightning protocol [5] for three users.
 `routing_game-subtree-supertree.py` generates (compositionally, over several hours and with intermediate files) a supertree for four users, included for reference as `routing_game-four-supertree.json`.
-Its collusion resilience subtree results were computed with an older version of CheckMate; regenerate it with the script before analyzing it.
+Run the script from the `build` folder: it analyzes each of its 1440 subtrees with `./checkmate --subtree` and writes the supertree to `routing_game-supertree.json` there.
+Its intermediate files are temporary files that are not deleted afterwards; set `TMPDIR` to a folder of your choice to remove them easily (they take up about 150 GB).
 
 Examples for compositional analysis are the `*-subtree*.json` files together with the corresponding `*-supertree.json` files, e.g. `closing_game-subtree1.json` to `closing_game-subtree8.json` with `closing_game-supertree.json`, or `pirate_game-subtree-Sc-not-honest.json`, whose results are nested in `pirate_game-subtree-Sb-honest.json` and `pirate_game-subtree-Sb-not-honest.json`, which in turn are part of `pirate_game-supertree.json`.
 
