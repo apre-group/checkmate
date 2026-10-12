@@ -545,6 +545,16 @@
                                                         "subtree": {
                                                             "collusion_resilience": [
                                                                 {
+                                                                    "player_group": [],
+                                                                    "satisfied_in_case": [
+                                                                        [
+                                                                            "((b_C + b_D) >= (c_C + c_D))",
+                                                                            "((b_B + b_D) >= ((- d) + c_D))",
+                                                                            "((b_B + b_C) >= ((- d) + c_C))"
+                                                                        ]
+                                                                    ]
+                                                                },
+                                                                {
                                                                     "player_group": [
                                                                         "A"
                                                                     ],
@@ -1023,6 +1033,16 @@
                                             "subtree": {
                                                 "collusion_resilience": [
                                                     {
+                                                        "player_group": [],
+                                                        "satisfied_in_case": [
+                                                            [
+                                                                "((b_C + b_D) >= (c_C + c_D))",
+                                                                "((b_B + b_D) >= ((- d) + c_D))",
+                                                                "((b_B + b_C) >= ((- d) + c_C))"
+                                                            ]
+                                                        ]
+                                                    },
+                                                    {
                                                         "player_group": [
                                                             "A"
                                                         ],
@@ -1500,6 +1520,16 @@
                             "child": {
                                 "subtree": {
                                     "collusion_resilience": [
+                                        {
+                                            "player_group": [],
+                                            "satisfied_in_case": [
+                                                [
+                                                    "((b_C + b_D) >= (c_C + c_D))",
+                                                    "((b_B + b_D) >= ((- d) + c_D))",
+                                                    "((b_B + b_C) >= ((- d) + c_C))"
+                                                ]
+                                            ]
+                                        },
                                         {
                                             "player_group": [
                                                 "A"

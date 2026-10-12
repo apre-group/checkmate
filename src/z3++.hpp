@@ -12,6 +12,7 @@
 #include <iostream>
 #include <string>
 #include <cctype>
+#include <functional>
 #include <sstream>
 #include <vector>
 #include <unordered_map>
@@ -125,7 +126,10 @@ namespace z3 {
 			return result;
 		}
 
+		// a single conjunct is returned as is, without wrapping it in an `and`
 		static Bool conjunction(const std::vector<Bool> &conjuncts) {
+			if (conjuncts.size() == 1)
+				return conjuncts[0];
 			Z3_ast result = Z3_mk_and(
 				CONTEXT,
 				conjuncts.size(),
@@ -136,7 +140,10 @@ namespace z3 {
 			return result;
 		}
 
+		// a single disjunct is returned as is, without wrapping it in an `or`
 		static Bool disjunction(const std::vector<Bool> &disjuncts) {
+			if (disjuncts.size() == 1)
+				return disjuncts[0];
 			Z3_ast result = Z3_mk_or(
 				CONTEXT,
 				disjuncts.size(),
@@ -617,34 +624,37 @@ namespace z3 {
 }
 
 
-// used in e.g. hash tables rather than operator==
-template<>
-struct std::equal_to<z3::Bool> {
-	bool operator()(const z3::Bool &left, const z3::Bool &right) const {
-		return left.is(right);
-	}
-};
+// specializations must be declared inside namespace std (qualifying them as std::... is only allowed since C++17)
+namespace std {
+	// used in e.g. hash tables rather than operator==
+	template<>
+	struct equal_to<z3::Bool> {
+		bool operator()(const z3::Bool &left, const z3::Bool &right) const {
+			return left.is(right);
+		}
+	};
 
-// used in e.g. hash tables rather than operator==
-template<>
-struct std::equal_to<z3::Real> {
-	bool operator()(const z3::Real &left, const z3::Real &right) const {
-		return left.is(right);
-	}
-};
+	// used in e.g. hash tables rather than operator==
+	template<>
+	struct equal_to<z3::Real> {
+		bool operator()(const z3::Real &left, const z3::Real &right) const {
+			return left.is(right);
+		}
+	};
 
-template<>
-struct std::hash<z3::Bool> {
-	size_t operator()(const z3::Bool &expr) const {
-		return std::hash<unsigned>{}(expr.id());
-	}
-};
+	template<>
+	struct hash<z3::Bool> {
+		size_t operator()(const z3::Bool &expr) const {
+			return hash<unsigned>{}(expr.id());
+		}
+	};
 
-template<>
-struct std::hash<z3::Real> {
-	size_t operator()(const z3::Real &expr) const {
-		return std::hash<unsigned>{}(expr.id());
-	}
-};
+	template<>
+	struct hash<z3::Real> {
+		size_t operator()(const z3::Real &expr) const {
+			return hash<unsigned>{}(expr.id());
+		}
+	};
+}
 
 #endif

@@ -133,6 +133,15 @@
                       "subtree": {
                         "collusion_resilience": [
                           {
+                            "player_group": [],
+                            "satisfied_in_case": [
+                              [
+                                "(b_C >= c_C)",
+                                "(b_D >= c_D)"
+                              ]
+                            ]
+                          },
+                          {
                             "player_group": [
                               "A"
                             ],
@@ -455,6 +464,15 @@
                       "subtree": {
                         "collusion_resilience": [
                           {
+                            "player_group": [],
+                            "satisfied_in_case": [
+                              [
+                                "(b_C >= c_C)",
+                                "(b_D >= c_D)"
+                              ]
+                            ]
+                          },
+                          {
                             "player_group": [
                               "A"
                             ],
@@ -740,6 +758,15 @@
               "child": {
                 "subtree": {
                   "collusion_resilience": [
+                    {
+                      "player_group": [],
+                      "satisfied_in_case": [
+                        [
+                          "(b_C >= c_C)",
+                          "(b_D >= c_D)"
+                        ]
+                      ]
+                    },
                     {
                       "player_group": [
                         "A"

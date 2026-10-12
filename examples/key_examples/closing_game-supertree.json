@@ -101,6 +101,14 @@
                 "subtree": {
                   "collusion_resilience": [
                     {
+                      "player_group": [],
+                      "satisfied_in_case": [
+                        [
+                          "true"
+                        ]
+                      ]
+                    },
+                    {
                       "player_group": [
                         "A"
                       ],
@@ -258,6 +266,15 @@
               "child": {
                 "subtree": {
                   "collusion_resilience": [
+                    {
+                      "player_group": [],
+                      "satisfied_in_case": [
+                        [
+                          "(0.0 >= ((b + p_B) - f))",
+                          "(0.0 > ((b + p_B) - f))"
+                        ]
+                      ]
+                    },
                     {
                       "player_group": [
                         "A"
@@ -461,6 +478,15 @@
                       "subtree": {
                         "collusion_resilience": [
                           {
+                            "player_group": [],
+                            "satisfied_in_case": [
+                              [
+                                "(0.0 >= ((a + p_A) - f))",
+                                "(0.0 > ((a + p_A) - f))"
+                              ]
+                            ]
+                          },
+                          {
                             "player_group": [
                               "A"
                             ],
@@ -619,6 +645,14 @@
                     "child": {
                       "subtree": {
                         "collusion_resilience": [
+                          {
+                            "player_group": [],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
                           {
                             "player_group": [
                               "A"
@@ -1009,6 +1043,14 @@
                       "subtree": {
                         "collusion_resilience": [
                           {
+                            "player_group": [],
+                            "satisfied_in_case": [
+                              [
+                                "true"
+                              ]
+                            ]
+                          },
+                          {
                             "player_group": [
                               "A"
                             ],
@@ -1127,6 +1169,26 @@
                     "child": {
                       "subtree": {
                         "collusion_resilience": [
+                          {
+                            "player_group": [],
+                            "satisfied_in_case": [
+                              [
+                                "(0.0 >= ((a + p_A) - f))",
+                                "(0.0 > ((a + p_A) - f))"
+                              ],
+                              [
+                                "(0.0 >= ((a + p_A) - f))",
+                                "(0.0 <= ((a + p_A) - f))",
+                                "(0.0 >= (p_A - c))",
+                                "(0.0 > (p_A - c))"
+                              ],
+                              [
+                                "(0.0 < ((a + p_A) - f))",
+                                "(0.0 >= (p_A - c))",
+                                "(0.0 > (p_A - c))"
+                              ]
+                            ]
+                          },
                           {
                             "player_group": [
                               "A"
@@ -1389,6 +1451,15 @@
                 "subtree": {
                   "collusion_resilience": [
                     {
+                      "player_group": [],
+                      "satisfied_in_case": [
+                        [
+                          "(0.0 >= ((b + p_B) - f))",
+                          "(0.0 > ((b + p_B) - f))"
+                        ]
+                      ]
+                    },
+                    {
                       "player_group": [
                         "A"
                       ],
@@ -1547,6 +1618,26 @@
               "child": {
                 "subtree": {
                   "collusion_resilience": [
+                    {
+                      "player_group": [],
+                      "satisfied_in_case": [
+                        [
+                          "(0.0 >= (c - p_A))",
+                          "(0.0 > (c - p_A))"
+                        ],
+                        [
+                          "(0.0 >= (c - p_A))",
+                          "(0.0 <= (c - p_A))",
+                          "(0.0 >= ((b - p_A) - f))",
+                          "(0.0 > ((b - p_A) - f))"
+                        ],
+                        [
+                          "(0.0 < (c - p_A))",
+                          "(0.0 >= ((b - p_A) - f))",
+                          "(0.0 > ((b - p_A) - f))"
+                        ]
+                      ]
+                    },
                     {
                       "player_group": [
                         "A"

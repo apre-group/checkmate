@@ -1055,6 +1055,8 @@ static std::vector<std::string> group_names(const Input &input, uint64_t group) 
 //   or a deviator (taking a choice violating collusion resilience for group together with the player)
 // - at a leaf, report the supergroups of group without honest players that gain more than on the honest history
 // without `all`, only the first counterexample found is returned
+// std::set rather than std::unordered_set on purpose: the order decides which counterexample is kept without `all`,
+// which ones are kept when capping at MAX_CR_COUNTEREXAMPLES, and the order they are printed in, so it should be deterministic
 static std::set<CrCounterexample> cr_counterexamples(const Input &input, const Node *node, std::vector<std::string> history, uint64_t group, uint64_t honest, bool all, bool &truncated) {
 
 	if (node->is_leaf()) {

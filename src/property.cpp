@@ -370,21 +370,10 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 				std::vector<z3::Bool> cases_as_conjunctions = {};
 
 				for (auto _case: subtree_result.satisfied_in_case) {
-					// try to optimize: if only 1 -> no need for conjunction
-					if(_case.size() == 1) {
-						cases_as_conjunctions.push_back(_case[0]);
-					} else {
-						cases_as_conjunctions.push_back(z3::conjunction(_case));
-					}
+					cases_as_conjunctions.push_back(z3::conjunction(_case));
 				}
 
 				z3::Bool disj_of_cases = z3::disjunction(cases_as_conjunctions);
-
-				if(cases_as_conjunctions.size() == 1) {
-					disj_of_cases = cases_as_conjunctions[0];
-				} else {
-					disj_of_cases = z3::disjunction(cases_as_conjunctions);
-				}
 
 				if(options.count_calls) {
 					weaker ? calls_weri++ : calls_wi++;
@@ -649,19 +638,10 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 					// satisfied without any case split: leave disj_of_cases null
 					if (_case.empty())
 						return true;
-					// try to optimize: if only 1 -> no need for conjunction
-					if(_case.size() == 1) {
-						cases_as_conjunctions.push_back(_case[0]);
-					} else {
-						cases_as_conjunctions.push_back(z3::conjunction(_case));
-					}
+					cases_as_conjunctions.push_back(z3::conjunction(_case));
 				}
 
-				if(cases_as_conjunctions.size() == 1) {
-					disj_of_cases = cases_as_conjunctions[0];
-				} else {
-					disj_of_cases = z3::disjunction(cases_as_conjunctions);
-				}
+				disj_of_cases = z3::disjunction(cases_as_conjunctions);
 				return true;
 			}
 			return false;
@@ -708,6 +688,11 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 				return false;
 			}
 		}
+
+		// subtree results must contain every group the subtree can be reached with
+		std::cerr << "checkmate: subtree has no collusion resilience result for group " << index2player(input, PropertyType::CollusionResilience, group_nr)
+			<< " - recompute it in subtree mode with the current version of CheckMate" << std::endl;
+		std::exit(EXIT_FAILURE);
 	} 
 
 	const auto &branch = node->branch();
@@ -896,13 +881,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		const auto &subtree = node->subtree();
 
 		for (const PracticalitySubtreeResult &subtree_result: subtree.practicality) {
-			z3::Bool subtree_case;
-			// try to optimize: if only 1 -> no need for conjunction
-			if(subtree_result._case.size() == 1) {
-				subtree_case = subtree_result._case[0];
-			} else {
-				subtree_case = z3::conjunction(subtree_result._case);
-			}
+			z3::Bool subtree_case = z3::conjunction(subtree_result._case);
 
 			if(options.count_calls) {
 				calls_pr++;
@@ -1967,19 +1946,22 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 
 	assert(solver.solve() == z3::Result::SAT);
 
-	size_t number_groups = pow(2,input.players.size())-2;
+	// all groups except the group of all players, including the empty group:
+	// the supertree reaches the subtree with the empty group if nobody deviated in it before
+	// (e.g. if the supertree itself is off the honest history)
+	size_t number_groups = pow(2,input.players.size())-1;
 	std::vector<SubtreeResult> subtree_results;
 
 	for (unsigned i = 0; i < number_groups; i++){
 		input.reset_reset_point();
 		input.root.get()->reset_reason();
-		std::vector<std::string> players = index2player(input, property, i+1);
+		std::vector<std::string> players = index2player(input, property, i);
 
 		SubtreeResult subtree_result_player;
 		subtree_result_player.player_group = players;
 		subtree_result_player.satisfied_in_case = {};
 
-		if (property_rec_utility(solver, options, input, property, std::vector<z3::Bool>(), honest_utility, i+1, subtree_result_player.satisfied_in_case)){
+		if (property_rec_utility(solver, options, input, property, std::vector<z3::Bool>(), honest_utility, i, subtree_result_player.satisfied_in_case)){
 			std::cout << "YES, it is collusion resilient against group " <<  players << "."  << std::endl;
 		} else { 
 			std::cout << "NO, it is not  collusion resilient against group " << players << "." << std::endl;

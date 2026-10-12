@@ -280,7 +280,7 @@ class Subtree : public Node {
       honest_utility(_honest_utility) {}
 
 	void reset_reason() const {
-		::new (&reason) z3::Bool();
+		reason = z3::Bool();
 	}
 
 	void reset_problematic_group() const {
@@ -322,7 +322,7 @@ class Leaf final : public Node {
 	virtual UtilityTuplesSet get_utilities() const override {return {utilities}; }
 
 	void reset_reason() const {
-		::new (&reason) z3::Bool();
+		reason = z3::Bool();
 	}
 
 	void reset_problematic_group() const {
@@ -554,7 +554,7 @@ class Branch final : public Node {
 	}
 
 	void reset_reason() const {
-		::new (&reason) z3::Bool();
+		reason = z3::Bool();
 		for(auto &choice: choices)
 			if(!choice.node->is_leaf() && !choice.node->is_subtree()){
 				choice.node->branch().reset_reason();
