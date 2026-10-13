@@ -1,0 +1,122 @@
+{
+  "players": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "actions": [
+    "y",
+    "n"
+  ],
+  "infinitesimals": [],
+  "constants": [
+    "d",
+    "a_A",
+    "a_B",
+    "a_C",
+    "a_D",
+    "b_B",
+    "b_C",
+    "b_D",
+    "c_C",
+    "c_D",
+    "g"
+  ],
+  "initial_constraints": [
+    "d > 0",
+    "g > 0",
+    "a_A >= 0",
+    "a_B >= 0",
+    "a_C >= 0",
+    "a_D >= 0",
+    "b_B >= 0",
+    "b_C >= 0",
+    "b_D >= 0",
+    "c_C >= 0",
+    "c_D >= 0",
+    "a_A + a_B + a_C + a_D = g",
+    "b_B + b_C + b_D = g",
+    "c_C + c_D = g"
+  ],
+  "property_constraints": {
+    "weak_immunity": [],
+    "weaker_immunity": [],
+    "collusion_resilience": [],
+    "practicality": []
+  },
+  "honest_histories": [],
+  "honest_utilities": [
+    {
+      "utility": [
+        {
+          "player": "A",
+          "value": "-d"
+        },
+        {
+          "player": "B",
+          "value": "b_B"
+        },
+        {
+          "player": "C",
+          "value": "b_C"
+        },
+        {
+          "player": "D",
+          "value": "b_D"
+        }
+      ]
+    }
+  ],
+  "tree": {
+    "player": "C",
+    "children": [
+      {
+        "action": "y",
+        "child": {
+          "utility": [
+            {
+              "player": "A",
+              "value": "-d"
+            },
+            {
+              "player": "B",
+              "value": "-d"
+            },
+            {
+              "player": "C",
+              "value": "c_C"
+            },
+            {
+              "player": "D",
+              "value": "c_D"
+            }
+          ]
+        }
+      },
+      {
+        "action": "n",
+        "child": {
+          "utility": [
+            {
+              "player": "A",
+              "value": "-d"
+            },
+            {
+              "player": "B",
+              "value": "-d"
+            },
+            {
+              "player": "C",
+              "value": "-d"
+            },
+            {
+              "player": "D",
+              "value": "g"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

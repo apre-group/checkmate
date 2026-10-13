@@ -5,9 +5,5 @@ build/
 __pycache__/
 venv/
 *.json
+*.out
 examples/other_examples/f_asset_minting.py
-examples/other_examples/fooling_around.py
-CMakeCache.txt
-CMakeFiles/
-Makefile
-*.cmake

@@ -102,7 +102,7 @@ struct std::equal_to<Utility> {
 // hash a utility by combining the bits of its constituent ids, then hash _that_
 template<>
 struct std::hash<Utility> {
-	bool operator()(Utility utility) const {
+	size_t operator()(Utility utility) const {
 		size_t real_id = utility.real.id();
 		size_t infinitesimal_id = utility.infinitesimal.id();
 		size_t combined = real_id << (CHAR_BIT * sizeof(unsigned)) | infinitesimal_id;

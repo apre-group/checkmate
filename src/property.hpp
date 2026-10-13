@@ -1,14 +1,15 @@
 #ifndef __checkmate_property__
 #define __checkmate_property__
 
-#include "input.hpp"
-#include "options.hpp"
+struct Input;
+struct Options;
 
-template<bool weaker>
-void weak_immunity(const Options &options, const Input &input);
 
-void collusion_resilience(const Options &options, const Input &input);
+std::vector<std::string> index2player(const Input &input, unsigned index);
 
-void practicality(const Options &options, const Input &input);
+void analyse_properties(const Options &options, const Input &input);
+
+void analyse_properties_subtree(const Options &options, const Input &input);
+
 
 #endif
