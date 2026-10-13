@@ -13,11 +13,11 @@
 // an honest history is continued inside the subtree nodes it ends in, by the honest histories considered there
 struct SubtreeData {
 	SubtreeEntryKey key;
-	Subtree result;
+	SubtreeResults result;
 };
 
 // analyse the chosen properties in subtree mode, with `ustar` the honest utilities (only needed for collusion resilience)
-Subtree subtree_mode(const Options &options, const Input &input, const UtilityTuplesSet &ustar);
+SubtreeResults subtree_mode(const Options &options, const Input &input, const UtilityTuplesSet &ustar);
 
 // write all collected subtree results to `file_name` as a list of keyed entries
 // {honest_history | honest_utility | no_honest_history, subtree}, which as a whole can be the value of a "subtree" node in a supertree
@@ -29,6 +29,6 @@ nlohmann::json parse_utility(const Input &input, std::vector<Utility> utility_to
 nlohmann::json parse_honest_utility_element(const Input &input, const HonestUtilityElement &element);
 nlohmann::json parse_property_to_json(std::vector<SubtreeResult> property_result);
 nlohmann::json parse_practicality_property_to_json(const Input &input, std::vector<PracticalitySubtreeResult> property_result);
-nlohmann::json subtree2json(const Input &input, const Subtree &subtree);
+nlohmann::json subtree2json(const Input &input, const SubtreeResults &results);
 
 #endif

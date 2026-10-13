@@ -6,7 +6,7 @@
 using json = nlohmann::json;
 
 // TODO: placeholder, only reports what would be checked and returns empty results
-Subtree subtree_mode(const Options &options, [[maybe_unused]] const Input &input, const UtilityTuplesSet &ustar) {
+SubtreeResults subtree_mode(const Options &options, [[maybe_unused]] const Input &input, const UtilityTuplesSet &ustar) {
 	std::vector<std::pair<bool, std::string>> properties = {
 		{options.weak_immunity, "weak immunity"},
 		{options.weaker_immunity, "weaker immunity"},
@@ -24,7 +24,7 @@ Subtree subtree_mode(const Options &options, [[maybe_unused]] const Input &input
 			std::cout << "\t\t" << utility.leaf << " if " << utility.condition << std::endl;
 		}
 	}
-	return Subtree({}, {}, {}, {}, std::vector<Utility>());
+	return SubtreeResults();
 }
 
 json parse_sat_case(std::vector<z3::Bool> sat_case) {
@@ -125,18 +125,18 @@ json parse_practicality_property_to_json(const Input &input, std::vector<Practic
     return arr_pr;
 }
 
-json subtree2json(const Input &input, const Subtree &subtree) {
+json subtree2json(const Input &input, const SubtreeResults &results) {
 	json subtree_json;
-	subtree_json["weak_immunity"] = parse_property_to_json(subtree.weak_immunity);
-	subtree_json["weaker_immunity"] = parse_property_to_json(subtree.weaker_immunity);
-	subtree_json["collusion_resilience"] = parse_property_to_json(subtree.collusion_resilience);
-	subtree_json["practicality"] = parse_practicality_property_to_json(input, subtree.practicality);
+	subtree_json["weak_immunity"] = parse_property_to_json(results.weak_immunity);
+	subtree_json["weaker_immunity"] = parse_property_to_json(results.weaker_immunity);
+	subtree_json["collusion_resilience"] = parse_property_to_json(results.collusion_resilience);
+	subtree_json["practicality"] = parse_practicality_property_to_json(input, results.practicality);
 	// only subtrees along the honest history have an honest utility;
 	// leave it out otherwise, the parser rejects an empty one and defaults to empty if it is missing
-	bool no_honest_utility = std::holds_alternative<std::vector<Utility>>(subtree.honest_utility)
-		&& std::get<std::vector<Utility>>(subtree.honest_utility).empty();
+	bool no_honest_utility = std::holds_alternative<std::vector<Utility>>(results.honest_utility)
+		&& std::get<std::vector<Utility>>(results.honest_utility).empty();
 	if (!no_honest_utility) {
-		subtree_json["honest_utility"] = parse_honest_utility_element(input, subtree.honest_utility);
+		subtree_json["honest_utility"] = parse_honest_utility_element(input, results.honest_utility);
 	}
 	return subtree_json;
 }

@@ -23,7 +23,7 @@ int main(int, char **argv) {
 			default_mode(run_options, input, ustar);
 			return;
 		}
-		Subtree result = subtree_mode(run_options, input, ustar);
+		SubtreeResults result = subtree_mode(run_options, input, ustar);
 		if (history) {
 			// the supertree needs the honest utility if its honest history ends in this subtree
 			result.honest_utility = honest_history2utility(input.root.get(), *history);

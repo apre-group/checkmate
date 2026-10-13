@@ -703,21 +703,14 @@ class Subtree : public Node {
 
 	NodeType type() const override { return NodeType::SUBTREE; }
 
-	std::vector<SubtreeResult> weak_immunity; // each player occurs exactly once in vector
-	std::vector<SubtreeResult> weaker_immunity;
-	std::vector<SubtreeResult> collusion_resilience;
-	std::vector<PracticalitySubtreeResult> practicality;
-	// honest utility needed in case the honest history ends in this subtree
-	HonestUtilityElement honest_utility;
-
-	// results in the keyed format written by subtree mode, one entry per honest history / honest utility
-	// (empty for the single-result format above); the supertree picks the entry matching its honest history / utility
+	// the results of analysing the subtree in subtree mode, one entry per honest history / honest utility
+	// (and one without honest history); the supertree picks the entry matching its honest history / utility
 	std::vector<SubtreeEntry> entries;
 
-	// keyed format, along the honest history: the entry of the honest history inside this subtree considered in the current run
+	// along the honest history: the entry of the honest history inside this subtree considered in the current run
 	mutable const SubtreeEntry *honest_entry = nullptr;
 
-	// keyed format: the entries computed for an honest history inside this subtree
+	// the entries computed for an honest history inside this subtree
 	std::vector<const SubtreeEntry *> honest_history_entries() const {
 		std::vector<const SubtreeEntry *> result;
 		for (const SubtreeEntry &entry : entries) {
@@ -728,21 +721,11 @@ class Subtree : public Node {
 		return result;
 	}
 
-	// the honest utility if the honest history ends in this subtree (keyed format: of the entry considered in the current run)
+	// the honest utility if the honest history ends in this subtree: of the entry considered in the current run
 	const HonestUtilityElement &current_honest_utility() const {
-		return honest_entry ? honest_entry->results.honest_utility : honest_utility;
+		assert(honest_entry);
+		return honest_entry->results.honest_utility;
 	}
-
-	Subtree(std::vector<SubtreeResult> _weak_immunity,
-        std::vector<SubtreeResult> _weaker_immunity,
-        std::vector<SubtreeResult> _collusion_resilience,
-        std::vector<PracticalitySubtreeResult> _practicality,
-        HonestUtilityElement _honest_utility)
-    : weak_immunity(_weak_immunity),
-      weaker_immunity(_weaker_immunity),
-      collusion_resilience(_collusion_resilience),
-      practicality(_practicality),
-      honest_utility(_honest_utility) {}
 
 	void reset_reason() const {
 		::new (&reason) z3::Bool();
@@ -776,12 +759,21 @@ class Subtree : public Node {
 		utilities = {};
 	}
 
-	// the honest history ends here (which honest history inside the subtree is considered is chosen separately)
+	// the entry computed for the honest history `history` inside this subtree, null if there is none
+	const SubtreeEntry *find_honest_history_entry(const HonestHistory &history) const;
+
+	// usually the honest history ends here, and which honest history inside the subtree is considered
+	// is chosen separately (see honest_subtree_histories);
+	// alternatively it continues with one of the honest histories inside the subtree, which is then considered
 	void mark_honest(const HonestHistory &history) const override {
 		honest = true;
 		honest_entry = nullptr;
-		if (!history.empty()) {
-			std::cerr << "checkmate: honest history not fitting the game tree (too long)" << std::endl;
+		if (history.empty()) {
+			return;
+		}
+		honest_entry = find_honest_history_entry(history);
+		if (!honest_entry) {
+			std::cerr << "checkmate: honest history continues inside a subtree, but not with an honest history computed for it" << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 	}
@@ -1693,7 +1685,7 @@ UtilityTuplesSet compute_ustar(const HonestUtilityElement &element);
 std::vector<const Subtree *> honest_subtrees(const Node *root);
 
 // every way to pick one honest history inside each of `subtrees`, one list of entries (one per subtree) per run:
-// a subtree in the keyed format has one option per entry for an honest history, one in the single-result format only nullptr
+// a subtree has one option per entry for an honest history (only the one given, if the honest history continues inside it)
 std::vector<std::vector<const SubtreeEntry *>> honest_subtree_histories(const std::vector<const Subtree *> &subtrees);
 
 // consider the honest histories `subtrees_history` inside `subtrees` (one of honest_subtree_histories) in the current run

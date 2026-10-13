@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <fstream>
 #include <iostream>
 #include "json.hpp"
@@ -481,7 +482,7 @@ static z3::Bool parse_case(Parser &parser, const std::string &_case) {
 static HonestUtilityElement parse_honest_utility_element(Parser &parser, const json &element, const Input &input);
 static HonestHistory parse_honest_history(Parser &parser, const json &history_json);
 
-// the results stored in a subtree node in the single-result format:
+// the results of one entry of a subtree node:
 // {weak_immunity, weaker_immunity, collusion_resilience, practicality, honest_utility}
 static SubtreeResults parse_subtree_results(Parser &parser, const json &subtree_json, const Input &input) {
 
@@ -795,29 +796,26 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 	if (node.contains("subtree")) {
 		const json &subtree_json = node["subtree"];
 
-		// keyed format written by subtree mode: a list of entries, each with the honest history or honest utility
-		// it was computed for (or none, for weak(er) immunity and practicality without honest history) and its results
-		if (subtree_json.is_array()) {
-			std::unique_ptr<Subtree> subtree(new Subtree({}, {}, {}, {}, std::vector<Utility>()));
-			for (const json &entry : subtree_json) {
-				SubtreeEntry subtree_entry;
-				if (entry.contains("honest_history")) {
-					subtree_entry.key = parse_honest_history(parser, entry["honest_history"]);
-				} else if (entry.contains("honest_utility")) {
-					subtree_entry.key = parse_honest_utility_element(parser, entry["honest_utility"], input);
-				} else if (!entry.contains("no_honest_history")) {
-					std::cerr << "checkmate: subtree entry without honest_history, honest_utility or no_honest_history " << entry << std::endl;
-					std::exit(EXIT_FAILURE);
-				}
-				subtree_entry.results = parse_subtree_results(parser, entry["subtree"], input);
-				subtree->entries.push_back(subtree_entry);
-			}
-			return subtree;
+		// written by subtree mode: a list of entries, each with the honest history or honest utility it was computed for
+		// (or none, for weak(er) immunity and practicality without honest history) and its results
+		if (!subtree_json.is_array()) {
+			std::cerr << "checkmate: subtree in an old format, recompute it in subtree mode" << std::endl;
+			std::exit(EXIT_FAILURE);
 		}
-
-		// single-result format
-		SubtreeResults results = parse_subtree_results(parser, subtree_json, input);
-		std::unique_ptr<Subtree> subtree(new Subtree(results.weak_immunity, results.weaker_immunity, results.collusion_resilience, results.practicality, results.honest_utility));
+		std::unique_ptr<Subtree> subtree(new Subtree());
+		for (const json &entry : subtree_json) {
+			SubtreeEntry subtree_entry;
+			if (entry.contains("honest_history")) {
+				subtree_entry.key = parse_honest_history(parser, entry["honest_history"]);
+			} else if (entry.contains("honest_utility")) {
+				subtree_entry.key = parse_honest_utility_element(parser, entry["honest_utility"], input);
+			} else if (!entry.contains("no_honest_history")) {
+				std::cerr << "checkmate: subtree entry without honest_history, honest_utility or no_honest_history " << entry << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+			subtree_entry.results = parse_subtree_results(parser, entry["subtree"], input);
+			subtree->entries.push_back(subtree_entry);
+		}
 		return subtree;
 	}
 
@@ -2136,6 +2134,48 @@ UtilityTuplesSet compute_ustar(const HonestUtilityElement &element) {
 
 // honest histories inside subtrees: one run per combination
 
+// are two honest histories the same (conditions are compared as when looking up the choice of a condition node)
+static bool same_honest_history(const HonestHistory &history, const HonestHistory &other) {
+	if (history.size() != other.size()) {
+		return false;
+	}
+	for (size_t i = 0; i < history.size(); i++) {
+		if (history[i].index() != other[i].index()) {
+			return false;
+		}
+		if (std::holds_alternative<std::string>(history[i])) {
+			if (std::get<std::string>(history[i]) != std::get<std::string>(other[i])) {
+				return false;
+			}
+			continue;
+		}
+		const auto &conditions = std::get<std::vector<HonestHistoryCondition>>(history[i]);
+		const auto &other_conditions = std::get<std::vector<HonestHistoryCondition>>(other[i]);
+		if (conditions.size() != other_conditions.size()) {
+			return false;
+		}
+		// the conditions may be listed in any order
+		for (const HonestHistoryCondition &condition : conditions) {
+			auto match = std::find_if(other_conditions.begin(), other_conditions.end(), [&](const HonestHistoryCondition &other_condition) {
+				return condition.condition.is_equal(other_condition.condition) && same_honest_history(condition.path, other_condition.path);
+			});
+			if (match == other_conditions.end()) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+const SubtreeEntry *Subtree::find_honest_history_entry(const HonestHistory &history) const {
+	for (const SubtreeEntry *entry : honest_history_entries()) {
+		if (same_honest_history(std::get<HonestHistory>(entry->key), history)) {
+			return entry;
+		}
+	}
+	return nullptr;
+}
+
 static void add_honest_subtrees(const Node *node, std::vector<const Subtree *> &subtrees) {
 	if (!node->honest) {
 		return;
@@ -2161,8 +2201,11 @@ std::vector<const Subtree *> honest_subtrees(const Node *root) {
 std::vector<std::vector<const SubtreeEntry *>> honest_subtree_histories(const std::vector<const Subtree *> &subtrees) {
 	std::vector<std::vector<const SubtreeEntry *>> choices = {{}};
 	for (const Subtree *subtree : subtrees) {
-		std::vector<const SubtreeEntry *> options = {nullptr};
-		if (!subtree->entries.empty()) {
+		std::vector<const SubtreeEntry *> options;
+		if (subtree->honest_entry) {
+			// the honest history continues inside the subtree: only this honest history is considered
+			options = {subtree->honest_entry};
+		} else {
 			options = subtree->honest_history_entries();
 			if (options.empty()) {
 				std::cerr << "checkmate: subtree along the honest history has no results for an honest history inside it" << std::endl;
