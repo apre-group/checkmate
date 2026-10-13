@@ -9,15 +9,16 @@ const char *USAGE = R"(usage: checkmate PATH
 	--weaker_immunity
 	--collusion_resilience
 	--practicality
-	--counterexamples
-	--all_counterexamples
-	--all_cases
-	--preconditions
-	--strategies
 	--subtree
-	--count_nodes
-	--count_calls
 )";
+// future options
+	// --counterexamples
+	// --all_counterexamples
+	// --all_cases
+	// --preconditions
+	// --strategies
+	// --count_nodes
+	// --count_calls
 
 // print a message, the usage information and exit with failure code
 [[noreturn]] static void bail(const char *msg) {
@@ -52,32 +53,32 @@ Options::Options(char **argv) {
 			collusion_resilience = true;
 		else if (!strcmp(*argv, "--practicality"))
 			practicality = true;
-		else if (!strcmp(*argv, "--counterexamples"))
-			counterexamples = true;
-		else if (!strcmp(*argv, "--all_counterexamples"))
-			counterexamples = all_counterexamples = true;
-		else if (!strcmp(*argv, "--all_cases"))
-			all_cases = true;
-		else if (!strcmp(*argv, "--preconditions"))
-			preconditions = true;
-		else if (!strcmp(*argv, "--strategies"))
-			strategies = true;
+		// else if (!strcmp(*argv, "--counterexamples"))
+		// 	counterexamples = true;
+		// else if (!strcmp(*argv, "--all_counterexamples"))
+		// 	counterexamples = all_counterexamples = true;
+		// else if (!strcmp(*argv, "--all_cases"))
+		// 	all_cases = true;
+		// else if (!strcmp(*argv, "--preconditions"))
+		// 	preconditions = true;
+		// else if (!strcmp(*argv, "--strategies"))
+		// 	strategies = true;
 		else if (!strcmp(*argv, "--subtree"))
 			subtree = true;
-		else if (!strcmp(*argv, "--count_nodes"))
-			count_nodes = true;
-		else if (!strcmp(*argv, "--count_calls"))
-			count_calls = true;
+		// else if (!strcmp(*argv, "--count_nodes"))
+		// 	count_nodes = true;
+		// else if (!strcmp(*argv, "--count_calls"))
+		// 	count_calls = true;
 		else
 			bail("unknown option");
 		argv++;
 	}
 
-	if(subtree) {
-		if(counterexamples || all_counterexamples || strategies || preconditions) {
-			bail("cannot combine subtree with any other option");
-		}
-	}
+	// if(subtree) {
+	// 	if(counterexamples || all_counterexamples || strategies || preconditions) {
+	// 		bail("cannot combine subtree with any other option");
+	// 	}
+	// }
 
 	// analyze everything by default
 	if (!weak_immunity && !weaker_immunity && !collusion_resilience && !practicality)

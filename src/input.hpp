@@ -347,6 +347,12 @@ public:
 	// are we (currently) along the honest history?
 	mutable bool honest = false;
 
+	// mark this node and the rest of `history` from here on as honest, exiting if the history does not fit the tree
+	virtual void mark_honest(const HonestHistory &history) const = 0;
+
+	// unmark this node and everything below it that is marked honest
+	virtual void reset_honest() const = 0;
+
 	// the reason that a check for a property failed:
 	// null if didn't fail or no case split would help
 	mutable z3::Bool reason;
@@ -541,6 +547,8 @@ inline std::ostream& operator<<(std::ostream& os, const HonestUtilityElement& el
 }
 
 // Helper function to convert HonestUtilityElement to a flat vector of CondHonestUtility
+// TODO: only used by the old property.cpp; remove it (and CondHonestUtility, if unused then) together with that code,
+// the new code uses compute_ustar(element) instead
 inline std::vector<CondHonestUtility> get_conditional_honest_utilities(const HonestUtilityElement &element, const z3::Bool &parent_condition = z3::Bool()) {
 	std::vector<CondHonestUtility> result;
 	
@@ -667,6 +675,24 @@ struct HonestUtilityTuple {
 };
 
 
+// the results of analysing a subtree in subtree mode, for one honest history or honest utility, or without honest history
+struct SubtreeResults {
+	std::vector<SubtreeResult> weak_immunity;
+	std::vector<SubtreeResult> weaker_immunity;
+	std::vector<SubtreeResult> collusion_resilience;
+	std::vector<PracticalitySubtreeResult> practicality;
+	HonestUtilityElement honest_utility = std::vector<Utility>();
+};
+
+// what subtree results belong to: an honest history, an honest utility,
+// or none (weak(er) immunity and practicality without honest history)
+using SubtreeEntryKey = std::variant<std::monostate, HonestHistory, HonestUtilityElement>;
+
+struct SubtreeEntry {
+	SubtreeEntryKey key;
+	SubtreeResults results;
+};
+
 // subtree node
 class Subtree : public Node {
 
@@ -683,6 +709,29 @@ class Subtree : public Node {
 	std::vector<PracticalitySubtreeResult> practicality;
 	// honest utility needed in case the honest history ends in this subtree
 	HonestUtilityElement honest_utility;
+
+	// results in the keyed format written by subtree mode, one entry per honest history / honest utility
+	// (empty for the single-result format above); the supertree picks the entry matching its honest history / utility
+	std::vector<SubtreeEntry> entries;
+
+	// keyed format, along the honest history: the entry of the honest history inside this subtree considered in the current run
+	mutable const SubtreeEntry *honest_entry = nullptr;
+
+	// keyed format: the entries computed for an honest history inside this subtree
+	std::vector<const SubtreeEntry *> honest_history_entries() const {
+		std::vector<const SubtreeEntry *> result;
+		for (const SubtreeEntry &entry : entries) {
+			if (std::holds_alternative<HonestHistory>(entry.key)) {
+				result.push_back(&entry);
+			}
+		}
+		return result;
+	}
+
+	// the honest utility if the honest history ends in this subtree (keyed format: of the entry considered in the current run)
+	const HonestUtilityElement &current_honest_utility() const {
+		return honest_entry ? honest_entry->results.honest_utility : honest_utility;
+	}
 
 	Subtree(std::vector<SubtreeResult> _weak_immunity,
         std::vector<SubtreeResult> _weaker_immunity,
@@ -726,6 +775,21 @@ class Subtree : public Node {
 	void reset_practical_utilities() const {
 		utilities = {};
 	}
+
+	// the honest history ends here (which honest history inside the subtree is considered is chosen separately)
+	void mark_honest(const HonestHistory &history) const override {
+		honest = true;
+		honest_entry = nullptr;
+		if (!history.empty()) {
+			std::cerr << "checkmate: honest history not fitting the game tree (too long)" << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+	}
+
+	void reset_honest() const override {
+		honest = false;
+		honest_entry = nullptr;
+	}
 };
 
 // leaf node
@@ -753,6 +817,19 @@ class Leaf final : public Node {
 
 	void reset_problematic_group(bool is_cr) const {
 		problematic_group = is_cr ? 1 : 0;
+	}
+
+	// the honest history ends here
+	void mark_honest(const HonestHistory &history) const override {
+		honest = true;
+		if (!history.empty()) {
+			std::cerr << "checkmate: honest history not fitting the game tree (too long)" << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+	}
+
+	void reset_honest() const override {
+		honest = false;
 	}
 };
 
@@ -832,9 +909,9 @@ class Branch final : public Node {
 
 	void restore_counterexample_choices(std::vector<std::vector<CondAction>> &ces) const;
 
-	void mark_honest(const HonestHistory &history) const;
+	void mark_honest(const HonestHistory &history) const override;
 	
-	void reset_honest() const;
+	void reset_honest() const override;
 
 	void reset_reason() const;
 
@@ -1040,7 +1117,7 @@ class ConditionNode final : public Node {
 		return;
 	}
 
-	void mark_honest(const HonestHistory &history) const {
+	void mark_honest(const HonestHistory &history) const override {
 		honest = true;
 		
 		if (history.empty()) {
@@ -1070,41 +1147,18 @@ class ConditionNode final : public Node {
 				// Find corresponding child node to recurse on
 				const ConditionChoice &node_choice = this->condition_node().get_choice(hist_cond.condition);
 
-				if (node_choice.node->is_branch() || node_choice.node->is_condition_node()) {
-					if (node_choice.node->is_branch()) {
-						node_choice.node->branch().mark_honest(hist_cond.path);
-					} else {
-						node_choice.node->condition_node().mark_honest(hist_cond.path);
-					}
-				}
-				else {
-					//otherwise set honest to true for the child node and check that the path is fully consumed
-					node_choice.node->honest = true;
-					if (!hist_cond.path.empty()) {
-						std::cerr << "checkmate: honest history not fitting the game tree (too long)" << std::endl;
-						std::exit(EXIT_FAILURE);
-					}
-				}
+				node_choice.node->mark_honest(hist_cond.path);
 			}
 		} 
 	}
 	
-	void reset_honest() const {
+	void reset_honest() const override {
 
 		honest = false;
 		
 		// Reset honest for all children (condition nodes mark all children as honest)
 		for (const auto &choice : this->condition_node().conditions) {
-			const Node * current = choice.node.get();
-			if (current->is_branch()) {
-				current->branch().reset_honest();
-			} else if (current->is_condition_node()) {
-				current->condition_node().reset_honest();
-			} else if (current->is_leaf()) {
-				current->leaf().honest = false;
-			} else {
-				current->subtree().honest = false;
-			}
+			choice.node->reset_honest();
 		}
 		
 	}
@@ -1626,6 +1680,28 @@ inline const ConditionNode &Node::condition_node() const {
 	return *static_cast<const ConditionNode *>(this);
 }
 
+// the honest utilities along `history` from `root`, each with the conditions leading to it:
+// at a condition node, the honest history continues in every condition, so there can be several
+// (the result refers to the utilities in the tree, so the tree must outlive it)
+UtilityTuplesSet compute_ustar(const Node *root, const HonestHistory &history);
+
+// the utilities of an honest utility given as `element` (e.g. in the input or a subtree result), each with its conditions
+// (the result refers to the utilities in `element`, so `element` must outlive it)
+UtilityTuplesSet compute_ustar(const HonestUtilityElement &element);
+
+// the subtree nodes along the honest history currently marked from `root`
+std::vector<const Subtree *> honest_subtrees(const Node *root);
+
+// every way to pick one honest history inside each of `subtrees`, one list of entries (one per subtree) per run:
+// a subtree in the keyed format has one option per entry for an honest history, one in the single-result format only nullptr
+std::vector<std::vector<const SubtreeEntry *>> honest_subtree_histories(const std::vector<const Subtree *> &subtrees);
+
+// consider the honest histories `subtrees_history` inside `subtrees` (one of honest_subtree_histories) in the current run
+void mark_honest_subtree_histories(const std::vector<const Subtree *> &subtrees, const std::vector<const SubtreeEntry *> &subtrees_history);
+
+// `history` from `root`, continued in the subtree nodes it ends in by the honest histories considered there in the current run
+HonestHistory extend_honest_history(const Node *root, const HonestHistory &history);
+
 // Implementation of honest_history2utility (defined after classes are complete)
 inline HonestUtilityElement honest_history2utility(Node *node, const HonestHistory &history) {
 	
@@ -1633,7 +1709,7 @@ inline HonestUtilityElement honest_history2utility(Node *node, const HonestHisto
 		return node->leaf().utilities;
 
 	} else if (node->is_subtree()) { // Base case: reached a subtree
-		return node->subtree().honest_utility;
+		return node->subtree().current_honest_utility();
 
 	} else if (node->is_branch()) { // Handle branch nodes
 		assert(!history.empty());

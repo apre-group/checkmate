@@ -13,6 +13,7 @@
 #include "z3++.hpp"
 #include "utils.hpp"
 #include "property.hpp"
+#include "subtree_mode.hpp"
 #include "json.hpp"
 
 
@@ -121,103 +122,8 @@ void print_calls_counters(bool wi, bool weri, bool cr, bool pr) {
 // third-party library for parsing to JSON
 using json = nlohmann::json;
 
-json parse_sat_case(std::vector<z3::Bool> sat_case) {
-    json arr_case = json::array();
-    if(sat_case.size() == 0) {
-        arr_case.push_back("true");
-    } else {
-        for(auto &case_entry: sat_case) {
-            std::stringstream ss;
-            ss << case_entry;
-            arr_case.push_back(ss.str());
-        }
-    }	
-	return arr_case;
-}
-
-json parse_utility(const Input &input, std::vector<Utility> utility_to_parse) {
-    json utility = json::array();
-    unsigned player_index = 0;
-    for(auto &u : utility_to_parse) {
-        json obj = {{"player", input.players[player_index]}};
-        std::stringstream ss; 
-        ss << u; 
-        std::string utility_string = ss.str();
-        obj["value"] = utility_string;
-        utility.push_back(obj);
-        player_index++;
-    }
-    return utility;
-}
-
-json parse_honest_utility_element(const Input &input, const HonestUtilityElement &element) {
-    if (std::holds_alternative<std::vector<Utility>>(element)) {
-        // It's a utility vector
-        return parse_utility(input, std::get<std::vector<Utility>>(element));
-    } else {
-        // It's a vector of conditions
-        const auto &conditions = std::get<std::vector<HonestUtilityCondition>>(element);
-        json result = json::array();
-        
-        for (const auto &cond : conditions) {
-            json cond_obj;
-            std::stringstream ss;
-            ss << cond.condition;
-            cond_obj["condition"] = ss.str();
-            cond_obj["utility"] = parse_honest_utility_element(input, cond.utility);
-            result.push_back(cond_obj);
-        }
-        
-        return result;
-    }
-}
-
-json parse_property_to_json(std::vector<SubtreeResult> property_result) {
-
-    json arr_res = json::array();
-
-    for(auto &subtree_result : property_result) {
-        // parse satisfied_in_case
-        json arr_cases = json::array();
-        for(auto &sat_case: subtree_result.satisfied_in_case) {
-            json arr_case = parse_sat_case(sat_case);
-            arr_cases.push_back(arr_case);
-        }
-
-        json obj = {{"player_group", subtree_result.player_group}, {"satisfied_in_case", arr_cases}};
-        arr_res.push_back(obj);
-    }
-    return arr_res;
-}
-
-json parse_practicality_property_to_json(const Input &input, std::vector<PracticalitySubtreeResult> property_result) {
-    json arr_pr = json::array();
-    for(auto &subtree_result : property_result) {
-        // parse case				
-        json arr_case = parse_sat_case(subtree_result._case);
-        // parse utilitiesß
-        json utilities = json::array();
-        for(auto &utility_tuple : subtree_result.utilities) {
-            // parse utility
-            json utility = parse_utility(input, utility_tuple.utility_tuple);
-            
-            // parse condition
-            std::stringstream ss;
-            ss << utility_tuple.condition;
-            std::string condition_string = ss.str();
-            
-            json utility_with_condition = {
-                {"utility", utility},
-                {"condition", condition_string}
-            };
-            utilities.push_back(utility_with_condition);
-        }
-        
-        json obj = {{"case", arr_case}, {"utilities", utilities}};
-        arr_pr.push_back(obj);
-    }
-    return arr_pr;
-}
+// parse_sat_case, parse_utility, parse_honest_utility_element, parse_property_to_json, parse_practicality_property_to_json:
+// moved to subtree_mode.cpp
 
 void print_subtree_result_to_file(const Input &input, std::string file_name, Subtree &subtree) {
     std::ofstream outputFile(file_name);

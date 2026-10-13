@@ -17,6 +17,10 @@ add_executable(checkmate
 	src/z3++.hpp
 	src/z3++.cpp
 	src/checkmate.cpp
+	src/default_mode.hpp
+	src/default_mode.cpp
+	src/subtree_mode.hpp
+	src/subtree_mode.cpp
 )
 target_link_libraries(checkmate z3)
 

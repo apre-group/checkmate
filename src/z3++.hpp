@@ -127,7 +127,10 @@ namespace z3 {
 			return result;
 		}
 
+		// a single conjunct is returned as is, without wrapping it in an `and`
 		static Bool conjunction(const std::vector<Bool> &conjuncts) {
+			if (conjuncts.size() == 1)
+				return conjuncts[0];
 			Z3_ast result = Z3_mk_and(
 				CONTEXT,
 				conjuncts.size(),
@@ -138,7 +141,10 @@ namespace z3 {
 			return result;
 		}
 
+		// a single disjunct is returned as is, without wrapping it in an `or`
 		static Bool disjunction(const std::vector<Bool> &disjuncts) {
+			if (disjuncts.size() == 1)
+				return disjuncts[0];
 			Z3_ast result = Z3_mk_or(
 				CONTEXT,
 				disjuncts.size(),
