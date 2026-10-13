@@ -2,30 +2,93 @@
 #include <sstream>
 
 #include "subtree_mode.hpp"
+#include "property_checks.hpp"
 
 using json = nlohmann::json;
 
-// TODO: placeholder, only reports what would be checked and returns empty results
-SubtreeResults subtree_mode(const Options &options, [[maybe_unused]] const Input &input, const UtilityTuplesSet &ustar) {
-	std::vector<std::pair<bool, std::string>> properties = {
-		{options.weak_immunity, "weak immunity"},
-		{options.weaker_immunity, "weaker immunity"},
-		{options.collusion_resilience, "collusion resilience"},
-		{options.practicality, "practicality"}
-	};
-	for (const auto &property : properties) {
-		if (property.first) {
-			std::cout << "\twould check " << property.second << std::endl;
+// the names of the players in `group` (bitset over the players, in the order of input.players)
+static std::vector<std::string> group_names(const Input &input, uint64_t group) {
+	std::vector<std::string> names;
+	for (size_t player = 0; player < input.players.size(); player++) {
+		if (group >> player & 1) {
+			names.push_back(input.players[player]);
 		}
 	}
-	if (options.collusion_resilience) {
-		std::cout << "\thonest utilities:" << std::endl;
-		for (const UtilityTuple &utility : ustar) {
-			std::cout << "\t\t" << utility.leaf << " if " << utility.condition << std::endl;
-		}
-	}
-	return SubtreeResults();
+	return names;
 }
+
+// the subtree result for `player_group` with `result` the constraints under which the property holds, given `ic`,
+// and `holds` whether it holds for all values satisfying `ic` (i.e. not violated_somewhere):
+// one case [result], normalised so that `true` and `false` never have to be written out:
+// no case if it never holds, the empty case (written as "true") if it always holds
+static SubtreeResult subtree_result(const std::vector<std::string> &player_group, const z3::Bool &ic, const z3::Bool &result, bool holds) {
+	SubtreeResult subtree_result;
+	subtree_result.player_group = player_group;
+	if (holds) {
+		subtree_result.satisfied_in_case = {{}};
+	} else if (holds_somewhere(ic, result)) {
+		subtree_result.satisfied_in_case = {{result}};
+	}
+	return subtree_result;
+}
+
+static void print_result(const char *what, const std::vector<std::string> &player_group, bool holds) {
+	if (holds) {
+		std::cout << "YES, the subtree is " << what << player_group << "." << std::endl;
+	} else {
+		std::cout << "NO, the subtree is not " << what << player_group << "." << std::endl;
+	}
+}
+
+SubtreeResults subtree_mode(const Options &options, const Input &input, const UtilityTuplesSet &ustar) {
+	SubtreeResults results;
+
+	// weak(er) immunity: ComputeCWI for every player, as in SatisfiesProperty
+	for (bool weaker : {false, true}) {
+		if (!(weaker ? options.weaker_immunity : options.weak_immunity)) {
+			continue;
+		}
+		PropertyType property = weaker ? PropertyType::WeakerImmunity : PropertyType::WeakImmunity;
+		z3::Bool ic = property_constraints(input, property);
+		std::vector<SubtreeResult> &property_results = weaker ? results.weaker_immunity : results.weak_immunity;
+		bool holds = true;
+		for (unsigned player = 0; player < input.players.size(); player++) {
+			z3::Bool result = computeCWI(input, player, weaker);
+			bool holds_for_player = !violated_somewhere(ic, result);
+			print_result(weaker ? "weaker immune for player " : "weak immune for player ", {input.players[player]}, holds_for_player);
+			holds = holds && holds_for_player;
+			property_results.push_back(subtree_result({input.players[player]}, ic, result, holds_for_player));
+		}
+		std::cout << (holds ? "YES, the subtree is " : "NO, the subtree is not ") << (weaker ? "weaker immune" : "weak immune")
+			<< " for the analyzed history." << std::endl;
+	}
+
+	// collusion resilience: ComputeCCR for every group except the group of all players
+    // as the supertree may reach the subtree with any of them as deviators
+	if (options.collusion_resilience) {
+		z3::Bool ic = property_constraints(input, PropertyType::CollusionResilience);
+		const uint64_t all_players = input.players.size() == 64 ? -1ull : (1ull << input.players.size()) - 1;
+		for (uint64_t group = 0; group < all_players; group++) {
+			z3::Bool result = computeCCR(input, ustar, z3::Bool(true), group);
+			bool holds = !violated_somewhere(ic, result);
+			print_result("collusion resilient against group ", group_names(input, group), holds);
+			results.collusion_resilience.push_back(subtree_result(group_names(input, group), ic, result, holds));
+			if (group == 0) {
+				std::cout << (holds ? "YES, the subtree is " : "NO, the subtree is not ") << "collusion resilient for the analyzed history." << std::endl;
+			}
+		}
+	}
+
+	// TODO: practicality results of the subtree (practical utilities per case), once ComputeCPR provides them
+	if (options.practicality) {
+		bool holds = computeCPR(input);
+		std::cout << (holds ? "YES, the subtree is " : "NO, the subtree is not ") << "practical for the analyzed history." << std::endl;
+	}
+
+	return results;
+}
+
+
 
 json parse_sat_case(std::vector<z3::Bool> sat_case) {
     json arr_case = json::array();

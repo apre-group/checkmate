@@ -28,7 +28,8 @@ struct Lexer {
 		LE,
 		AND,
 		OR,
-		IMPLIES
+		IMPLIES,
+		NOT
 	};
 
 	// should the next '-' be negation or subtraction?
@@ -113,6 +114,11 @@ struct Lexer {
 			remaining += 2;
 			unary = true;
 			return Token::NE;
+		} else if (*remaining == '!') {
+			// Boolean negation, as in the output of CheckMate: !(...)
+			remaining++;
+			unary = true;
+			return Token::NOT;
 		} else if (*remaining == '>') {
 			remaining++;
 			if (*remaining == '=') {
@@ -164,7 +170,8 @@ struct Parser {
 		LT,
 		AND,
 		OR,
-		IMPLIES
+		IMPLIES,
+		NOT
 	};
 
 	// operator precedence classes, binding from loosest to tightest
@@ -172,6 +179,7 @@ struct Parser {
 		PAREN,
 		IMPLIES,
 		ANDOR,
+		NOT,
 		COMPARISON,
 		PLUSMINUS,
 		DIVIDE,
@@ -206,6 +214,8 @@ struct Parser {
 				return Precedence::ANDOR;
 			case Operation::IMPLIES:
 				return Precedence::IMPLIES;
+			case Operation::NOT:
+				return Precedence::NOT;
 		}
 		assert(false);
 		UNREACHABLE;
@@ -348,6 +358,11 @@ struct Parser {
 				constraint_stack.push_back(left.implies(right));
 				break;
 			}
+			case Operation::NOT: {
+				auto negate = pop_constraint();
+				constraint_stack.push_back(!negate);
+				break;
+			}
 		}
 	}
 
@@ -439,6 +454,10 @@ struct Parser {
 					break;
 				case Lexer::Token::IMPLIES:
 					operation(Operation::IMPLIES);
+					break;
+				case Lexer::Token::NOT:
+					// prefix operator: its operand comes after it, so nothing on the stack is committed yet
+					operation_stack.push_back(Operation::NOT);
 					break;
 			}
 		}

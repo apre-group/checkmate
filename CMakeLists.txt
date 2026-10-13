@@ -21,6 +21,10 @@ add_executable(checkmate
 	src/default_mode.cpp
 	src/subtree_mode.hpp
 	src/subtree_mode.cpp
+	src/property_checks.hpp
+	src/weak_immunity.cpp
+	src/collusion_resilience.cpp
+	src/practicality.cpp
 )
 target_link_libraries(checkmate z3)
 

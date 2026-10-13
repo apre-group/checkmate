@@ -184,7 +184,8 @@ namespace z3 {
 			LT,
 			LE,
 			GT,
-			GE
+			GE,
+			IMPLIES
 		};
 
 		// what kind of operator we have
@@ -216,6 +217,8 @@ namespace z3 {
 				return Operator::GT;
 			case Z3_OP_GE:
 				return Operator::GE;
+			case Z3_OP_IMPLIES:
+				return Operator::IMPLIES;
 			default:
 				assert(false);
 				UNREACHABLE
@@ -345,6 +348,9 @@ namespace z3 {
 			return out << ">";
 		case Operator::GE:
 			return out << ">=";
+		case Operator::IMPLIES:
+			// as the parser reads it
+			return out << "=>";
 		}
 		assert(false);
 		UNREACHABLE;

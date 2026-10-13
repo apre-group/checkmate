@@ -88,6 +88,8 @@ namespace z3 {
 					return out << '(' << expr.real_child(0) << ' ' << op << ' ' << expr.real_child(1) << ')';
 				}
 			}
+		case Bool::Operator::IMPLIES:
+			return out << '(' << expr.bool_child(0) << ' ' << op << ' ' << expr.bool_child(1) << ')';
 		case Bool::Operator::LT:
 		case Bool::Operator::LE:
 		case Bool::Operator::GT:
