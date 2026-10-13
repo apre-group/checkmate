@@ -2001,12 +2001,16 @@ void Branch::mark_honest(const HonestHistory &history) const {
 	else{
 		// Branch case: recurse on honest child
 		const std::string &action = std::get<std::string>(first_element);
-		const Choice &honest_choice = this->branch().get_choice(action);
+		const Choice *honest_choice = find_choice(action);
+		if (!honest_choice) {
+			std::cerr << "checkmate: honest history not fitting the game tree (action " << action << " not available, the actions are " << actions_list() << ")" << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
 		
 		// Prepare remaining history for recursion
 		HonestHistory remaining_history(history.begin() + 1, history.end());
 		
-		honest_choice.node->mark_honest(remaining_history);
+		honest_choice->node->mark_honest(remaining_history);
 	} 
 }
 

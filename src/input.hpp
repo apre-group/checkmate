@@ -1,8 +1,10 @@
 #ifndef __checkmate_input__
 #define __checkmate_input__
 
+#include <algorithm>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -773,7 +775,8 @@ class Subtree : public Node {
 		}
 		honest_entry = find_honest_history_entry(history);
 		if (!honest_entry) {
-			std::cerr << "checkmate: honest history continues inside a subtree, but not with an honest history computed for it" << std::endl;
+			std::cerr << "checkmate: honest history continues inside a subtree with " << history
+				<< ", which is none of the honest histories computed for the subtree (too long or different)" << std::endl;
 			std::exit(EXIT_FAILURE);
 		}
 	}
@@ -858,33 +861,52 @@ class Branch final : public Node {
 
 	virtual UtilityTuplesSet get_utilities() const override {return practical_utilities;}
 
-	// do a linear-time lookup of `action` by name in the branch, which must be present
-	const Choice &get_choice(const std::string &action) const {
+	// do a linear-time lookup of `action` by name in the branch, null if it is not present
+	const Choice *find_choice(const std::string &action) const {
 		for (const Choice &choice: choices)
 			if (choice.action == action)
-				return choice;
-
-		assert(false);
-		UNREACHABLE;
+				return &choice;
+		return nullptr;
 	}
 
-	// do a linear-time lookup of `action` by child address in the branch, which must be present
+	// the actions of the branch, for error messages
+	std::string actions_list() const {
+		std::string list;
+		for (const Choice &choice: choices)
+			list += (list.empty() ? "" : " ") + choice.action;
+		return list;
+	}
+
+	// do a linear-time lookup of `action` by name in the branch, which must be present (exits otherwise)
+	const Choice &get_choice(const std::string &action) const {
+		const Choice *choice = find_choice(action);
+		if (!choice) {
+			std::cerr << "checkmate: action " << action << " not available, the actions are " << actions_list() << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		return *choice;
+	}
+
+	// do a linear-time lookup of `action` by child address in the branch, which must be present (exits otherwise)
 	const Choice &get_choice(const Node *child) const {
 		for (const Choice &choice: choices)
 			if (choice.node.get() == child)
 				return choice;
 
-		assert(false);
-		UNREACHABLE;
+		// only possible because of a bug: callers pass children of this branch
+		std::cerr << "checkmate: internal error: node is not a child of the branch with actions " << actions_list() << std::endl;
+		std::exit(EXIT_FAILURE);
 	}
 
+	// the child along the honest history, which must be marked (exits otherwise)
 	const Choice &get_honest_child() const {
 		for (const Choice &choice: choices)
 			if (choice.node->honest)
 				return choice;
 
-		assert(false);
-		UNREACHABLE;
+		// only possible because of a bug: callers only ask honest branches, whose honest child is marked as well
+		std::cerr << "checkmate: internal error: no honest child marked in the branch with actions " << actions_list() << std::endl;
+		std::exit(EXIT_FAILURE);
 	}
 
 	void reset_counterexample_choices() const;
@@ -948,24 +970,41 @@ class ConditionNode final : public Node {
 
 	virtual UtilityTuplesSet get_utilities() const override {return practical_utilities;}
 
-	// do a linear-time lookup of condition by name in the branch, which must be present
-	const ConditionChoice &get_choice(const z3::Bool &condition) const {
+	// do a linear-time lookup of `condition` in the condition node, null if it is not present
+	const ConditionChoice *find_choice(const z3::Bool &condition) const {
 		for (const ConditionChoice &choice: conditions)
 			if (choice.condition.is_equal(condition))
-				return choice;
-
-		assert(false);
-		UNREACHABLE;
+				return &choice;
+		return nullptr;
 	}
 
-	// do a linear-time lookup of condition by child address in the branch, which must be present
+	// the conditions of the condition node, for error messages
+	std::string conditions_list() const {
+		std::stringstream list;
+		for (const ConditionChoice &choice: conditions)
+			list << (&choice == &conditions.front() ? "" : " ") << choice.condition;
+		return list.str();
+	}
+
+	// do a linear-time lookup of `condition` in the condition node, which must be present (exits otherwise)
+	const ConditionChoice &get_choice(const z3::Bool &condition) const {
+		const ConditionChoice *choice = find_choice(condition);
+		if (!choice) {
+			std::cerr << "checkmate: condition " << condition << " not available, the conditions are " << conditions_list() << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		return *choice;
+	}
+
+	// do a linear-time lookup of condition by child address in the condition node, which must be present (exits otherwise)
 	const ConditionChoice &get_choice(const Node *child) const {
 		for (const ConditionChoice &choice: conditions)
 			if (choice.node.get() == child)
 				return choice;
 
-		assert(false);
-		UNREACHABLE;
+		// only possible because of a bug: callers pass children of this condition node
+		std::cerr << "checkmate: internal error: node is not a child of the condition node with conditions " << conditions_list() << std::endl;
+		std::exit(EXIT_FAILURE);
 	}
 
 	void reset_counterexample_choices() const {
@@ -1137,9 +1176,13 @@ class ConditionNode final : public Node {
 				}
 
 				// Find corresponding child node to recurse on
-				const ConditionChoice &node_choice = this->condition_node().get_choice(hist_cond.condition);
+				const ConditionChoice *node_choice = find_choice(hist_cond.condition);
+				if (!node_choice) {
+					std::cerr << "checkmate: honest history not fitting the game tree (condition " << hist_cond.condition << " not available, the conditions are " << conditions_list() << ")" << std::endl;
+					std::exit(EXIT_FAILURE);
+				}
 
-				node_choice.node->mark_honest(hist_cond.path);
+				node_choice->node->mark_honest(hist_cond.path);
 			}
 		} 
 	}
