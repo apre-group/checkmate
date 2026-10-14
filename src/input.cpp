@@ -29,7 +29,8 @@ struct Lexer {
 		AND,
 		OR,
 		IMPLIES,
-		NOT
+		NOT,
+		FORALL
 	};
 
 	// should the next '-' be negation or subtraction?
@@ -40,6 +41,8 @@ struct Lexer {
 	const char *remaining = nullptr;
 	// NUL-terminated copy of the previous token
 	std::string buffer;
+	// the variables bound by the previous token, if it is FORALL
+	std::vector<std::string> bound;
 
 	// start analysis of the NUL-terminated expression `start`
 	void start(const char *start) {
@@ -54,6 +57,34 @@ struct Lexer {
 		return *remaining;
 	}
 
+	// the variable list "[x, y]" after "forall", read into `bound`
+	void bound_variables() {
+		bound.clear();
+		auto expect = [&](char expected) {
+			while (std::isspace(*remaining)) remaining++;
+			if (*remaining != expected) {
+				std::cerr << "checkmate: expected '" << expected << "' in the variable list after forall in expression " << current << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+			remaining++;
+		};
+		expect('[');
+		do {
+			while (std::isspace(*remaining)) remaining++;
+			std::string name;
+			if (std::isalpha(*remaining))
+				while (std::isalnum(*remaining) || *remaining == '_')
+					name.push_back(*remaining++);
+			if (name.empty()) {
+				std::cerr << "checkmate: expected a variable in the variable list after forall in expression " << current << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+			bound.push_back(name);
+			while (std::isspace(*remaining)) remaining++;
+		} while (*remaining == ',' && remaining++);
+		expect(']');
+	}
+
 	// get the next token or exit with failure
 	Token next() {
 		buffer.clear();
@@ -62,6 +93,11 @@ struct Lexer {
 			buffer.push_back(*remaining++);
 			while (std::isalnum(*remaining) || *remaining == '_')
 				buffer.push_back(*remaining++);
+			if (buffer == "forall") {
+				bound_variables();
+				unary = true;
+				return Token::FORALL;
+			}
 			unary = false;
 			return Token::IDENTIFIER;
 		}
@@ -171,12 +207,15 @@ struct Parser {
 		AND,
 		OR,
 		IMPLIES,
-		NOT
+		NOT,
+		FORALL
 	};
 
 	// operator precedence classes, binding from loosest to tightest
 	enum class Precedence {
 		PAREN,
+		// a quantifier's body extends as far as possible, to the closing parenthesis or the end
+		FORALL,
 		IMPLIES,
 		ANDOR,
 		NOT,
@@ -216,6 +255,8 @@ struct Parser {
 				return Precedence::IMPLIES;
 			case Operation::NOT:
 				return Precedence::NOT;
+			case Operation::FORALL:
+				return Precedence::FORALL;
 		}
 		assert(false);
 		UNREACHABLE;
@@ -237,6 +278,10 @@ struct Parser {
 	std::vector<Utility> utility_stack;
 	// stack of constructed Boolean expressions
 	std::vector<z3::Bool> constraint_stack;
+	// stack of the variables bound by the FORALL operations in `operation_stack`
+	std::vector<std::vector<z3::Real>> bound_stack;
+	// whether the expression being parsed may contain quantifiers
+	bool allow_quantifiers = false;
 
 	// bail out from a malformed expression
 	[[noreturn]] void error() {
@@ -363,6 +408,12 @@ struct Parser {
 				constraint_stack.push_back(!negate);
 				break;
 			}
+			case Operation::FORALL: {
+				auto body = pop_constraint();
+				constraint_stack.push_back(z3::Bool::forall(bound_stack.back(), body));
+				bound_stack.pop_back();
+				break;
+			}
 		}
 	}
 
@@ -391,6 +442,11 @@ struct Parser {
 					utility_stack.push_back({z3::Real::value(lexer.buffer), z3::Real::ZERO});
 					break;
 				case Lexer::Token::IDENTIFIER: {
+					// Boolean constants, as the printer writes them
+					if (lexer.buffer == "true" || lexer.buffer == "false") {
+						constraint_stack.push_back(z3::Bool(lexer.buffer == "true"));
+						break;
+					}
 					Utility utility;
 					try {
 						utility = identifiers.at(lexer.buffer);
@@ -459,6 +515,26 @@ struct Parser {
 					// prefix operator: its operand comes after it, so nothing on the stack is committed yet
 					operation_stack.push_back(Operation::NOT);
 					break;
+				case Lexer::Token::FORALL: {
+					if (!allow_quantifiers) {
+						std::cerr << "checkmate: quantifier in expression " << lexer.current
+							<< ", quantifiers are only allowed in the weak(er) immunity and collusion resilience results of subtrees" << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
+					// the variables are declared constants, bound by name (cf. z3::Bool::forall)
+					std::vector<z3::Real> bound;
+					for (const std::string &name : lexer.bound) {
+						if (!identifiers.count(name)) {
+							std::cerr << "checkmate: undeclared constant " << name << std::endl;
+							std::exit(EXIT_FAILURE);
+						}
+						bound.push_back(z3::Real::constant(name));
+					}
+					bound_stack.push_back(bound);
+					// prefix operator, as NOT
+					operation_stack.push_back(Operation::FORALL);
+					break;
+				}
 			}
 		}
 		// when there is no more input, we know all the operators have to be committed
@@ -476,9 +552,13 @@ struct Parser {
 		return utility;
 	}
 
-	// parse a Boolean term, popping it out from the stack
-	z3::Bool parse_constraint(const char *start) {
+	// parse a Boolean term, popping it out from the stack;
+	// quantifiers are rejected unless `allow_quantifiers`
+	// (only for weak(er) immunity and collusion resilience results of subtrees)
+	z3::Bool parse_constraint(const char *start, bool allow_quantifiers = false) {
+		this->allow_quantifiers = allow_quantifiers;
 		parse(start);
+		this->allow_quantifiers = false;
 		if (!utility_stack.empty() || constraint_stack.size() != 1)
 			error();
 		auto constraint = constraint_stack.back();
@@ -490,11 +570,11 @@ struct Parser {
 // third-party library for parsing JSON
 using json = nlohmann::json;
 
-static z3::Bool parse_case(Parser &parser, const std::string &_case) {
+static z3::Bool parse_case(Parser &parser, const std::string &_case, bool allow_quantifiers = false) {
 	if(_case == "true")
 		return true;
 
-	return parser.parse_constraint(_case.c_str());
+	return parser.parse_constraint(_case.c_str(), allow_quantifiers);
 }
 
 // Forward declarations
@@ -531,7 +611,7 @@ static SubtreeResults parse_subtree_results(Parser &parser, const json &subtree_
 				for (const json &_case_entry: json_case) {
 					if(_case_entry != "true") {
 						const std::string &_case_e = _case_entry;
-						_case.push_back(parse_case(parser, _case_e));
+						_case.push_back(parse_case(parser, _case_e, true));
 					}
 				}
 				satisfied_in_case.push_back(_case);					
@@ -562,7 +642,7 @@ static SubtreeResults parse_subtree_results(Parser &parser, const json &subtree_
 				for (const json &_case_entry: json_case) {
 					if(_case_entry != "true") {
 						const std::string &_case_e = _case_entry;
-						_case.push_back(parse_case(parser, _case_e));
+						_case.push_back(parse_case(parser, _case_e, true));
 					}
 				}
 				satisfied_in_case.push_back(_case);					
@@ -593,7 +673,7 @@ static SubtreeResults parse_subtree_results(Parser &parser, const json &subtree_
 				for (const json &_case_entry: json_case) {
 					if(_case_entry != "true") {
 						const std::string &_case_e = _case_entry;
-						_case.push_back(parse_case(parser, _case_e));
+						_case.push_back(parse_case(parser, _case_e, true));
 					}
 				}
 				satisfied_in_case.push_back(_case);					

@@ -10,6 +10,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <optional>
 #include <string>
 #include <cctype>
 #include <sstream>
@@ -173,6 +174,14 @@ namespace z3 {
 			return simp_exp;
 		}
 
+		// ∀ `variables`. `body`; defined after Real
+		static Bool forall(const std::vector<Real> &variables, Bool body);
+
+		// for a quantifier: the variables it binds and its body in terms of them, as in forall(variables, body);
+		// defined after Real
+		std::vector<Real> bound_variables() const;
+		Bool body() const;
+
 		enum class Operator {
 			TRUE,
 			FALSE,
@@ -185,11 +194,17 @@ namespace z3 {
 			LE,
 			GT,
 			GE,
-			IMPLIES
+			IMPLIES,
+			FORALL
 		};
 
 		// what kind of operator we have
 		Operator op() const {
+			if (Z3_get_ast_kind(CONTEXT, ast) == Z3_QUANTIFIER_AST) {
+				// we only ever construct universal quantifiers
+				assert(Z3_is_quantifier_forall(CONTEXT, ast));
+				return Operator::FORALL;
+			}
 			Z3_app app = Z3_to_app(CONTEXT, ast);
 			Z3_func_decl decl = Z3_get_app_decl(CONTEXT, app);
 			Z3_decl_kind kind = Z3_get_decl_kind(CONTEXT, decl);
@@ -351,6 +366,8 @@ namespace z3 {
 		case Operator::IMPLIES:
 			// as the parser reads it
 			return out << "=>";
+		case Operator::FORALL:
+			return out << "forall";
 		}
 		assert(false);
 		UNREACHABLE;
@@ -364,6 +381,8 @@ namespace z3 {
 	// Expression of real sort by construction
 	class Real : public Expression {
 		friend Expression;
+		// Bool wants to bind Reals in quantifiers
+		friend Bool;
 		friend std::ostream &operator<<(std::ostream &, Real);
 	public:
 		Real() : Expression() {}
@@ -524,6 +543,41 @@ namespace z3 {
 		Real(Z3_ast ast) : Expression(ast) { assert(is_real()); }
 	};
 
+	inline Bool Bool::forall(const std::vector<Real> &variables, Bool body) {
+		if (variables.empty())
+			return body;
+		std::vector<Z3_app> bound;
+		for (Real variable : variables)
+			bound.push_back(Z3_to_app(CONTEXT, variable.ast));
+		Z3_ast result = Z3_mk_forall_const(CONTEXT, 0, bound.size(), bound.data(), 0, nullptr, body.ast);
+		check_error();
+		return result;
+	}
+
+	// forall() binds the constants under their own names, so they can be recovered by name
+	inline std::vector<Real> Bool::bound_variables() const {
+		assert(Z3_get_ast_kind(CONTEXT, ast) == Z3_QUANTIFIER_AST);
+		std::vector<Real> variables;
+		for (unsigned i = 0; i < Z3_get_quantifier_num_bound(CONTEXT, ast); i++) {
+			Z3_symbol name = Z3_get_quantifier_bound_name(CONTEXT, ast, i);
+			assert(Z3_get_quantifier_bound_sort(CONTEXT, ast, i) == REAL_SORT);
+			variables.push_back(Real::constant(Z3_get_symbol_string(CONTEXT, name)));
+		}
+		check_error();
+		return variables;
+	}
+
+	inline Bool Bool::body() const {
+		// in the body, bound variable i is the de Bruijn index (number of bound variables - 1 - i)
+		std::vector<Real> variables = bound_variables();
+		std::vector<Z3_ast> replacements;
+		for (auto variable = variables.rbegin(); variable != variables.rend(); variable++)
+			replacements.push_back(variable->ast);
+		Z3_ast result = Z3_substitute_vars(CONTEXT, Z3_get_quantifier_body(CONTEXT, ast), replacements.size(), replacements.data());
+		check_error();
+		return result;
+	}
+
 	// the nth child of an operator application
 	inline Real Expression::real_child(unsigned n) {
 		Z3_app app = Z3_to_app(CONTEXT, ast);
@@ -628,6 +682,38 @@ namespace z3 {
 					return Result::SAT;
 				default:
 					throw std::logic_error("Z3_solver_check_assumptions() returned UNDEF - this shouldn't happen");
+			}
+		}
+
+		// invoke the solver with extra `assumptions`, giving up after `timeout` milliseconds:
+		// no result if Z3 cannot decide in time (or at all, e.g. for some quantified non-linear problems);
+		// switches off the Horner and Gröbner heuristics for non-linear arithmetic, in which Z3 was seen
+		// to run far past the timeout (it only stops where it checks for cancellation)
+		std::optional<Result> solve_within(const std::vector<Bool> &assumptions, unsigned timeout) {
+			// all parameters at once: setting parameters may reset the ones not given to their defaults
+			Z3_params params = Z3_mk_params(CONTEXT);
+			Z3_params_inc_ref(CONTEXT, params);
+			Z3_params_set_uint(CONTEXT, params, Z3_mk_string_symbol(CONTEXT, "timeout"), timeout);
+			Z3_params_set_bool(CONTEXT, params, Z3_mk_string_symbol(CONTEXT, "arith.nl.horner"), false);
+			Z3_params_set_bool(CONTEXT, params, Z3_mk_string_symbol(CONTEXT, "arith.nl.grobner"), false);
+			Z3_solver_set_params(CONTEXT, solver, params);
+			Z3_params_dec_ref(CONTEXT, params);
+			check_error();
+			Z3_lbool result = Z3_solver_check_assumptions(
+					CONTEXT,
+					solver,
+					assumptions.size(),
+					// safety: Z3_ast should have the same size/alignment as Bool
+					reinterpret_cast<const Z3_ast *>(assumptions.data())
+			);
+			check_error();
+			switch (result) {
+				case Z3_L_FALSE:
+					return Result::UNSAT;
+				case Z3_L_TRUE:
+					return Result::SAT;
+				default:
+					return std::nullopt;
 			}
 		}
 

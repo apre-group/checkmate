@@ -6,6 +6,9 @@
 
 using json = nlohmann::json;
 
+// milliseconds to spend on deciding whether a subtree result holds somewhere, which only simplifies the written result
+static const unsigned HOLDS_SOMEWHERE_TIMEOUT = 10000;
+
 // the names of the players in `group` (bitset over the players, in the order of input.players)
 static std::vector<std::string> group_names(const Input &input, uint64_t group) {
 	std::vector<std::string> names;
@@ -20,13 +23,15 @@ static std::vector<std::string> group_names(const Input &input, uint64_t group) 
 // the subtree result for `player_group` with `result` the constraints under which the property holds, given `ic`,
 // and `holds` whether it holds for all values satisfying `ic` (i.e. not violated_somewhere):
 // one case [result], normalised so that `true` and `false` never have to be written out:
-// no case if it never holds, the empty case (written as "true") if it always holds
+// no case if it never holds, the empty case (written as "true") if it always holds;
+// if Z3 cannot decide in time whether it holds somewhere (e.g. quantified and non-linear in the bound variables),
+// the result is written as is, which is still correct if it never holds
 static SubtreeResult subtree_result(const std::vector<std::string> &player_group, const z3::Bool &ic, const z3::Bool &result, bool holds) {
 	SubtreeResult subtree_result;
 	subtree_result.player_group = player_group;
 	if (holds) {
 		subtree_result.satisfied_in_case = {{}};
-	} else if (holds_somewhere(ic, result)) {
+	} else if (holds_somewhere(ic, result, HOLDS_SOMEWHERE_TIMEOUT).value_or(true)) {
 		subtree_result.satisfied_in_case = {{result}};
 	}
 	return subtree_result;

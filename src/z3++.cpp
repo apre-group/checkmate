@@ -28,7 +28,17 @@ namespace z3 {
 	std::ostream &operator<<(std::ostream &out, z3::Real expr) {
 		auto op = expr.op();
 		switch(op) {
-		case Real::Operator::NUMERAL:
+		case Real::Operator::NUMERAL: {
+			// Z3 writes a fraction as (/ n d), which is not the infix syntax the parser reads
+			Z3_ast denominator = Z3_get_denominator(CONTEXT, expr.ast);
+			Z3_ast numerator = Z3_get_numerator(CONTEXT, expr.ast);
+			check_error();
+			if (std::string(Z3_get_numeral_string(CONTEXT, denominator)) != "1")
+				return out << '(' << Z3_ast_to_string(CONTEXT, numerator) << " / " << Z3_ast_to_string(CONTEXT, denominator) << ')';
+			out << Z3_ast_to_string(CONTEXT, expr.ast);
+			check_error();
+			return out;
+		}
 		case Real::Operator::CONSTANT:
 			out << Z3_ast_to_string(CONTEXT, expr.ast);
 			check_error();
@@ -64,6 +74,9 @@ namespace z3 {
 			return out << "!(" << expr.bool_child(0) << ")";
 		case Bool::Operator::AND:
 		case Bool::Operator::OR:
+			// the empty conjunction/disjunction, as the parser reads it
+			if (expr.num_args() == 0)
+				return out << (op == Bool::Operator::AND ? "true" : "false");
 			out << '(';
 			for(unsigned i = 0; i < expr.num_args(); i++) {
 				if(i)
@@ -90,6 +103,14 @@ namespace z3 {
 			}
 		case Bool::Operator::IMPLIES:
 			return out << '(' << expr.bool_child(0) << ' ' << op << ' ' << expr.bool_child(1) << ')';
+		case Bool::Operator::FORALL: {
+			// as the parser reads it: (forall [x, y] body)
+			out << '(' << op << " [";
+			std::vector<Real> variables = expr.bound_variables();
+			for (size_t i = 0; i < variables.size(); i++)
+				out << (i ? ", " : "") << variables[i];
+			return out << "] " << expr.body() << ')';
+		}
 		case Bool::Operator::LT:
 		case Bool::Operator::LE:
 		case Bool::Operator::GT:

@@ -45,11 +45,16 @@ inline bool violated_somewhere(const z3::Bool &ic, const z3::Bool &result) {
 	return solver.solve({!result}) == z3::Result::SAT;
 }
 
-// Check(IC ∧ result) = sat: for some values satisfying `ic`, the property described by `result` holds
-inline bool holds_somewhere(const z3::Bool &ic, const z3::Bool &result) {
+// Check(IC ∧ result) = sat: for some values satisfying `ic`, the property described by `result` holds;
+// no answer if Z3 cannot decide it within `timeout` milliseconds
+inline std::optional<bool> holds_somewhere(const z3::Bool &ic, const z3::Bool &result, unsigned timeout) {
 	z3::Solver solver;
 	solver.assert_(ic);
-	return solver.solve({result}) == z3::Result::SAT;
+	std::optional<z3::Result> answer = solver.solve_within({result}, timeout);
+	if (!answer) {
+		return std::nullopt;
+	}
+	return *answer == z3::Result::SAT;
 }
 
 // for checks that are not written yet: stop instead of returning a result that looks real
