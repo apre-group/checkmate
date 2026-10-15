@@ -58,7 +58,7 @@ SubtreeResults subtree_mode(const Options &options, const Input &input, const Ut
 		std::vector<SubtreeResult> &property_results = weaker ? results.weaker_immunity : results.weak_immunity;
 		bool holds = true;
 		for (unsigned player = 0; player < input.players.size(); player++) {
-			z3::Bool result = computeCWI(input, player, weaker);
+			z3::Bool result = computeCWI(input, input.root.get(), ic, player, weaker);
 			bool holds_for_player = !violated_somewhere(ic, result);
 			print_result(weaker ? "weaker immune for player " : "weak immune for player ", {input.players[player]}, holds_for_player);
 			holds = holds && holds_for_player;

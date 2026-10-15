@@ -36,7 +36,7 @@ bool satisfiesProperty(const Input &input, const UtilityTuplesSet &ustar, Proper
 			bool weaker = property == PropertyType::WeakerImmunity;
 			z3::Bool ic = property_constraints(input, property);
 			for (unsigned player = 0; player < input.players.size(); player++) {
-				z3::Bool result = computeCWI(input, player, weaker);
+				z3::Bool result = computeCWI(input, input.root.get(), ic, player, weaker);
 				if (violated_somewhere(ic, result)) {
 					return false;
 				}

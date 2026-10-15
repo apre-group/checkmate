@@ -11,9 +11,9 @@
 // the checks of the single properties for the honest history currently marked in `input`
 // (or no honest history, if none is marked)
 
-// ComputeCWI (Algorithm 1): the constraints under which the game is weak immune for `player`
-// (`weaker`: weaker immunity, on the real parts of the utilities); in weak_immunity.cpp
-z3::Bool computeCWI(const Input &input, unsigned player, bool weaker);
+// ComputeCWI (Algorithm 1): the constraints under which the game at `node` is weak immune for `player`,
+// given the initial constraints `ic` (`weaker`: weaker immunity, on the real parts of the utilities); in weak_immunity.cpp
+z3::Bool computeCWI(const Input &input, const Node *node, const z3::Bool &ic, unsigned player, bool weaker);
 
 // ComputeCCR (Algorithm 2): the constraints under which the game is collusion resilient against all supergroups
 // of `group` (bitset over the players), given the conditions `cond` so far, compared to the honest utilities `ustar`;

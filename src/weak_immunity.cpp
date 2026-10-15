@@ -36,6 +36,7 @@ static z3::Bool get_wi_case(const Input &input, const Subtree &subtree, unsigned
 		entry = subtree.honest_entry;
 	} else {
 		for (const SubtreeEntry &candidate : subtree.entries) {
+			// off honest, there has to be an entry without honest history or utility
 			if (std::holds_alternative<std::monostate>(candidate.key)) {
 				entry = &candidate;
 				break;
@@ -44,7 +45,7 @@ static z3::Bool get_wi_case(const Input &input, const Subtree &subtree, unsigned
 	}
 	if (!entry) {
 		std::cerr << "checkmate: subtree " << (subtree.honest ? "along" : "off") << " the honest history has no results "
-			<< (subtree.honest ? "for an honest history inside it" : "without honest history") << std::endl;
+			<< (subtree.honest ? "for the current honest history it" : "without honest history") << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 
@@ -65,7 +66,7 @@ static z3::Bool get_wi_case(const Input &input, const Subtree &subtree, unsigned
 
 // Algorithm 1 (ComputeCWI) on the subtree rooted at `node`, with the honest history currently marked in the tree
 // and `ic` the initial constraints
-static z3::Bool compute_cwi(const Input &input, const Node *node, const z3::Bool &ic, unsigned player, bool weaker) {
+z3::Bool computeCWI(const Input &input, const Node *node, const z3::Bool &ic, unsigned player, bool weaker) {
 	if (node->is_leaf()) {
 		const Utility &utility = node->leaf().utilities[player];
 		return weaker ? utility.real >= z3::Real::ZERO : utility >= Utility {z3::Real::ZERO, z3::Real::ZERO};
@@ -84,7 +85,7 @@ static z3::Bool compute_cwi(const Input &input, const Node *node, const z3::Bool
 		}
 		std::vector<z3::Bool> conjuncts;
 		for (const ConditionChoice &choice : condition_node.conditions) {
-			z3::Bool child = compute_cwi(input, choice.node.get(), ic, player, weaker);
+			z3::Bool child = computeCWI(input, choice.node.get(), ic, player, weaker);
 			if (child.is(z3::Bool(true))) {
 				continue;
 			}
@@ -100,23 +101,18 @@ static z3::Bool compute_cwi(const Input &input, const Node *node, const z3::Bool
 	if (branch.player != player) {
 		std::vector<z3::Bool> conjuncts;
 		for (const Choice &choice : branch.choices) {
-			conjuncts.push_back(compute_cwi(input, choice.node.get(), ic, player, weaker));
+			conjuncts.push_back(computeCWI(input, choice.node.get(), ic, player, weaker));
 		}
 		return all_of(conjuncts);
 	}
 	// our choice along the honest history: we follow it
 	if (branch.honest) {
-		return compute_cwi(input, branch.get_honest_child().node.get(), ic, player, weaker);
+		return computeCWI(input, branch.get_honest_child().node.get(), ic, player, weaker);
 	}
 	// our choice off the honest history: we may pick any action that keeps us weak immune
 	std::vector<z3::Bool> disjuncts;
 	for (const Choice &choice : branch.choices) {
-		disjuncts.push_back(compute_cwi(input, choice.node.get(), ic, player, weaker));
+		disjuncts.push_back(computeCWI(input, choice.node.get(), ic, player, weaker));
 	}
 	return any_of(disjuncts);
-}
-
-z3::Bool computeCWI(const Input &input, unsigned player, bool weaker) {
-	z3::Bool ic = property_constraints(input, weaker ? PropertyType::WeakerImmunity : PropertyType::WeakImmunity);
-	return compute_cwi(input, input.root.get(), ic, player, weaker);
 }
