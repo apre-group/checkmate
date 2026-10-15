@@ -55,10 +55,11 @@ struct CrCache {
 };
 
 // ComputeCCR (Algorithm 2): the constraints under which the game at `node` is collusion resilient against all supergroups
-// of `group` (bitset over the players), given the initial constraints `ic`, the conditions `cond` on the way to `node` and
-// the unknown constants `revealed` on the way to `node`, compared to the honest utilities `ustar`; in collusion_resilience.cpp
+// of `group` (bitset over the players), given the initial constraints `ic` and the conditions `cond` on the way to `node`,
+// compared to the honest utilities `ustar`; `known_unknowns` are the constants unknown at the root that were revealed
+// on the way to `node` (only the leaves need them, to quantify over the ones still unknown); in collusion_resilience.cpp
 z3::Bool computeCCR(const Input &input, const Node *node, const UtilityTuplesSet &ustar, const z3::Bool &ic, const z3::Bool &cond,
-	uint64_t group, CrCache &cache, const std::unordered_set<std::string> &revealed = {});
+	uint64_t group, CrCache &cache, const std::unordered_set<std::string> &known_unknowns = {});
 
 // practicality; in practicality.cpp
 bool computeCPR(const Input &input);
@@ -67,13 +68,13 @@ bool computeCPR(const Input &input);
 inline z3::Bool property_constraints(const Input &input, PropertyType property) {
 	switch (property) {
 		case PropertyType::WeakImmunity:
-			return input.initial_constraint && input.weak_immunity_constraint;
+			return all_of({input.initial_constraint, input.weak_immunity_constraint});
 		case PropertyType::WeakerImmunity:
-			return input.initial_constraint && input.weaker_immunity_constraint;
+			return all_of({input.initial_constraint, input.weaker_immunity_constraint});
 		case PropertyType::CollusionResilience:
-			return input.initial_constraint && input.collusion_resilience_constraint;
+			return all_of({input.initial_constraint, input.collusion_resilience_constraint});
 		case PropertyType::Practicality:
-			return input.initial_constraint && input.practicality_constraint;
+			return all_of({input.initial_constraint, input.practicality_constraint});
 	}
 	return input.initial_constraint;
 }

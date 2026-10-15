@@ -128,8 +128,10 @@ namespace z3 {
 			return result;
 		}
 
-		// a single conjunct is returned as is, without wrapping it in an `and`
+		// a single conjunct is returned as is, without wrapping it in an `and`, and no conjunct as the literal true
 		static Bool conjunction(const std::vector<Bool> &conjuncts) {
+			if (conjuncts.empty())
+				return Bool(true);
 			if (conjuncts.size() == 1)
 				return conjuncts[0];
 			Z3_ast result = Z3_mk_and(
@@ -142,8 +144,10 @@ namespace z3 {
 			return result;
 		}
 
-		// a single disjunct is returned as is, without wrapping it in an `or`
+		// a single disjunct is returned as is, without wrapping it in an `or`, and no disjunct as the literal false
 		static Bool disjunction(const std::vector<Bool> &disjuncts) {
+			if (disjuncts.empty())
+				return Bool(false);
 			if (disjuncts.size() == 1)
 				return disjuncts[0];
 			Z3_ast result = Z3_mk_or(

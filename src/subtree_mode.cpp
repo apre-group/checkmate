@@ -7,7 +7,7 @@
 using json = nlohmann::json;
 
 // milliseconds to spend on deciding whether a subtree result holds somewhere, which only simplifies the written result
-static const unsigned HOLDS_SOMEWHERE_TIMEOUT = 10000;
+static const unsigned HOLDS_SOMEWHERE_TIMEOUT = 1000;
 
 // the names of the players in `group` (bitset over the players, in the order of input.players)
 static std::vector<std::string> group_names(const Input &input, uint64_t group) {

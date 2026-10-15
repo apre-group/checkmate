@@ -104,10 +104,11 @@ static z3::Bool get_cr_case(const Input &input, const Subtree &subtree, const Ut
 // for all values of the constants still unknown here, every supergroup S of `group` (non-empty, not all players)
 // gets at most its honest utility
 static z3::Bool leaf_ccr(const Input &input, const Leaf &leaf, const UtilityTuplesSet &ustar, const z3::Bool &ic, const z3::Bool &cond,
-		uint64_t group, const std::unordered_set<std::string> &revealed) {
+		uint64_t group, const std::unordered_set<std::string> &known_unknowns) {
+	// the constants still unknown here: unknown at the root and not revealed on the way
 	std::vector<z3::Real> unknown;
 	for (const std::string &name : input.unknowns) {
-		if (!revealed.count(name)) {
+		if (!known_unknowns.count(name)) {
 			unknown.push_back(z3::Real::constant(name));
 		}
 	}
@@ -133,14 +134,14 @@ static z3::Bool leaf_ccr(const Input &input, const Leaf &leaf, const UtilityTupl
 			continue;
 		}
 		// as in ComputeCWI: results are only used under `ic`, so it is only needed in the premise if something is quantified
-		z3::Bool premise = unknown.empty() ? cond && honest.condition : ic && cond && honest.condition;
+		z3::Bool premise = unknown.empty() ? all_of({cond, honest.condition}) : all_of({ic, cond, honest.condition});
 		conjuncts.push_back(z3::Bool::forall(unknown, premise.implies(comparison)));
 	}
 	return all_of(conjuncts);
 }
 
 z3::Bool computeCCR(const Input &input, const Node *node, const UtilityTuplesSet &ustar, const z3::Bool &ic, const z3::Bool &cond,
-		uint64_t group, CrCache &cache, const std::unordered_set<std::string> &revealed) {
+		uint64_t group, CrCache &cache, const std::unordered_set<std::string> &known_unknowns) {
 	// no supergroup of all players is a strict subgroup: nothing to check
 	if (group == all_players(input)) {
 		return z3::Bool(true);
@@ -154,26 +155,27 @@ z3::Bool computeCCR(const Input &input, const Node *node, const UtilityTuplesSet
 
 	z3::Bool result;
 	if (node->is_leaf()) {
-		result = leaf_ccr(input, node->leaf(), ustar, ic, cond, group, revealed);
+		result = leaf_ccr(input, node->leaf(), ustar, ic, cond, group, known_unknowns);
 	} else if (node->is_subtree()) {
 		result = get_cr_case(input, node->subtree(), ustar, ic, group, cache);
 	} else if (node->is_condition_node()) {
-		// whichever condition holds, for all values of the unknowns revealed here
+		// whichever condition holds, for all values of the unknowns revealed here (quantified only here);
+		// below, they are known: the leaves only quantify over the unknowns that are still unknown there
 		const ConditionNode &condition_node = node->condition_node();
-		std::unordered_set<std::string> now_revealed = revealed;
+		std::unordered_set<std::string> known_below = known_unknowns;
 		std::vector<z3::Real> revealed_here;
 		for (const std::string &name : condition_node.revealed) {
-			now_revealed.insert(name);
+			known_below.insert(name);
 			revealed_here.push_back(z3::Real::constant(name));
 		}
 		std::vector<z3::Bool> conjuncts;
 		for (const ConditionChoice &choice : condition_node.conditions) {
-			z3::Bool child = computeCCR(input, choice.node.get(), ustar, ic, cond && choice.condition, group, cache, now_revealed);
+			z3::Bool child = computeCCR(input, choice.node.get(), ustar, ic, all_of({cond, choice.condition}), group, cache, known_below);
 			if (child.is(z3::Bool(true))) {
 				continue;
 			}
 			// as in ComputeCWI: `ic` is only needed in the premise if something is quantified
-			z3::Bool premise = revealed_here.empty() ? choice.condition : ic && choice.condition;
+			z3::Bool premise = revealed_here.empty() ? choice.condition : all_of({ic, choice.condition});
 			conjuncts.push_back(z3::Bool::forall(revealed_here, premise.implies(child)));
 		}
 		result = all_of(conjuncts);
@@ -181,17 +183,21 @@ z3::Bool computeCCR(const Input &input, const Node *node, const UtilityTuplesSet
 		const Branch &branch = node->branch();
 		const uint64_t with_player = group | (1ull << branch.player);
 		auto child_ccr = [&](const Choice &choice, uint64_t child_group) {
-			return computeCCR(input, choice.node.get(), ustar, ic, cond, child_group, cache, revealed);
+			return computeCCR(input, choice.node.get(), ustar, ic, cond, child_group, cache, known_unknowns);
 		};
 
 		// note: collusion resilience against all supergroups of `group` implies it against all supergroups of
 		// `with_player` (they are a subset), so the result for `group` implies the one for `with_player`
 		if (branch.honest) {
-			// the honest choice for `group`, every deviation for `group` together with the current player
+			// the honest choice for `group`, every deviation for `group` together with the current player;
+			// as soon as one of them is false, so is the result
 			const Choice &honest_choice = branch.get_honest_child();
 			std::vector<z3::Bool> conjuncts = {child_ccr(honest_choice, group)};
 			for (const Choice &choice : branch.choices) {
-				if (&choice != &honest_choice && !conjuncts.front().is(z3::Bool(false))) {
+				if (conjuncts.back().is(z3::Bool(false))) {
+					break;
+				}
+				if (&choice != &honest_choice) {
 					conjuncts.push_back(child_ccr(choice, with_player));
 				}
 			}
@@ -209,15 +215,20 @@ z3::Bool computeCCR(const Input &input, const Node *node, const UtilityTuplesSet
 		} else {
 			// some choice for `group`, every other one for `group` together with the current player:
 			// OR_a (R_a AND AND_{a' != a} T_a'), with R the results for `group` and T those for `with_player`;
-			// as R_a implies T_a, this is (OR_a R_a) AND (AND_a T_a), and T_a need not be computed if R_a is true
+			// as R_a implies T_a, this is (OR_a R_a) AND (AND_a T_a), and T_a need not be computed if R_a is true;
+			// once some R_a is true, so is OR_a R_a, and the remaining R_a are not needed
 			std::vector<z3::Bool> for_group;
 			for (const Choice &choice : branch.choices) {
 				for_group.push_back(child_ccr(choice, group));
+				if (for_group.back().is(z3::Bool(true))) {
+					break;
+				}
 			}
 			z3::Bool some_choice = any_of(for_group);
 			std::vector<z3::Bool> conjuncts = {some_choice};
+			// T_a for every choice whose R_a is not true (or not computed), as soon as one of them is false, so is the result
 			for (size_t i = 0; i < branch.choices.size() && !some_choice.is(z3::Bool(false)); i++) {
-				if (for_group[i].is(z3::Bool(true))) {
+				if (i < for_group.size() && for_group[i].is(z3::Bool(true))) {
 					continue;
 				}
 				conjuncts.push_back(child_ccr(branch.choices[i], with_player));
