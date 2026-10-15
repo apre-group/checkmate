@@ -73,8 +73,10 @@ SubtreeResults subtree_mode(const Options &options, const Input &input, const Ut
 	if (options.collusion_resilience) {
 		z3::Bool ic = property_constraints(input, PropertyType::CollusionResilience);
 		const uint64_t all_players = input.players.size() == 64 ? -1ull : (1ull << input.players.size()) - 1;
+		// shared by all groups, which reuse each other's subresults
+		CrCache cache;
 		for (uint64_t group = 0; group < all_players; group++) {
-			z3::Bool result = computeCCR(input, ustar, z3::Bool(true), group);
+			z3::Bool result = computeCCR(input, input.root.get(), ustar, ic, z3::Bool(true), group, cache);
 			bool holds = !violated_somewhere(ic, result);
 			print_result("collusion resilient against group ", group_names(input, group), holds);
 			results.collusion_resilience.push_back(subtree_result(group_names(input, group), ic, result, holds));

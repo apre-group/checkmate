@@ -45,8 +45,9 @@ bool satisfiesProperty(const Input &input, const UtilityTuplesSet &ustar, Proper
 		}
 		case PropertyType::CollusionResilience: {
 			z3::Bool ic = property_constraints(input, property);
-			// start with no conditions so far and the empty group
-			z3::Bool result = computeCCR(input, ustar, z3::Bool(true), 0);
+			// start at the root with no conditions so far and the empty group
+			CrCache cache;
+			z3::Bool result = computeCCR(input, input.root.get(), ustar, ic, z3::Bool(true), 0, cache);
 			return !violated_somewhere(ic, result);
 		}
 		case PropertyType::Practicality:

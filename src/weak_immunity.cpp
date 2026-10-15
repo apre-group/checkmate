@@ -1,32 +1,5 @@
 #include "property_checks.hpp"
 
-// conjunction/disjunction that leave out neutral and stop at dominating constants, to keep the results readable
-static z3::Bool all_of(const std::vector<z3::Bool> &conjuncts) {
-	std::vector<z3::Bool> kept;
-	for (const z3::Bool &conjunct : conjuncts) {
-		if (conjunct.is(z3::Bool(false))) {
-			return z3::Bool(false);
-		}
-		if (!conjunct.is(z3::Bool(true))) {
-			kept.push_back(conjunct);
-		}
-	}
-	return kept.empty() ? z3::Bool(true) : z3::conjunction(kept);
-}
-
-static z3::Bool any_of(const std::vector<z3::Bool> &disjuncts) {
-	std::vector<z3::Bool> kept;
-	for (const z3::Bool &disjunct : disjuncts) {
-		if (disjunct.is(z3::Bool(true))) {
-			return z3::Bool(true);
-		}
-		if (!disjunct.is(z3::Bool(false))) {
-			kept.push_back(disjunct);
-		}
-	}
-	return kept.empty() ? z3::Bool(false) : z3::disjunction(kept);
-}
-
 // GetWiCase: the constraints under which `subtree` is weak(er) immune for `player`, as computed in subtree mode
 // (a disjunction of cases, each a conjunction), taken from the entry of the honest history inside the subtree
 // considered in the current run if the subtree is along the honest history, and from the entry without honest history otherwise
