@@ -11,6 +11,7 @@ FLAG_SETS=(
   "--strategies --counterexamples"
   "--strategies --counterexamples --all_cases"
   "--counterexamples --all_counterexamples --all_cases"
+  "--preconditions"
   "--strategies --counterexamples --all_cases --no-cr-node-cache --no-cr-leaf-cache --no-cr-implied-groups --no-cr-violated-lookup --no-problematic-groups --exact-splits --reset-from-root"
 )
 fail=0
