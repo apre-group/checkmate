@@ -19,6 +19,8 @@ cp build-wasm/checkmate.js build-wasm/checkmate.wasm build-wasm/checkmate-conver
 # the page loads the modules with this id, so browsers do not keep using an older build
 echo "{\"id\": \"$(date +%s)\"}" > html/build.json
 
+# examples over 1 MB (routing_game-four-supertree.json is 57 MB) would hang the page while loading
+rm -rf html/examples
 mkdir -p html/examples
-cp examples/*/*.json html/examples/
+find examples -name '*.json' -size -1024k -exec cp {} html/examples/ \;
 (cd html/examples && ls *.json | grep -v '^index.json$' | python3 -c 'import json, sys; print(json.dumps(sys.stdin.read().split()))' > index.json)
