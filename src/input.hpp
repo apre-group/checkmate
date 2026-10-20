@@ -732,7 +732,7 @@ struct Input {
 
 	void init_solved_for_group(size_t number_groups) const {
 		solved_for_group = {};
-		for ( uint i = 0; i< number_groups; i++) {
+		for ( unsigned i = 0; i< number_groups; i++) {
 			solved_for_group.push_back(false);
 		}
 		
