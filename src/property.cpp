@@ -1920,6 +1920,8 @@ void property(const Options &options, const Input &input, PropertyType property,
 				z3::Bool raw_prec = conjunction(conjuncts);
 				z3::Bool simpl_prec = raw_prec.simplify();
 				std::cout << "Weakest Precondition: " << std::endl << "\t" << simpl_prec << std::endl;
+				if (options.json_out)
+					json_entry["precondition"] = simpl_prec.to_smt2();
 	}
 	
 	// generate strategies

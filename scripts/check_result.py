@@ -592,6 +592,14 @@ class Checker:
             if self.check(base, z3.Not(covered)):
                 self.error(ctx, "cases do not cover the constraints")
 
+        if "precondition" in r:
+            pre = self.smt2(r["precondition"])
+            if self.check(base, pre, z3.Not(formula)):
+                self.error(ctx, "the property fails somewhere under the weakest precondition %s" % r["precondition"])
+            if self.check(base, formula, z3.Not(pre)):
+                self.error(ctx, "the precondition %s is not weakest: the property holds somewhere outside it"
+                           % r["precondition"])
+
         weaker = prop == "weaker_immunity"
         for st in r["strategies"]:
             assume = base + [self.smt2(s) for s in st["case"]]
