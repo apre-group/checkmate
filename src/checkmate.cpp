@@ -12,6 +12,7 @@ int main(int, char **argv) {
 	} else {
 		// analyse properties in default mode (the tree may contain subtree results)
 		analyse_properties(options, input);
+		write_json_out(options);
 	}
 
 	return EXIT_SUCCESS;

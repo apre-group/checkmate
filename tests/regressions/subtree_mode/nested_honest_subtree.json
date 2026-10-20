@@ -1,0 +1,323 @@
+{
+  "players": [
+    "A",
+    "B",
+    "C"
+  ],
+  "actions": [
+    "x",
+    "y"
+  ],
+  "infinitesimals": [],
+  "constants": [
+    "c0",
+    "c1",
+    "c2"
+  ],
+  "initial_constraints": [
+    "c0 > 0",
+    "c1 > 0",
+    "c2 > 0"
+  ],
+  "property_constraints": {
+    "weak_immunity": [],
+    "weaker_immunity": [],
+    "collusion_resilience": [],
+    "practicality": []
+  },
+  "tree": {
+    "player": "A",
+    "children": [
+      {
+        "action": "y",
+        "child": {
+          "subtree": {
+            "collusion_resilience": [
+              {
+                "player_group": [],
+                "satisfied_in_case": [
+                  [
+                    "((3.0 + 4.0) >= (2.0 + (2.0 * c0)))",
+                    "((((1.0 + (2.0 * c0)) + 4.0) + (3.0 + 4.0)) >= ((2.0 + c2) + (2.0 + (2.0 * c0))))"
+                  ]
+                ]
+              },
+              {
+                "player_group": [
+                  "A"
+                ],
+                "satisfied_in_case": [
+                  [
+                    "((4.0 + (3.0 + 4.0)) >= (1.0 + (2.0 + (2.0 * c0))))"
+                  ]
+                ]
+              },
+              {
+                "player_group": [
+                  "B"
+                ],
+                "satisfied_in_case": [
+                  [
+                    "((((1.0 + (2.0 * c0)) + 4.0) + (3.0 + 4.0)) >= ((2.0 + c2) + (2.0 + (2.0 * c0))))"
+                  ]
+                ]
+              },
+              {
+                "player_group": [
+                  "A",
+                  "B"
+                ],
+                "satisfied_in_case": [
+                  [
+                    "true"
+                  ]
+                ]
+              },
+              {
+                "player_group": [
+                  "C"
+                ],
+                "satisfied_in_case": [
+                  [
+                    "((3.0 + 4.0) >= (2.0 + (2.0 * c0)))",
+                    "((((1.0 + (2.0 * c0)) + 4.0) + (3.0 + 4.0)) >= ((2.0 + c2) + (2.0 + (2.0 * c0))))"
+                  ]
+                ]
+              },
+              {
+                "player_group": [
+                  "A",
+                  "C"
+                ],
+                "satisfied_in_case": [
+                  [
+                    "((4.0 + (3.0 + 4.0)) >= (1.0 + (2.0 + (2.0 * c0))))"
+                  ]
+                ]
+              },
+              {
+                "player_group": [
+                  "B",
+                  "C"
+                ],
+                "satisfied_in_case": [
+                  [
+                    "((((1.0 + (2.0 * c0)) + 4.0) + (3.0 + 4.0)) >= ((2.0 + c2) + (2.0 + (2.0 * c0))))"
+                  ]
+                ]
+              }
+            ],
+            "honest_utility": [
+              {
+                "player": "A",
+                "value": "4.0 + 0.0"
+              },
+              {
+                "player": "B",
+                "value": "((1.0 + (2.0 * c0)) + 4.0) + 0.0"
+              },
+              {
+                "player": "C",
+                "value": "(3.0 + 4.0) + 0.0"
+              }
+            ],
+            "practicality": [
+              {
+                "case": [
+                  "((3.0 + 4.0) >= (2.0 + (2.0 * c0)))"
+                ],
+                "utilities": [
+                  [
+                    {
+                      "player": "A",
+                      "value": "4.0 + 0.0"
+                    },
+                    {
+                      "player": "B",
+                      "value": "((1.0 + (2.0 * c0)) + 4.0) + 0.0"
+                    },
+                    {
+                      "player": "C",
+                      "value": "(3.0 + 4.0) + 0.0"
+                    }
+                  ]
+                ]
+              }
+            ],
+            "weak_immunity": [
+              {
+                "player_group": [
+                  "A"
+                ],
+                "satisfied_in_case": [
+                  [
+                    "true"
+                  ]
+                ]
+              },
+              {
+                "player_group": [
+                  "B"
+                ],
+                "satisfied_in_case": [
+                  [
+                    "true"
+                  ]
+                ]
+              },
+              {
+                "player_group": [
+                  "C"
+                ],
+                "satisfied_in_case": [
+                  [
+                    "true"
+                  ]
+                ]
+              }
+            ],
+            "weaker_immunity": [
+              {
+                "player_group": [
+                  "A"
+                ],
+                "satisfied_in_case": [
+                  [
+                    "true"
+                  ]
+                ]
+              },
+              {
+                "player_group": [
+                  "B"
+                ],
+                "satisfied_in_case": [
+                  [
+                    "true"
+                  ]
+                ]
+              },
+              {
+                "player_group": [
+                  "C"
+                ],
+                "satisfied_in_case": [
+                  [
+                    "true"
+                  ]
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        "action": "x",
+        "child": {
+          "player": "A",
+          "children": [
+            {
+              "action": "y",
+              "child": {
+                "player": "A",
+                "children": [
+                  {
+                    "action": "y",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "2*c0"
+                        },
+                        {
+                          "player": "B",
+                          "value": "-2 + c1"
+                        },
+                        {
+                          "player": "C",
+                          "value": "2 + c0 + 2*c2"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "action": "x",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "2"
+                        },
+                        {
+                          "player": "B",
+                          "value": "1 + c2"
+                        },
+                        {
+                          "player": "C",
+                          "value": "0"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "action": "x",
+              "child": {
+                "player": "B",
+                "children": [
+                  {
+                    "action": "x",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "2*c1"
+                        },
+                        {
+                          "player": "B",
+                          "value": "2*c0 + c1"
+                        },
+                        {
+                          "player": "C",
+                          "value": "3 + c0 + 2*c2"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "action": "y",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "3 + 2*c1 + c2"
+                        },
+                        {
+                          "player": "B",
+                          "value": "2*c2"
+                        },
+                        {
+                          "player": "C",
+                          "value": "2"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "honest_histories": [
+    [
+      "y",
+      "y",
+      "y"
+    ]
+  ]
+}

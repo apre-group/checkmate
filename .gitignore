@@ -7,3 +7,7 @@ venv/
 *.json
 *.out
 examples/other_examples/f_asset_minting.py
+out/
+build-*/
+/CLAUDE.md
+/FUZZ-PLAN.md
