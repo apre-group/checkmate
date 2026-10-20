@@ -38,10 +38,10 @@ std::vector<std::string> split(const std::string &s, const std::string &separato
 
 // player, action and constant names have to survive the separators of the format
 bool plain_name(const std::string &name) {
-	if (name.empty())
+	if (name.empty() || name.find("->") != std::string::npos)
 		return false;
 	for (char c : name)
-		if (std::isspace(static_cast<unsigned char>(c)) || c == ',' || c == ':' || c == '#' || c == '-' || c == '>')
+		if (std::isspace(static_cast<unsigned char>(c)) || c == ',' || c == ':' || c == '#')
 			return false;
 	return true;
 }
@@ -65,7 +65,7 @@ std::string value_text(const json &value) {
 void check_name(const json &name, const char *what) {
 	if (!name.is_string() || !plain_name(name.get<std::string>()))
 		throw CompactError(std::string("cannot write ") + what + " " + name.dump() +
-			" compactly: names must not contain spaces or any of , : # - >");
+			" compactly: names must not contain spaces, any of , : # or ->");
 }
 
 void check_text(const std::string &text) {
@@ -112,7 +112,7 @@ struct Node {
 	json utility;                                                  // leaves
 	json subtree;                                                  // subtree results
 	std::vector<std::pair<std::string, std::unique_ptr<Node>>> children;
-	bool branch() const { return !player.empty(); }
+	std::string key;                                               // "tree/a/b", for the line map
 };
 
 [[noreturn]] void fail(size_t line, const std::string &message) {
@@ -206,7 +206,9 @@ std::string to_compact(const json &game) {
 	return out.str();
 }
 
-json from_compact(const std::string &text) {
+json from_compact(const std::string &text, LineMap *lines) {
+	LineMap ignored;
+	LineMap &at = lines ? *lines : ignored;
 	std::vector<std::string> players, constants, infinitesimals;
 	json initial = json::array(), honest = json::array(), honest_utilities = json::array();
 	json property = json::object();
@@ -245,6 +247,8 @@ json from_compact(const std::string &text) {
 						into.push_back(name);
 					}
 				};
+				if (key == "players" || key == "constants" || key == "infinitesimals")
+					at[key] = line;
 				if (key == "players") {
 					names(players);
 					has_players = true;
@@ -253,10 +257,13 @@ json from_compact(const std::string &text) {
 				} else if (key == "infinitesimals") {
 					names(infinitesimals);
 				} else if (key == "initial") {
+					at["initial/" + std::to_string(initial.size())] = line;
 					initial.push_back(value);
 				} else if (property.contains(key)) {
+					at["property/" + key + "/" + std::to_string(property[key].size())] = line;
 					property[key].push_back(value);
 				} else if (key == "honest") {
+					at["honest/" + std::to_string(honest.size())] = line;
 					json h = json::array();
 					for (const std::string &a : split(value, " ,"))
 						if (!trim(a).empty())
@@ -265,6 +272,7 @@ json from_compact(const std::string &text) {
 				} else if (key == "honest_utility") {
 					if (!has_players)
 						fail(line, "honest_utility before players");
+					at["honest_utility/" + std::to_string(honest_utilities.size())] = line;
 					honest_utilities.push_back({{"utility", parse_utilities(line, value, players)}});
 				} else {
 					fail(line, "unknown setting \"" + key + "\"");
@@ -277,6 +285,8 @@ json from_compact(const std::string &text) {
 				fail(line, "the tree must start with the player at the root, without indentation");
 			root.reset(new Node());
 			root->player = body;
+			root->key = "tree";
+			at["tree"] = line;
 			stack.push_back({indent, root.get()});
 			continue;
 		}
@@ -296,6 +306,8 @@ json from_compact(const std::string &text) {
 				fail(line, "action " + action + " appears twice at the same node");
 
 		std::unique_ptr<Node> child(new Node());
+		child->key = parent->key + "/" + action;
+		at[child->key] = line;
 		Node *branch = nullptr;
 		if (rest.compare(0, 7, "subtree") == 0) {
 			try {

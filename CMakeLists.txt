@@ -18,6 +18,8 @@ add_executable(checkmate
 	src/checkmate.cpp
 	src/compact.hpp
 	src/compact.cpp
+	src/validate.hpp
+	src/validate.cpp
 )
 target_link_libraries(checkmate z3)
 
@@ -25,6 +27,8 @@ target_link_libraries(checkmate z3)
 add_executable(checkmate-convert
 	src/compact.hpp
 	src/compact.cpp
+	src/validate.hpp
+	src/validate.cpp
 	src/convert.cpp
 )
 

@@ -732,7 +732,10 @@ Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 	try {
 		input.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 		std::string text((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-		document = looks_like_json(text) ? json::parse(text) : from_compact(text);
+		LineMap lines;
+		bool is_json = looks_like_json(text);
+		document = is_json ? json::parse(text) : from_compact(text, &lines);
+		validate_game(document, is_json ? nullptr : &lines);
 	}
 	catch (const std::ifstream::failure &fail) {
 		std::cerr << "checkmate: " << std::strerror(errno) << std::endl;
@@ -743,6 +746,10 @@ Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 		std::exit(EXIT_FAILURE);
 	}
 	catch (const CompactError &err) {
+		std::cerr << "checkmate: " << path << ": " << err.what() << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+	catch (const GameError &err) {
 		std::cerr << "checkmate: " << path << ": " << err.what() << std::endl;
 		std::exit(EXIT_FAILURE);
 	}

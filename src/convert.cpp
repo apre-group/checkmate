@@ -20,11 +20,23 @@ int main(int argc, char **argv) {
 	std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 	std::string result;
 	try {
-		result = looks_like_json(text) ? to_compact(nlohmann::json::parse(text)) : from_compact(text).dump(2) + "\n";
+		if (looks_like_json(text)) {
+			nlohmann::json game = nlohmann::json::parse(text);
+			validate_game(game);
+			result = to_compact(game);
+		} else {
+			LineMap lines;
+			nlohmann::json game = from_compact(text, &lines);
+			validate_game(game, &lines);
+			result = game.dump(2) + "\n";
+		}
 	} catch (const nlohmann::json::exception &e) {
 		std::cerr << "checkmate-convert: " << e.what() << std::endl;
 		return EXIT_FAILURE;
 	} catch (const CompactError &e) {
+		std::cerr << "checkmate-convert: " << e.what() << std::endl;
+		return EXIT_FAILURE;
+	} catch (const GameError &e) {
 		std::cerr << "checkmate-convert: " << e.what() << std::endl;
 		return EXIT_FAILURE;
 	}
