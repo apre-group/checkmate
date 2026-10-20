@@ -58,7 +58,7 @@ Additionally, all (real) numbers and all constants and infinitesimals declared i
 
 CheckMate is written in C++11. It requires:
 
-* [CMake](https://cmake.org/) as a build system, although you could do without this in a pinch.
+* [CMake](https://cmake.org/) 3.25 or newer as a build system, although you could do without this in a pinch.
 * The [Z3](https://github.com/Z3Prover/z3) SMT solver, via its API. To obtain the Z3 API, follow the directions in Z3's README or use a recent prebuilt package - Debian has `libz3-dev`, Red Hat has `z3-devel`.
 * To generate some of the examples, [Python 3](https://www.python.org/downloads/) has to be installed as well.
 
@@ -75,7 +75,6 @@ make -C build # actually compile CheckMate with make(1)
 You will then have a CheckMate binary in the `build` folder.
 
 Troubleshooting:
-* CMake 4 refuses to configure projects that declare compatibility with CMake versions older than 3.5. Add `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` to the `cmake` call.
 * On macOS, linking can fail with `unknown architecture` errors in `.tbd` files if the Command Line Tools ship an SDK newer than their linker. Update the Command Line Tools, or point CMake to an older SDK, e.g. `-DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.sdk`.
 * If Z3 is installed in a non-standard location (e.g. Homebrew on Apple Silicon), pass its paths: `-DCMAKE_CXX_FLAGS=-I/opt/homebrew/include -DCMAKE_EXE_LINKER_FLAGS=-L/opt/homebrew/lib`.
 
@@ -93,9 +92,11 @@ There are several options:
 * `--all_counterexamples`: If a property is not fulfilled, provide **all** counterexamples for the considered problematic case(s). The number of considered problematic cases depends on whether the `all_cases` flag was set. For collusion resilience, identical counterexamples are shown only once, and at most 100 counterexamples are shown per case.
 * `--all_cases`: If a property is not fulfilled, keep looking for all problematic cases.
 * `--strategies`: If a property is satisfied, provide a witness strategy.
+* `--json-out FILE`: Also write the results as JSON to `FILE`: for each honest history and property, the verdict, every case checked (as a list of SMT-LIB 2 conditions) with whether the property holds in it, and the strategies and counterexamples, exactly when the text output shows them. With `--subtree`, `FILE` gets the subtree result instead: the same as `SUBTREE.out`, but with cases as SMT-LIB 2 conditions and utilities as SMT-LIB 2 real and infinitesimal parts.
 * If not all security properties should be analyzed, users can specify properties individually with some combination of `--weak_immunity`, `--weaker_immunity`, `--collusion_resilience`, and `--practicality`.
 * `--subtree` is used for [compositional analysis](#compositional-analysis). It cannot be combined with `--counterexamples`, `--all_counterexamples`, `--strategies` or `--preconditions`.
 * `--count_nodes` and `--count_calls`: For experiments, report the number of checked tree nodes and of SMT solver calls per analyzed property.
+* `--no-cr-node-cache`, `--no-cr-leaf-cache`, `--no-cr-implied-groups`, `--no-cr-violated-lookup`, `--no-problematic-groups`, `--exact-splits`, `--reset-from-root`: For testing only, disable an optimization or heuristic. Results must not change; the fuzzer (`scripts/fuzz.py`) checks this.
 
 For instance, to run a security analysis on the Closing Game [5] with counterexample generation, but only considering weak immunity and collusion resilience, execute the following from the repository root:
 

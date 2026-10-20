@@ -48,6 +48,9 @@ namespace z3 {
 		// is this expression exactly the same as `other`?
 		bool is(Expression other) const { return ast == other.ast; }
 
+		// SMT-LIB 2 rendering, e.g. for machine-readable output
+		std::string to_smt2() const;
+
 		// Z3's internal ID for this AST
 		unsigned id() const {
 			unsigned result = Z3_get_ast_id(CONTEXT, ast);
