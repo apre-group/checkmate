@@ -50,14 +50,14 @@ def gen_constraint(rng, constants, infinitesimals):
     return atom
 
 
-def gen_tree(rng, players, actions, new_leaf, depth, max_branch, is_root):
-    if not is_root and (depth == 0 or rng.random() < 0.3):
+def gen_tree(rng, players, actions, new_leaf, depth, max_branch, is_root, stop_rate):
+    if not is_root and (depth == 0 or rng.random() < stop_rate):
         return {"utility": new_leaf()}
     n = rng.randint(1 if not is_root else 2, max_branch)
     return {
         "player": rng.choice(players),
         "children": [{"action": a,
-                      "child": gen_tree(rng, players, actions, new_leaf, depth - 1, max_branch, False)}
+                      "child": gen_tree(rng, players, actions, new_leaf, depth - 1, max_branch, False, stop_rate)}
                      for a in rng.sample(actions, n)],
     }
 
@@ -88,13 +88,23 @@ def satisfiable(constraints, constants, infinitesimals):
     return s.check() == z3.sat
 
 
+# (weight, players, depth, max branching, chance to stop early at a leaf)
+SIZES = {
+    "small": (0.4, (2, 3), (1, 3), (2, 3), 0.3),
+    "medium": (0.45, (2, 5), (3, 5), (2, 3), 0.25),
+    "large": (0.15, (3, 6), (4, 6), (2, 4), 0.2),
+}
+
+
 def gen_game(rng):
-    players = ["A", "B", "C", "D"][:rng.randint(2, 4)]
+    size = rng.choices(list(SIZES), [w for w, *_ in SIZES.values()])[0]
+    _, n_players, depth, branch, stop_rate = SIZES[size]
+    players = ["A", "B", "C", "D", "E", "F"][:rng.randint(*n_players)]
     constants = ["c%d" % i for i in range(rng.randint(1, 3))]
     infinitesimals = ["e%d" % i for i in range(rng.choice([0, 0, 1, 2]))]
-    max_branch = rng.randint(2, 3)
-    actions = ["x", "y", "z"][:max_branch]
-    depth = rng.randint(1, 4)
+    max_branch = rng.randint(*branch)
+    actions = ["x", "y", "z", "w"][:max_branch]
+    depth = rng.randint(*depth)
     # Fully random utilities make nearly every honest history insecure, so most games lean non-negative.
     pos_rate = rng.choice([0.0, 0.5, 0.9, 1.0])
     # Infinitesimals only matter when real parts tie (or are 0, for weak immunity), so with
@@ -119,10 +129,11 @@ def gen_game(rng):
         seen.append(copy.deepcopy(u))
         return u
 
-    tree = gen_tree(rng, players, actions, new_leaf, depth, max_branch, True)
+    tree = gen_tree(rng, players, actions, new_leaf, depth, max_branch, True, stop_rate)
 
     props = ["weak_immunity", "weaker_immunity", "collusion_resilience", "practicality"]
-    positive = ["%s > 0" % c for c in constants + infinitesimals if pos_rate > 0 or rng.random() < 0.5]
+    # Leaving some signs open makes weak immunity split on them.
+    positive = ["%s > 0" % c for c in constants + infinitesimals if rng.random() < (0.7 if pos_rate > 0 else 0.3)]
     while True:
         initial = positive + [gen_constraint(rng, constants, infinitesimals)
                               for _ in range(rng.randint(0, 2))]
@@ -132,6 +143,10 @@ def gen_game(rng):
             break
 
     hists = list(leaf_histories(tree))
+    # Long honest histories exercise more of the honest-node logic.
+    if rng.random() < 0.6:
+        longest = max(len(h) for h in hists)
+        hists = [h for h in hists if len(h) >= longest - 1]
     honest = rng.sample(hists, min(len(hists), rng.choice([1, 1, 2])))
     # Random leaves rarely make the honest history secure; favour it sometimes so YES answers occur.
     if rng.random() < 0.6:

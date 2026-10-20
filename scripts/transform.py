@@ -24,7 +24,7 @@ def leaves(tree):
 def rename_players(game, rng):
     g = copy.deepcopy(game)
     old = sorted(g["players"])
-    new = ["W", "X", "Y", "Z"][:len(old)]
+    new = ["P", "Q", "R", "S", "T", "U"][:len(old)]
     # A non-identity permutation, so the alphabetical (index) order of players changes.
     while True:
         perm = rng.sample(new, len(new))
