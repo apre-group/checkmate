@@ -100,6 +100,8 @@
 <script src="gen_game.js"></script>
 <script>
 const $ = id => document.getElementById(id);
+// the build id makes browsers fetch the modules again after a rebuild, and cache them otherwise
+const version = fetch('build.json', { cache: 'no-store' }).then(r => r.json()).then(b => '?v=' + b.id).catch(() => '');
 let game = null, results = null, selection = null, worker = null;
 
 // ---- examples -------------------------------------------------------------
@@ -133,13 +135,14 @@ const converter = (() => {
             // not self.out/self.err: the Emscripten script defines globals with those names
             print: t => self.convertOut.push(t),
             printErr: t => self.convertErr.push(t),
-            locateFile: p => p.endsWith('.wasm') ? self.base + 'checkmate-convert.wasm' : self.base + p,
+            locateFile: p => p.endsWith('.wasm') ? self.base + 'checkmate-convert.wasm' + self.v : self.base + p,
             onRuntimeInitialized: () => postMessage({ type: 'ready' })
         };
         onmessage = e => {
             if (e.data.type === 'init') {
                 self.base = e.data.base;
-                importScripts(e.data.base + 'checkmate-convert.js');
+                self.v = e.data.v;
+                importScripts(e.data.base + 'checkmate-convert.js' + self.v);
                 return;
             }
             self.convertOut = []; self.convertErr = [];
@@ -163,7 +166,7 @@ const converter = (() => {
         if (e.data.result !== null) p.resolve(e.data.result);
         else p.reject(new Error(e.data.error.replace(/^checkmate-convert: /, '') || 'conversion failed'));
     };
-    w.postMessage({ type: 'init', base: new URL('.', location.href).href });
+    version.then(v => w.postMessage({ type: 'init', base: new URL('.', location.href).href, v }));
     // JSON becomes compact text, compact text becomes JSON
     return text => ready.then(() => new Promise((resolve, reject) => {
         const id = next++;
@@ -226,13 +229,14 @@ function workerSource() {
             noInitialRun: true,
             print: t => postMessage({ type: 'output', content: t }),
             printErr: t => postMessage({ type: 'output', content: t }),
-            locateFile: p => p.endsWith('.wasm') ? self.base + 'checkmate.wasm' : self.base + p,
+            locateFile: p => p.endsWith('.wasm') ? self.base + 'checkmate.wasm' + self.v : self.base + p,
             onRuntimeInitialized: () => postMessage({ type: 'ready' })
         };
         onmessage = e => {
             if (e.data.type === 'init') {
                 self.base = e.data.base;
-                importScripts(e.data.base + 'checkmate.js');
+                self.v = e.data.v;
+                importScripts(e.data.base + 'checkmate.js' + self.v);
             } else if (e.data.type === 'run') {
                 let result = null;
                 try {
@@ -280,7 +284,8 @@ $('run').addEventListener('click', () => {
             showResults(d.result ? JSON.parse(d.result).results : null);
         }
     };
-    worker.postMessage({ type: 'init', base: new URL('.', location.href).href });
+    const w = worker;
+    version.then(v => w.postMessage({ type: 'init', base: new URL('.', location.href).href, v }));
 });
 
 $('cancel').addEventListener('click', () => { finish('Cancelled'); });

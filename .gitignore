@@ -16,3 +16,4 @@ html/checkmate.wasm
 html/examples/
 html/checkmate-convert.js
 html/checkmate-convert.wasm
+html/build.json
