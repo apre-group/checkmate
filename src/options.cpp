@@ -14,9 +14,18 @@ const char *USAGE = R"(usage: checkmate PATH
 	--all_cases
 	--preconditions
 	--strategies
+	--json-out FILE
 	--subtree
 	--count_nodes
 	--count_calls
+testing only, disable optimizations/heuristics:
+	--no-cr-node-cache
+	--no-cr-leaf-cache
+	--no-cr-implied-groups
+	--no-cr-violated-lookup
+	--no-problematic-groups
+	--exact-splits
+	--reset-from-root
 )";
 
 // print a message, the usage information and exit with failure code
@@ -62,12 +71,31 @@ Options::Options(char **argv) {
 			preconditions = true;
 		else if (!strcmp(*argv, "--strategies"))
 			strategies = true;
+		else if (!strcmp(*argv, "--json-out")) {
+			if (!argv[1])
+				bail("--json-out expects a file name");
+			json_out = *++argv;
+		}
 		else if (!strcmp(*argv, "--subtree"))
 			subtree = true;
 		else if (!strcmp(*argv, "--count_nodes"))
 			count_nodes = true;
 		else if (!strcmp(*argv, "--count_calls"))
 			count_calls = true;
+		else if (!strcmp(*argv, "--no-cr-node-cache"))
+			no_cr_node_cache = true;
+		else if (!strcmp(*argv, "--no-cr-leaf-cache"))
+			no_cr_leaf_cache = true;
+		else if (!strcmp(*argv, "--no-cr-implied-groups"))
+			no_cr_implied_groups = true;
+		else if (!strcmp(*argv, "--no-cr-violated-lookup"))
+			no_cr_violated_lookup = true;
+		else if (!strcmp(*argv, "--no-problematic-groups"))
+			no_problematic_groups = true;
+		else if (!strcmp(*argv, "--exact-splits"))
+			exact_splits = true;
+		else if (!strcmp(*argv, "--reset-from-root"))
+			reset_from_root = true;
 		else
 			bail("unknown option");
 		argv++;

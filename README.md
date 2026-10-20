@@ -54,11 +54,39 @@ All **expressions** throughout the input support the following symbols in infix 
 To express the conjunction of two expressions, list both.
 Additionally, all (real) numbers and all constants and infinitesimals declared in the dictionary are supported.
 
+### Compact format
+
+CheckMate also reads a compact, line-based format, which is easier to write and read than JSON.
+Here is the game of `examples/key_examples/splits_wi.json`:
+
+```
+players: D, G
+constants: a, b
+initial: a > 0
+honest: q
+honest: l r
+honest: l y
+
+D
+  q -> D: a, G: a
+  l -> G
+    r -> D: a, G: b
+    y -> D: a, G: -b
+```
+
+The header lines are `players:`, `constants:` and `infinitesimals:` (comma-separated names), and then one line per constraint or history:
+`initial:` for an initial constraint, `weak_immunity:`, `weaker_immunity:`, `collusion_resilience:` or `practicality:` for a property constraint, `honest:` for an honest history (actions separated by spaces), and `honest_utility:` for an honest utility (`PLAYER: utility, ...`).
+The tree starts at the first line that is not a header: the player at the root, and then one line per branch, indented below its node: `action -> PLAYER` for an internal node (whose branches follow, indented further), `action -> PLAYER: utility, ...` for a leaf, or `action -> subtree {...}` for a subtree result in JSON.
+The `actions` list is not needed; it is derived from the tree. `#` starts a comment.
+
+CheckMate treats a file as JSON if it starts with `{`, and as the compact format otherwise.
+`build/checkmate-convert GAME [OUTPUT]` converts a game from one format to the other.
+
 ## Build
 
 CheckMate is written in C++11. It requires:
 
-* [CMake](https://cmake.org/) as a build system, although you could do without this in a pinch.
+* [CMake](https://cmake.org/) 3.25 or newer as a build system, although you could do without this in a pinch.
 * The [Z3](https://github.com/Z3Prover/z3) SMT solver, via its API. To obtain the Z3 API, follow the directions in Z3's README or use a recent prebuilt package - Debian has `libz3-dev`, Red Hat has `z3-devel`.
 * To generate some of the examples, [Python 3](https://www.python.org/downloads/) has to be installed as well.
 
@@ -75,9 +103,21 @@ make -C build # actually compile CheckMate with make(1)
 You will then have a CheckMate binary in the `build` folder.
 
 Troubleshooting:
-* CMake 4 refuses to configure projects that declare compatibility with CMake versions older than 3.5. Add `-DCMAKE_POLICY_VERSION_MINIMUM=3.5` to the `cmake` call.
 * On macOS, linking can fail with `unknown architecture` errors in `.tbd` files if the Command Line Tools ship an SDK newer than their linker. Update the Command Line Tools, or point CMake to an older SDK, e.g. `-DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.sdk`.
 * If Z3 is installed in a non-standard location (e.g. Homebrew on Apple Silicon), pass its paths: `-DCMAKE_CXX_FLAGS=-I/opt/homebrew/include -DCMAKE_EXE_LINKER_FLAGS=-L/opt/homebrew/lib`.
+
+### In the browser
+
+`html/` contains a page that runs CheckMate in the browser, compiled to WebAssembly: pick an example or paste a game, run it, and see the verdicts, cases, strategies and counterexamples drawn on the game tree.
+To build it, install [Emscripten](https://emscripten.org/), get the [Z3](https://github.com/Z3Prover/z3) sources, and run, from the repository root:
+
+```shell
+source /path/to/emsdk/emsdk_env.sh
+scripts/build_emscripten.sh /path/to/z3   # builds Z3 for WebAssembly once, then CheckMate
+cd html && python3 -m http.server         # then open http://localhost:8000
+```
+
+The page must be served over HTTP (not opened as a file), but needs no special server headers.
 
 ## Run
 
@@ -93,9 +133,11 @@ There are several options:
 * `--all_counterexamples`: If a property is not fulfilled, provide **all** counterexamples for the considered problematic case(s). The number of considered problematic cases depends on whether the `all_cases` flag was set. For collusion resilience, identical counterexamples are shown only once, and at most 100 counterexamples are shown per case.
 * `--all_cases`: If a property is not fulfilled, keep looking for all problematic cases.
 * `--strategies`: If a property is satisfied, provide a witness strategy.
+* `--json-out FILE`: Also write the results as JSON to `FILE`: for each honest history and property, the verdict, every case checked (as a list of SMT-LIB 2 conditions) with whether the property holds in it, the strategies and counterexamples, exactly when the text output shows them, and the weakest precondition with `--preconditions`. With `--subtree`, `FILE` gets the subtree result instead: the same as `SUBTREE.out`, but with cases as SMT-LIB 2 conditions and utilities as SMT-LIB 2 real and infinitesimal parts.
 * If not all security properties should be analyzed, users can specify properties individually with some combination of `--weak_immunity`, `--weaker_immunity`, `--collusion_resilience`, and `--practicality`.
 * `--subtree` is used for [compositional analysis](#compositional-analysis). It cannot be combined with `--counterexamples`, `--all_counterexamples`, `--strategies` or `--preconditions`.
 * `--count_nodes` and `--count_calls`: For experiments, report the number of checked tree nodes and of SMT solver calls per analyzed property.
+* `--no-cr-node-cache`, `--no-cr-leaf-cache`, `--no-cr-implied-groups`, `--no-cr-violated-lookup`, `--no-problematic-groups`, `--exact-splits`, `--reset-from-root`: For testing only, disable an optimization or heuristic. Results must not change; the fuzzer (`scripts/fuzz.py`) checks this.
 
 For instance, to run a security analysis on the Closing Game [5] with counterexample generation, but only considering weak immunity and collusion resilience, execute the following from the repository root:
 

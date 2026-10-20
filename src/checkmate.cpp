@@ -3,6 +3,7 @@
 #include "property.hpp"
 
 int main(int, char **argv) {
+	z3::initialize();
 	Options options(argv);
 	Input input(options.input_path);
 
@@ -12,6 +13,7 @@ int main(int, char **argv) {
 	} else {
 		// analyse properties in default mode (the tree may contain subtree results)
 		analyse_properties(options, input);
+		write_json_out(options);
 	}
 
 	return EXIT_SUCCESS;

@@ -4,6 +4,7 @@
 #include <set>
 #include <tuple>
 #include "json.hpp"
+#include "compact.hpp"
 
 #include "input.hpp"
 
@@ -25,7 +26,8 @@ struct Lexer {
 		GE,
 		LT,
 		LE,
-		OR
+		OR,
+		AND
 	};
 
 	// should the next '-' be negation or subtraction?
@@ -124,6 +126,11 @@ struct Lexer {
 			remaining++;
 			unary = true;
 			return Token::OR;
+		} else if (*remaining == '&') {
+			// not documented for input, but printed in subtree results (e.g. lexicographic comparisons)
+			remaining++;
+			unary = true;
+			return Token::AND;
 		} else {
 			std::cerr << "checkmate: unexpected character '" << *remaining << "' in expression " << current << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -146,13 +153,15 @@ struct Parser {
 		GE,
 		LE,
 		LT,
-		OR
+		OR,
+		AND
 	};
 
 	// operator precedence classes, binding from loosest to tightest
 	enum class Precedence {
 		PAREN,
 		OR,
+		AND,
 		COMPARISON,
 		PLUSMINUS,
 		MULTIPLY,
@@ -181,6 +190,8 @@ struct Parser {
 				return Precedence::COMPARISON;
 			case Operation::OR:
 				return Precedence::OR;
+			case Operation::AND:
+				return Precedence::AND;
 		}
 		assert(false);
 		UNREACHABLE;
@@ -297,11 +308,18 @@ struct Parser {
 				constraint_stack.push_back(left <= right);
 				break;
 			}
-			case Operation::OR:
+			case Operation::OR: {
 				auto right = pop_constraint();
 				auto left = pop_constraint();
 				constraint_stack.push_back(left || right);
 				break;
+			}
+			case Operation::AND: {
+				auto right = pop_constraint();
+				auto left = pop_constraint();
+				constraint_stack.push_back(left && right);
+				break;
+			}
 		}
 	}
 
@@ -375,6 +393,9 @@ struct Parser {
 					break;
 				case Lexer::Token::OR:
 					operation(Operation::OR);
+					break;
+				case Lexer::Token::AND:
+					operation(Operation::AND);
 			}
 		}
 		// when there is no more input, we know all the operators have to be committed
@@ -704,13 +725,17 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 
 
 Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
-	// parse a JSON document from `path`
+	// parse the game from `path`, in JSON or the compact format
 	std::ifstream input(path);
 	json document;
 	Parser parser(utilities);
 	try {
 		input.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-		document = json::parse(input);
+		std::string text((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+		LineMap lines;
+		bool is_json = looks_like_json(text);
+		document = is_json ? json::parse(text) : from_compact(text, &lines);
+		validate_game(document, is_json ? nullptr : &lines);
 	}
 	catch (const std::ifstream::failure &fail) {
 		std::cerr << "checkmate: " << std::strerror(errno) << std::endl;
@@ -718,6 +743,14 @@ Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 	}
 	catch (const json::exception &err) {
 		std::cerr << "checkmate: " << err.what() << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+	catch (const CompactError &err) {
+		std::cerr << "checkmate: " << path << ": " << err.what() << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+	catch (const GameError &err) {
+		std::cerr << "checkmate: " << path << ": " << err.what() << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 

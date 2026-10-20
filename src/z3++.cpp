@@ -2,27 +2,43 @@
 
 namespace z3 {
 	// the only Z3 context - mostly just hangs out here to be passed to the Z3 API
-	Z3_context CONTEXT;
+	Z3_context CONTEXT = nullptr;
 
-	// thing constructed on program start to create a Z3 context
+	Z3_sort Expression::BOOL_SORT = nullptr;
+	Z3_sort Expression::REAL_SORT = nullptr;
+
+	Real Real::ZERO;
+
+	// Not done by a static constructor: when Z3 is linked statically (e.g. for WebAssembly), a context
+	// created before Z3's own static initializers have run gets strict inequalities wrong.
+	void initialize() {
+		// TODO should we try and minimize unsat cores?
+		//Z3_global_param_set("sat.core.minimize", "true");
+		//Z3_global_param_set("smt.core.minimize", "true");
+		Z3_config config = Z3_mk_config();
+		CONTEXT = Z3_mk_context(config);
+		Z3_del_config(config);
+		check_error();
+		Expression::BOOL_SORT = Z3_mk_bool_sort(CONTEXT);
+		Expression::REAL_SORT = Z3_mk_real_sort(CONTEXT);
+		Real::ZERO = Real::value(0);
+	}
+
 	struct Global {
-		Global() {
-			// TODO should we try and minimize unsat cores?
-			//Z3_global_param_set("sat.core.minimize", "true");
-			//Z3_global_param_set("smt.core.minimize", "true");
-			CONTEXT = Z3_mk_context(Z3_mk_config());
-			check_error();
-		}
-
 		~Global() {
-			Z3_del_context(CONTEXT);
+			if (CONTEXT)
+				Z3_del_context(CONTEXT);
 		}
 	} GLOBAL;
 
-	Z3_sort Expression::BOOL_SORT = Z3_mk_bool_sort(CONTEXT);
-	Z3_sort Expression::REAL_SORT = Z3_mk_real_sort(CONTEXT);
-
-	Real Real::ZERO = Real::value(0);
+	std::string Expression::to_smt2() const {
+		// the print mode is context-wide, and operator<< relies on the default for numerals
+		Z3_set_ast_print_mode(CONTEXT, Z3_PRINT_SMTLIB2_COMPLIANT);
+		std::string result = Z3_ast_to_string(CONTEXT, ast);
+		Z3_set_ast_print_mode(CONTEXT, Z3_PRINT_SMTLIB_FULL);
+		check_error();
+		return result;
+	}
 
 	// TODO keep track of precedence
 	std::ostream &operator<<(std::ostream &out, z3::Real expr) {

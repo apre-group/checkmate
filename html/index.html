@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="CheckMate in your browser">
+    <title>CheckMate in your browser</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; line-height: 1.5; color: #222; }
+        h1 { margin-bottom: 4px; }
+        .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+        /* the editor: a transparent textarea over a <pre> with the highlighted text; both must lay out identically */
+        .editor { position: relative; height: 320px; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
+        .editor textarea, .editor pre { position: absolute; inset: 0; margin: 0; padding: 10px; border: 0;
+            box-sizing: border-box; width: 100%; height: 100%; font: 13px/1.5 monospace; white-space: pre;
+            overflow: auto; tab-size: 4; }
+        .editor textarea { color: transparent; caret-color: #222; background: transparent; resize: none; outline: none; }
+        .editor pre { pointer-events: none; overflow: hidden; color: #222; }
+        .editor textarea::selection { background: rgba(21, 101, 192, 0.25); }
+        .h-key { color: #6a1b9a; font-weight: bold; }
+        .h-player { color: #1565c0; font-weight: bold; }
+        .h-action { color: #2e7d32; }
+        .h-arrow { color: #999; }
+        .h-num { color: #c25e00; }
+        .h-const { color: #00838f; }
+        .h-comment { color: #888; font-style: italic; }
+        .h-subtree { color: #999; }
+        .h-error { background: #ffd7d7; display: inline-block; min-width: 100%; }
+        input[type=text] { flex: 1; min-width: 200px; padding: 6px; font-family: monospace; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 8px 14px; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; }
+        button:hover { background: #256628; }
+        button:disabled { background: #bbb; cursor: not-allowed; }
+        button.secondary { background: #666; }
+        select { padding: 6px; }
+        #status { color: #555; }
+        #tree-box { border: 1px solid #ddd; border-radius: 4px; overflow: auto; max-height: 560px; background: #fcfcfc; }
+        #results table { border-collapse: collapse; margin: 8px 0; }
+        #results td, #results th { border: 1px solid #ddd; padding: 4px 10px; text-align: left; }
+        .verdict { cursor: pointer; font-weight: bold; }
+        .yes { color: #2e7d32; }
+        .no { color: #c62828; }
+        .selected { background: #fff3c4; }
+        #cases div { cursor: pointer; padding: 2px 6px; font-family: monospace; font-size: 12px; border-radius: 3px; }
+        #cases div:hover { background: #f0f0f0; }
+        #output { border: 1px solid #ddd; padding: 10px; white-space: pre-wrap; background: #f7f7f7; border-radius: 4px;
+                  font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto; }
+        .legend span { margin-right: 16px; font-size: 13px; }
+        .swatch { display: inline-block; width: 22px; height: 4px; vertical-align: middle; margin-right: 4px; }
+        svg text { font-family: Arial, sans-serif; }
+    </style>
+</head>
+<body>
+<h1>CheckMate in your browser</h1>
+<div>CheckMate checks game-theoretic security properties of games: weak immunity, weaker immunity,
+    collusion resilience and practicality. Pick an example or write a game in the
+    <a href="https://github.com/apre-group/checkmate#compact-format">compact format</a>, then click Run.
+    Everything runs locally in your browser (WebAssembly).</div>
+
+<div class="row">
+    <label for="example">Example:</label>
+    <select id="example"><option value="">loading…</option></select>
+    <span>or</span>
+    <button id="random" class="secondary">Random game</button>
+    <label for="seed">seed:</label>
+    <input type="text" id="seed" placeholder="random" style="flex:0 0 110px; min-width: 0">
+</div>
+<div class="row">
+    <h2 style="margin: 0 12px 0 0">Game</h2>
+    <button id="run" disabled>Run CheckMate</button>
+    <button id="cancel" class="secondary" disabled>Cancel</button>
+    <span id="status">Loading WebAssembly module…</span>
+</div>
+<div class="editor">
+    <pre id="highlight" aria-hidden="true"></pre>
+    <textarea id="game" spellcheck="false" wrap="off"></textarea>
+</div>
+<div id="parse-error" class="no"></div>
+<div class="row">
+    <label><input type="checkbox" class="prop" value="--weak_immunity" checked> weak immunity</label>
+    <label><input type="checkbox" class="prop" value="--weaker_immunity" checked> weaker immunity</label>
+    <label><input type="checkbox" class="prop" value="--collusion_resilience" checked> collusion resilience</label>
+    <label><input type="checkbox" class="prop" value="--practicality" checked> practicality</label>
+</div>
+<div class="row">
+    <label><input type="checkbox" class="opt" value="--strategies" checked> strategies</label>
+    <label><input type="checkbox" class="opt" value="--counterexamples" checked> counterexamples</label>
+    <label><input type="checkbox" class="opt" value="--all_cases"> all cases</label>
+    <label><input type="checkbox" class="opt" value="--preconditions"> preconditions</label>
+    <label for="extra">Extra arguments:</label>
+    <input type="text" id="extra" placeholder="e.g. --all_counterexamples">
+</div>
+
+<h2>Game tree</h2>
+<div class="legend">
+    <span><span class="swatch" style="background:#1565c0;opacity:0.3;height:10px"></span>honest history</span>
+    <span><span class="swatch" style="background:#2e7d32"></span>strategy</span>
+    <span><span class="swatch" style="background:#c62828"></span>counterexample</span>
+</div>
+<div id="tree-box"><svg id="tree"></svg></div>
+
+
+<h2>Results</h2>
+<div id="results">Run CheckMate to see results. Click a verdict to see its cases, and a case to show its
+    strategy or counterexample in the tree.</div>
+<div id="cases"></div>
+
+<h2>Output</h2>
+<div id="output"></div>
+
+<script src="gen_game.js"></script>
+<script src="highlight.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+// the build id makes browsers fetch the modules again after a rebuild, and cache them otherwise
+const version = fetch('build.json', { cache: 'no-store' }).then(r => r.json()).then(b => '?v=' + b.id).catch(() => '');
+let game = null, results = null, selection = null, worker = null;
+
+// ---- examples -------------------------------------------------------------
+
+fetch('examples/index.json').then(r => r.json()).then(names => {
+    $('example').innerHTML = names.map(n => `<option>${n}</option>`).join('');
+    const start = names.includes('market_entry_game.json') ? 'market_entry_game.json' : names[0];
+    $('example').value = start;
+    loadExample(start);
+}).catch(() => { $('example').innerHTML = '<option value="">(no examples found)</option>'; });
+
+$('example').addEventListener('change', e => loadExample(e.target.value));
+
+$('random').addEventListener('click', () => {
+    const typed = parseInt($('seed').value, 10);
+    const seed = Number.isNaN(typed) ? Math.floor(Math.random() * 1e9) : typed;
+    $('seed').value = '';
+    $('seed').placeholder = String(seed);
+    $('example').value = '';
+    showGame(JSON.stringify(genGame(seed), null, 2));
+    $('status').textContent = 'Random game with seed ' + seed;
+});
+
+// ---- converting between JSON and the compact format ------------------------
+
+// One long-lived worker with the small converter module: main has no global state, so it can run again and again.
+const converter = (() => {
+    const source = `
+        var Module = {
+            noInitialRun: true,
+            // not self.out/self.err: the Emscripten script defines globals with those names
+            print: t => self.convertOut.push(t),
+            printErr: t => self.convertErr.push(t),
+            locateFile: p => p.endsWith('.wasm') ? self.base + 'checkmate-convert.wasm' + self.v : self.base + p,
+            onRuntimeInitialized: () => postMessage({ type: 'ready' })
+        };
+        onmessage = e => {
+            if (e.data.type === 'init') {
+                self.base = e.data.base;
+                self.v = e.data.v;
+                importScripts(e.data.base + 'checkmate-convert.js' + self.v);
+                return;
+            }
+            self.convertOut = []; self.convertErr = [];
+            let result = null;
+            try {
+                Module.FS.writeFile('/in', e.data.text);
+                if (Module.callMain(['/in', '/out']) === 0) result = Module.FS.readFile('/out', { encoding: 'utf8' });
+            } catch (err) {
+                if (!(err && err.name === 'ExitStatus')) self.convertErr.push(err && err.message ? err.message : String(err));
+            }
+            postMessage({ type: 'result', id: e.data.id, result, error: self.convertErr.join('\\n') });
+        };`;
+    const w = new Worker(URL.createObjectURL(new Blob([source], { type: 'application/javascript' })));
+    const pending = new Map();
+    let next = 0, readyResolve;
+    const ready = new Promise(r => { readyResolve = r; });
+    w.onmessage = e => {
+        if (e.data.type === 'ready') return readyResolve();
+        const p = pending.get(e.data.id);
+        pending.delete(e.data.id);
+        if (e.data.result !== null) p.resolve(e.data.result);
+        else p.reject(new Error(e.data.error.replace(/^checkmate-convert: /, '') || 'conversion failed'));
+    };
+    version.then(v => w.postMessage({ type: 'init', base: new URL('.', location.href).href, v }));
+    // JSON becomes compact text, compact text becomes JSON
+    return text => ready.then(() => new Promise((resolve, reject) => {
+        const id = next++;
+        pending.set(id, { resolve, reject });
+        w.postMessage({ type: 'convert', id, text });
+    }));
+})();
+
+const looksLikeJson = text => text.trimStart().startsWith('{');
+
+async function showGame(jsonText) {
+    try {
+        $('game').value = await converter(jsonText);
+    } catch (e) {
+        $('game').value = jsonText;
+    }
+    gameChanged();
+}
+
+function loadExample(name) {
+    if (!name) return;
+    fetch('examples/' + name).then(r => r.text()).then(showGame);
+}
+
+let editTimer = null, errorLine = 0;
+function highlight() {
+    $('highlight').innerHTML = highlightCompact($('game').value, errorLine);
+    syncScroll();
+}
+function syncScroll() {
+    $('highlight').scrollTop = $('game').scrollTop;
+    $('highlight').scrollLeft = $('game').scrollLeft;
+}
+$('game').addEventListener('scroll', syncScroll);
+$('game').addEventListener('input', () => {
+    highlight();
+    clearTimeout(editTimer);
+    editTimer = setTimeout(gameChanged, 250);
+});
+
+// Parse the editor's text into `game` (for the tree); pasted JSON is shown in the compact format.
+async function gameChanged() {
+    results = null; selection = null;
+    $('results').textContent = 'Run CheckMate to see results.';
+    $('cases').innerHTML = '';
+    const text = $('game').value;
+    highlight();
+    if (looksLikeJson(text)) {
+        try { JSON.parse(text); } catch (e) { $('parse-error').textContent = 'Invalid JSON: ' + e.message; return; }
+        return showGame(text);
+    }
+    try {
+        const jsonText = await converter(text);
+        if ($('game').value !== text) return;  // edited again meanwhile
+        game = JSON.parse(jsonText);
+        $('parse-error').textContent = '';
+        errorLine = 0;
+        highlight();
+    } catch (e) {
+        if ($('game').value !== text) return;
+        $('parse-error').textContent = e.message;
+        const m = e.message.match(/^line (\d+):/);
+        errorLine = m ? +m[1] : 0;
+        highlight();
+        return;  // keep showing the last good tree
+    }
+    drawTree();
+}
+
+// ---- running checkmate in a worker -----------------------------------------
+
+// A fresh worker per run: checkmate keeps global state, and cancelling means terminating the worker.
+function workerSource() {
+    return `
+        var Module = {
+            noInitialRun: true,
+            print: t => postMessage({ type: 'output', content: t }),
+            printErr: t => postMessage({ type: 'output', content: t }),
+            locateFile: p => p.endsWith('.wasm') ? self.base + 'checkmate.wasm' + self.v : self.base + p,
+            onRuntimeInitialized: () => postMessage({ type: 'ready' })
+        };
+        onmessage = e => {
+            if (e.data.type === 'init') {
+                self.base = e.data.base;
+                self.v = e.data.v;
+                importScripts(e.data.base + 'checkmate.js' + self.v);
+            } else if (e.data.type === 'run') {
+                let result = null;
+                try {
+                    Module.FS.writeFile('/game.txt', e.data.game);
+                    Module.callMain(['/game.txt'].concat(e.data.args).concat(['--json-out', '/result.json']));
+                } catch (err) {
+                    if (!(err && err.name === 'ExitStatus')) postMessage({ type: 'output', content: 'Error: ' + err });
+                }
+                try { result = Module.FS.readFile('/result.json', { encoding: 'utf8' }); } catch (err) {}
+                postMessage({ type: 'done', result });
+            }
+        };`;
+}
+
+function parseArgs(str) {
+    return (str.match(/"[^"]*"|\S+/g) || []).map(a => a.replace(/^"|"$/g, ''));
+}
+
+$('run').addEventListener('click', () => {
+    if (!game || $('parse-error').textContent) { $('status').textContent = 'Fix the game first.'; return; }
+    const props = [...document.querySelectorAll('.prop:checked')].map(c => c.value);
+    const args = (props.length === 4 ? [] : props)
+        .concat([...document.querySelectorAll('.opt:checked')].map(c => c.value))
+        .concat(parseArgs($('extra').value));
+    $('output').textContent = '';
+    $('status').textContent = 'Running…';
+    $('run').disabled = true;
+    $('cancel').disabled = false;
+    const started = performance.now();
+    const url = URL.createObjectURL(new Blob([workerSource()], { type: 'application/javascript' }));
+    worker = new Worker(url);
+    const out = [];
+    worker.onmessage = e => {
+        const d = e.data;
+        if (d.type === 'output') {
+            out.push(d.content);
+            if (out.length % 50 === 0) $('output').textContent = out.join('\n');
+        } else if (d.type === 'ready') {
+            worker.postMessage({ type: 'run', game: $('game').value, args });
+        } else if (d.type === 'done') {
+            $('output').textContent = out.join('\n');
+            finish(d.result ? 'Done in ' + ((performance.now() - started) / 1000).toFixed(2) + ' s'
+                            : 'Failed, see the output below');
+            URL.revokeObjectURL(url);
+            showResults(d.result ? JSON.parse(d.result).results : null);
+        }
+    };
+    const w = worker;
+    version.then(v => w.postMessage({ type: 'init', base: new URL('.', location.href).href, v }));
+});
+
+$('cancel').addEventListener('click', () => { finish('Cancelled'); });
+
+function finish(status) {
+    if (worker) worker.terminate();
+    worker = null;
+    $('status').textContent = status;
+    $('run').disabled = false;
+    $('cancel').disabled = true;
+}
+
+// Check that the module loads at all before enabling Run.
+fetch('checkmate.wasm', { method: 'HEAD' }).then(r => {
+    if (!r.ok) throw new Error();
+    $('status').textContent = 'Ready';
+    $('run').disabled = false;
+}).catch(() => { $('status').textContent = 'checkmate.wasm not found: build it with scripts/build_emscripten.sh'; });
+
+// ---- results ----------------------------------------------------------------
+
+const NAMES = { weak_immunity: 'weak immunity', weaker_immunity: 'weaker immunity',
+                collusion_resilience: 'collusion resilience', practicality: 'practicality' };
+
+function showResults(rs) {
+    results = rs; selection = null;
+    $('cases').innerHTML = '';
+    if (!rs) { $('results').textContent = 'No results (see the output below).'; drawTree(); return; }
+    const histories = [...new Map(rs.map(r => [JSON.stringify(r.history), r.history])).values()];
+    const props = Object.keys(NAMES).filter(p => rs.some(r => r.property === p));
+    let html = '<table><tr><th>honest history</th>' + props.map(p => `<th>${NAMES[p]}</th>`).join('') + '</tr>';
+    for (const h of histories) {
+        html += `<tr><td>${h ? h.join(' → ') || '(empty)' : '(no honest history)'}</td>`;
+        for (const p of props) {
+            const i = rs.findIndex(r => r.property === p && JSON.stringify(r.history) === JSON.stringify(h));
+            html += i < 0 ? '<td></td>' : `<td class="verdict ${rs[i].holds ? 'yes' : 'no'}" data-i="${i}">${rs[i].holds ? 'YES' : 'NO'}</td>`;
+        }
+        html += '</tr>';
+    }
+    $('results').innerHTML = html + '</table>';
+    document.querySelectorAll('.verdict').forEach(td => td.addEventListener('click', () => selectResult(+td.dataset.i, td)));
+    const first = document.querySelector('.verdict');
+    if (first) selectResult(+first.dataset.i, first);
+}
+
+function selectResult(i, td) {
+    document.querySelectorAll('.verdict').forEach(x => x.classList.remove('selected'));
+    td.classList.add('selected');
+    const r = results[i];
+    const items = [];
+    r.cases.forEach(c => items.push({ label: (c.holds ? '✔ holds' : '✘ violated') + ' in case ' + caseText(c.case), r, kind: 'case', c }));
+    r.strategies.forEach(s => items.push({ label: 'strategy for case ' + caseText(s.case), r, kind: 'strategy', s }));
+    r.counterexamples.forEach(ce => items.push({ label: 'counterexample for case ' + caseText(ce.case), r, kind: 'ce', ce }));
+    if (r.precondition) items.push({ label: 'weakest precondition: ' + r.precondition, r, kind: 'case' });
+    $('cases').innerHTML = items.map((it, k) => `<div data-k="${k}">${escapeHtml(it.label)}</div>`).join('');
+    $('cases').querySelectorAll('div').forEach(div => div.addEventListener('click', () => {
+        $('cases').querySelectorAll('div').forEach(x => x.classList.remove('selected'));
+        div.classList.add('selected');
+        selection = items[+div.dataset.k];
+        drawTree();
+    }));
+    const firstOverlay = items.findIndex(it => it.kind !== 'case');
+    selection = firstOverlay >= 0 ? items[firstOverlay] : { r, kind: 'case' };
+    if (firstOverlay >= 0) $('cases').querySelectorAll('div')[firstOverlay].classList.add('selected');
+    drawTree();
+}
+
+function caseText(c) { return c.length ? c.join(' ∧ ') : '(any)'; }
+function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+// ---- tree drawing -------------------------------------------------------------
+
+const LEAF_W = 120, LEVEL_H = 90, PAD = 30;
+
+function layout(node, depth, hist, state) {
+    node._hist = hist; node._depth = depth;
+    if (node.children) {
+        node.children.forEach(c => layout(c.child, depth + 1, hist.concat([c.action]), state));
+        const xs = node.children.map(c => c.child._x);
+        node._x = (Math.min(...xs) + Math.max(...xs)) / 2;
+    } else {
+        node._x = PAD + state.next++ * LEAF_W + LEAF_W / 2;
+    }
+    state.maxDepth = Math.max(state.maxDepth, depth);
+}
+
+function highlights() {
+    const h = { honest: new Set(), strategy: new Set(), ce: new Set(), ceLeaf: new Set() };
+    const key = (hist, a) => JSON.stringify(hist.concat([a]));
+    const honest = selection ? selection.r.history : (game.honest_histories || [])[0];
+    if (honest) honest.forEach((a, i) => h.honest.add(key(honest.slice(0, i), a)));
+    if (!selection) return h;
+    if (selection.kind === 'strategy') selection.s.strategy.forEach(e => h.strategy.add(key(e.history, e.action)));
+    if (selection.kind === 'ce') {
+        const ce = selection.ce;
+        if (selection.r.property === 'practicality') {
+            // e.history ends with the deviating action, the rest of the path is how play continues practically
+            ce.choices.forEach(e => {
+                const path = e.history.concat(e.actions);
+                path.forEach((a, i) => { if (i >= e.history.length - 1) h.ce.add(key(path.slice(0, i), a)); });
+                h.ceLeaf.add(JSON.stringify(path));
+            });
+        } else {
+            ce.choices.forEach(e => e.actions.forEach(a => h.ce.add(key(e.history, a))));
+            (ce.cr_leaves || []).forEach(l => h.ceLeaf.add(JSON.stringify(l.history)));
+        }
+    }
+    return h;
+}
+
+function drawTree() {
+    const svg = $('tree');
+    if (!game || !game.tree) { svg.setAttribute('width', 0); svg.setAttribute('height', 0); svg.innerHTML = ''; return; }
+    const state = { next: 0, maxDepth: 0 };
+    layout(game.tree, 0, [], state);
+    const players = game.players || [];
+    const treeWidth = state.next * LEAF_W + 2 * PAD;
+    const width = Math.max(treeWidth, $('tree-box').clientWidth - 2);
+    const shift = (width - treeWidth) / 2;
+    const height = state.maxDepth * LEVEL_H + 2 * PAD + 20 + 16 * players.length;
+    svg.setAttribute('width', width);
+    svg.setAttribute('height', height);
+    const h = highlights();
+    const y = d => PAD + 10 + d * LEVEL_H;
+    // labels get a halo in the background colour so they stay readable on top of edges
+    const halo = 'paint-order="stroke" stroke="#fcfcfc" stroke-width="4" stroke-linejoin="round"';
+    let bands = '', edges = '', labels = '', nodes = '';
+    (function draw(node) {
+        const x = node._x + shift, yy = y(node._depth);
+        if (node.children) {
+            for (const c of node.children) {
+                const k = JSON.stringify(node._hist.concat([c.action]));
+                const cx = c.child._x + shift, cy = y(c.child._depth);
+                // the honest history is a band underneath, so strategies and counterexamples on it stay visible
+                if (h.honest.has(k))
+                    bands += `<line x1="${x}" y1="${yy}" x2="${cx}" y2="${cy}" stroke="#1565c0" stroke-opacity="0.3" stroke-width="12" stroke-linecap="round"/>`;
+                const color = h.ce.has(k) ? '#c62828' : h.strategy.has(k) ? '#2e7d32' : h.honest.has(k) ? '#1565c0' : '#999';
+                const w = color === '#999' ? 1.2 : 3;
+                edges += `<line x1="${x}" y1="${yy}" x2="${cx}" y2="${cy}" stroke="${color}" stroke-width="${w}"/>`;
+                labels += `<text x="${(x + cx) / 2 + (cx < x ? -6 : 6)}" y="${(yy + cy) / 2}" font-size="13" ` +
+                          `text-anchor="${cx < x ? 'end' : 'start'}" fill="#333" ${halo}>${escapeHtml(c.action)}</text>`;
+                draw(c.child);
+            }
+            nodes += `<circle cx="${x}" cy="${yy}" r="13" fill="#fff" stroke="#333"/>` +
+                     `<text x="${x}" y="${yy + 4}" font-size="12" text-anchor="middle">${escapeHtml(node.player)}</text>`;
+        } else if (node.subtree) {
+            nodes += `<polygon points="${x},${yy - 14} ${x - 16},${yy + 12} ${x + 16},${yy + 12}" fill="#eee" stroke="#333"/>` +
+                     `<text x="${x}" y="${yy + 28}" font-size="11" text-anchor="middle" fill="#555">subtree</text>`;
+        } else {
+            const mark = h.ceLeaf.has(JSON.stringify(node._hist));
+            nodes += `<rect x="${x - 5}" y="${yy - 5}" width="10" height="10" fill="${mark ? '#c62828' : '#555'}"/>`;
+            (node.utility || []).forEach((u, i) => {
+                nodes += `<text x="${x}" y="${yy + 20 + 14 * i}" font-size="11" text-anchor="middle" ${halo}>` +
+                         `${escapeHtml(u.player)}: ${escapeHtml(u.value)}</text>`;
+            });
+        }
+    })(game.tree);
+    svg.innerHTML = bands + edges + labels + nodes;
+}
+</script>
+</body>
+</html>

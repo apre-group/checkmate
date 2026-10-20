@@ -257,7 +257,9 @@ class Subtree : public Node {
 
 	public:
 	mutable uint64_t problematic_group = 0;
-	mutable std::vector<std::vector<Utility>> utilities;
+	// the practical utilities of the current case, pointing into `practicality`: utility tuples keep
+	// references to them, so they must not be copies that are freed when the case changes
+	mutable const std::vector<std::vector<Utility>> *utilities = nullptr;
 
 	NodeType type() const override { return NodeType::SUBTREE; }
 
@@ -290,8 +292,10 @@ class Subtree : public Node {
 	virtual UtilityTuplesSet get_utilities() const override {
 		
 		UtilityTuplesSet result;
+		if (!utilities)
+			return result;
 
-		for (const auto &utility_tuple: utilities){
+		for (const auto &utility_tuple: *utilities){
 			result.insert(result.end(), utility_tuple);
 		}
 
@@ -728,7 +732,7 @@ struct Input {
 
 	void init_solved_for_group(size_t number_groups) const {
 		solved_for_group = {};
-		for ( uint i = 0; i< number_groups; i++) {
+		for ( unsigned i = 0; i< number_groups; i++) {
 			solved_for_group.push_back(false);
 		}
 		

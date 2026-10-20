@@ -1,0 +1,152 @@
+{
+  "players": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "actions": [
+    "x",
+    "y",
+    "z"
+  ],
+  "infinitesimals": [
+    "e0",
+    "e1"
+  ],
+  "constants": [
+    "c0"
+  ],
+  "initial_constraints": [
+    "c0 > 0",
+    "e0 > 0",
+    "e1 > 0"
+  ],
+  "property_constraints": {
+    "weak_immunity": [],
+    "weaker_immunity": [],
+    "collusion_resilience": [
+      "1 + c0 >= 1"
+    ],
+    "practicality": []
+  },
+  "tree": {
+    "player": "D",
+    "children": [
+      {
+        "action": "z",
+        "child": {
+          "player": "D",
+          "children": [
+            {
+              "action": "z",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "3 + (2*e0 + e1)"
+                  },
+                  {
+                    "player": "B",
+                    "value": "3"
+                  },
+                  {
+                    "player": "C",
+                    "value": "1 + c0"
+                  },
+                  {
+                    "player": "D",
+                    "value": "2"
+                  }
+                ]
+              }
+            },
+            {
+              "action": "x",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "0"
+                  },
+                  {
+                    "player": "B",
+                    "value": "3"
+                  },
+                  {
+                    "player": "C",
+                    "value": "2*c0"
+                  },
+                  {
+                    "player": "D",
+                    "value": "2"
+                  }
+                ]
+              }
+            },
+            {
+              "action": "y",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "3 + (0 + 2*e0)"
+                  },
+                  {
+                    "player": "B",
+                    "value": "3 + (2*e1)"
+                  },
+                  {
+                    "player": "C",
+                    "value": "2 + (2*e0)"
+                  },
+                  {
+                    "player": "D",
+                    "value": "1 + c0"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "action": "y",
+        "child": {
+          "player": "B",
+          "children": [
+            {
+              "action": "z",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "3 + (2*e0 + e1) + 4"
+                  },
+                  {
+                    "player": "B",
+                    "value": "3 + 4"
+                  },
+                  {
+                    "player": "C",
+                    "value": "1 + c0 + 4"
+                  },
+                  {
+                    "player": "D",
+                    "value": "2 + 4"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "honest_histories": [
+    [
+      "y",
+      "z"
+    ]
+  ]
+}

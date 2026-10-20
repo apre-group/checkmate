@@ -28,6 +28,8 @@ struct Options {
 	bool preconditions = false;
 	// provide witness strategy in case property satisfied
 	bool strategies = false;
+	// write verdicts, cases, strategies and counterexamples as JSON to this file
+	const char *json_out = nullptr;
 
 	// options for "compositionality feature"
 	// reason over a subtree, to be plugged into a supertree later
@@ -36,6 +38,15 @@ struct Options {
 	// used for experiments
 	bool count_nodes = false;
 	bool count_calls = false;
+
+	// disable optimizations/heuristics, for testing that they do not change results
+	bool no_cr_node_cache = false;
+	bool no_cr_leaf_cache = false;
+	bool no_cr_implied_groups = false;
+	bool no_cr_violated_lookup = false;
+	bool no_problematic_groups = false;
+	bool exact_splits = false;
+	bool reset_from_root = false;
 };
 
 #endif

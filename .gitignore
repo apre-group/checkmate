@@ -7,3 +7,13 @@ venv/
 *.json
 *.out
 examples/other_examples/f_asset_minting.py
+out/
+build-*/
+/CLAUDE.md
+/FUZZ-PLAN.md
+html/checkmate.js
+html/checkmate.wasm
+html/examples/
+html/checkmate-convert.js
+html/checkmate-convert.wasm
+html/build.json
