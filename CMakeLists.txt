@@ -16,12 +16,22 @@ add_executable(checkmate
 	src/z3++.hpp
 	src/z3++.cpp
 	src/checkmate.cpp
+	src/compact.hpp
+	src/compact.cpp
 )
 target_link_libraries(checkmate z3)
+
+# JSON <-> compact format, without Z3 (small enough for the web page to convert while typing)
+add_executable(checkmate-convert
+	src/compact.hpp
+	src/compact.cpp
+	src/convert.cpp
+)
 
 # add extra warnings for GCC/Clang
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 	target_compile_options(checkmate PRIVATE -Wall -Wextra -Wpedantic)
+	target_compile_options(checkmate-convert PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 if(EMSCRIPTEN)
@@ -34,6 +44,11 @@ if(EMSCRIPTEN)
 	target_link_options(checkmate PRIVATE -fwasm-exceptions
 		"SHELL:-s ALLOW_MEMORY_GROWTH=1"
 		"SHELL:-s STACK_SIZE=10MB"
+		"SHELL:-s EXPORTED_RUNTIME_METHODS='[\"callMain\", \"FS\"]'"
+		"SHELL:-s FORCE_FILESYSTEM=1")
+	target_compile_options(checkmate-convert PRIVATE -fwasm-exceptions)
+	target_link_options(checkmate-convert PRIVATE -fwasm-exceptions
+		"SHELL:-s ALLOW_MEMORY_GROWTH=1"
 		"SHELL:-s EXPORTED_RUNTIME_METHODS='[\"callMain\", \"FS\"]'"
 		"SHELL:-s FORCE_FILESYSTEM=1")
 endif()
