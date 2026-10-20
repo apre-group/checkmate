@@ -1813,6 +1813,16 @@ bool property_rec_nohistory(z3::Solver &solver, const Options &options, const In
 }
 
 
+// the analysis assumes the constraints can be met, otherwise every property would hold vacuously
+static void require_satisfiable(Solver &solver, PropertyType property) {
+	static const char *names[] = {"weak immunity", "weaker immunity", "collusion resilience", "practicality"};
+	if (solver.solve() != z3::Result::SAT) {
+		std::cerr << "checkmate: the initial constraints and the " << names[static_cast<int>(property)]
+			<< " constraints are unsatisfiable" << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+}
+
 void property(const Options &options, const Input &input, PropertyType property, size_t history) {
 	/* determine if the input has some property for the current honest history */
 	Solver solver;
@@ -1859,7 +1869,7 @@ void property(const Options &options, const Input &input, PropertyType property,
 		}
 	}
 
-	assert(solver.solve() == z3::Result::SAT);
+	require_satisfiable(solver, property);
 
 	json json_entry;
 	if (options.json_out) {
@@ -1986,7 +1996,7 @@ void property_subtree(const Options &options, const Input &input, PropertyType p
 	std::cout << std::endl;
 	std::cout << "Is history " << input.honest[history] << " " << prop_name << "?" << std::endl;
 
-	assert(solver.solve() == z3::Result::SAT);
+	require_satisfiable(solver, property);
 
 	if (property == PropertyType::Practicality) {
 		input.reset_practical_utilities();
@@ -2094,7 +2104,7 @@ void property_subtree_utility(const Options &options, const Input &input, Proper
 	std::cout << std::endl;
 	std::cout << "Is utility " << honest_utility << " collusion resilient?" << std::endl;
 
-	assert(solver.solve() == z3::Result::SAT);
+	require_satisfiable(solver, property);
 
 	// all groups except the group of all players, including the empty group:
 	// the supertree reaches the subtree with the empty group if nobody deviated in it before
@@ -2175,7 +2185,7 @@ void property_subtree_nohistory(const Options &options, const Input &input, Prop
 	std::cout << std::endl;
 	
 
-	assert(solver.solve() == z3::Result::SAT);
+	require_satisfiable(solver, property);
 
 
 	if (property == PropertyType::Practicality){
