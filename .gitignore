@@ -11,3 +11,6 @@ out/
 build-*/
 /CLAUDE.md
 /FUZZ-PLAN.md
+html/checkmate.js
+html/checkmate.wasm
+html/examples/

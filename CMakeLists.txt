@@ -24,6 +24,20 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang
 	target_compile_options(checkmate PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
+if(EMSCRIPTEN)
+	# WebAssembly build for html/, see scripts/build_emscripten.sh
+	set(Z3_WASM_DIR "" CACHE PATH "Z3 source tree with a WebAssembly libz3.a in build-wasm/")
+	target_include_directories(checkmate PRIVATE ${Z3_WASM_DIR}/src/api ${Z3_WASM_DIR}/build-wasm/src/api)
+	target_link_directories(checkmate PRIVATE ${Z3_WASM_DIR}/build-wasm)
+	target_compile_options(checkmate PRIVATE -fwasm-exceptions)
+	# as in arjun; the page starts main itself (noInitialRun), in a fresh worker per run
+	target_link_options(checkmate PRIVATE -fwasm-exceptions
+		"SHELL:-s ALLOW_MEMORY_GROWTH=1"
+		"SHELL:-s STACK_SIZE=10MB"
+		"SHELL:-s EXPORTED_RUNTIME_METHODS='[\"callMain\", \"FS\"]'"
+		"SHELL:-s FORCE_FILESYSTEM=1")
+endif()
+
 option(SANITIZE "build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 if(SANITIZE)
 	target_compile_options(checkmate PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
