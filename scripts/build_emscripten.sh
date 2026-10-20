@@ -15,7 +15,7 @@ fi
 
 emcmake cmake -B build-wasm -DCMAKE_BUILD_TYPE=Release -DZ3_WASM_DIR="$Z3"
 emmake make -C build-wasm -j"$(nproc)"
-cp build-wasm/checkmate.js build-wasm/checkmate.wasm html/
+cp build-wasm/checkmate.js build-wasm/checkmate.wasm build-wasm/checkmate-convert.js build-wasm/checkmate-convert.wasm html/
 
 mkdir -p html/examples
 cp examples/*/*.json html/examples/

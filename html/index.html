@@ -6,10 +6,13 @@
     <meta name="description" content="CheckMate in your browser">
     <title>CheckMate in your browser</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 1100px; margin: 0 auto; padding: 20px; line-height: 1.5; color: #222; }
+        body { font-family: Arial, sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; line-height: 1.5; color: #222; }
         h1 { margin-bottom: 4px; }
         .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
-        textarea { width: 100%; height: 260px; padding: 10px; box-sizing: border-box; font-family: monospace;
+        .split { display: grid; grid-template-columns: minmax(320px, 2fr) 3fr; gap: 20px; align-items: start; }
+        @media (max-width: 950px) { .split { grid-template-columns: 1fr; } }
+        .split h2 { margin-top: 8px; }
+        textarea { width: 100%; height: 420px; padding: 10px; box-sizing: border-box; font-family: monospace;
                    font-size: 13px; border: 1px solid #ccc; border-radius: 4px; }
         input[type=text] { flex: 1; min-width: 200px; padding: 6px; font-family: monospace; border: 1px solid #ccc; border-radius: 4px; }
         button { padding: 8px 14px; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; }
@@ -37,8 +40,8 @@
 <body>
 <h1>CheckMate in your browser</h1>
 <div>CheckMate checks game-theoretic security properties of games: weak immunity, weaker immunity,
-    collusion resilience and practicality. Pick an example or paste a game in the
-    <a href="https://github.com/apre-group/checkmate#input">input format</a>, then click Run.
+    collusion resilience and practicality. Pick an example or write a game in the
+    <a href="https://github.com/apre-group/checkmate#compact-format">compact format</a>, then click Run.
     Everything runs locally in your browser (WebAssembly).</div>
 
 <div class="row">
@@ -49,8 +52,22 @@
     <label for="seed">seed:</label>
     <input type="text" id="seed" placeholder="random" style="flex:0 0 110px; min-width: 0">
 </div>
-<textarea id="game" spellcheck="false"></textarea>
-<div id="parse-error" class="no"></div>
+<div class="split">
+<div>
+    <h2>Game</h2>
+    <textarea id="game" spellcheck="false"></textarea>
+    <div id="parse-error" class="no"></div>
+</div>
+<div>
+    <h2>Game tree</h2>
+    <div class="legend">
+        <span><span class="swatch" style="background:#1565c0;opacity:0.3;height:10px"></span>honest history</span>
+        <span><span class="swatch" style="background:#2e7d32"></span>strategy</span>
+        <span><span class="swatch" style="background:#c62828"></span>counterexample</span>
+    </div>
+    <div id="tree-box"><svg id="tree"></svg></div>
+</div>
+</div>
 
 <div class="row">
     <label><input type="checkbox" class="prop" value="--weak_immunity" checked> weak immunity</label>
@@ -71,14 +88,6 @@
     <button id="cancel" class="secondary" disabled>Cancel</button>
     <span id="status">Loading WebAssembly module…</span>
 </div>
-
-<h2>Game tree</h2>
-<div class="legend">
-    <span><span class="swatch" style="background:#1565c0;opacity:0.3;height:10px"></span>honest history</span>
-    <span><span class="swatch" style="background:#2e7d32"></span>strategy</span>
-    <span><span class="swatch" style="background:#c62828"></span>counterexample</span>
-</div>
-<div id="tree-box"><svg id="tree"></svg></div>
 
 <h2>Results</h2>
 <div id="results">Run CheckMate to see results. Click a verdict to see its cases, and a case to show its
@@ -110,28 +119,100 @@ $('random').addEventListener('click', () => {
     $('seed').value = '';
     $('seed').placeholder = String(seed);
     $('example').value = '';
-    $('game').value = JSON.stringify(genGame(seed), null, 2);
-    gameChanged();
+    showGame(JSON.stringify(genGame(seed), null, 2));
     $('status').textContent = 'Random game with seed ' + seed;
 });
 
-function loadExample(name) {
-    if (!name) return;
-    fetch('examples/' + name).then(r => r.text()).then(text => { $('game').value = text; gameChanged(); });
+// ---- converting between JSON and the compact format ------------------------
+
+// One long-lived worker with the small converter module: main has no global state, so it can run again and again.
+const converter = (() => {
+    const source = `
+        var Module = {
+            noInitialRun: true,
+            // not self.out/self.err: the Emscripten script defines globals with those names
+            print: t => self.convertOut.push(t),
+            printErr: t => self.convertErr.push(t),
+            locateFile: p => p.endsWith('.wasm') ? self.base + 'checkmate-convert.wasm' : self.base + p,
+            onRuntimeInitialized: () => postMessage({ type: 'ready' })
+        };
+        onmessage = e => {
+            if (e.data.type === 'init') {
+                self.base = e.data.base;
+                importScripts(e.data.base + 'checkmate-convert.js');
+                return;
+            }
+            self.convertOut = []; self.convertErr = [];
+            let result = null;
+            try {
+                Module.FS.writeFile('/in', e.data.text);
+                if (Module.callMain(['/in', '/out']) === 0) result = Module.FS.readFile('/out', { encoding: 'utf8' });
+            } catch (err) {
+                if (!(err && err.name === 'ExitStatus')) self.convertErr.push(err && err.message ? err.message : String(err));
+            }
+            postMessage({ type: 'result', id: e.data.id, result, error: self.convertErr.join('\\n') });
+        };`;
+    const w = new Worker(URL.createObjectURL(new Blob([source], { type: 'application/javascript' })));
+    const pending = new Map();
+    let next = 0, readyResolve;
+    const ready = new Promise(r => { readyResolve = r; });
+    w.onmessage = e => {
+        if (e.data.type === 'ready') return readyResolve();
+        const p = pending.get(e.data.id);
+        pending.delete(e.data.id);
+        if (e.data.result !== null) p.resolve(e.data.result);
+        else p.reject(new Error(e.data.error.replace(/^checkmate-convert: /, '') || 'conversion failed'));
+    };
+    w.postMessage({ type: 'init', base: new URL('.', location.href).href });
+    // JSON becomes compact text, compact text becomes JSON
+    return text => ready.then(() => new Promise((resolve, reject) => {
+        const id = next++;
+        pending.set(id, { resolve, reject });
+        w.postMessage({ type: 'convert', id, text });
+    }));
+})();
+
+const looksLikeJson = text => text.trimStart().startsWith('{');
+
+async function showGame(jsonText) {
+    try {
+        $('game').value = await converter(jsonText);
+    } catch (e) {
+        $('game').value = jsonText;
+    }
+    gameChanged();
 }
 
-$('game').addEventListener('input', gameChanged);
+function loadExample(name) {
+    if (!name) return;
+    fetch('examples/' + name).then(r => r.text()).then(showGame);
+}
 
-function gameChanged() {
+let editTimer = null;
+$('game').addEventListener('input', () => {
+    clearTimeout(editTimer);
+    editTimer = setTimeout(gameChanged, 250);
+});
+
+// Parse the editor's text into `game` (for the tree); pasted JSON is shown in the compact format.
+async function gameChanged() {
     results = null; selection = null;
     $('results').textContent = 'Run CheckMate to see results.';
     $('cases').innerHTML = '';
+    const text = $('game').value;
+    if (looksLikeJson(text)) {
+        try { JSON.parse(text); } catch (e) { $('parse-error').textContent = 'Invalid JSON: ' + e.message; return; }
+        return showGame(text);
+    }
     try {
-        game = JSON.parse($('game').value);
+        const jsonText = await converter(text);
+        if ($('game').value !== text) return;  // edited again meanwhile
+        game = JSON.parse(jsonText);
         $('parse-error').textContent = '';
     } catch (e) {
-        game = null;
-        $('parse-error').textContent = 'Invalid JSON: ' + e.message;
+        if ($('game').value !== text) return;
+        $('parse-error').textContent = e.message;
+        return;  // keep showing the last good tree
     }
     drawTree();
 }
@@ -155,8 +236,8 @@ function workerSource() {
             } else if (e.data.type === 'run') {
                 let result = null;
                 try {
-                    Module.FS.writeFile('/game.json', e.data.game);
-                    Module.callMain(['/game.json'].concat(e.data.args).concat(['--json-out', '/result.json']));
+                    Module.FS.writeFile('/game.txt', e.data.game);
+                    Module.callMain(['/game.txt'].concat(e.data.args).concat(['--json-out', '/result.json']));
                 } catch (err) {
                     if (!(err && err.name === 'ExitStatus')) postMessage({ type: 'output', content: 'Error: ' + err });
                 }
@@ -171,7 +252,7 @@ function parseArgs(str) {
 }
 
 $('run').addEventListener('click', () => {
-    if (!game) { $('status').textContent = 'Fix the JSON first.'; return; }
+    if (!game || $('parse-error').textContent) { $('status').textContent = 'Fix the game first.'; return; }
     const props = [...document.querySelectorAll('.prop:checked')].map(c => c.value);
     const args = (props.length === 4 ? [] : props)
         .concat([...document.querySelectorAll('.opt:checked')].map(c => c.value))

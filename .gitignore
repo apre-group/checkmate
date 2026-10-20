@@ -14,3 +14,5 @@ build-*/
 html/checkmate.js
 html/checkmate.wasm
 html/examples/
+html/checkmate-convert.js
+html/checkmate-convert.wasm
