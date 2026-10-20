@@ -2,6 +2,7 @@
 # Fuzz checkmate with random games. Run from the repo root: scripts/fuzz.py [--num N] [--seed S]
 
 import argparse
+import collections
 import json
 import os
 import random
@@ -17,11 +18,55 @@ from transform import random_transform
 from compose import split, splice
 
 _USE_COLOR = os.isatty(1) and os.environ.get("NO_COLOR") is None
-GREEN, RED, BLUE, MAGENTA = "32", "31;1", "34;1", "35"
+GREEN, RED, BLUE, MAGENTA, CYAN = "32", "31;1", "34;1", "35", "36"
 
 PROPS = ["weak_immunity", "weaker_immunity", "collusion_resilience", "practicality"]
 NO_OPTS = ["--no-cr-node-cache", "--no-cr-leaf-cache", "--no-cr-implied-groups",
            "--no-cr-violated-lookup", "--no-problematic-groups", "--exact-splits", "--reset-from-root"]
+
+
+# what the fuzzer exercised so far, printed every few iterations to see whether it covers enough
+STATS = collections.Counter()
+
+
+def note_game(game_json, base):
+    leaves = 0
+
+    def walk(t):
+        nonlocal leaves
+        if "utility" in t:
+            leaves += 1
+        for c in t.get("children", []):
+            walk(c["child"])
+    walk(game_json["tree"])
+    STATS["players %d" % len(game_json["players"])] += 1
+    STATS["leaves " + next(b for lim, b in [(3, "1-3"), (8, "4-8"), (16, "9-16"), (10**9, "17+")] if leaves <= lim)] += 1
+    verdicts = {}
+    for r in base:
+        p = r["property"]
+        STATS[p + " runs"] += 1
+        STATS[p + " YES"] += r["holds"]
+        STATS[p + " split"] += len(r["cases"]) > 1
+        verdicts[(tuple(r["history"]), p)] = r["holds"]
+    STATS["weak != weaker"] += any(v != verdicts.get((h, "weaker_immunity"))
+                                   for (h, p), v in verdicts.items() if p == "weak_immunity")
+
+
+def print_stats(iterations):
+    def line(prefix, keys, strip=""):
+        return "  " + prefix + ": " + ", ".join("%s %d" % (k[len(strip):], STATS[k]) for k in keys)
+    print(col("=== Statistics after %d iterations ===" % iterations, CYAN))
+    print(line("games", ["players %d" % n for n in (2, 3, 4, 5, 6)] + ["leaves " + b for b in ("1-3", "4-8", "9-16", "17+")]))
+    for p in PROPS:
+        n = STATS[p + " runs"]
+        if n:
+            print("  %-21s YES %3d%%, split %3d%% of %d runs"
+                  % (p, 100 * STATS[p + " YES"] // n, 100 * STATS[p + " split"] // n, n))
+    print("  weak and weaker immunity differ in %d games" % STATS["weak != weaker"])
+    print(line("subtrees", ["cut along honest", "cut off honest", "cut nested"]))
+    print(line("transforms", sorted(k for k in STATS if k.startswith("transform ")), "transform "))
+    print(line("switches", sorted(k for k in STATS if k.startswith("--no-") or k == "--exact-splits" or k == "--reset-from-root")))
+    print(line("checks", ["results verified", "checker undecided", "checker timeouts", "checkmate timeouts"]))
 
 
 def col(txt, code):
@@ -79,8 +124,12 @@ def run(cmd, tout):
 
 def run_checkmate(game, flags, json_out=None):
     cmd = [args.checkmate, game] + flags + (["--json-out", json_out] if json_out else [])
+    for f in flags:
+        if f in NO_OPTS:
+            STATS[f] += 1
     p = run(cmd, args.tout)
     if p is None:
+        STATS["checkmate timeouts"] += 1
         return None
     if p.returncode != 0:
         how = "killed by signal %d" % -p.returncode if p.returncode < 0 else "exit code %d" % p.returncode
@@ -111,10 +160,12 @@ def compositional(game_json, base, rng, game, outs):
     if cut is None:
         return
     sub, hist = cut
+    STATS["cut along honest" if sub["honest_histories"] else "cut off honest"] += 1
     print("Cutting subtree at %s%s" % (list(hist), " (along the honest history)" if sub["honest_histories"] else ""))
     if rng.random() < 0.3:
         inner = split(sub, rng)
         if inner is not None:
+            STATS["cut nested"] += 1
             print("Cutting nested subtree at %s inside it" % list(inner[1]))
             res = run_subtree(inner[0], game[:-5] + "-sub2.json", rng, outs)
             if res is None:
@@ -144,14 +195,17 @@ def run_checker(game, json_out, flags):
         cmd.append("--subtree")
     p = run(cmd, args.check_tout)
     if p is None:
+        STATS["checker timeouts"] += 1
         return
     if p.returncode == 2:
+        STATS["checker undecided"] += 1
         print("Checker could not decide, skipping:")
         print(tail(p.stdout, 10))
         return
     if p.returncode != 0:
         raise Bug("verification of checkmate's results failed. checkmate ran as:\n  %s"
                   % fmt_cmd([args.checkmate, game] + flags + ["--json-out", json_out]), cmd, p.stdout)
+    STATS["results verified"] += 1
     print(p.stdout.strip().split("\n")[-1])
 
 
@@ -223,6 +277,7 @@ def fuzz_one(seed):
         if base is None:
             return True
         check_consistent(base, [])
+        note_game(game_json, base)
         run_checker(game, base_out, [])
 
         cert_flags = (["--strategies", "--counterexamples"] + (["--all_cases"] if rng.random() < 0.5 else [])
@@ -243,6 +298,8 @@ def fuzz_one(seed):
         with open(meta, "w") as f:
             json.dump(meta_json, f, indent=2)
         print("Transforms: " + " + ".join(names))
+        for t in names:
+            STATS["transform " + t] += 1
         flags = random_opts(rng)
         out = game[:-5] + "-meta.out.json"
         outs.append(out)
@@ -285,6 +342,7 @@ def main():
     ap.add_argument("--check-tout", type=int, default=20,
                     help="timeout per check_result.py call")
     ap.add_argument("--checkmate", default="build/checkmate")
+    ap.add_argument("--stats-every", type=int, default=10, help="print statistics every N iterations")
     args = ap.parse_args()
     os.makedirs("out", exist_ok=True)
 
@@ -293,7 +351,12 @@ def main():
         i += 1
         seed = args.seed if args.seed is not None else random.SystemRandom().randrange(2**63)
         if not fuzz_one(seed):
+            print_stats(i)
             sys.exit(1)
+        if i % args.stats_every == 0:
+            print_stats(i)
+    if i % args.stats_every:
+        print_stats(i)
     print(col("Done: %d iterations, no bugs" % i, GREEN))
 
 
