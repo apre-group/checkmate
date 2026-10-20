@@ -149,8 +149,25 @@ def run(cmd, tout):
         return None
 
 
+def repro_options():
+    opts = ""
+    if args.wasm:
+        opts += " --wasm --wasm-dir " + shlex.quote(args.wasm_dir)
+    elif args.checkmate != "build/checkmate":
+        opts += " --checkmate " + shlex.quote(args.checkmate)
+    if args.js_gen:
+        opts += " --js-gen"
+    return opts
+
+
+def checkmate_cmd():
+    if args.wasm:
+        return ["node", os.path.join(SCRIPTS, "checkmate_wasm.js"), "--wasm-dir", args.wasm_dir]
+    return [args.checkmate]
+
+
 def run_checkmate(game, flags, json_out=None):
-    cmd = [args.checkmate, game] + flags + (["--json-out", json_out] if json_out else [])
+    cmd = checkmate_cmd() + [game] + flags + (["--json-out", json_out] if json_out else [])
     for f in flags:
         if f in NO_OPTS:
             STATS[f] += 1
@@ -232,7 +249,7 @@ def run_checker(game, json_out, flags):
         return
     if p.returncode != 0:
         raise Bug("verification of checkmate's results failed. checkmate ran as:\n  %s"
-                  % fmt_cmd([args.checkmate, game] + flags + ["--json-out", json_out]), cmd, p.stdout)
+                  % fmt_cmd(checkmate_cmd() + [game] + flags + ["--json-out", json_out]), cmd, p.stdout)
     if p.stdout.startswith("UNSUPPORTED"):
         STATS["checker unsupported"] += 1
         print(p.stdout.strip())
@@ -305,7 +322,14 @@ def fuzz_one(seed):
     rng = random.Random(seed)
     game = unique_file("fuzzTest")
     print(col("Seed: ", MAGENTA) + str(seed) + col("  file: ", MAGENTA) + game)
-    game_json = gen_game(rng)
+    if args.js_gen:
+        js_seed = rng.randrange(2**31)
+        p = subprocess.run(["node", os.path.join(SCRIPTS, "gen_game_js.js"), str(js_seed)],
+                           stdout=subprocess.PIPE, universal_newlines=True, check=True)
+        game_json = json.loads(p.stdout)
+        print("Generated with html/gen_game.js, seed %d" % js_seed)
+    else:
+        game_json = gen_game(rng)
     with open(game, "w") as f:
         json.dump(game_json, f, indent=2)
     outs = []
@@ -362,7 +386,7 @@ def fuzz_one(seed):
             print("Output was (all of it in %s):" % full)
             print(tail(e.output))
         print("Game kept in %s, other files: %s" % (game, " ".join(outs)))
-        print("REPRODUCE with: scripts/fuzz.py --seed %d --num 1" % seed)
+        print("REPRODUCE with: scripts/fuzz.py --seed %d --num 1%s" % (seed, repro_options()))
         print(col("=" * 60, RED))
         return False
     for f in [game] + outs:
@@ -381,6 +405,11 @@ def main():
     ap.add_argument("--check-tout", type=int, default=20,
                     help="timeout per check_result.py call")
     ap.add_argument("--checkmate", default="build/checkmate")
+    ap.add_argument("--wasm", action="store_true",
+                    help="run the WebAssembly build through scripts/checkmate_wasm.js instead of --checkmate")
+    ap.add_argument("--wasm-dir", default=os.path.normpath(os.path.join(SCRIPTS, "..", "html")),
+                    help="directory with checkmate.js and checkmate.wasm, default: html/")
+    ap.add_argument("--js-gen", action="store_true", help="generate games with the web page's html/gen_game.js")
     ap.add_argument("--stats-every", type=int, default=10, help="print statistics every N iterations")
     args = ap.parse_args()
     os.makedirs("out", exist_ok=True)
