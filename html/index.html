@@ -9,8 +9,23 @@
         body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; line-height: 1.5; color: #222; }
         h1 { margin-bottom: 4px; }
         .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
-        textarea { width: 100%; height: 320px; padding: 10px; box-sizing: border-box; font-family: monospace;
-                   font-size: 13px; border: 1px solid #ccc; border-radius: 4px; }
+        /* the editor: a transparent textarea over a <pre> with the highlighted text; both must lay out identically */
+        .editor { position: relative; height: 320px; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
+        .editor textarea, .editor pre { position: absolute; inset: 0; margin: 0; padding: 10px; border: 0;
+            box-sizing: border-box; width: 100%; height: 100%; font: 13px/1.5 monospace; white-space: pre;
+            overflow: auto; tab-size: 4; }
+        .editor textarea { color: transparent; caret-color: #222; background: transparent; resize: none; outline: none; }
+        .editor pre { pointer-events: none; overflow: hidden; color: #222; }
+        .editor textarea::selection { background: rgba(21, 101, 192, 0.25); }
+        .h-key { color: #6a1b9a; font-weight: bold; }
+        .h-player { color: #1565c0; font-weight: bold; }
+        .h-action { color: #2e7d32; }
+        .h-arrow { color: #999; }
+        .h-num { color: #c25e00; }
+        .h-const { color: #00838f; }
+        .h-comment { color: #888; font-style: italic; }
+        .h-subtree { color: #999; }
+        .h-error { background: #ffd7d7; display: inline-block; min-width: 100%; }
         input[type=text] { flex: 1; min-width: 200px; padding: 6px; font-family: monospace; border: 1px solid #ccc; border-radius: 4px; }
         button { padding: 8px 14px; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; }
         button:hover { background: #256628; }
@@ -55,7 +70,10 @@
     <button id="cancel" class="secondary" disabled>Cancel</button>
     <span id="status">Loading WebAssembly module…</span>
 </div>
-<textarea id="game" spellcheck="false"></textarea>
+<div class="editor">
+    <pre id="highlight" aria-hidden="true"></pre>
+    <textarea id="game" spellcheck="false" wrap="off"></textarea>
+</div>
 <div id="parse-error" class="no"></div>
 <div class="row">
     <label><input type="checkbox" class="prop" value="--weak_immunity" checked> weak immunity</label>
@@ -90,6 +108,7 @@
 <div id="output"></div>
 
 <script src="gen_game.js"></script>
+<script src="highlight.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 // the build id makes browsers fetch the modules again after a rebuild, and cache them otherwise
@@ -183,8 +202,18 @@ function loadExample(name) {
     fetch('examples/' + name).then(r => r.text()).then(showGame);
 }
 
-let editTimer = null;
+let editTimer = null, errorLine = 0;
+function highlight() {
+    $('highlight').innerHTML = highlightCompact($('game').value, errorLine);
+    syncScroll();
+}
+function syncScroll() {
+    $('highlight').scrollTop = $('game').scrollTop;
+    $('highlight').scrollLeft = $('game').scrollLeft;
+}
+$('game').addEventListener('scroll', syncScroll);
 $('game').addEventListener('input', () => {
+    highlight();
     clearTimeout(editTimer);
     editTimer = setTimeout(gameChanged, 250);
 });
@@ -195,6 +224,7 @@ async function gameChanged() {
     $('results').textContent = 'Run CheckMate to see results.';
     $('cases').innerHTML = '';
     const text = $('game').value;
+    highlight();
     if (looksLikeJson(text)) {
         try { JSON.parse(text); } catch (e) { $('parse-error').textContent = 'Invalid JSON: ' + e.message; return; }
         return showGame(text);
@@ -204,9 +234,14 @@ async function gameChanged() {
         if ($('game').value !== text) return;  // edited again meanwhile
         game = JSON.parse(jsonText);
         $('parse-error').textContent = '';
+        errorLine = 0;
+        highlight();
     } catch (e) {
         if ($('game').value !== text) return;
         $('parse-error').textContent = e.message;
+        const m = e.message.match(/^line (\d+):/);
+        errorLine = m ? +m[1] : 0;
+        highlight();
         return;  // keep showing the last good tree
     }
     drawTree();
