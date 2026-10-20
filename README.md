@@ -54,6 +54,34 @@ All **expressions** throughout the input support the following symbols in infix 
 To express the conjunction of two expressions, list both.
 Additionally, all (real) numbers and all constants and infinitesimals declared in the dictionary are supported.
 
+### Compact format
+
+CheckMate also reads a compact, line-based format, which is easier to write and read than JSON.
+Here is the game of `examples/key_examples/splits_wi.json`:
+
+```
+players: D, G
+constants: a, b
+initial: a > 0
+honest: q
+honest: l r
+honest: l y
+
+D
+  q -> D: a, G: a
+  l -> G
+    r -> D: a, G: b
+    y -> D: a, G: -b
+```
+
+The header lines are `players:`, `constants:` and `infinitesimals:` (comma-separated names), and then one line per constraint or history:
+`initial:` for an initial constraint, `weak_immunity:`, `weaker_immunity:`, `collusion_resilience:` or `practicality:` for a property constraint, `honest:` for an honest history (actions separated by spaces), and `honest_utility:` for an honest utility (`PLAYER: utility, ...`).
+The tree starts at the first line that is not a header: the player at the root, and then one line per branch, indented below its node: `action -> PLAYER` for an internal node (whose branches follow, indented further), `action -> PLAYER: utility, ...` for a leaf, or `action -> subtree {...}` for a subtree result in JSON.
+The `actions` list is not needed; it is derived from the tree. `#` starts a comment.
+
+CheckMate treats a file as JSON if it starts with `{`, and as the compact format otherwise.
+`build/checkmate-convert GAME [OUTPUT]` converts a game from one format to the other.
+
 ## Build
 
 CheckMate is written in C++11. It requires:
