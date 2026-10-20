@@ -49,18 +49,14 @@
     <label for="seed">seed:</label>
     <input type="text" id="seed" placeholder="random" style="flex:0 0 110px; min-width: 0">
 </div>
-<h2>Game</h2>
+<div class="row">
+    <h2 style="margin: 0 12px 0 0">Game</h2>
+    <button id="run" disabled>Run CheckMate</button>
+    <button id="cancel" class="secondary" disabled>Cancel</button>
+    <span id="status">Loading WebAssembly module…</span>
+</div>
 <textarea id="game" spellcheck="false"></textarea>
 <div id="parse-error" class="no"></div>
-
-<h2>Game tree</h2>
-<div class="legend">
-    <span><span class="swatch" style="background:#1565c0;opacity:0.3;height:10px"></span>honest history</span>
-    <span><span class="swatch" style="background:#2e7d32"></span>strategy</span>
-    <span><span class="swatch" style="background:#c62828"></span>counterexample</span>
-</div>
-<div id="tree-box"><svg id="tree"></svg></div>
-
 <div class="row">
     <label><input type="checkbox" class="prop" value="--weak_immunity" checked> weak immunity</label>
     <label><input type="checkbox" class="prop" value="--weaker_immunity" checked> weaker immunity</label>
@@ -75,11 +71,15 @@
     <label for="extra">Extra arguments:</label>
     <input type="text" id="extra" placeholder="e.g. --all_counterexamples">
 </div>
-<div class="row">
-    <button id="run" disabled>Run CheckMate</button>
-    <button id="cancel" class="secondary" disabled>Cancel</button>
-    <span id="status">Loading WebAssembly module…</span>
+
+<h2>Game tree</h2>
+<div class="legend">
+    <span><span class="swatch" style="background:#1565c0;opacity:0.3;height:10px"></span>honest history</span>
+    <span><span class="swatch" style="background:#2e7d32"></span>strategy</span>
+    <span><span class="swatch" style="background:#c62828"></span>counterexample</span>
 </div>
+<div id="tree-box"><svg id="tree"></svg></div>
+
 
 <h2>Results</h2>
 <div id="results">Run CheckMate to see results. Click a verdict to see its cases, and a case to show its
