@@ -3,6 +3,7 @@
 #include "property.hpp"
 
 int main(int, char **argv) {
+	z3::initialize();
 	Options options(argv);
 	Input input(options.input_path);
 

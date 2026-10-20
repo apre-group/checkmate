@@ -21,11 +21,15 @@
 #include "z3.h"
 
 namespace z3 {
-	// the only Z3 context we use
+	// the only Z3 context we use, created by initialize()
 	extern Z3_context CONTEXT;
+
+	// call before anything else uses Z3, e.g. at the start of main: never during static initialization
+	void initialize();
 
 	// check for Z3 errors in debug mode
 	inline void check_error() {
+		assert(CONTEXT && "z3::initialize() must be called before using Z3");
 		assert(Z3_get_error_code(CONTEXT) == Z3_OK);
 	}
 
@@ -38,6 +42,8 @@ namespace z3 {
 	class Expression {
 		// Solver wants to access `ast`
 		friend Solver;
+		// creates the sorts
+		friend void initialize();
 
 	public:
 		Expression() = default;
