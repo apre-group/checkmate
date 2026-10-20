@@ -185,6 +185,7 @@ def compositional(game_json, base, rng, game, outs):
     if results is not None:
         check_consistent(results, flags)
         compare_verdicts(base, results, "the subtree at %s analysed separately, %s" % (list(hist), fmt_cmd(flags)))
+        run_checker(sup, out, flags)
 
 
 def run_checker(game, json_out, flags):

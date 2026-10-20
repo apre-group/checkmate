@@ -81,6 +81,8 @@ class Parser:
         for e in infinitesimals:
             self.env[e] = U(z3.RealVal(0), z3.Real(e))
         self.env["N"] = lambda s: U.of(Fraction(s))
+        self.raw_env = {n: z3.Real(n) for n in constants + infinitesimals}
+        self.raw_env["N"] = lambda s: z3.RealVal(Fraction(s))
 
     def _py(self, s):
         s = re.sub(r"(?<![\w.])(\d+(\.\d+)?)", r'N("\1")', s)
@@ -90,6 +92,12 @@ class Parser:
 
     def utility(self, s):
         return U.of(eval(self._py(str(s)), {"__builtins__": {}}, self.env))
+
+    def raw_case(self, s):
+        """A case condition as printed in subtree results: fully parenthesized, over plain reals."""
+        if s == "true":
+            return z3.BoolVal(True)
+        return eval(self._py(s), {"__builtins__": {}}, self.raw_env)
 
     def constraint(self, s):
         # `|` binds looser than comparisons in the input grammar, unlike Python
@@ -102,9 +110,15 @@ class Node:
         self.player = None
         self.children = []  # (action, Node)
         self.u = None       # player -> U, for leaves
+        self.sub = None     # parsed result, for subtree nodes
+        self.cond = None    # for the virtual leaves of a subtree: the case its utility is practical in
+        self.parent = None
 
     def is_leaf(self):
         return self.u is not None
+
+    def is_subtree(self):
+        return self.sub is not None
 
     def child(self, action):
         for a, c in self.children:
@@ -115,7 +129,31 @@ class Node:
     def leaves(self):
         if self.is_leaf():
             return [self]
+        if self.is_subtree():
+            return self.sub["virtual_leaves"]
         return [l for _, c in self.children for l in c.leaves()]
+
+
+def load_subtree(j, parser, n):
+    def cases(entries):
+        return {frozenset(e["player_group"]): z3.Or([z3.And([parser.raw_case(c) for c in case])
+                                                     for case in e["satisfied_in_case"]])
+                for e in entries}
+    utility = lambda entries: {e["player"]: parser.utility(e["value"]) for e in entries}
+    n.sub = {
+        "weak_immunity": cases(j["weak_immunity"]),
+        "weaker_immunity": cases(j["weaker_immunity"]),
+        "collusion_resilience": cases(j["collusion_resilience"]),
+        "practicality": [(z3.And([parser.raw_case(c) for c in e["case"]]), [utility(u) for u in e["utilities"]])
+                         for e in j["practicality"]],
+        "honest_utility": utility(j["honest_utility"]),
+        "virtual_leaves": [],
+    }
+    for i, (cond, us) in enumerate(n.sub["practicality"]):
+        for k, u in enumerate(us):
+            v = Node(n.hist + ("#%d.%d" % (i, k),))
+            v.u, v.cond, v.parent = u, cond, n
+            n.sub["virtual_leaves"].append(v)
 
 
 def load_tree(j, parser, hist=()):
@@ -127,7 +165,7 @@ def load_tree(j, parser, hist=()):
         n.children = [(c["action"], load_tree(c["child"], parser, hist + (c["action"],)))
                       for c in j["children"]]
     else:
-        raise Unsupported("subtree nodes")
+        load_subtree(j["subtree"], parser, n)
     return n
 
 
@@ -157,10 +195,13 @@ class Checker:
         return z3.parse_smt2_string(self.decls + "(assert %s)" % s)[0]
 
     def node(self, hist):
+        """The node at `hist`; a subtree node stands for everything below it."""
         n = self.root
         for a in hist:
             if n.is_leaf():
                 return None
+            if n.is_subtree():
+                return n
             n = n.child(a)
             if n is None:
                 return None
@@ -188,12 +229,25 @@ class Checker:
     def on_honest(self, n, honest):
         return len(n.hist) < len(honest) and tuple(honest[:len(n.hist)]) == n.hist
 
+    def sub_entry(self, n, prop, group):
+        f = n.sub[prop].get(frozenset(group))
+        if f is None:
+            self.error("subtree at %s" % list(n.hist), "no %s result for %s" % (prop, sorted(group)))
+            return z3.BoolVal(False)
+        return f
+
+    def utility_at(self, n):
+        """Utility at the end of the honest history: a leaf's, or the honest utility of a subtree."""
+        return n.u if n.is_leaf() else n.sub["honest_utility"]
+
     def wi_ok(self, leaf, p, weaker):
         return leaf.u[p].r >= 0 if weaker else leaf.u[p] >= zero()
 
     def wi_formula(self, n, p, honest, weaker):
         if n.is_leaf():
             return self.wi_ok(n, p, weaker)
+        if n.is_subtree():
+            return self.sub_entry(n, "weaker_immunity" if weaker else "weak_immunity", [p])
         if n.player == p and self.on_honest(n, honest):
             return self.wi_formula(n.child(honest[len(n.hist)]), p, honest, weaker)
         subs = [self.wi_formula(c, p, honest, weaker) for _, c in n.children]
@@ -226,6 +280,18 @@ class Checker:
                     conds.append(z3.Implies(z3.And(reach) if reach else z3.BoolVal(True),
                                             self.gsum(n.u, g) <= self.gsum(honest_u, g)))
                 return
+            if n.is_subtree():
+                # The entry for the players that actually deviated on the way here: one strategy inside
+                # the subtree against all their supergroups (not each supergroup with its own strategy).
+                dev = {p: z3.Or([z3.Not(c) for (actor, c) in path if actor == p]) for p in self.players}
+                for size in range(len(self.players) + 1):
+                    for d in itertools.combinations(self.players, size):
+                        deviators = entry_group | frozenset(d)
+                        if len(deviators) == len(self.players):
+                            continue
+                        exactly = z3.And([dev[p] if p in d else z3.Not(dev[p]) for p in self.players])
+                        conds.append(z3.Implies(exactly, self.sub_entry(n, "collusion_resilience", deviators)))
+                return
             if self.on_honest(n, honest):
                 h = honest[len(n.hist)]
                 for a, c in n.children:
@@ -248,6 +314,8 @@ class Checker:
             return memo[key]
         if n.is_leaf():
             f = z3.BoolVal(n is leaf)
+        elif n.is_subtree():
+            f = leaf.cond if leaf.parent is n else z3.BoolVal(False)
         else:
             a = leaf.hist[len(n.hist)]
             parts = [self.spe_outcome(n.child(a), leaf, memo)]
@@ -265,12 +333,18 @@ class Checker:
     def pr_formula(self, honest, honest_leaf):
         memo = {}
         parts = []
+        hu = self.utility_at(honest_leaf)
         n = self.root
         for a in honest:
+            if n.is_subtree():
+                break
             for b, c in n.children:
                 if b != a:
-                    parts.append(self.not_better(c, n.player, honest_leaf.u[n.player], memo))
+                    parts.append(self.not_better(c, n.player, hu[n.player], memo))
             n = n.child(a)
+        if n.is_subtree():
+            # along the honest history, the subtree result lists the cases its honest history is practical in
+            parts.append(z3.Or([cond for cond, _ in n.sub["practicality"]]))
         return z3.And(parts) if parts else z3.BoolVal(True)
 
     def property_formula(self, prop, honest, honest_leaf):
@@ -278,7 +352,7 @@ class Checker:
             weaker = prop == "weaker_immunity"
             return z3.And([self.wi_formula(self.root, p, honest, weaker) for p in self.players])
         if prop == "collusion_resilience":
-            return self.cr_formula(honest, honest_leaf.u)
+            return self.cr_formula(honest, self.utility_at(honest_leaf))
         return self.pr_formula(honest, honest_leaf)
 
     # ---- certificates ----------------------------------------------------
@@ -288,7 +362,7 @@ class Checker:
         for e in strategy:
             n = self.node(e["history"])
             h = tuple(e["history"])
-            if n is None or n.is_leaf():
+            if n is None or n.is_leaf() or n.is_subtree():
                 self.error(ctx, "strategy names non-branch history %s" % (e["history"],))
                 continue
             if n.player != e["player"] or n.child(e["action"]) is None:
@@ -308,6 +382,11 @@ class Checker:
                     if not self.valid(assume, self.wi_ok(n, p, weaker)):
                         self.error(ctx, "strategy: %s can be harmed at %s" % (p, list(n.hist)))
                     return
+                if n.is_subtree():
+                    entry = self.sub_entry(n, "weaker_immunity" if weaker else "weak_immunity", [p])
+                    if not self.valid(assume, entry):
+                        self.error(ctx, "strategy: %s can be harmed in the subtree at %s" % (p, list(n.hist)))
+                    return
                 if n.player == p and self.on_honest(n, honest):
                     walk(n.child(honest[len(n.hist)]))
                 elif n.player == p and n.hist in s:
@@ -324,21 +403,28 @@ class Checker:
                     if deviators <= g and not self.valid(assume, self.gsum(n.u, g) <= self.gsum(honest_u, g)):
                         self.error(ctx, "strategy: group %s gains at %s" % (sorted(g), list(n.hist)))
                 return
+            if n.is_subtree():
+                if len(deviators) < len(self.players) and \
+                        not self.valid(assume, self.sub_entry(n, "collusion_resilience", deviators)):
+                    self.error(ctx, "strategy: the subtree at %s is not resilient against supergroups of %s"
+                               % (list(n.hist), sorted(deviators)))
+                return
             fixed = honest[len(n.hist)] if self.on_honest(n, honest) else s.get(n.hist)
             for a, c in n.children:
                 walk(c, deviators | {n.player} if fixed is not None and a != fixed else deviators)
         walk(self.root, frozenset())
 
     def check_pr_strategy(self, ctx, assume, s, honest):
+        # strategies end at subtrees, whose outcome is not known here: those comparisons are skipped
         def outcome(n):
-            while not n.is_leaf():
+            while not n.is_leaf() and not n.is_subtree():
                 if n.hist not in s:
                     return None
                 n = n.child(s[n.hist])
             return n
 
         def walk(n):
-            if n.is_leaf():
+            if n.is_leaf() or n.is_subtree():
                 return
             out = outcome(n)
             if out is None:
@@ -346,7 +432,7 @@ class Checker:
                 return
             for a, c in n.children:
                 oc = outcome(c)
-                if oc is not None and not self.valid(assume, oc.u[n.player] <= out.u[n.player]):
+                if oc is not None and oc.is_leaf() and out.is_leaf() and not self.valid(assume, oc.u[n.player] <= out.u[n.player]):
                     self.error(ctx, "strategy: %s gains by playing %s at %s" % (n.player, a, list(n.hist)))
                 walk(c)
         walk(self.root)
@@ -355,7 +441,7 @@ class Checker:
         m = {}
         for e in choices:
             n = self.node(e["history"])
-            if n is None or n.is_leaf():
+            if n is None or n.is_leaf() or n.is_subtree():
                 self.error(ctx, "counterexample names non-branch history %s" % (e["history"],))
                 continue
             if n.player != e["player"] or any(n.child(a) is None for a in e["actions"]) or not e["actions"]:
@@ -375,6 +461,11 @@ class Checker:
             if n.is_leaf():
                 if not self.valid(assume, z3.Not(self.wi_ok(n, p, weaker))):
                     self.error(ctx, "counterexample: %s is not harmed at %s" % (p, list(n.hist)))
+                return
+            if n.is_subtree():
+                entry = self.sub_entry(n, "weaker_immunity" if weaker else "weak_immunity", [p])
+                if not self.valid(assume, z3.Not(entry)):
+                    self.error(ctx, "counterexample: %s is not harmed in the subtree at %s" % (p, list(n.hist)))
                 return
             if n.player == p:
                 if n.hist in m:
@@ -396,18 +487,33 @@ class Checker:
 
     def check_cr_ce(self, ctx, assume, ce, honest, honest_u):
         m = self.ce_map(ctx, ce["choices"])
+        # without a deviation, the honest history itself has to end in a subtree that is not resilient
         if not ce["choices"]:
-            self.error(ctx, "collusion resilience counterexample without a deviation")
-            return
-        first = ce["choices"][0]
-        dev_node = self.node(first["history"])
-        if dev_node is None or not self.on_honest(dev_node, honest) or honest[len(dev_node.hist)] in first["actions"]:
-            self.error(ctx, "counterexample does not start with a deviation from the honest history")
-            return
+            if not self.node(honest).is_subtree():
+                self.error(ctx, "collusion resilience counterexample without a deviation")
+                return
+        else:
+            first = ce["choices"][0]
+            dev_node = self.node(first["history"])
+            if dev_node is None or not self.on_honest(dev_node, honest) or honest[len(dev_node.hist)] in first["actions"]:
+                self.error(ctx, "counterexample does not start with a deviation from the honest history")
+                return
         claimed = {tuple(l["history"]): [frozenset(g) for g in l["groups"]] for l in ce["cr_leaves"]}
         reached = set()
 
         def walk(n, deviators, deviated):
+            if n.is_subtree():
+                reached.add(n.hist)
+                entry = next((l for l in ce["cr_leaves"] if tuple(l["history"]) == n.hist), None)
+                if entry is None or not entry["subtree"]:
+                    self.error(ctx, "counterexample reaches the subtree at %s but does not list it" % (list(n.hist),))
+                    return
+                g = frozenset(entry["groups"][0])
+                if not deviators <= g:
+                    self.error(ctx, "counterexample: group %s at the subtree misses deviators %s" % (sorted(g), sorted(deviators)))
+                if not self.valid(assume, z3.Not(self.sub_entry(n, "collusion_resilience", g))):
+                    self.error(ctx, "counterexample: the subtree at %s is resilient against group %s" % (list(n.hist), sorted(g)))
+                return
             if n.is_leaf():
                 reached.add(n.hist)
                 groups = claimed.get(n.hist)
@@ -441,8 +547,13 @@ class Checker:
                     self.error(ctx, "counterexample lists unreachable leaf %s" % (list(h),))
 
     def check_pr_ce(self, ctx, assume, ce, honest, honest_leaf):
-        if len(ce["player_group"]) != 1:
-            raise Unsupported("practicality counterexample ending in a subtree")
+        if not ce["player_group"]:
+            n = self.node(ce["choices"][0]["history"])
+            if n is None or not n.is_subtree():
+                self.error(ctx, "practicality counterexample names a subtree that is not there")
+            elif not self.valid(assume, z3.Not(z3.Or([cond for cond, _ in n.sub["practicality"]]))):
+                self.error(ctx, "the subtree at %s is practical in some part of the case" % (list(n.hist),))
+            return
         q = ce["player_group"][0]
         h = ce["choices"][0]["history"]
         dev = self.node(h[:-1]) if h else None
@@ -453,13 +564,16 @@ class Checker:
         if sub is None:
             self.error(ctx, "practicality counterexample deviates to unknown action")
             return
+        hu = self.utility_at(honest_leaf)
         for e in ce["choices"]:
             leaf = self.node(h + e["actions"])
+            if leaf is not None and leaf.is_subtree():
+                continue
             if leaf is None or not leaf.is_leaf():
                 self.error(ctx, "practical history %s does not end in a leaf" % (h + e["actions"],))
-            elif not self.valid(assume, leaf.u[q] > honest_leaf.u[q]):
+            elif not self.valid(assume, leaf.u[q] > hu[q]):
                 self.error(ctx, "practical history %s is not better for %s" % (h + e["actions"], q))
-        if self.check(assume, self.not_better(sub, q, honest_leaf.u[q], {})):
+        if self.check(assume, self.not_better(sub, q, hu[q], {})):
             self.error(ctx, "some subgame perfect outcome after %s is not better for %s" % (h, q))
 
     # ---- subtree results ---------------------------------------------------
@@ -490,10 +604,10 @@ class Checker:
         honest = game["honest_histories"][0] if along else []
         if along:
             leaf = self.node(honest)
-            if leaf is None or not leaf.is_leaf():
+            if leaf is None or not (leaf.is_leaf() or leaf.is_subtree()):
                 self.error("subtree", "honest history does not end in a leaf")
                 return
-            honest_u = leaf.u
+            honest_u = self.utility_at(leaf)
         else:
             honest_u = {e["player"]: self.parser.utility(e["value"]) for e in game["honest_utilities"][0]["utility"]}
         base_all = self.initial
@@ -567,7 +681,7 @@ class Checker:
         honest = r["history"]
         ctx = "%s %s" % (honest, prop)
         honest_leaf = self.node(honest)
-        if honest_leaf is None or not honest_leaf.is_leaf():
+        if honest_leaf is None or not (honest_leaf.is_leaf() or honest_leaf.is_subtree()):
             self.error(ctx, "honest history does not end in a leaf")
             return
         base = self.initial + self.prop_constraints.get(prop, [])
@@ -608,7 +722,7 @@ class Checker:
             if prop in ("weak_immunity", "weaker_immunity"):
                 self.check_wi_strategy(sctx, assume, s, honest, weaker)
             elif prop == "collusion_resilience":
-                self.check_cr_strategy(sctx, assume, s, honest, honest_leaf.u)
+                self.check_cr_strategy(sctx, assume, s, honest, self.utility_at(honest_leaf))
             else:
                 self.check_pr_strategy(sctx, assume, s, honest)
 
@@ -621,7 +735,7 @@ class Checker:
             if prop in ("weak_immunity", "weaker_immunity"):
                 self.check_wi_ce(cctx, assume, ce, honest, weaker)
             elif prop == "collusion_resilience":
-                self.check_cr_ce(cctx, assume, ce, honest, honest_leaf.u)
+                self.check_cr_ce(cctx, assume, ce, honest, self.utility_at(honest_leaf))
             else:
                 self.check_pr_ce(cctx, assume, ce, honest, honest_leaf)
 
