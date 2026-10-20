@@ -29,24 +29,45 @@ NO_OPTS = ["--no-cr-node-cache", "--no-cr-leaf-cache", "--no-cr-implied-groups",
 STATS = collections.Counter()
 
 
-def note_game(game_json, base):
-    leaves = 0
+def bucket(n, limits):
+    lo = 0
+    for hi in limits:
+        if n <= hi:
+            return "%d" % n if lo + 1 == hi or lo == hi else "%d-%d" % (lo + 1, hi)
+        lo = hi
+    return "%d+" % (lo + 1)
 
-    def walk(t):
-        nonlocal leaves
+
+LEAF_BUCKETS = (3, 8, 16, 32)
+
+
+def note_game(game_json, base):
+    leaves, depth, utilities = 0, 0, collections.Counter()
+
+    def walk(t, d):
+        nonlocal leaves, depth
         if "utility" in t:
             leaves += 1
+            depth = max(depth, d)
+            utilities[tuple(u["value"] for u in t["utility"])] += 1
         for c in t.get("children", []):
-            walk(c["child"])
-    walk(game_json["tree"])
+            walk(c["child"], d + 1)
+    walk(game_json["tree"], 0)
     STATS["players %d" % len(game_json["players"])] += 1
-    STATS["leaves " + next(b for lim, b in [(3, "1-3"), (8, "4-8"), (16, "9-16"), (10**9, "17+")] if leaves <= lim)] += 1
+    STATS["leaves " + bucket(leaves, LEAF_BUCKETS)] += 1
+    STATS["depth %d" % depth] += 1
+    STATS["honest length %d" % max(len(h) for h in game_json["honest_histories"])] += 1
+    STATS["with infinitesimals in utilities"] += any(e in v for u in utilities for v in u for e in game_json["infinitesimals"])
+    STATS["with repeated leaves"] += any(n > 1 for n in utilities.values())
     verdicts = {}
     for r in base:
         p = r["property"]
+        violated = sum(not c["holds"] for c in r["cases"])
         STATS[p + " runs"] += 1
         STATS[p + " YES"] += r["holds"]
         STATS[p + " split"] += len(r["cases"]) > 1
+        STATS[p + " mixed"] += 0 < violated < len(r["cases"])
+        STATS[p + " max cases"] = max(STATS[p + " max cases"], len(r["cases"]))
         verdicts[(tuple(r["history"]), p)] = r["holds"]
     STATS["weak != weaker"] += any(v != verdicts.get((h, "weaker_immunity"))
                                    for (h, p), v in verdicts.items() if p == "weak_immunity")
@@ -54,19 +75,25 @@ def note_game(game_json, base):
 
 def print_stats(iterations):
     def line(prefix, keys, strip=""):
-        return "  " + prefix + ": " + ", ".join("%s %d" % (k[len(strip):], STATS[k]) for k in keys)
+        return "  " + prefix + ": " + (", ".join("%s %d" % (k[len(strip):], STATS[k]) for k in keys if STATS[k]) or "none")
     print(col("=== Statistics after %d iterations ===" % iterations, CYAN))
-    print(line("games", ["players %d" % n for n in (2, 3, 4, 5, 6)] + ["leaves " + b for b in ("1-3", "4-8", "9-16", "17+")]))
+    print(line("players", ["players %d" % n for n in range(2, 7)], "players "))
+    print(line("leaves", ["leaves " + bucket(n, LEAF_BUCKETS) for n in (1, 4, 9, 17, 33)], "leaves "))
+    print(line("depth", ["depth %d" % n for n in range(1, 7)], "depth "))
+    print(line("honest history length", ["honest length %d" % n for n in range(1, 7)], "honest length "))
+    print(line("games", ["with infinitesimals in utilities", "with repeated leaves", "weak != weaker"]))
     for p in PROPS:
         n = STATS[p + " runs"]
         if n:
-            print("  %-21s YES %3d%%, split %3d%% of %d runs"
-                  % (p, 100 * STATS[p + " YES"] // n, 100 * STATS[p + " split"] // n, n))
-    print("  weak and weaker immunity differ in %d games" % STATS["weak != weaker"])
+            print("  %-21s YES %3d%%, split %3d%%, mixed %3d%% of %d runs, most cases %d"
+                  % (p, 100 * STATS[p + " YES"] // n, 100 * STATS[p + " split"] // n,
+                     100 * STATS[p + " mixed"] // n, n, STATS[p + " max cases"]))
     print(line("subtrees", ["cut along honest", "cut off honest", "cut nested"]))
     print(line("transforms", sorted(k for k in STATS if k.startswith("transform ")), "transform "))
-    print(line("switches", sorted(k for k in STATS if k.startswith("--no-") or k == "--exact-splits" or k == "--reset-from-root")))
-    print(line("checks", ["results verified", "checker undecided", "checker timeouts", "checkmate timeouts"]))
+    print(line("switches", sorted(k for k in STATS if k.startswith("--no-") or k in ("--exact-splits", "--reset-from-root"))))
+    print(line("verified", ["verified game", "verified transformed", "verified subtree", "verified supertree",
+                            "verified strategies", "verified counterexamples", "verified preconditions"], "verified "))
+    print(line("skipped", ["checker unsupported", "checker undecided", "checker timeouts", "checkmate timeouts"]))
 
 
 def col(txt, code):
@@ -206,7 +233,18 @@ def run_checker(game, json_out, flags):
     if p.returncode != 0:
         raise Bug("verification of checkmate's results failed. checkmate ran as:\n  %s"
                   % fmt_cmd([args.checkmate, game] + flags + ["--json-out", json_out]), cmd, p.stdout)
-    STATS["results verified"] += 1
+    if p.stdout.startswith("UNSUPPORTED"):
+        STATS["checker unsupported"] += 1
+        print(p.stdout.strip())
+        return
+    kind = ("subtree" if "--subtree" in flags else "supertree" if game.endswith("-super.json")
+            else "transformed" if game.endswith("-meta.json") else "game")
+    STATS["verified " + kind] += 1
+    if kind != "subtree":
+        for r in json.load(open(json_out))["results"]:
+            STATS["verified strategies"] += len(r["strategies"])
+            STATS["verified counterexamples"] += len(r["counterexamples"])
+            STATS["verified preconditions"] += "precondition" in r
     print(p.stdout.strip().split("\n")[-1])
 
 
