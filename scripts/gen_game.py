@@ -30,11 +30,11 @@ def lin_term(rng, names, max_coef, constant_range, nonneg=False):
     return s
 
 
-def gen_utility(rng, constants, infinitesimals, pos_rate):
+def gen_utility(rng, constants, infinitesimals, pos_rate, real_pool, inf_rate):
     nonneg = rng.random() < pos_rate
-    s = lin_term(rng, constants, 2, 3, nonneg)
-    if infinitesimals and rng.random() < 0.4:
-        inf = lin_term(rng, infinitesimals, 2, 0, nonneg)
+    s = rng.choice(real_pool) if real_pool else lin_term(rng, constants, 2, 3, nonneg)
+    if infinitesimals and rng.random() < inf_rate:
+        inf = lin_term(rng, infinitesimals, 2, 0, nonneg and rng.random() < 0.5)
         if inf != "0":
             s = "%s + (%s)" % (s, inf)
     return s
@@ -97,7 +97,14 @@ def gen_game(rng):
     depth = rng.randint(1, 4)
     # Fully random utilities make nearly every honest history insecure, so most games lean non-negative.
     pos_rate = rng.choice([0.0, 0.5, 0.9, 1.0])
-    term = lambda: gen_utility(rng, constants, infinitesimals, pos_rate)
+    # Infinitesimals only matter when real parts tie (or are 0, for weak immunity), so with
+    # infinitesimals, real parts usually come from a small pool that includes 0.
+    real_pool, inf_rate = None, 0.4
+    if infinitesimals and rng.random() < 0.7:
+        real_pool = ["0"] + [lin_term(rng, constants, 2, 3, rng.random() < pos_rate)
+                             for _ in range(rng.randint(1, 2))]
+        inf_rate = 0.8
+    term = lambda: gen_utility(rng, constants, infinitesimals, pos_rate, real_pool, inf_rate)
     # Repeated terms and whole repeated leaves give ties and exercise the caches keyed by utilities.
     if rng.random() < 0.4:
         pool = [term() for _ in range(rng.randint(2, 5))]
