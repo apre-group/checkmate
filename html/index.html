@@ -44,6 +44,10 @@
 <div class="row">
     <label for="example">Example:</label>
     <select id="example"><option value="">loading…</option></select>
+    <span>or</span>
+    <button id="random" class="secondary">Random game</button>
+    <label for="seed">seed:</label>
+    <input type="text" id="seed" placeholder="random" style="flex:0 0 110px; min-width: 0">
 </div>
 <textarea id="game" spellcheck="false"></textarea>
 <div id="parse-error" class="no"></div>
@@ -84,6 +88,7 @@
 <h2>Output</h2>
 <div id="output"></div>
 
+<script src="gen_game.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 let game = null, results = null, selection = null, worker = null;
@@ -98,6 +103,17 @@ fetch('examples/index.json').then(r => r.json()).then(names => {
 }).catch(() => { $('example').innerHTML = '<option value="">(no examples found)</option>'; });
 
 $('example').addEventListener('change', e => loadExample(e.target.value));
+
+$('random').addEventListener('click', () => {
+    const typed = parseInt($('seed').value, 10);
+    const seed = Number.isNaN(typed) ? Math.floor(Math.random() * 1e9) : typed;
+    $('seed').value = '';
+    $('seed').placeholder = String(seed);
+    $('example').value = '';
+    $('game').value = JSON.stringify(genGame(seed), null, 2);
+    gameChanged();
+    $('status').textContent = 'Random game with seed ' + seed;
+});
 
 function loadExample(name) {
     if (!name) return;
