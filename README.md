@@ -78,6 +78,19 @@ Troubleshooting:
 * On macOS, linking can fail with `unknown architecture` errors in `.tbd` files if the Command Line Tools ship an SDK newer than their linker. Update the Command Line Tools, or point CMake to an older SDK, e.g. `-DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.sdk`.
 * If Z3 is installed in a non-standard location (e.g. Homebrew on Apple Silicon), pass its paths: `-DCMAKE_CXX_FLAGS=-I/opt/homebrew/include -DCMAKE_EXE_LINKER_FLAGS=-L/opt/homebrew/lib`.
 
+### In the browser
+
+`html/` contains a page that runs CheckMate in the browser, compiled to WebAssembly: pick an example or paste a game, run it, and see the verdicts, cases, strategies and counterexamples drawn on the game tree.
+To build it, install [Emscripten](https://emscripten.org/), get the [Z3](https://github.com/Z3Prover/z3) sources, and run, from the repository root:
+
+```shell
+source /path/to/emsdk/emsdk_env.sh
+scripts/build_emscripten.sh /path/to/z3   # builds Z3 for WebAssembly once, then CheckMate
+cd html && python3 -m http.server         # then open http://localhost:8000
+```
+
+The page must be served over HTTP (not opened as a file), but needs no special server headers.
+
 ## Run
 
 To run the security analysis, execute the following command from the `build` folder (where `GAME` is the path to the input file - for example, `../examples/key_examples/market_entry_game.json`):
