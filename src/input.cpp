@@ -518,7 +518,7 @@ struct Parser {
 				case Lexer::Token::FORALL: {
 					if (!allow_quantifiers) {
 						std::cerr << "checkmate: quantifier in expression " << lexer.current
-							<< ", quantifiers are only allowed in the weak(er) immunity and collusion resilience results of subtrees" << std::endl;
+							<< ", quantifiers are only allowed in the results of subtrees" << std::endl;
 						std::exit(EXIT_FAILURE);
 					}
 					// the variables are declared constants, bound by name (cf. z3::Bool::forall)
@@ -692,7 +692,7 @@ static SubtreeResults parse_subtree_results(Parser &parser, const json &subtree_
 			for (const json &_case_entry: _case_pr) {
 				if(_case_entry != "true") {
 					const std::string &_case_e = _case_entry;
-					_case.push_back(parse_case(parser, _case_e));
+					_case.push_back(parse_case(parser, _case_e, true));
 				}
 			}
 			std::vector<Cond_Utility> utilities = {};
@@ -744,7 +744,7 @@ static SubtreeResults parse_subtree_results(Parser &parser, const json &subtree_
 					assert(pr_condition_json.is_string());
 					const std::string &string = pr_condition_json;
 				
-					pr_condition = parser.parse_constraint(string.c_str());
+					pr_condition = parser.parse_constraint(string.c_str(), true);
 				}
 
 				Cond_Utility cond_utility {pr_utility, pr_condition};

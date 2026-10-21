@@ -86,10 +86,37 @@ SubtreeResults subtree_mode(const Options &options, const Input &input, const Ut
 		}
 	}
 
-	// TODO: practicality results of the subtree (practical utilities per case), once ComputeCPR provides them
+	// practicality: for each practical utility set, the constraints under which it is practical (Definition 4.30)
 	if (options.practicality) {
-		bool holds = computeCPR(input);
-		std::cout << (holds ? "YES, the subtree is " : "NO, the subtree is not ") << "practical for the analyzed history." << std::endl;
+		z3::Bool ic = property_constraints(input, PropertyType::Practicality);
+		if (input.root->honest) {
+			// along the honest history, the only possible practical utility set is that of the honest utilities
+			z3::Bool result = computeCPR(input, input.root.get(), ustar, ic, z3::Bool(true));
+			bool holds = !violated_somewhere(ic, result);
+			std::cout << (holds ? "YES, the subtree is " : "NO, the subtree is not ") << "practical for the analyzed history." << std::endl;
+			SubtreeResult normalised = subtree_result({}, ic, result, holds);
+			if (!normalised.satisfied_in_case.empty()) {
+				PracticalitySubtreeResult practical {normalised.satisfied_in_case[0], {}};
+				for (const UtilityTuple &honest : ustar) {
+					practical.utilities.push_back({honest.leaf, honest.condition});
+				}
+				results.practicality.push_back(std::move(practical));
+			}
+		} else {
+			// off the honest history: the rationalizable utility sets, for a supertree in which the subtree is off its honest history
+			std::vector<DomCandidate> candidates = computeDom(input, input.root.get(), ic, z3::Bool(true));
+			for (const DomCandidate &candidate : candidates) {
+				// always a rationalizable utility set: the empty case (written as "true")
+				bool always = !holds_somewhere(ic, !candidate.constraint, HOLDS_SOMEWHERE_TIMEOUT).value_or(true);
+				PracticalitySubtreeResult rationalizable {always ? std::vector<z3::Bool>() : std::vector<z3::Bool> {candidate.constraint}, {}};
+				for (const LiveUtility &utility : candidate.utilities) {
+					rationalizable.utilities.push_back({*utility.utility, utility.live});
+				}
+				results.practicality.push_back(std::move(rationalizable));
+			}
+			std::cout << "The subtree has " << candidates.size() << " rationalizable utility set"
+				<< (candidates.size() == 1 ? "" : "s") << " off the honest history." << std::endl;
+		}
 	}
 
 	return results;

@@ -44,7 +44,7 @@ int main(int, char **argv) {
 			std::cout << std::endl << std::endl << "Checking history " << full_history << std::endl;
 
 			UtilityTuplesSet ustar;
-			if (options.collusion_resilience) {
+			if (options.collusion_resilience || options.practicality) {
 				ustar = compute_ustar(input.root.get(), history);
 			}
 			run(options, ustar, full_history, &history);

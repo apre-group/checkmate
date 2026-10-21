@@ -1,6 +1,7 @@
 #ifndef __checkmate_property_checks__
 #define __checkmate_property_checks__
 
+#include <array>
 #include <cstdint>
 #include <iostream>
 #include <map>
@@ -61,8 +62,31 @@ struct CrCache {
 z3::Bool computeCCR(const Input &input, const Node *node, const UtilityTuplesSet &ustar, const z3::Bool &ic, const z3::Bool &cond,
 	uint64_t group, CrCache &cache, const std::unordered_set<std::string> &known_unknowns = {});
 
-// practicality; in practicality.cpp
-bool computeCPR(const Input &input);
+// a utility of a leaf with its liveness condition (Definition 4.23): live for the values of the unknowns satisfying `live`
+// (`utility` points into the tree or a subtree result, so the input must outlive it)
+struct LiveUtility {
+	const std::vector<Utility> *utility;
+	z3::Bool live;
+};
+
+// a conditional utility set that is a rationalizable utility set (Definition 4.24) under `constraint`
+// on the constants known where it was computed
+struct DomCandidate {
+	z3::Bool constraint;
+	std::vector<LiveUtility> utilities;
+};
+
+// ComputeDom (Algorithm 3): the rationalizable utility sets of the game at `node` off the honest history, each with the
+// constraint under which it is one, given the initial constraints `ic` and the conditions `cond` on the way to `node`;
+// `known_unknowns` as for computeCCR; in practicality.cpp
+std::vector<DomCandidate> computeDom(const Input &input, const Node *node, const z3::Bool &ic, const z3::Bool &cond,
+	const std::unordered_set<std::string> &known_unknowns = {});
+
+// ComputeCPR (Algorithm 4): the constraints under which the game at `node` along the honest history is practical,
+// given the initial constraints `ic` and the conditions `cond` on the way to `node`, compared to the honest utilities `ustar`;
+// `known_unknowns` as for computeCCR; in practicality.cpp
+z3::Bool computeCPR(const Input &input, const Node *node, const UtilityTuplesSet &ustar, const z3::Bool &ic, const z3::Bool &cond,
+	const std::unordered_set<std::string> &known_unknowns = {});
 
 // IC for checking `property`: the initial constraints together with the constraints of the property
 inline z3::Bool property_constraints(const Input &input, PropertyType property) {

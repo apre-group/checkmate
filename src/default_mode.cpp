@@ -50,8 +50,16 @@ bool satisfiesProperty(const Input &input, const UtilityTuplesSet &ustar, Proper
 			z3::Bool result = computeCCR(input, input.root.get(), ustar, ic, z3::Bool(true), 0, cache);
 			return !violated_somewhere(ic, result);
 		}
-		case PropertyType::Practicality:
-			return computeCPR(input);
+		case PropertyType::Practicality: {
+			// without honest history there is no deviation from it to check
+			// (and every subgame has a rationalizable utility set)
+			if (!input.root->honest) {
+				return true;
+			}
+			z3::Bool ic = property_constraints(input, property);
+			z3::Bool result = computeCPR(input, input.root.get(), ustar, ic, z3::Bool(true));
+			return !violated_somewhere(ic, result);
+		}
 	}
 	assert(false);
 	return false;
