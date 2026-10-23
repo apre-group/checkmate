@@ -858,20 +858,6 @@ Answer check_practicality(const Input &input, const z3::Bool &ic, const z3::Bool
 		(input.unknowns.count(name) ? unknown_names : known_names).push_back(name);
 	}
 	Tree tree;
-	const char *dump_dir = std::getenv("CHECKMATE_EXPERIMENT_DIR");
-	static unsigned dump_count = 0;
-	auto dump = [&](const std::string &name, const std::string &text) {
-		if (!dump_dir) return;
-		FILE *f = fopen((std::string(dump_dir) + "/" + std::to_string(dump_count) + "-" + name).c_str(), "w");
-		fputs(text.c_str(), f); fclose(f);
-	};
-	if (dump_dir) {
-		std::vector<Z3_app> all;
-		for (Z3_ast c : known) all.push_back(Z3_to_app(CONTEXT, c));
-		for (Z3_ast c : unknown) all.push_back(Z3_to_app(CONTEXT, c));
-		Z3_ast original = Z3_mk_forall_const(CONTEXT, 0, all.size(), all.data(), 0, nullptr, Z3_mk_implies(CONTEXT, ic.raw(), result.raw()));
-		dump("raw-original.sy", raw_sygus_problem(original));
-	}
 	try {
 		Tree not_ic = make_unary(FormulaNode::NOT, convert(ic.raw()));
 		Tree body = make_binary(FormulaNode::OR, make_block(true, unknown, unknown_names, std::move(not_ic)), convert(result.raw()));
@@ -879,7 +865,6 @@ Answer check_practicality(const Input &input, const z3::Bool &ic, const z3::Bool
 	} catch (Unsupported &) {
 		tree = nullptr;
 	}
-	if (std::getenv("CHECKMATE_FORCE_FALLBACK")) tree = nullptr;
 
 	// 1. replace selectors by quantifiers wherever possible
 	unsigned replaced = 0, remaining = 0;
@@ -918,23 +903,6 @@ Answer check_practicality(const Input &input, const z3::Bool &ic, const z3::Bool
 	std::string replaced_text = std::to_string(replaced) + " of " + std::to_string(replaced + remaining)
 		+ " selector" + (replaced + remaining == 1 ? "" : "s") + " replaced by quantifiers";
 
-	if (dump_dir) {
-		dump("raw-step1.sy", raw_sygus_problem(formula));
-		Z3_solver solver = Z3_mk_solver(CONTEXT); Z3_solver_inc_ref(CONTEXT, solver);
-		Z3_solver_assert(CONTEXT, solver, formula);
-		dump("z3.smt2", std::string(Z3_solver_to_string(CONTEXT, solver)) + "(check-sat)\n");
-		Z3_solver_dec_ref(CONTEXT, solver);
-		if (tree) {
-			SyGuS sygus; std::vector<Z3_ast> u, f, t;
-			Z3_ast matrix = sygus.skolemize(*tree, true, u, f, t);
-			if (!sygus.any_function) sygus.synth_fun("q!unused", {}, Z3_mk_bool_sort(CONTEXT));
-			std::ostringstream problem;
-			problem << "(set-logic ALL)\n" << sygus.functions.str() << sygus.variables.str()
-				<< "(constraint " << Z3_ast_to_string(CONTEXT, matrix) << ")\n(check-synth)\n";
-			dump("skolem.sy", problem.str());
-		}
-		dump_count++;
-	}
 	// 2. Z3, with the remaining selectors as uninterpreted function symbols
 	std::optional<bool> answer = z3_satisfiable(formula, Z3_TIMEOUT);
 	if (answer) {
