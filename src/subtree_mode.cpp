@@ -3,6 +3,7 @@
 
 #include "subtree_mode.hpp"
 #include "property_checks.hpp"
+#include "selectors.hpp"
 
 using json = nlohmann::json;
 
@@ -91,9 +92,16 @@ SubtreeResults subtree_mode(const Options &options, const Input &input, const Ut
 		z3::Bool ic = property_constraints(input, PropertyType::Practicality);
 		if (input.root->honest) {
 			// along the honest history, the only possible practical utility set is that of the honest utilities
+			// the result may contain selectors, which are written out and quantified in the supertree
 			z3::Bool result = computeCPR(input, input.root.get(), ustar, ic, z3::Bool(true));
-			bool holds = !violated_somewhere(ic, result);
-			std::cout << (holds ? "YES, the subtree is " : "NO, the subtree is not ") << "practical for the analyzed history." << std::endl;
+			std::string how;
+			Answer answer = check_practicality(input, ic, result, how);
+			bool holds = answer == Answer::YES;
+			if (answer == Answer::UNKNOWN) {
+				std::cout << "UNKNOWN, could not decide whether the subtree is practical for the analyzed history: " << how << "." << std::endl;
+			} else {
+				std::cout << (holds ? "YES, the subtree is " : "NO, the subtree is not ") << "practical for the analyzed history." << std::endl;
+			}
 			SubtreeResult normalised = subtree_result({}, ic, result, holds);
 			if (!normalised.satisfied_in_case.empty()) {
 				PracticalitySubtreeResult practical {normalised.satisfied_in_case[0], {}};
@@ -104,6 +112,7 @@ SubtreeResults subtree_mode(const Options &options, const Input &input, const Ut
 			}
 		} else {
 			// off the honest history: the rationalizable utility sets, for a supertree in which the subtree is off its honest history
+			// the constraints and liveness conditions may contain selectors, as above
 			std::vector<DomCandidate> candidates = computeDom(input, input.root.get(), ic, z3::Bool(true));
 			for (const DomCandidate &candidate : candidates) {
 				// always a rationalizable utility set: the empty case (written as "true")

@@ -39,10 +39,20 @@ namespace z3 {
 			check_error();
 			return out;
 		}
-		case Real::Operator::CONSTANT:
+		case Real::Operator::CONSTANT: {
+			// a function applied to arguments (selectors of practicality) as the parser reads it: @name(x, y)
+			unsigned arguments = expr.num_args();
+			if (arguments > 0) {
+				Z3_func_decl decl = Z3_get_app_decl(CONTEXT, Z3_to_app(CONTEXT, expr.ast));
+				out << '@' << Z3_get_symbol_string(CONTEXT, Z3_get_decl_name(CONTEXT, decl)) << '(';
+				for (unsigned i = 0; i < arguments; i++)
+					out << (i ? ", " : "") << expr.real_child(i);
+				return out << ')';
+			}
 			out << Z3_ast_to_string(CONTEXT, expr.ast);
 			check_error();
 			return out;
+		}
 		case Real::Operator::MIN:
 			return out << '(' << op << ' ' << expr.real_child(0) << ')';
 		case Real::Operator::ADD:

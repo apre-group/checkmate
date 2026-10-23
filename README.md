@@ -46,6 +46,7 @@ CheckMate is written in C++11. It requires:
 * [CMake](https://cmake.org/) as a build system, although you could do without this in a pinch.
 * The [Z3](https://github.com/Z3Prover/z3) SMT solver, via its API. To obtain the Z3 API, follow the directions in Z3's README or use a recent prebuilt package - Debian has `libz3-dev`, Red Hat has `z3-devel`.
 * To generate some of the examples, [Python 3](https://www.python.org/downloads/) has to be installed as well.
+* Optionally, the [cvc5](https://cvc5.github.io/) solver (a recent release binary is enough, nothing to build against). Practicality of games with condition nodes can need it, see [below](#practicality-with-condition-nodes).
 
 We also use [JSON for modern C++](https://json.nlohmann.me/), but this is already vendored in the source tree as `src/json.hpp`.
 
@@ -67,20 +68,31 @@ To run the security analysis, execute the following command from the `build` fol
 ./checkmate GAME
 ```
 
-There are several options:
-* `--preconditions`: If a property is not satisfied, try to compute preconditions under which the property holds.
-* `--counterexamples`: If a property is not fulfilled, provide a counterexample, i.e. "justifications" why the property does not hold, per analyzed property.
-* `--all_counterexamples`: If a property is not fulfilled, provide **all** counterexamples for the considered problematic case(s). The number of considered problematic cases depends on whether the `all_cases` flag was set.
-* `--all_cases`: If a property is not fulfilled, keep looking for all problematic cases.
-* `--strategies`: If a property is satisfied, provide a witness strategy.
+There are the following options:
 * If not all security properties should be analyzed, users can specify properties individually with some combination of `--weak_immunity`, `--weaker_immunity`, `--collusion_resilience`, and `--practicality`.
 * `--subtree` should be used if the input is intended as part of a larger tree.
 
-For instance, to run a security analysis on the Closing Game [1] with counterexample generation, but only considering weak immunity and collusion resilience, execute the following:
+For instance, to run a security analysis on the simplified Closing Game [1], only considering weak immunity and collusion resilience, execute the following from the `build` folder:
 
 ```shell
-checkmate examples/key_examples/closing_game.json --counterexamples --weak_immunity --collusion_resilience
+./checkmate ../examples/key_examples/closing_game-simplified.json --weak_immunity --collusion_resilience
 ```
+
+### Practicality with condition nodes
+
+Below a condition node, a player who learns the revealed values may break a tie between equally good actions differently for different values.
+CheckMate represents such choices by *selectors*, functions of the revealed values that are quantified at the very end: the game is practical iff some choice of the selectors makes the result true.
+To decide this, CheckMate
+1. replaces every selector by a quantifier over its value wherever that is equivalent (when the selector only occurs under one quantifier),
+2. asks Z3 (10 seconds), with the remaining selectors as uninterpreted functions,
+3. if Z3 cannot decide it, asks cvc5 to synthesize the remaining selectors (without a time limit).
+
+cvc5 is called as `cvc5`, or as given in the environment variable `CHECKMATE_CVC5`, e.g. `CHECKMATE_CVC5=/path/to/cvc5 ./checkmate GAME`.
+If neither Z3 nor cvc5 can decide it, CheckMate answers `UNKNOWN` with the reason.
+Games without such ties need neither selectors nor cvc5.
+
+In subtree mode (`--subtree`), the practicality results may contain selectors, written as `@sel!3!2(x, y)`: the selector `sel!3!2` (the last number is the number of candidates it chooses among) applied to the constants `x` and `y`.
+When a supertree reads the results of a subtree, the selectors get fresh names, so that different subtrees never share a selector, and they are quantified together with the selectors of the supertree.
 
 ## Examples
 

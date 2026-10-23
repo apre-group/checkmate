@@ -159,14 +159,17 @@ z3::Bool computeCCR(const Input &input, const Node *node, const UtilityTuplesSet
 	} else if (node->is_subtree()) {
 		result = get_cr_case(input, node->subtree(), ustar, ic, group, cache);
 	} else if (node->is_condition_node()) {
-		// whichever condition holds, for all values of the unknowns revealed here (quantified only here);
-		// below, they are known: the leaves only quantify over the unknowns that are still unknown there
+		// whichever condition holds, for all values of the constants unknown here: as in ComputeCWI, not only the ones
+		// revealed here, but also the ones that stay unknown, as `ic` may relate them to the revealed ones;
+		// below, the revealed ones are known: the leaves only quantify over the unknowns that are still unknown there
 		const ConditionNode &condition_node = node->condition_node();
+		// if nothing is revealed here, the constants still unknown occur neither in the conditions nor in the results
+		// below (leaves only use known constants), so quantifying them would not change anything
+		const std::vector<z3::Real> unknown = condition_node.revealed.empty()
+			? std::vector<z3::Real>() : still_unknown(input, known_unknowns);
 		std::unordered_set<std::string> known_below = known_unknowns;
-		std::vector<z3::Real> revealed_here;
 		for (const std::string &name : condition_node.revealed) {
 			known_below.insert(name);
-			revealed_here.push_back(z3::Real::constant(name));
 		}
 		std::vector<z3::Bool> conjuncts;
 		for (const ConditionChoice &choice : condition_node.conditions) {
@@ -175,8 +178,8 @@ z3::Bool computeCCR(const Input &input, const Node *node, const UtilityTuplesSet
 				continue;
 			}
 			// as in ComputeCWI: `ic` is only needed in the premise if something is quantified
-			z3::Bool premise = revealed_here.empty() ? choice.condition : all_of({ic, choice.condition});
-			conjuncts.push_back(z3::Bool::forall(revealed_here, premise.implies(child)));
+			z3::Bool premise = unknown.empty() ? choice.condition : all_of({ic, choice.condition});
+			conjuncts.push_back(z3::Bool::forall(unknown, premise.implies(child)));
 		}
 		result = all_of(conjuncts);
 	} else {

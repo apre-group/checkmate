@@ -39,7 +39,8 @@ static z3::Bool get_wi_case(const Input &input, const Subtree &subtree, unsigned
 
 // Algorithm 1 (ComputeCWI) on the subtree rooted at `node`, with the honest history currently marked in the tree
 // and `ic` the initial constraints
-z3::Bool computeCWI(const Input &input, const Node *node, const z3::Bool &ic, unsigned player, bool weaker) {
+z3::Bool computeCWI(const Input &input, const Node *node, const z3::Bool &ic, unsigned player, bool weaker,
+		const std::unordered_set<std::string> &known_unknowns) {
 	if (node->is_leaf()) {
 		const Utility &utility = node->leaf().utilities[player];
 		return weaker ? utility.real >= z3::Real::ZERO : utility >= Utility {z3::Real::ZERO, z3::Real::ZERO};
@@ -50,21 +51,28 @@ z3::Bool computeCWI(const Input &input, const Node *node, const z3::Bool &ic, un
 	}
 
 	if (node->is_condition_node()) {
-		// whichever condition holds, for all values of the unknowns revealed here
+		// whichever condition holds, for all values of the constants unknown here: the ones revealed here, and also
+		// the ones that stay unknown, as `ic` may relate them to the revealed ones; quantifying only the revealed ones
+		// would leave the others free in the result, so that a choice above could depend on them
 		const ConditionNode &condition_node = node->condition_node();
-		std::vector<z3::Real> revealed;
+		// if nothing is revealed here, the constants still unknown occur neither in the conditions nor in the results
+		// below (leaves only use known constants), so quantifying them would not change anything
+		const std::vector<z3::Real> unknown = condition_node.revealed.empty()
+			? std::vector<z3::Real>() : still_unknown(input, known_unknowns);
+		// below, the unknowns revealed here are known
+		std::unordered_set<std::string> known_below = known_unknowns;
 		for (const std::string &name : condition_node.revealed) {
-			revealed.push_back(z3::Real::constant(name));
+			known_below.insert(name);
 		}
 		std::vector<z3::Bool> conjuncts;
 		for (const ConditionChoice &choice : condition_node.conditions) {
-			z3::Bool child = computeCWI(input, choice.node.get(), ic, player, weaker);
+			z3::Bool child = computeCWI(input, choice.node.get(), ic, player, weaker, known_below);
 			if (child.is(z3::Bool(true))) {
 				continue;
 			}
-			// results are only ever used under `ic`, so without revealed unknowns `ic` can be left out of the premise
-			z3::Bool premise = revealed.empty() ? choice.condition : ic && choice.condition;
-			conjuncts.push_back(z3::Bool::forall(revealed, premise.implies(child)));
+			// results are only ever used under `ic`, so without unknowns `ic` can be left out of the premise
+			z3::Bool premise = unknown.empty() ? choice.condition : ic && choice.condition;
+			conjuncts.push_back(z3::Bool::forall(unknown, premise.implies(child)));
 		}
 		return all_of(conjuncts);
 	}
@@ -74,18 +82,18 @@ z3::Bool computeCWI(const Input &input, const Node *node, const z3::Bool &ic, un
 	if (branch.player != player) {
 		std::vector<z3::Bool> conjuncts;
 		for (const Choice &choice : branch.choices) {
-			conjuncts.push_back(computeCWI(input, choice.node.get(), ic, player, weaker));
+			conjuncts.push_back(computeCWI(input, choice.node.get(), ic, player, weaker, known_unknowns));
 		}
 		return all_of(conjuncts);
 	}
 	// our choice along the honest history: we follow it
 	if (branch.honest) {
-		return computeCWI(input, branch.get_honest_child().node.get(), ic, player, weaker);
+		return computeCWI(input, branch.get_honest_child().node.get(), ic, player, weaker, known_unknowns);
 	}
 	// our choice off the honest history: we may pick any action that keeps us weak immune
 	std::vector<z3::Bool> disjuncts;
 	for (const Choice &choice : branch.choices) {
-		disjuncts.push_back(computeCWI(input, choice.node.get(), ic, player, weaker));
+		disjuncts.push_back(computeCWI(input, choice.node.get(), ic, player, weaker, known_unknowns));
 	}
 	return any_of(disjuncts);
 }

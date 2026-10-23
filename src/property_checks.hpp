@@ -15,9 +15,22 @@
 // the checks of the single properties for the honest history currently marked in `input`
 // (or no honest history, if none is marked)
 
+// the constants still unknown at a node: unknown at the root and not revealed on the way (`known_unknowns`)
+inline std::vector<z3::Real> still_unknown(const Input &input, const std::unordered_set<std::string> &known_unknowns) {
+	std::vector<z3::Real> unknown;
+	for (const std::string &name : input.unknowns) {
+		if (!known_unknowns.count(name)) {
+			unknown.push_back(z3::Real::constant(name));
+		}
+	}
+	return unknown;
+}
+
 // ComputeCWI (Algorithm 1): the constraints under which the game at `node` is weak immune for `player`,
-// given the initial constraints `ic` (`weaker`: weaker immunity, on the real parts of the utilities); in weak_immunity.cpp
-z3::Bool computeCWI(const Input &input, const Node *node, const z3::Bool &ic, unsigned player, bool weaker);
+// given the initial constraints `ic` (`weaker`: weaker immunity, on the real parts of the utilities);
+// `known_unknowns` are the constants unknown at the root that were revealed on the way to `node`; in weak_immunity.cpp
+z3::Bool computeCWI(const Input &input, const Node *node, const z3::Bool &ic, unsigned player, bool weaker,
+	const std::unordered_set<std::string> &known_unknowns = {});
 
 // conjunction/disjunction that leave out neutral and stop at dominating constants, to keep the results readable
 inline z3::Bool all_of(const std::vector<z3::Bool> &conjuncts) {
@@ -78,7 +91,8 @@ struct DomCandidate {
 
 // ComputeDom (Algorithm 3): the rationalizable utility sets of the game at `node` off the honest history, each with the
 // constraint under which it is one, given the initial constraints `ic` and the conditions `cond` on the way to `node`;
-// `known_unknowns` as for computeCCR; in practicality.cpp
+// `known_unknowns` as for computeCCR; at condition nodes, candidates are selected by selectors (see selectors.hpp),
+// which may occur in the constraints and liveness conditions; in practicality.cpp
 std::vector<DomCandidate> computeDom(const Input &input, const Node *node, const z3::Bool &ic, const z3::Bool &cond,
 	const std::unordered_set<std::string> &known_unknowns = {});
 

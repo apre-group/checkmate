@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <map>
 #include <fstream>
 #include <iostream>
 #include "json.hpp"
@@ -6,6 +7,40 @@
 #include <variant>
 
 #include "input.hpp"
+#include "selectors.hpp"
+
+// a JSON number as an exact real value: integers of any sign and decimals, e.g. -1, 1.5 or 0.1 (exactly 1/10);
+// JSON may write numbers with an exponent, e.g. 1e+20 or 1.5e-07, which Z3 does not read, so they are expanded first
+static z3::Real json_number(const nlohmann::json &value) {
+	std::string text = value.dump();
+	size_t e = text.find_first_of("eE");
+	if (e != std::string::npos) {
+		long exponent = std::stol(text.substr(e + 1));
+		std::string mantissa = text.substr(0, e);
+		bool negative = !mantissa.empty() && mantissa[0] == '-';
+		if (negative) {
+			mantissa.erase(0, 1);
+		}
+		// the digits without the decimal point, and how many of them are before it
+		size_t point = mantissa.find('.');
+		std::string digits = mantissa;
+		long before = static_cast<long>(mantissa.size());
+		if (point != std::string::npos) {
+			digits.erase(point, 1);
+			before = static_cast<long>(point);
+		}
+		before += exponent;
+		if (before <= 0) {
+			digits = "0." + std::string(-before, '0') + digits;
+		} else if (before >= static_cast<long>(digits.size())) {
+			digits += std::string(before - digits.size(), '0');
+		} else {
+			digits.insert(before, ".");
+		}
+		text = (negative ? "-" : "") + digits;
+	}
+	return z3::Real::value(text);
+}
 
 // lexical analysis for expressions
 struct Lexer {
@@ -30,7 +65,8 @@ struct Lexer {
 		OR,
 		IMPLIES,
 		NOT,
-		FORALL
+		FORALL,
+		SELECTOR
 	};
 
 	// should the next '-' be negation or subtraction?
@@ -41,7 +77,7 @@ struct Lexer {
 	const char *remaining = nullptr;
 	// NUL-terminated copy of the previous token
 	std::string buffer;
-	// the variables bound by the previous token, if it is FORALL
+	// the variables bound by the previous token, if it is FORALL, or the arguments, if it is SELECTOR
 	std::vector<std::string> bound;
 
 	// start analysis of the NUL-terminated expression `start`
@@ -57,18 +93,24 @@ struct Lexer {
 		return *remaining;
 	}
 
-	// the variable list "[x, y]" after "forall", read into `bound`
-	void bound_variables() {
+	// a list of variables "[x, y]" after "forall" (`open` '[', `close` ']'), or of arguments "(x, y)" after a selector
+	// (`open` '(', `close` ')', possibly empty), read into `bound`
+	void variable_list(char open, char close, const char *what) {
 		bound.clear();
 		auto expect = [&](char expected) {
 			while (std::isspace(*remaining)) remaining++;
 			if (*remaining != expected) {
-				std::cerr << "checkmate: expected '" << expected << "' in the variable list after forall in expression " << current << std::endl;
+				std::cerr << "checkmate: expected '" << expected << "' in the " << what << " in expression " << current << std::endl;
 				std::exit(EXIT_FAILURE);
 			}
 			remaining++;
 		};
-		expect('[');
+		expect(open);
+		while (std::isspace(*remaining)) remaining++;
+		if (open == '(' && *remaining == close) {
+			remaining++;
+			return;
+		}
 		do {
 			while (std::isspace(*remaining)) remaining++;
 			std::string name;
@@ -76,13 +118,17 @@ struct Lexer {
 				while (std::isalnum(*remaining) || *remaining == '_')
 					name.push_back(*remaining++);
 			if (name.empty()) {
-				std::cerr << "checkmate: expected a variable in the variable list after forall in expression " << current << std::endl;
+				std::cerr << "checkmate: expected a constant in the " << what << " in expression " << current << std::endl;
 				std::exit(EXIT_FAILURE);
 			}
 			bound.push_back(name);
 			while (std::isspace(*remaining)) remaining++;
 		} while (*remaining == ',' && remaining++);
-		expect(']');
+		expect(close);
+	}
+
+	void bound_variables() {
+		variable_list('[', ']', "variable list after forall");
 	}
 
 	// get the next token or exit with failure
@@ -100,6 +146,19 @@ struct Lexer {
 			}
 			unary = false;
 			return Token::IDENTIFIER;
+		}
+		// a selector applied to constants, as written in practicality results of subtrees: @name(x, y)
+		else if (*remaining == '@') {
+			remaining++;
+			while (std::isalnum(*remaining) || *remaining == '_' || *remaining == '!')
+				buffer.push_back(*remaining++);
+			if (buffer.empty()) {
+				std::cerr << "checkmate: expected a selector name after '@' in expression " << current << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+			variable_list('(', ')', "arguments of a selector");
+			unary = false;
+			return Token::SELECTOR;
 		}
 		// number
 		else if (std::isdigit(*remaining)) {
@@ -282,6 +341,9 @@ struct Parser {
 	std::vector<std::vector<z3::Real>> bound_stack;
 	// whether the expression being parsed may contain quantifiers
 	bool allow_quantifiers = false;
+	// while parsing the results of a subtree: its selectors, by their names in the results, renamed apart from the
+	// selectors of all other subtrees (null elsewhere, where selectors are not allowed)
+	std::map<std::string, Z3_func_decl> *selectors = nullptr;
 
 	// bail out from a malformed expression
 	[[noreturn]] void error() {
@@ -515,6 +577,44 @@ struct Parser {
 					// prefix operator: its operand comes after it, so nothing on the stack is committed yet
 					operation_stack.push_back(Operation::NOT);
 					break;
+				case Lexer::Token::SELECTOR: {
+					if (!selectors) {
+						std::cerr << "checkmate: selector in expression " << lexer.current
+							<< ", selectors are only allowed in the results of subtrees" << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
+					std::vector<z3::Real> arguments;
+					for (const std::string &name : lexer.bound) {
+						if (!identifiers.count(name)) {
+							std::cerr << "checkmate: undeclared constant " << name << std::endl;
+							std::exit(EXIT_FAILURE);
+						}
+						arguments.push_back(z3::Real::constant(name));
+					}
+					auto found = selectors->find(lexer.buffer);
+					if (found == selectors->end()) {
+						// the number of candidates is the last part of the name: sel!<number>!<candidates>
+						size_t separator = lexer.buffer.rfind('!');
+						unsigned candidates = 0;
+						if (separator != std::string::npos)
+							candidates = std::strtoul(lexer.buffer.c_str() + separator + 1, nullptr, 10);
+						if (lexer.buffer.rfind("sel!", 0) != 0 || candidates == 0) {
+							std::cerr << "checkmate: unexpected selector " << lexer.buffer << " in expression " << lexer.current << std::endl;
+							std::exit(EXIT_FAILURE);
+						}
+						found = selectors->emplace(lexer.buffer, fresh_selector(arguments.size(), candidates)).first;
+					}
+					if (Z3_get_domain_size(z3::CONTEXT, found->second) != arguments.size()) {
+						std::cerr << "checkmate: selector " << lexer.buffer << " applied to different numbers of arguments" << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
+					std::vector<Z3_ast> raw;
+					for (const z3::Real &argument : arguments)
+						raw.push_back(argument.raw());
+					Z3_ast application = Z3_mk_app(z3::CONTEXT, found->second, raw.size(), raw.data());
+					utility_stack.push_back({z3::Real::wrap(application), z3::Real::ZERO});
+					break;
+				}
 				case Lexer::Token::FORALL: {
 					if (!allow_quantifiers) {
 						std::cerr << "checkmate: quantifier in expression " << lexer.current
@@ -712,12 +812,11 @@ static SubtreeResults parse_subtree_results(Parser &parser, const json &subtree_
 														parser.parse_utility(string.c_str())
 												});
 					}
-						// numeric utility, assumed real
-					else if (value.is_number_unsigned()) {
-						unsigned number = value;
+						// numeric utility, any JSON number, assumed real
+					else if (value.is_number()) {
 						player_utilities.push_back({
 														utility["player"],
-														{z3::Real::value(number), z3::Real::ZERO}
+														{json_number(value), z3::Real::ZERO}
 												});
 					}
 						// foreign object, bail
@@ -863,12 +962,11 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 						std::exit(EXIT_FAILURE);
 					}
 			}
-				// numeric utility, assumed real
-			else if (value.is_number_unsigned()) {
-				unsigned number = value;
+				// numeric utility, any JSON number, assumed real
+			else if (value.is_number()) {
 				player_utilities.push_back({
 												   utility["player"],
-												   {z3::Real::value(number), z3::Real::ZERO}
+												   {json_number(value), z3::Real::ZERO}
 										   });
 			}
 				// foreign object, bail
@@ -902,6 +1000,10 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 			std::exit(EXIT_FAILURE);
 		}
 		std::unique_ptr<Subtree> subtree(new Subtree());
+		// the selectors in the practicality results of this subtree get fresh names, different from those of other
+		// subtrees (the same results may be used for several subtrees, and every subtree file starts at sel!0)
+		std::map<std::string, Z3_func_decl> selectors;
+		parser.selectors = &selectors;
 		for (const json &entry : subtree_json) {
 			SubtreeEntry subtree_entry;
 			if (entry.contains("honest_history")) {
@@ -915,6 +1017,7 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 			subtree_entry.results = parse_subtree_results(parser, entry["subtree"], input);
 			subtree->entries.push_back(subtree_entry);
 		}
+		parser.selectors = nullptr;
 		return subtree;
 	}
 
@@ -983,12 +1086,11 @@ static std::vector<Utility> parse_utility_vector(Parser &parser, const json &uti
 											parser.parse_utility(string.c_str())
 									});
 		}
-		// numeric utility, assumed real
-		else if (value.is_number_unsigned()) {
-			unsigned number = value;
+		// numeric utility, any JSON number, assumed real
+		else if (value.is_number()) {
 			player_utilities.push_back({
 											utility["player"],
-											{z3::Real::value(number), z3::Real::ZERO}
+											{json_number(value), z3::Real::ZERO}
 									});
 		}
 		// foreign object, bail

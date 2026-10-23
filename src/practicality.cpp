@@ -1,26 +1,22 @@
 #include "property_checks.hpp"
+#include "selectors.hpp"
 
 // milliseconds to spend on deciding whether a candidate's constraint is satisfiable: undecided candidates are kept,
 // which is sound, as pruning a candidate only saves work
 static const unsigned PRUNE_TIMEOUT = 1000;
+// the same for formulas with selectors: showing that they are satisfiable needs a model of the selectors,
+// which is the hard part of the final check; showing that they are unsatisfiable is usually quick
+static const unsigned SELECTOR_PRUNE_TIMEOUT = 100;
 
-// Check(context ∧ formula) = sat, or undecided in time
+// Check(context ∧ formula) = sat, or undecided in time; with selectors, Z3's general solver decides much more in time
 static bool maybe_satisfiable(const z3::Bool &context, const z3::Bool &formula) {
 	if (formula.is(z3::Bool(false))) {
 		return false;
 	}
-	return holds_somewhere(context, formula, PRUNE_TIMEOUT).value_or(true);
-}
-
-// the constants still unknown at a node: unknown at the root and not revealed on the way
-static std::vector<z3::Real> still_unknown(const Input &input, const std::unordered_set<std::string> &known_unknowns) {
-	std::vector<z3::Real> unknown;
-	for (const std::string &name : input.unknowns) {
-		if (!known_unknowns.count(name)) {
-			unknown.push_back(z3::Real::constant(name));
-		}
+	if (contains_selectors(formula)) {
+		return satisfiable_within(all_of({context, formula}), SELECTOR_PRUNE_TIMEOUT).value_or(true);
 	}
-	return unknown;
+	return holds_somewhere(context, formula, PRUNE_TIMEOUT).value_or(true);
 }
 
 // premise → conclusion and ¬formula, leaving out true and false, to keep the results readable
@@ -281,130 +277,82 @@ static std::vector<DomCandidate> branch_dom(const Input &input, const Branch &br
 	return result;
 }
 
-// a sequence of candidates of a condition edge c (ComputeDom at a condition node), read as a priority list:
-// for values of the revealed constants, the first candidate whose constraint holds is selected;
-// `covered` is ∀ revealed (IC ∧ cond ∧ c → some candidate holds), `utilities` the utilities of the candidates
-// with liveness condition c ∧ φ_k ∧ ¬φ_j (j < k) ∧ c_u
-struct CandidateSequence {
-	z3::Bool covered;
-	std::vector<LiveUtility> utilities;
-};
-
-// the sequences of pairwise distinct candidates in `list` for condition edge `condition` whose `covered` is satisfiable,
-// leaving out sequences equivalent to one that is kept: with a candidate that is never selected,
-// or with adjacent candidates whose constraints never hold at once in decreasing order (swapping them changes nothing)
-static std::vector<CandidateSequence> condition_sequences(const std::vector<DomCandidate> &list, const z3::Bool &ic, const z3::Bool &cond,
-		const z3::Bool &condition, const std::vector<z3::Real> &revealed) {
-	const z3::Bool context = all_of({ic, cond});
-	const z3::Bool edge_context = all_of({ic, cond, condition});
-	// as in ComputeCWI: results are only used under IC ∧ cond, so they are only needed in the premise if something is quantified
-	const z3::Bool premise = revealed.empty() ? condition : edge_context;
-
-	// whether the constraints of candidates i and j can hold at once, computed once
-	std::map<std::pair<size_t, size_t>, bool> overlapping;
-	auto overlap = [&](size_t i, size_t j) {
-		auto key = std::make_pair(std::min(i, j), std::max(i, j));
-		auto cached = overlapping.find(key);
-		if (cached != overlapping.end()) {
-			return cached->second;
-		}
-		bool result = maybe_satisfiable(edge_context, all_of({list[i].constraint, list[j].constraint}));
-		overlapping.emplace(key, result);
-		return result;
-	};
-
-	std::vector<CandidateSequence> sequences;
-	std::vector<size_t> sequence;
-	std::vector<bool> used(list.size(), false);
-	// the constraints of the candidates in `sequence` and the utilities with their liveness conditions so far
-	std::vector<z3::Bool> earlier;
-	std::vector<LiveUtility> utilities;
-
-	auto extend = [&](auto &extend) -> void {
-		z3::Bool covered = normalise(context, forall(revealed, implies(premise, any_of(earlier))));
-		if (!covered.is(z3::Bool(false))) {
-			sequences.push_back({covered, utilities});
-		}
-		z3::Bool none_earlier = negate(any_of(earlier));
-		for (size_t next = 0; next < list.size(); next++) {
-			if (used[next] || (!sequence.empty() && sequence.back() > next && !overlap(sequence.back(), next))) {
-				continue;
-			}
-			// under the edge's context, as it is only used together with the condition of the edge
-			z3::Bool selected = normalise(edge_context, all_of({list[next].constraint, none_earlier}));
-			// never selected after the candidates so far: the sequence without it is the same
-			if (selected.is(z3::Bool(false))) {
-				continue;
-			}
-			size_t utilities_before = utilities.size();
-			for (const LiveUtility &utility : list[next].utilities) {
-				z3::Bool live = normalise(edge_context, all_of({selected, utility.live}));
-				if (!live.is(z3::Bool(false))) {
-					utilities.push_back({utility.utility, all_of({condition, live})});
-				}
-			}
-			used[next] = true;
-			sequence.push_back(next);
-			earlier.push_back(list[next].constraint);
-			extend(extend);
-			earlier.pop_back();
-			sequence.pop_back();
-			used[next] = false;
-			utilities.erase(utilities.begin() + utilities_before, utilities.end());
-		}
-	};
-	extend(extend);
-	return sequences;
+// the constants unknown at a condition node that are quantified there: all of them, not only the revealed ones, as IC may
+// relate them (as in ComputeCWI); if nothing is revealed, they occur neither in the conditions nor in the results below
+static std::vector<z3::Real> quantified_at(const Input &input, const ConditionNode &condition_node,
+		const std::unordered_set<std::string> &known_unknowns) {
+	return condition_node.revealed.empty() ? std::vector<z3::Real>() : still_unknown(input, known_unknowns);
 }
 
-// ComputeDom at a condition node: a sequence of candidates for every condition edge, which together have to cover
-// all values of the revealed constants
-static std::vector<DomCandidate> condition_dom(const Input &input, const ConditionNode &condition_node, const z3::Bool &ic,
-		const z3::Bool &cond, const std::unordered_set<std::string> &known_unknowns) {
+// ComputeDom at a condition node with selectors (Algorithm 3): a single candidate, which selects for every condition edge c
+// and all values of the constants known after c one of the candidates of the subgame after c; the selected candidate has
+// to hold wherever c is taken: ∀ unknown (IC ∧ cond ∧ c → ∨_k (σ_c = k ∧ φ_k)), and a utility of the k-th candidate is
+// live iff c ∧ σ_c = k ∧ its liveness condition. If the constraints of the candidates never hold at once, the candidate
+// whose constraint holds is the only one that can be selected, and no selector is needed: σ_c = k is replaced by φ_k
+static std::vector<DomCandidate> condition_dom_selectors(const Input &input, const ConditionNode &condition_node,
+		const z3::Bool &ic, const z3::Bool &cond, const std::unordered_set<std::string> &known_unknowns) {
 	// below, the unknowns revealed here are known
 	std::unordered_set<std::string> known_below = known_unknowns;
-	std::vector<z3::Real> revealed_here;
 	for (const std::string &name : condition_node.revealed) {
 		known_below.insert(name);
-		revealed_here.push_back(z3::Real::constant(name));
+	}
+	const std::vector<z3::Real> unknown = quantified_at(input, condition_node, known_unknowns);
+	// the arguments of the selectors: the constants known after the edges, in a fixed order
+	std::vector<std::string> known_names;
+	for (const auto &entry : input.utilities) {
+		if (!input.unknowns.count(entry.first) || known_below.count(entry.first)) {
+			known_names.push_back(entry.first);
+		}
+	}
+	std::sort(known_names.begin(), known_names.end());
+	std::vector<z3::Real> known_after;
+	for (const std::string &name : known_names) {
+		known_after.push_back(z3::Real::constant(name));
 	}
 
-	std::vector<std::vector<CandidateSequence>> sequences;
+	const z3::Bool context = all_of({ic, cond});
+	std::vector<z3::Bool> covered;
+	DomCandidate candidate;
 	for (const ConditionChoice &choice : condition_node.conditions) {
 		z3::Bool child_cond = all_of({cond, choice.condition});
+		// no candidate for this edge: then the constraint below says that the edge is never taken
 		std::vector<DomCandidate> list = computeDom(input, choice.node.get(), ic, child_cond, known_below);
-		sequences.push_back(condition_sequences(list, ic, cond, choice.condition, revealed_here));
-		if (sequences.back().empty()) {
+		const z3::Bool edge_context = all_of({ic, child_cond});
+		// as in ComputeCWI: results are only used under IC ∧ cond, so they are only needed in the premise if something is quantified
+		const z3::Bool premise = unknown.empty() ? choice.condition : edge_context;
+
+		bool overlapping = false;
+		for (size_t i = 0; i < list.size() && !overlapping; i++) {
+			for (size_t j = i + 1; j < list.size() && !overlapping; j++) {
+				overlapping = maybe_satisfiable(edge_context, all_of({list[i].constraint, list[j].constraint}));
+			}
+		}
+		std::optional<Selector> selector;
+		if (overlapping) {
+			selector.emplace(known_after, list.size());
+		}
+
+		std::vector<z3::Bool> valid;
+		for (size_t k = 0; k < list.size(); k++) {
+			z3::Bool selected = selector ? selector->selects(k + 1) : list[k].constraint;
+			valid.push_back(selector ? all_of({selected, list[k].constraint}) : selected);
+			for (const LiveUtility &utility : list[k].utilities) {
+				z3::Bool live = selector ? all_of({selected, utility.live}) : normalise(edge_context, all_of({selected, utility.live}));
+				if (!live.is(z3::Bool(false))) {
+					candidate.utilities.push_back({utility.utility, all_of({choice.condition, live})});
+				}
+			}
+		}
+		covered.push_back(normalise(context, forall(unknown, implies(premise, any_of(valid)))));
+		if (covered.back().is(z3::Bool(false))) {
 			return {};
 		}
 	}
-
-	const z3::Bool context = all_of({ic, cond});
-	std::vector<DomCandidate> result;
-	// the sequence picked for every condition edge, enumerated like an odometer
-	std::vector<size_t> picked(sequences.size(), 0);
-	while (true) {
-		std::vector<z3::Bool> covered;
-		DomCandidate candidate;
-		for (size_t c = 0; c < sequences.size(); c++) {
-			const CandidateSequence &sequence = sequences[c][picked[c]];
-			covered.push_back(sequence.covered);
-			candidate.utilities.insert(candidate.utilities.end(), sequence.utilities.begin(), sequence.utilities.end());
-		}
-		candidate.constraint = normalise(context, all_of(covered));
-		if (!candidate.constraint.is(z3::Bool(false))) {
-			add_candidate(result, std::move(candidate));
-		}
-
-		size_t c = 0;
-		while (c < sequences.size() && ++picked[c] == sequences[c].size()) {
-			picked[c++] = 0;
-		}
-		if (c == sequences.size()) {
-			break;
-		}
+	candidate.constraint = normalise(context, all_of(covered));
+	if (candidate.constraint.is(z3::Bool(false))) {
+		return {};
 	}
-	return result;
+	return {candidate};
 }
 
 std::vector<DomCandidate> computeDom(const Input &input, const Node *node, const z3::Bool &ic, const z3::Bool &cond,
@@ -416,7 +364,7 @@ std::vector<DomCandidate> computeDom(const Input &input, const Node *node, const
 		return get_dom_cases(node->subtree());
 	}
 	if (node->is_condition_node()) {
-		return condition_dom(input, node->condition_node(), ic, cond, known_unknowns);
+		return condition_dom_selectors(input, node->condition_node(), ic, cond, known_unknowns);
 	}
 	return branch_dom(input, node->branch(), ic, cond, known_unknowns);
 }
@@ -432,14 +380,13 @@ z3::Bool computeCPR(const Input &input, const Node *node, const UtilityTuplesSet
 	}
 
 	if (node->is_condition_node()) {
-		// whichever condition holds, for all values of the unknowns revealed here
+		// whichever condition holds, for all values of the constants unknown here
 		const ConditionNode &condition_node = node->condition_node();
 		std::unordered_set<std::string> known_below = known_unknowns;
-		std::vector<z3::Real> revealed_here;
 		for (const std::string &name : condition_node.revealed) {
 			known_below.insert(name);
-			revealed_here.push_back(z3::Real::constant(name));
 		}
+		const std::vector<z3::Real> unknown = quantified_at(input, condition_node, known_unknowns);
 		std::vector<z3::Bool> conjuncts;
 		for (const ConditionChoice &choice : condition_node.conditions) {
 			z3::Bool child = computeCPR(input, choice.node.get(), ustar, ic, all_of({cond, choice.condition}), known_below);
@@ -447,8 +394,8 @@ z3::Bool computeCPR(const Input &input, const Node *node, const UtilityTuplesSet
 				continue;
 			}
 			// as in ComputeCWI: `ic` and `cond` are only needed in the premise if something is quantified
-			z3::Bool premise = revealed_here.empty() ? choice.condition : all_of({ic, cond, choice.condition});
-			conjuncts.push_back(z3::Bool::forall(revealed_here, implies(premise, child)));
+			z3::Bool premise = unknown.empty() ? choice.condition : all_of({ic, cond, choice.condition});
+			conjuncts.push_back(z3::Bool::forall(unknown, implies(premise, child)));
 		}
 		return all_of(conjuncts);
 	}

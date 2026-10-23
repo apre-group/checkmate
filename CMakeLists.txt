@@ -23,6 +23,7 @@ add_executable(checkmate
 	src/weak_immunity.cpp
 	src/collusion_resilience.cpp
 	src/practicality.cpp
+	src/selectors.cpp
 )
 target_link_libraries(checkmate z3)
 

@@ -71,6 +71,9 @@ namespace z3 {
 		// wrap `ast`
 		Expression(Z3_ast ast) : ast(ast) {}
 
+		// the wrapped Z3 AST, for code that works with the Z3 C API directly
+		Z3_ast raw() const { return ast; }
+
 	protected:
 
 		// are we of Boolean sort? moderately expensive so protected
@@ -109,6 +112,9 @@ namespace z3 {
 
 	public:
 		Bool() : Expression() {}
+
+		// wrap a Z3 AST of Boolean sort built with the Z3 C API directly
+		static Bool wrap(Z3_ast ast) { return Bool(ast); }
 
 		Bool(bool b) {
 			ast = b ? Z3_mk_true(CONTEXT) : Z3_mk_false(CONTEXT);
@@ -390,6 +396,9 @@ namespace z3 {
 		friend std::ostream &operator<<(std::ostream &, Real);
 	public:
 		Real() : Expression() {}
+
+		// wrap a Z3 AST of real sort built with the Z3 C API directly
+		static Real wrap(Z3_ast ast) { return Real(ast); }
 
 		// construct an integer-valued real expression
 		static Real value(unsigned number) {
