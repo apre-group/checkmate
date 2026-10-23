@@ -15,8 +15,10 @@ using z3::CONTEXT;
 
 namespace {
 
-// milliseconds for Z3 on the final formula with selectors (cvc5's synthesis runs without a time limit)
+// milliseconds for Z3 on the final formula with selectors
 const unsigned Z3_TIMEOUT = 10000;
+// milliseconds for cvc5's synthesis, if Z3 cannot decide it (20 minutes)
+const unsigned CVC5_TIMEOUT = 20 * 60 * 1000;
 
 // all symbols introduced here contain '!', which cannot occur in identifiers of the input
 // selectors are named sel!<number>!<number of candidates>
@@ -746,7 +748,7 @@ std::string run_cvc5(const std::string &problem, std::string &how) {
 
 	const char *configured = std::getenv("CHECKMATE_CVC5");
 	std::string cvc5 = configured ? configured : "cvc5";
-	std::string command = "'" + cvc5 + "' --lang sygus2 '" + path + "' 2>&1";
+	std::string command = "'" + cvc5 + "' --lang sygus2 --tlimit=" + std::to_string(CVC5_TIMEOUT) + " '" + path + "' 2>&1";
 	std::string output;
 	FILE *pipe = popen(command.c_str(), "r");
 	if (pipe) {

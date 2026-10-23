@@ -286,7 +286,7 @@ class Truth(Constraint):
         pass
 
     def __repr__(self) -> str:
-        return "True"
+        return "true"
 
 class Falsehood(Constraint):
 
@@ -294,7 +294,7 @@ class Falsehood(Constraint):
         pass
 
     def __repr__(self) -> str:
-        return "False"
+        return "false"
 
 
 class DisequationConstraint(Constraint):

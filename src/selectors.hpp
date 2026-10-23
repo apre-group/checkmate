@@ -47,7 +47,7 @@ enum class Answer { YES, NO, UNKNOWN };
 // the final check of practicality (SatisfiesProperty) for `result` = ComputeCPR at the root under the initial constraints `ic`:
 // 1. every selector that only occurs under one quantifier scope is replaced by a quantifier over its value,
 // 2. Z3 decides the remaining formula, with the remaining selectors as uninterpreted function symbols, within a timeout,
-// 3. if Z3 cannot decide it, cvc5 tries to synthesize the remaining selectors (SyGuS), without a time limit;
+// 3. if Z3 cannot decide it, cvc5 tries to synthesize the remaining selectors (SyGuS), within 20 minutes;
 // cvc5 is called as `cvc5`, or as given in the environment variable CHECKMATE_CVC5;
 // `how` describes which step decided, or why nothing did
 Answer check_practicality(const Input &input, const z3::Bool &ic, const z3::Bool &result, std::string &how);
