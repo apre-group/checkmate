@@ -4,108 +4,246 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="CheckMate in your browser">
+    <meta name="color-scheme" content="light dark">
     <title>CheckMate in your browser</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+    <script>
+        // apply a saved theme before the page renders, so it does not flash
+        try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+    </script>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; line-height: 1.5; color: #222; }
-        h1 { margin-bottom: 4px; }
-        .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+        :root {
+            --bg: #f5f4ef; --surface: #ffffff; --surface-2: #f0eee8; --border: #e3e0d8; --border-strong: #cfcbc0;
+            --text: #1d2125; --muted: #6b6f76; --link: #2b5fb8;
+            --accent: #2f7a52; --accent-hover: #276644; --accent-text: #ffffff;
+            --honest: #2b5fb8; --strategy: #2f7a52; --ce: #c2362f; --edge: #a8a59c; --leaf: #5b5f66;
+            --yes-bg: #e3f2e8; --no-bg: #fbe5e3; --selected: #fdf0c2; --hover: #f2f0ea; --error-bg: #fbdcd8;
+            --h-key: #7b3fa8; --h-player: #2b5fb8; --h-action: #2f7a52; --h-arrow: #a3a09a;
+            --h-num: #b85c00; --h-const: #0a7f86; --h-comment: #9a968c;
+            --shadow: 0 1px 2px rgba(30, 30, 20, 0.04), 0 2px 8px rgba(30, 30, 20, 0.04);
+            --sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --bg: #1c1f24; --surface: #24282f; --surface-2: #2b3038; --border: #383e48; --border-strong: #4a515c;
+                --text: #eef0f3; --muted: #a8adb5; --link: #82aaff;
+                --accent: #3d9a6a; --accent-hover: #47ad78; --accent-text: #ffffff;
+                --honest: #6f9ef8; --strategy: #5cc68e; --ce: #f0716a; --edge: #737a85; --leaf: #b0b5bc;
+                --yes-bg: #1f402f; --no-bg: #4a2624; --selected: #4a4128; --hover: #313741; --error-bg: #55302d;
+                --h-key: #c79bf2; --h-player: #82aaff; --h-action: #8bd5a8; --h-arrow: #808792;
+                --h-num: #f5a35f; --h-const: #5fd0d6; --h-comment: #8a9099;
+                --shadow: none;
+            }
+        }
+        :root[data-theme="dark"] {
+            --bg: #1c1f24; --surface: #24282f; --surface-2: #2b3038; --border: #383e48; --border-strong: #4a515c;
+            --text: #eef0f3; --muted: #a8adb5; --link: #82aaff;
+            --accent: #3d9a6a; --accent-hover: #47ad78; --accent-text: #ffffff;
+            --honest: #6f9ef8; --strategy: #5cc68e; --ce: #f0716a; --edge: #737a85; --leaf: #b0b5bc;
+            --yes-bg: #1f402f; --no-bg: #4a2624; --selected: #4a4128; --hover: #313741; --error-bg: #55302d;
+            --h-key: #c79bf2; --h-player: #82aaff; --h-action: #8bd5a8; --h-arrow: #808792;
+            --h-num: #f5a35f; --h-const: #5fd0d6; --h-comment: #8a9099;
+            --shadow: none;
+        }
+        :root[data-theme="light"] { color-scheme: light; }
+        :root[data-theme="dark"] { color-scheme: dark; }
+
+        * { box-sizing: border-box; }
+        body { font-family: var(--sans); font-size: 15px; line-height: 1.55; color: var(--text); background: var(--bg);
+               max-width: 1200px; margin: 0 auto; padding: 28px 20px 60px; -webkit-font-smoothing: antialiased; }
+        a { color: var(--link); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+        header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+        h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 6px; }
+        h1 .mark { color: var(--accent); margin-right: 6px; }
+        .intro { color: var(--muted); max-width: 760px; margin: 0; }
+        h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0; }
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px;
+                margin: 16px 0; box-shadow: var(--shadow); }
+        .card-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+        .card-head h2 { margin-right: auto; }
+        .row { display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; margin: 10px 0 0; }
+        .group-label { font-size: 12px; font-weight: 600; color: var(--muted); min-width: 84px; }
+        label { cursor: pointer; }
+        input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; vertical-align: -2px; margin: 0 4px 0 0; }
+
         /* the editor: a transparent textarea over a <pre> with the highlighted text; both must lay out identically */
-        .editor { position: relative; height: 320px; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
-        .editor textarea, .editor pre { position: absolute; inset: 0; margin: 0; padding: 10px; border: 0;
-            box-sizing: border-box; width: 100%; height: 100%; font: 13px/1.5 monospace; white-space: pre;
-            overflow: auto; tab-size: 4; }
-        .editor textarea { color: transparent; caret-color: #222; background: transparent; resize: none; outline: none; }
-        .editor pre { pointer-events: none; overflow: hidden; color: #222; }
-        .editor textarea::selection { background: rgba(21, 101, 192, 0.25); }
-        .h-key { color: #6a1b9a; font-weight: bold; }
-        .h-player { color: #1565c0; font-weight: bold; }
-        .h-action { color: #2e7d32; }
-        .h-arrow { color: #999; }
-        .h-num { color: #c25e00; }
-        .h-const { color: #00838f; }
-        .h-comment { color: #888; font-style: italic; }
-        .h-subtree { color: #999; }
-        .h-error { background: #ffd7d7; display: inline-block; min-width: 100%; }
-        input[type=text] { flex: 1; min-width: 200px; padding: 6px; font-family: monospace; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 8px 14px; background: #2e7d32; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 15px; }
-        button:hover { background: #256628; }
-        button:disabled { background: #bbb; cursor: not-allowed; }
-        button.secondary { background: #666; }
-        select { padding: 6px; }
-        #status { color: #555; }
-        #tree-box { border: 1px solid #ddd; border-radius: 4px; overflow: auto; max-height: 560px; background: #fcfcfc; }
-        #results table { border-collapse: collapse; margin: 8px 0; }
-        #results td, #results th { border: 1px solid #ddd; padding: 4px 10px; text-align: left; }
-        .verdict { cursor: pointer; font-weight: bold; }
-        .yes { color: #2e7d32; }
-        .no { color: #c62828; }
-        .selected { background: #fff3c4; }
-        #cases div { cursor: pointer; padding: 2px 6px; font-family: monospace; font-size: 12px; border-radius: 3px; }
-        #cases div:hover { background: #f0f0f0; }
-        #output { border: 1px solid #ddd; padding: 10px; white-space: pre-wrap; background: #f7f7f7; border-radius: 4px;
-                  font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto; }
-        .legend span { margin-right: 16px; font-size: 13px; }
-        .swatch { display: inline-block; width: 22px; height: 4px; vertical-align: middle; margin-right: 4px; }
-        svg text { font-family: Arial, sans-serif; }
+        .editor { position: relative; height: 340px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+        .editor:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+        .editor textarea, .editor pre { position: absolute; inset: 0; margin: 0; padding: 12px 14px; border: 0;
+            box-sizing: border-box; width: 100%; height: 100%; font: 13px/1.6 var(--mono); white-space: pre;
+            overflow: auto; tab-size: 4; font-variant-ligatures: none; }
+        .editor textarea { color: transparent; caret-color: var(--text); background: transparent; resize: none; outline: none; }
+        .editor pre { pointer-events: none; overflow: hidden; color: var(--text); }
+        .editor textarea::selection { background: color-mix(in srgb, var(--honest) 28%, transparent); }
+        .h-key { color: var(--h-key); font-weight: 600; }
+        .h-player { color: var(--h-player); font-weight: 600; }
+        .h-action { color: var(--h-action); }
+        .h-arrow { color: var(--h-arrow); }
+        .h-num { color: var(--h-num); }
+        .h-const { color: var(--h-const); }
+        .h-comment { color: var(--h-comment); font-style: italic; }
+        .h-subtree { color: var(--h-arrow); }
+        .h-error { background: var(--error-bg); display: inline-block; min-width: 100%; }
+        #parse-error { font-family: var(--mono); font-size: 12.5px; margin-top: 6px; }
+        #parse-error:empty { display: none; }
+
+        input[type=text], select { font: 13px var(--mono); color: var(--text); background: var(--surface-2);
+            border: 1px solid var(--border); border-radius: 6px; padding: 6px 9px; }
+        input[type=text] { flex: 1; min-width: 200px; }
+        select { font-family: var(--sans); font-size: 14px; max-width: 100%; }
+        input[type=text]:focus, select:focus { outline: none; border-color: var(--accent); }
+        button { font: 500 14px var(--sans); padding: 7px 14px; background: var(--accent); color: var(--accent-text);
+                 border: 1px solid transparent; border-radius: 6px; cursor: pointer; transition: background 0.15s; }
+        button:hover:not(:disabled) { background: var(--accent-hover); }
+        button:disabled { opacity: 0.45; cursor: not-allowed; }
+        button.secondary { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+        button.secondary:hover:not(:disabled) { background: var(--hover); }
+        #theme { padding: 6px 10px; font-size: 16px; line-height: 1; flex: none; }
+        #status { color: var(--muted); font-size: 13px; }
+
+        button.small { padding: 4px 10px; font-size: 13px; }
+        #tree-box { position: relative; border: 1px solid var(--border); border-radius: 8px; overflow: auto; max-height: 580px; background: var(--surface-2); }
+        #tree-tip { position: absolute; z-index: 1; pointer-events: none; white-space: nowrap; background: var(--surface);
+                    border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 10px; font: 12px/1.5 var(--mono);
+                    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); }
+        #tree-tip .tip-path { color: var(--muted); }
+        #tree-tip b { color: var(--h-player); }
+        .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+        .swatch { display: inline-block; width: 22px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+        svg text { font-family: var(--sans); fill: var(--text); font-variant-numeric: tabular-nums; }
+        .t-action { font: 500 14px var(--mono); fill: var(--h-action); }
+        .t-utility { font: 12px var(--mono); }
+        .t-utility tspan { font-weight: 600; fill: var(--h-player); }
+        .t-band { stroke: var(--honest); stroke-opacity: 0.25; stroke-width: 12; stroke-linecap: round; }
+        .t-edge { stroke: var(--edge); stroke-width: 1.2; }
+        .t-edge.honest { stroke: var(--honest); stroke-width: 3; }
+        .t-edge.strategy { stroke: var(--strategy); stroke-width: 3; }
+        .t-edge.ce { stroke: var(--ce); stroke-width: 3; }
+        .t-halo { paint-order: stroke; stroke: var(--surface-2); stroke-width: 4; stroke-linejoin: round; }
+        .t-node { fill: var(--surface); stroke: var(--text); stroke-width: 1.2; }
+        .t-player { font-size: 13px; font-weight: 600; }
+        .t-subtree { fill: var(--surface); stroke: var(--text); }
+        .t-muted { fill: var(--muted) !important; }
+        .t-leaf { fill: var(--leaf); }
+        .t-leaf.ce { fill: var(--ce); }
+        .t-hit { fill: transparent; pointer-events: all; }
+        .t-click { cursor: pointer; }
+        .t-click:hover .t-node, .t-click:hover .t-folded { stroke: var(--accent); stroke-width: 2; }
+        .t-folded { fill: var(--surface); stroke: var(--edge); stroke-width: 1.2; stroke-linejoin: round; }
+        .t-folded.strategy { stroke: var(--strategy); stroke-width: 2.5; }
+        .t-folded.ce { stroke: var(--ce); stroke-width: 2.5; }
+
+        #results { color: var(--muted); }
+        #results table { border-collapse: separate; border-spacing: 0; margin: 0 0 4px; color: var(--text);
+                         border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        #results td, #results th { padding: 7px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+        #results tr:last-child td { border-bottom: 0; }
+        #results th { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--surface-2); }
+        #results td:first-child { font-family: var(--mono); font-size: 13px; }
+        .verdict { cursor: pointer; font-weight: 600; font-size: 12.5px; letter-spacing: 0.03em; }
+        .verdict::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+                           background: currentColor; margin-right: 7px; vertical-align: 1px; }
+        .verdict:hover { background: var(--hover); }
+        .yes { color: var(--strategy); }
+        .no { color: var(--ce); }
+        td.selected.yes { background: var(--yes-bg); }
+        td.selected.no { background: var(--no-bg); }
+        #cases { margin-top: 10px; }
+        #cases div { cursor: pointer; padding: 4px 10px; font-family: var(--mono); font-size: 12.5px; border-radius: 5px; }
+        #cases div:hover { background: var(--hover); }
+        #cases div.selected { background: var(--selected); }
+        #output { border: 1px solid var(--border); padding: 12px 14px; white-space: pre-wrap; background: var(--surface-2);
+                  border-radius: 8px; font: 12px/1.55 var(--mono); max-height: 400px; overflow-y: auto; }
+        #output:empty::before { content: 'Nothing yet.'; color: var(--muted); font-family: var(--sans); }
+
+        @media (max-width: 600px) {
+            body { padding: 18px 16px 40px; }
+            h1 { font-size: 23px; }
+            .card { padding: 14px; }
+            .group-label { min-width: 0; width: 100%; }
+        }
     </style>
 </head>
 <body>
-<h1>CheckMate in your browser</h1>
-<div>CheckMate checks game-theoretic security properties of games: weak immunity, weaker immunity,
-    collusion resilience and practicality. Pick an example or write a game in the
-    <a href="https://github.com/apre-group/checkmate#compact-format">compact format</a>, then click Run.
-    Everything runs locally in your browser (WebAssembly).</div>
+<header>
+    <div>
+        <h1><span class="mark">♚</span>CheckMate in your browser</h1>
+        <p class="intro">CheckMate checks game-theoretic security properties of games: weak immunity, weaker immunity,
+            collusion resilience and practicality. Pick an example or write a game in the
+            <a href="https://github.com/apre-group/checkmate#compact-format">compact format</a>, then click Run.
+            Everything runs locally in your browser (WebAssembly).</p>
+    </div>
+    <button id="theme" class="secondary" title="Switch between light and dark" aria-label="Switch between light and dark">◐</button>
+</header>
 
-<div class="row">
-    <label for="example">Example:</label>
-    <select id="example"><option value="">loading…</option></select>
-    <span>or</span>
-    <button id="random" class="secondary">Random game</button>
-    <label for="seed">seed:</label>
-    <input type="text" id="seed" placeholder="random" style="flex:0 0 110px; min-width: 0">
-</div>
-<div class="row">
-    <h2 style="margin: 0 12px 0 0">Game</h2>
-    <button id="run" disabled>Run CheckMate</button>
-    <button id="cancel" class="secondary" disabled>Cancel</button>
-    <span id="status">Loading WebAssembly module…</span>
-</div>
-<div class="editor">
-    <pre id="highlight" aria-hidden="true"></pre>
-    <textarea id="game" spellcheck="false" wrap="off"></textarea>
-</div>
-<div id="parse-error" class="no"></div>
-<div class="row">
-    <label><input type="checkbox" class="prop" value="--weak_immunity" checked> weak immunity</label>
-    <label><input type="checkbox" class="prop" value="--weaker_immunity" checked> weaker immunity</label>
-    <label><input type="checkbox" class="prop" value="--collusion_resilience" checked> collusion resilience</label>
-    <label><input type="checkbox" class="prop" value="--practicality" checked> practicality</label>
-</div>
-<div class="row">
-    <label><input type="checkbox" class="opt" value="--strategies" checked> strategies</label>
-    <label><input type="checkbox" class="opt" value="--counterexamples" checked> counterexamples</label>
-    <label><input type="checkbox" class="opt" value="--all_cases"> all cases</label>
-    <label><input type="checkbox" class="opt" value="--preconditions"> preconditions</label>
-    <label for="extra">Extra arguments:</label>
-    <input type="text" id="extra" placeholder="e.g. --all_counterexamples">
-</div>
+<section class="card">
+    <div class="card-head">
+        <h2>Game</h2>
+        <span id="status">Loading WebAssembly module…</span>
+        <button id="cancel" class="secondary" disabled>Cancel</button>
+        <button id="run" disabled>Run CheckMate</button>
+    </div>
+    <div class="row" style="margin: 0 0 12px">
+        <label for="example">Example</label>
+        <select id="example"><option value="">loading…</option></select>
+        <span style="color: var(--muted)">or</span>
+        <button id="random" class="secondary">Random game</button>
+        <label for="seed">seed</label>
+        <input type="text" id="seed" placeholder="random" style="flex:0 0 110px; min-width: 0">
+    </div>
+    <div class="editor">
+        <pre id="highlight" aria-hidden="true"></pre>
+        <textarea id="game" spellcheck="false" wrap="off"></textarea>
+    </div>
+    <div id="parse-error" class="no"></div>
+    <div class="row">
+        <span class="group-label">Properties</span>
+        <label><input type="checkbox" class="prop" value="--weak_immunity" checked>weak immunity</label>
+        <label><input type="checkbox" class="prop" value="--weaker_immunity" checked>weaker immunity</label>
+        <label><input type="checkbox" class="prop" value="--collusion_resilience" checked>collusion resilience</label>
+        <label><input type="checkbox" class="prop" value="--practicality" checked>practicality</label>
+    </div>
+    <div class="row">
+        <span class="group-label">Options</span>
+        <label><input type="checkbox" class="opt" value="--strategies" checked>strategies</label>
+        <label><input type="checkbox" class="opt" value="--counterexamples" checked>counterexamples</label>
+        <label><input type="checkbox" class="opt" value="--all_cases">all cases</label>
+        <label><input type="checkbox" class="opt" value="--preconditions">preconditions</label>
+    </div>
+    <div class="row">
+        <label class="group-label" for="extra">Extra arguments</label>
+        <input type="text" id="extra" placeholder="e.g. --all_counterexamples">
+    </div>
+</section>
 
-<h2>Game tree</h2>
-<div class="legend">
-    <span><span class="swatch" style="background:#1565c0;opacity:0.3;height:10px"></span>honest history</span>
-    <span><span class="swatch" style="background:#2e7d32"></span>strategy</span>
-    <span><span class="swatch" style="background:#c62828"></span>counterexample</span>
-</div>
-<div id="tree-box"><svg id="tree"></svg></div>
+<section class="card">
+    <div class="card-head">
+        <h2>Game tree</h2>
+        <div class="legend">
+            <span><span class="swatch" style="background:var(--honest);opacity:0.35;height:8px"></span>honest history</span>
+            <span><span class="swatch" style="background:var(--strategy)"></span>strategy</span>
+            <span><span class="swatch" style="background:var(--ce)"></span>counterexample</span>
+        </div>
+        <button id="fold-default" class="secondary small" title="Fold the tree as when it was loaded">Fold</button>
+        <button id="unfold-all" class="secondary small">Unfold all</button>
+    </div>
+    <div id="tree-box"><svg id="tree"></svg><div id="tree-tip" hidden></div></div>
+</section>
 
+<section class="card">
+    <div class="card-head"><h2>Results</h2></div>
+    <div id="results">Run CheckMate to see results. Click a verdict to see its cases, and a case to show its
+        strategy or counterexample in the tree.</div>
+    <div id="cases"></div>
+</section>
 
-<h2>Results</h2>
-<div id="results">Run CheckMate to see results. Click a verdict to see its cases, and a case to show its
-    strategy or counterexample in the tree.</div>
-<div id="cases"></div>
-
-<h2>Output</h2>
-<div id="output"></div>
+<section class="card">
+    <div class="card-head"><h2>Output</h2></div>
+    <div id="output"></div>
+</section>
 
 <script src="gen_game.js"></script>
 <script src="highlight.js"></script>
@@ -114,6 +252,17 @@ const $ = id => document.getElementById(id);
 // the build id makes browsers fetch the modules again after a rebuild, and cache them otherwise
 const version = fetch('build.json', { cache: 'no-store' }).then(r => r.json()).then(b => '?v=' + b.id).catch(() => '');
 let game = null, results = null, selection = null, worker = null;
+
+// ---- theme ----------------------------------------------------------------
+
+// Without a saved choice the page follows the system; the button switches to the other theme and remembers it.
+$('theme').addEventListener('click', () => {
+    const current = document.documentElement.dataset.theme ||
+        (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('theme', next); } catch (e) {}
+});
 
 // ---- examples -------------------------------------------------------------
 
@@ -189,6 +338,7 @@ const converter = (() => {
 const looksLikeJson = text => text.trimStart().startsWith('{');
 
 async function showGame(jsonText) {
+    folded = null;  // a new game gets the default folding
     try {
         $('game').value = await converter(jsonText);
     } catch (e) {
@@ -385,19 +535,127 @@ function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '
 
 // ---- tree drawing -------------------------------------------------------------
 
-const LEAF_W = 120, LEVEL_H = 90, PAD = 30;
+// Large trees start folded at the deepest level that fits the box. Payoffs are shown under the leaves when
+// that fits too; otherwise they move into the tooltip so leaves can sit NARROW_W apart.
+const LEVEL_H = 90, PAD = 30, NARROW_W = 36, FOLDED_W = 70;
+// histories (as JSON) of folded nodes; null makes the next drawing fold by default
+let folded = null, revealed, treeTips = [], foldable = [];
+
+const histKey = hist => JSON.stringify(hist);
+
+function countLeaves(node) {
+    if (node._leaves === undefined)
+        node._leaves = node.children ? node.children.reduce((n, c) => n + countLeaves(c.child), 0) : 1;
+    return node._leaves;
+}
+
+// the leaves and folded nodes along the bottom of the drawing
+function showingNodes(tree, folds) {
+    const out = [];
+    (function collect(node, hist) {
+        if (node.children && !folds.has(histKey(hist))) node.children.forEach(c => collect(c.child, hist.concat([c.action])));
+        else out.push(node);
+    })(tree, []);
+    return out;
+}
+
+// payoffs are 12px JetBrains Mono, about 7.3px per character
+function slots(showing, avail) {
+    const longest = Math.max(0, ...showing.flatMap(n => (n.utility || []).map(u => `${u.player}: ${u.value}`.length)));
+    const width = w => showing.reduce((s, n) => s + (n.children ? Math.max(w, FOLDED_W) : w), 2 * PAD);
+    const wide = Math.max(90, longest * 7.3 + 20);
+    return width(wide) <= avail ? { leafW: wide, inline: true, width: width(wide) }
+                                : { leafW: NARROW_W, inline: false, width: width(NARROW_W) };
+}
+
+function defaultFolds(tree, avail) {
+    const foldAt = depth => {
+        const set = new Set();
+        (function fold(node, hist) {
+            if (!node.children) return;
+            if (hist.length === depth) return set.add(histKey(hist));
+            node.children.forEach(c => fold(c.child, hist.concat([c.action])));
+        })(tree, []);
+        return set;
+    };
+    let best = foldAt(1);
+    for (let depth = 2; ; depth++) {
+        const set = foldAt(depth);
+        if (set.size === 0) return slots(showingNodes(tree, set), avail).width <= avail ? set : best;
+        if (slots(showingNodes(tree, set), avail).width <= avail) best = set;
+    }
+}
+
+// unfold one level: the node's inner children start folded
+function unfoldOne(node, hist) {
+    folded.delete(histKey(hist));
+    node.children.forEach(c => { if (c.child.children) folded.add(histKey(hist.concat([c.action]))); });
+}
+
+// unfold the nodes on the way to the end of `path`, keeping the branches off it folded
+function unfoldPath(path) {
+    let node = game.tree;
+    for (let i = 0; i < path.length && node && node.children; i++) {
+        const hist = path.slice(0, i);
+        if (folded.has(histKey(hist))) unfoldOne(node, hist);
+        node = (node.children.find(c => c.action === path[i]) || {}).child;
+    }
+}
+
+// small subtrees unfold completely, larger ones a level at a time
+const UNFOLD_ALL_MAX = 16;
+
+// ' ce' or ' strategy' when a folded node hides highlighted edges
+function hiddenKind(hist, h) {
+    const prefix = hist.length ? histKey(hist).slice(0, -1) + ',' : '[';
+    const hides = set => [...set].some(k => k.startsWith(prefix));
+    return hides(h.ce) || hides(h.ceLeaf) ? ' ce' : hides(h.strategy) ? ' strategy' : '';
+}
 
 function layout(node, depth, hist, state) {
     node._hist = hist; node._depth = depth;
-    if (node.children) {
+    node._folded = !!node.children && folded.has(histKey(hist));
+    if (node.children && !node._folded) {
         node.children.forEach(c => layout(c.child, depth + 1, hist.concat([c.action]), state));
         const xs = node.children.map(c => c.child._x);
         node._x = (Math.min(...xs) + Math.max(...xs)) / 2;
     } else {
-        node._x = PAD + state.next++ * LEAF_W + LEAF_W / 2;
+        const w = node._folded ? Math.max(state.leafW, FOLDED_W) : state.leafW;
+        node._x = PAD + state.next + w / 2;
+        state.next += w;
     }
     state.maxDepth = Math.max(state.maxDepth, depth);
 }
+
+function leafTip(node) {
+    return `<div class="tip-path">${escapeHtml(node._hist.join(' ')) || '(root)'}</div>` +
+        (node.utility || []).map(u => `<div><b>${escapeHtml(u.player)}</b>: ${escapeHtml(u.value)}</div>`).join('');
+}
+
+$('tree').addEventListener('click', e => {
+    const g = e.target.closest('[data-n]');
+    if (!g) return;
+    const { node, hist } = foldable[+g.dataset.n], k = histKey(hist);
+    if (!folded.has(k)) folded.add(k);
+    else if (countLeaves(node) <= UNFOLD_ALL_MAX) folded.delete(k);
+    else unfoldOne(node, hist);
+    drawTree();
+});
+$('tree').addEventListener('mousemove', e => {
+    const t = e.target.closest('[data-tip]'), tip = $('tree-tip'), box = $('tree-box');
+    if (!t) { tip.hidden = true; return; }
+    tip.innerHTML = treeTips[+t.dataset.tip];
+    tip.hidden = false;
+    const r = box.getBoundingClientRect();
+    let left = e.clientX - r.left + box.scrollLeft + 14;
+    // flip to the left of the pointer near the right edge, so the tooltip does not widen the scroll area
+    if (left + tip.offsetWidth > box.scrollLeft + box.clientWidth) left -= tip.offsetWidth + 28;
+    tip.style.left = left + 'px';
+    tip.style.top = (e.clientY - r.top + box.scrollTop + 14) + 'px';
+});
+$('tree').addEventListener('mouseleave', () => { $('tree-tip').hidden = true; });
+$('unfold-all').addEventListener('click', () => { folded = new Set(); revealed = selection; drawTree(); });
+$('fold-default').addEventListener('click', () => { folded = null; drawTree(); });
 
 function highlights() {
     const h = { honest: new Set(), strategy: new Set(), ce: new Set(), ceLeaf: new Set() };
@@ -426,47 +684,64 @@ function highlights() {
 function drawTree() {
     const svg = $('tree');
     if (!game || !game.tree) { svg.setAttribute('width', 0); svg.setAttribute('height', 0); svg.innerHTML = ''; return; }
-    const state = { next: 0, maxDepth: 0 };
+    const avail = $('tree-box').clientWidth - 2;
+    if (folded === null) { folded = defaultFolds(game.tree, avail); revealed = undefined; }
+    const h = highlights();
+    // a newly selected result unfolds the honest history and its counterexample; strategies cover the
+    // whole tree, so folds that hide them are only coloured
+    if (selection !== revealed) {
+        revealed = selection;
+        [...h.honest, ...h.ce, ...h.ceLeaf].forEach(k => unfoldPath(JSON.parse(k)));
+    }
+    const { leafW, inline } = slots(showingNodes(game.tree, folded), avail);
+    const state = { next: 0, maxDepth: 0, leafW };
     layout(game.tree, 0, [], state);
     const players = game.players || [];
-    const treeWidth = state.next * LEAF_W + 2 * PAD;
-    const width = Math.max(treeWidth, $('tree-box').clientWidth - 2);
+    const treeWidth = state.next + 2 * PAD;
+    const width = Math.max(treeWidth, avail);
     const shift = (width - treeWidth) / 2;
-    const height = state.maxDepth * LEVEL_H + 2 * PAD + 20 + 16 * players.length;
+    const height = state.maxDepth * LEVEL_H + 2 * PAD + Math.max(60, inline ? 20 + 17 * players.length : 0);
     svg.setAttribute('width', width);
     svg.setAttribute('height', height);
-    const h = highlights();
+    treeTips = []; foldable = [];
     const y = d => PAD + 10 + d * LEVEL_H;
-    // labels get a halo in the background colour so they stay readable on top of edges
-    const halo = 'paint-order="stroke" stroke="#fcfcfc" stroke-width="4" stroke-linejoin="round"';
+    // colours come from CSS classes so the tree follows the theme; labels get a halo (t-halo) in the
+    // background colour so they stay readable on top of edges
     let bands = '', edges = '', labels = '', nodes = '';
     (function draw(node) {
         const x = node._x + shift, yy = y(node._depth);
         if (node.children) {
-            for (const c of node.children) {
+            if (!node._folded) for (const c of node.children) {
                 const k = JSON.stringify(node._hist.concat([c.action]));
                 const cx = c.child._x + shift, cy = y(c.child._depth);
                 // the honest history is a band underneath, so strategies and counterexamples on it stay visible
                 if (h.honest.has(k))
-                    bands += `<line x1="${x}" y1="${yy}" x2="${cx}" y2="${cy}" stroke="#1565c0" stroke-opacity="0.3" stroke-width="12" stroke-linecap="round"/>`;
-                const color = h.ce.has(k) ? '#c62828' : h.strategy.has(k) ? '#2e7d32' : h.honest.has(k) ? '#1565c0' : '#999';
-                const w = color === '#999' ? 1.2 : 3;
-                edges += `<line x1="${x}" y1="${yy}" x2="${cx}" y2="${cy}" stroke="${color}" stroke-width="${w}"/>`;
+                    bands += `<line x1="${x}" y1="${yy}" x2="${cx}" y2="${cy}" class="t-band"/>`;
+                const kind = h.ce.has(k) ? ' ce' : h.strategy.has(k) ? ' strategy' : h.honest.has(k) ? ' honest' : '';
+                edges += `<line x1="${x}" y1="${yy}" x2="${cx}" y2="${cy}" class="t-edge${kind}"/>`;
                 labels += `<text x="${(x + cx) / 2 + (cx < x ? -6 : 6)}" y="${(yy + cy) / 2}" font-size="13" ` +
-                          `text-anchor="${cx < x ? 'end' : 'start'}" fill="#333" ${halo}>${escapeHtml(c.action)}</text>`;
+                          `text-anchor="${cx < x ? 'end' : 'start'}" class="t-halo t-action">${escapeHtml(c.action)}</text>`;
                 draw(c.child);
             }
-            nodes += `<circle cx="${x}" cy="${yy}" r="13" fill="#fff" stroke="#333"/>` +
-                     `<text x="${x}" y="${yy + 4}" font-size="12" text-anchor="middle">${escapeHtml(node.player)}</text>`;
+            const n = foldable.push({ node, hist: node._hist }) - 1;
+            const tip = treeTips.push(node._folded ? `${countLeaves(node)} leaves folded, click to unfold` : 'click to fold') - 1;
+            nodes += `<g class="t-click" data-n="${n}" data-tip="${tip}">`;
+            if (node._folded)
+                nodes += `<polygon points="${x},${yy + 8} ${x - 15},${yy + 40} ${x + 15},${yy + 40}" class="t-folded${hiddenKind(node._hist, h)}"/>` +
+                         `<text x="${x}" y="${yy + 55}" font-size="11" text-anchor="middle" class="t-muted">${countLeaves(node)} leaves</text>`;
+            nodes += `<circle cx="${x}" cy="${yy}" r="14" class="t-node"/>` +
+                     `<text x="${x}" y="${yy + 4}" font-size="12" text-anchor="middle" class="t-player">${escapeHtml(node.player)}</text></g>`;
         } else if (node.subtree) {
-            nodes += `<polygon points="${x},${yy - 14} ${x - 16},${yy + 12} ${x + 16},${yy + 12}" fill="#eee" stroke="#333"/>` +
-                     `<text x="${x}" y="${yy + 28}" font-size="11" text-anchor="middle" fill="#555">subtree</text>`;
+            nodes += `<polygon points="${x},${yy - 14} ${x - 16},${yy + 12} ${x + 16},${yy + 12}" class="t-subtree"/>` +
+                     `<text x="${x}" y="${yy + 28}" font-size="11" text-anchor="middle" class="t-muted">subtree</text>`;
         } else {
             const mark = h.ceLeaf.has(JSON.stringify(node._hist));
-            nodes += `<rect x="${x - 5}" y="${yy - 5}" width="10" height="10" fill="${mark ? '#c62828' : '#555'}"/>`;
-            (node.utility || []).forEach((u, i) => {
-                nodes += `<text x="${x}" y="${yy + 20 + 14 * i}" font-size="11" text-anchor="middle" ${halo}>` +
-                         `${escapeHtml(u.player)}: ${escapeHtml(u.value)}</text>`;
+            nodes += `<g data-tip="${treeTips.push(leafTip(node)) - 1}">` +
+                     `<rect x="${x - 12}" y="${yy - 12}" width="24" height="24" class="t-hit"/>` +
+                     `<rect x="${x - 5}" y="${yy - 5}" width="10" height="10" rx="2" class="t-leaf${mark ? ' ce' : ''}"/></g>`;
+            if (inline) (node.utility || []).forEach((u, i) => {
+                nodes += `<text x="${x}" y="${yy + 21 + 15 * i}" font-size="11" text-anchor="middle" class="t-halo t-utility">` +
+                         `<tspan>${escapeHtml(u.player)}</tspan>: ${escapeHtml(u.value)}</text>`;
             });
         }
     })(game.tree);
