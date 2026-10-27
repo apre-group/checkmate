@@ -82,6 +82,24 @@ The `actions` list is not needed; it is derived from the tree. `#` starts a comm
 CheckMate treats a file as JSON if it starts with `{`, and as the compact format otherwise.
 `build/checkmate-convert GAME [OUTPUT]` converts a game from one format to the other.
 
+### Validation
+
+Before analyzing a game, CheckMate checks that it is well-formed, in either format: 
+- every name is declared once (and not both as a constant and as an infinitesimal), 
+- every internal node has children with distinct actions, 
+- every leaf has exactly one utility per player, 
+- all utilities and constraints parse,
+- every honest history exists in the tree and ends at a leaf or a subtree.
+A game with honest utilities instead of honest histories (a subtree off the honest history) is accepted as well.
+If a check fails, CheckMate stops with an error naming the line in the compact format, or the node in JSON:
+
+```
+checkmate: game.txt: line 2: q already ends at a leaf, but the honest history continues with x
+checkmate: game.json: node at b: action c appears twice
+```
+
+CheckMate also stops with an error if the initial constraints together with the constraints of a property are unsatisfiable, since every property would then hold vacuously.
+
 ## Build
 
 CheckMate is written in C++11. It requires:
@@ -216,6 +234,7 @@ Others, such as the auction benchmark, are provided in forms of scripts that gen
 
 Important benchmarks include `closing_game.py` that models the Closing Game proposed in [5] for the closing phase of the [Bitcoin Lightning protocol](https://lightning.network/lightning-network-paper.pdf) as well as `routing_game-three.py`, which models the routing module of the Lightning protocol [5] for three users.
 `routing_game-subtree-supertree.py` generates (compositionally, over several hours and with intermediate files) a supertree for four users, included for reference as `routing_game-four-supertree.json`.
+CheckMate currently rejects that file, since many of its nodes have two children with the same action (see [Validation](#validation)).
 Run the script from the `build` folder: it analyzes each of its 1440 subtrees with `./checkmate --subtree` and writes the supertree to `routing_game-supertree.json` there.
 Its intermediate files are temporary files that are not deleted afterwards; set `TMPDIR` to a folder of your choice to remove them easily (they take up about 150 GB).
 
