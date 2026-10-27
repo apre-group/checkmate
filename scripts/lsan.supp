@@ -1,0 +1,3 @@
+# LeakSanitizer suppressions for the SANITIZE build: LSAN_OPTIONS=suppressions=scripts/lsan.supp
+# honest_utilities are leaked on purpose in Input::Input (see input.cpp)
+leak:Input::Input

@@ -1,0 +1,147 @@
+# Fuzzing CheckMate
+
+`scripts/fuzz.py` tests CheckMate on random games. It runs CheckMate on each game, then checks every answer independently: a separate checker verifies the results, and the verdicts must not change when the flags, the optimizations or the game itself change in ways that cannot affect them.
+
+## Quick start
+
+Build CheckMate as described in the [README](README.md#build), then run from the repository root:
+
+```shell
+scripts/fuzz.py --num 100                 # 100 random games
+scripts/fuzz.py                           # until it finds a bug
+scripts/run_regressions.sh                # rerun the games of previously fixed bugs
+```
+
+You also need Python 3 with the Z3 bindings (`pip install z3-solver`), which the generator and the checker use.
+
+The fuzzer writes its games to `out/` and deletes them when an iteration passes. It stops at the first bug, prints it and keeps the game files.
+
+## Running in parallel
+
+Each run picks its own random seeds, so several runs can work at the same time without testing the same games:
+
+```shell
+scripts/fuzz_session.sh --num 10 --num 100 --quiet
+```
+
+This opens a [tmux](https://github.com/tmux/tmux) session called `fuzzing checkmate` with one fuzzer per window. The first `--num` is the number of windows (default 10); all later options go to `fuzz.py`. A window that finds a bug stops there, so you can look at it. Switch windows with `Ctrl-b n` / `Ctrl-b p`, list them with `Ctrl-b w`, detach with `Ctrl-b d`, and end the session with `tmux kill-session -t "fuzzing checkmate"`. Running the script again while the session exists reattaches to it.
+
+Without tmux, give each run its own log file, since their output would otherwise be mixed on one terminal:
+
+```shell
+seq 10 | xargs -P10 -I{} sh -c 'scripts/fuzz.py --num 100 > out/fuzz_{}.log 2>&1'
+```
+
+## Options
+
+| Option | Meaning |
+|---|---|
+| `--num N`, `-n N` | Number of iterations. Default: run until a bug is found. |
+| `--seed S` | Use seed `S` for every iteration, to reproduce a bug. Combine it with `--num 1`. |
+| `--quiet`, `-q` | Print only the seed of each iteration, the statistics and bugs. When an iteration finds a bug, its full output is printed too. |
+| `--stats-every N` | Print statistics every `N` iterations (default 10). |
+| `--tout T`, `-t T` | Timeout in seconds per CheckMate call (default 20). Timeouts are skipped and counted. |
+| `--check-tout T` | Timeout in seconds per checker call (default 20). |
+| `--checkmate PATH` | The CheckMate binary (default `build/checkmate`). |
+
+## What each iteration checks
+
+For each random game, the fuzzer runs CheckMate:
+
+1. without flags;
+2. with `--strategies --counterexamples`, sometimes with `--all_cases`;
+3. with random flags, including the testing-only switches that turn off optimizations (`--no-cr-node-cache`, `--exact-splits`, …; see the [README](README.md#run)).
+
+Each run writes `--json-out` results, which `scripts/check_result.py` verifies. The checker uses its own reading of the semantics in the README, not CheckMate's code:
+
+- **Cases:** each case is satisfiable, and its verdict agrees with a direct SMT encoding of the property. With `--all_cases`, the cases together cover all the constraints.
+- **Strategies:** for a YES verdict, the strategies are legal moves and actually secure.
+- **Counterexamples:** for a NO verdict, the counterexamples are legal moves and actually violate the property. For practicality, every subgame-perfect outcome after the deviation must be better for the deviating player.
+- **Weakest preconditions** from `--preconditions`.
+
+The verdicts must also agree:
+
+- across all the flag combinations above;
+- after transforms that cannot change them: renaming players (which changes their order), permuting children, renaming actions or constants, scaling or shifting utilities;
+- when a random subtree is analyzed separately with `--subtree` and spliced into the rest of the game (the supertree), sometimes with a second subtree nested inside the first. The subtree results are also checked directly.
+
+## When it finds a bug
+
+The fuzzer prints a red block with:
+
+- `BUG:` and what went wrong;
+- `Command was:`, the command that failed;
+- the end of its output, if it printed any;
+- `Game kept in ...`, the game file and the other files of this iteration;
+- `REPRODUCE with: scripts/fuzz.py --seed N --num 1`.
+
+To work on it:
+
+1. Rerun the `REPRODUCE` command. The same seed generates the same game and the same flags, so the bug comes back without any of the other games.
+2. Run the command from `Command was:` directly on the kept game. Long CheckMate output is cut in the bug report; all of it is in `out/fuzzTest_N-failure.txt`.
+3. After the fix, add the game to `tests/regressions/` (to `tests/regressions/subtree_mode/` if it has to be analyzed with `--subtree`). `scripts/run_regressions.sh` runs CheckMate on every game there with several flag sets and verifies each result.
+
+The checker can also be run by itself on any game and result:
+
+```shell
+build/checkmate game.json --strategies --counterexamples --json-out result.json
+scripts/check_result.py game.json result.json            # add --complete-cases after --all_cases
+```
+
+It exits with 0 if the result is correct, 1 if it is wrong, and 2 if it could not decide (solver timeout).
+
+## Statistics
+
+Every `--stats-every` iterations, and at the end, the fuzzer prints what it has covered so far:
+
+```
+=== Statistics after 80 iterations ===
+  players: 2 23, 3 29, 4 12, 5 12, 6 4
+  leaves: 1-3 26, 4-8 30, 9-16 14, 17-32 7, 33+ 3
+  depth: 1 13, 2 11, 3 22, 4 18, 5 12, 6 4
+  honest history length: 1 15, 2 14, 3 17, 4 21, 5 10, 6 3
+  games: with infinitesimals in utilities 36, with repeated leaves 34, weak != weaker 9
+  weak_immunity         YES  37%, split  22%, mixed  22% of 108 runs, most cases 3
+  ...
+  subtrees: cut along honest 28, cut off honest 39, cut nested 7
+  transforms: permute_children 33, rename_actions 26, ...
+  switches: --exact-splits 125, --no-cr-implied-groups 107, ...
+  verified: game 237, transformed 80, subtree 74, supertree 67, strategies 255, counterexamples 1186, preconditions 164
+  skipped: checker timeouts 3
+```
+
+- **players, leaves, depth, honest history length:** how many games had each size.
+- **games:** how many games had infinitesimals in their utilities, two leaves with the same utilities, or different verdicts for weak and weaker immunity.
+- **per property:** how often it holds (YES), how often the analysis split into several cases (split), and how often some cases hold and others don't (mixed); "most cases" is the largest number of cases in one result.
+- **subtrees:** where the subtree for the compositional check was cut: on the honest history, off it, or nested.
+- **transforms, switches:** how often each was used.
+- **verified:** how many results the checker accepted, and how many strategies, counterexamples and preconditions they contained.
+- **skipped:** results that timed out or that the checker could not decide or does not support.
+
+If a number stays at zero, that part of CheckMate is not being tested, and the generator in `scripts/gen_game.py` may need tuning. `scripts/gen_stats.py --num 500` measures the generated games without the checker, so you can compare generator changes quickly.
+
+## Sanitizer builds
+
+To catch memory errors and undefined behavior, fuzz an AddressSanitizer and UndefinedBehaviorSanitizer build:
+
+```shell
+cmake -B build-asan -DCMAKE_BUILD_TYPE=Debug -DSANITIZE=ON
+cmake --build build-asan
+scripts/fuzz.py --checkmate build-asan/checkmate
+```
+
+The fuzzer sets the sanitizer options itself, so a sanitizer report stops CheckMate and counts as a crash.
+
+## The scripts
+
+| File | Purpose |
+|---|---|
+| `scripts/fuzz.py` | The fuzzer. |
+| `scripts/fuzz_session.sh` | Runs several fuzzers in a tmux session. |
+| `scripts/gen_game.py` | Generates random games (`scripts/gen_game.py --seed S -o game.json` writes one). |
+| `scripts/check_result.py` | Checks a `--json-out` result independently of CheckMate. |
+| `scripts/transform.py` | Transforms that must not change the verdicts. |
+| `scripts/compose.py` | Splits a game into a subtree and a supertree for the `--subtree` check. |
+| `scripts/gen_stats.py` | Statistics on generated games, for tuning the generator. |
+| `scripts/run_regressions.sh` | Checks the games in `tests/regressions/`. |
+| `scripts/lsan.supp` | Leak reports to ignore in sanitizer builds. |

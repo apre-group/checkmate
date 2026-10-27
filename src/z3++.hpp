@@ -48,6 +48,9 @@ namespace z3 {
 		// is this expression exactly the same as `other`?
 		bool is(Expression other) const { return ast == other.ast; }
 
+		// SMT-LIB 2 rendering, e.g. for machine-readable output
+		std::string to_smt2() const;
+
 		// Z3's internal ID for this AST
 		unsigned id() const {
 			unsigned result = Z3_get_ast_id(CONTEXT, ast);
@@ -230,24 +233,11 @@ namespace z3 {
 		}
 
 		// TODO is this just checking that two things are syntactically identical?
+		// structural equality: Z3 shares structurally equal terms
 		bool is_equal(const Bool other) const {
-			Z3_app app = Z3_to_app(CONTEXT, ast);
-			Z3_ast ast_left = Z3_get_app_arg(CONTEXT, app, 0);
-			Z3_ast ast_right = Z3_get_app_arg(CONTEXT, app, 1);
-			Z3_func_decl func_decl = Z3_get_app_decl(CONTEXT, app);
-			Z3_decl_kind decl_kind = Z3_get_decl_kind(CONTEXT, func_decl);
-			
-			Z3_app other_app = Z3_to_app(CONTEXT, other.ast);
-			Z3_ast other_ast_left = Z3_get_app_arg(CONTEXT, other_app, 0);
-			Z3_ast other_ast_right = Z3_get_app_arg(CONTEXT, other_app, 1);
-			Z3_func_decl other_func_decl = Z3_get_app_decl(CONTEXT, other_app);
-			Z3_decl_kind other_decl_kind = Z3_get_decl_kind(CONTEXT, other_func_decl);
-
-			if ((ast_left == other_ast_left) && (ast_right == other_ast_right) && (decl_kind == other_decl_kind)) {
-				return true;
-			} else {
-				return false;
-			}
+			bool result = Z3_is_eq_ast(CONTEXT, ast, other.ast);
+			check_error();
+			return result;
 		}
 
 		Bool invert() const {

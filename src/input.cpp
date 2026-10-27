@@ -25,7 +25,8 @@ struct Lexer {
 		GE,
 		LT,
 		LE,
-		OR
+		OR,
+		AND
 	};
 
 	// should the next '-' be negation or subtraction?
@@ -124,6 +125,11 @@ struct Lexer {
 			remaining++;
 			unary = true;
 			return Token::OR;
+		} else if (*remaining == '&') {
+			// not documented for input, but printed in subtree results (e.g. lexicographic comparisons)
+			remaining++;
+			unary = true;
+			return Token::AND;
 		} else {
 			std::cerr << "checkmate: unexpected character '" << *remaining << "' in expression " << current << std::endl;
 			std::exit(EXIT_FAILURE);
@@ -146,13 +152,15 @@ struct Parser {
 		GE,
 		LE,
 		LT,
-		OR
+		OR,
+		AND
 	};
 
 	// operator precedence classes, binding from loosest to tightest
 	enum class Precedence {
 		PAREN,
 		OR,
+		AND,
 		COMPARISON,
 		PLUSMINUS,
 		MULTIPLY,
@@ -181,6 +189,8 @@ struct Parser {
 				return Precedence::COMPARISON;
 			case Operation::OR:
 				return Precedence::OR;
+			case Operation::AND:
+				return Precedence::AND;
 		}
 		assert(false);
 		UNREACHABLE;
@@ -297,11 +307,18 @@ struct Parser {
 				constraint_stack.push_back(left <= right);
 				break;
 			}
-			case Operation::OR:
+			case Operation::OR: {
 				auto right = pop_constraint();
 				auto left = pop_constraint();
 				constraint_stack.push_back(left || right);
 				break;
+			}
+			case Operation::AND: {
+				auto right = pop_constraint();
+				auto left = pop_constraint();
+				constraint_stack.push_back(left && right);
+				break;
+			}
 		}
 	}
 
@@ -375,6 +392,9 @@ struct Parser {
 					break;
 				case Lexer::Token::OR:
 					operation(Operation::OR);
+					break;
+				case Lexer::Token::AND:
+					operation(Operation::AND);
 			}
 		}
 		// when there is no more input, we know all the operators have to be committed

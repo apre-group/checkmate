@@ -1,5 +1,4 @@
-# minimum 3.1 for CMAKE_CXX_STANDARD_REQUIRED
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.25)
 project(checkmate)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -23,4 +22,10 @@ target_link_libraries(checkmate z3)
 # add extra warnings for GCC/Clang
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 	target_compile_options(checkmate PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+option(SANITIZE "build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+if(SANITIZE)
+	target_compile_options(checkmate PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer)
+	target_link_options(checkmate PRIVATE -fsanitize=address,undefined)
 endif()

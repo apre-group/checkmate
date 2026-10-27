@@ -11,5 +11,7 @@ void analyse_properties(const Options &options, const Input &input);
 
 void analyse_properties_subtree(const Options &options, const Input &input);
 
+void write_json_out(const Options &options);
+
 
 #endif

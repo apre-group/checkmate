@@ -10,7 +10,9 @@ namespace z3 {
 			// TODO should we try and minimize unsat cores?
 			//Z3_global_param_set("sat.core.minimize", "true");
 			//Z3_global_param_set("smt.core.minimize", "true");
-			CONTEXT = Z3_mk_context(Z3_mk_config());
+			Z3_config config = Z3_mk_config();
+			CONTEXT = Z3_mk_context(config);
+			Z3_del_config(config);
 			check_error();
 		}
 
@@ -23,6 +25,15 @@ namespace z3 {
 	Z3_sort Expression::REAL_SORT = Z3_mk_real_sort(CONTEXT);
 
 	Real Real::ZERO = Real::value(0);
+
+	std::string Expression::to_smt2() const {
+		// the print mode is context-wide, and operator<< relies on the default for numerals
+		Z3_set_ast_print_mode(CONTEXT, Z3_PRINT_SMTLIB2_COMPLIANT);
+		std::string result = Z3_ast_to_string(CONTEXT, ast);
+		Z3_set_ast_print_mode(CONTEXT, Z3_PRINT_SMTLIB_FULL);
+		check_error();
+		return result;
+	}
 
 	// TODO keep track of precedence
 	std::ostream &operator<<(std::ostream &out, z3::Real expr) {

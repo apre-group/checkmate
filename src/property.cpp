@@ -121,6 +121,105 @@ void print_calls_counters(bool wi, bool weri, bool cr, bool pr) {
 // third-party library for parsing JSON
 using json = nlohmann::json;
 
+// --json-out: one entry per (history, property), and the case list of the entry being computed
+static json json_results = json::array();
+static json *json_cases = nullptr;
+
+static json case_to_smt2(const std::vector<z3::Bool> &_case) {
+	json result = json::array();
+	for (const auto &condition : _case)
+		result.push_back(condition.to_smt2());
+	return result;
+}
+
+static json strategies_to_json(const Input &input) {
+	json result = json::array();
+	for (const StrategyCase &strategy_case : input.strategies) {
+		json choices = json::array();
+		for (const HistoryChoice &choice : strategy_case.strategy)
+			choices.push_back({{"player", choice.player}, {"action", choice.choice}, {"history", choice.history}});
+		result.push_back({{"case", case_to_smt2(strategy_case._case)}, {"strategy", choices}});
+	}
+	return result;
+}
+
+static json counterexamples_to_json(const Input &input) {
+	json result = json::array();
+	for (const CeCase &ce_case : input.counterexamples) {
+		json choices = json::array();
+		for (const CeChoice &choice : ce_case.counterexample)
+			choices.push_back({{"player", choice.player}, {"actions", choice.choices}, {"history", choice.history}});
+		json cr_leaves = json::array();
+		for (const CrLeafViolation &leaf : ce_case.cr_leaves)
+			cr_leaves.push_back({{"history", leaf.history}, {"groups", leaf.groups}, {"subtree", leaf.subtree}});
+		result.push_back({
+			{"case", case_to_smt2(ce_case._case)},
+			{"player_group", ce_case.player_group},
+			{"choices", choices},
+			{"cr_leaves", cr_leaves},
+			{"cr_more_omitted", ce_case.cr_more_omitted}
+		});
+	}
+	return result;
+}
+
+static json utility_to_smt2(const Input &input, const std::vector<Utility> &utility) {
+	json result = json::array();
+	for (size_t player = 0; player < utility.size(); player++)
+		result.push_back({
+			{"player", input.players[player]},
+			{"real", utility[player].real.to_smt2()},
+			{"infinitesimal", utility[player].infinitesimal.to_smt2()}
+		});
+	return result;
+}
+
+// --json-out in subtree mode: the subtree result, as in the .out file but with SMT-LIB 2 cases and utilities
+static void write_subtree_json_out(const Options &options, const Input &input, const Subtree &subtree) {
+	auto groups = [](const std::vector<SubtreeResult> &results) {
+		json result = json::array();
+		for (const SubtreeResult &r : results) {
+			json cases = json::array();
+			for (const auto &_case : r.satisfied_in_case)
+				cases.push_back(case_to_smt2(_case));
+			result.push_back({{"player_group", r.player_group}, {"satisfied_in_case", cases}});
+		}
+		return result;
+	};
+	json practicality = json::array();
+	for (const PracticalitySubtreeResult &r : subtree.practicality) {
+		json utilities = json::array();
+		for (const auto &utility : r.utilities)
+			utilities.push_back(utility_to_smt2(input, utility));
+		practicality.push_back({{"case", case_to_smt2(r._case)}, {"utilities", utilities}});
+	}
+	json document = {{"version", 1}, {"subtree", {
+		{"weak_immunity", groups(subtree.weak_immunity)},
+		{"weaker_immunity", groups(subtree.weaker_immunity)},
+		{"collusion_resilience", groups(subtree.collusion_resilience)},
+		{"practicality", practicality},
+		{"honest_utility", utility_to_smt2(input, subtree.honest_utility)}
+	}}};
+	std::ofstream out(options.json_out);
+	if (!out) {
+		std::cerr << "checkmate: cannot write " << options.json_out << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+	out << document.dump(2) << std::endl;
+}
+
+void write_json_out(const Options &options) {
+	if (!options.json_out)
+		return;
+	std::ofstream out(options.json_out);
+	if (!out) {
+		std::cerr << "checkmate: cannot write " << options.json_out << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+	json document = {{"version", 1}, {"results", json_results}};
+	out << document.dump(2) << std::endl;
+}
+
 json parse_sat_case(std::vector<z3::Bool> sat_case) {
     json arr_case = json::array();
     if(sat_case.size() == 0) {
@@ -214,8 +313,10 @@ void print_subtree_result_to_file(const Input &input, std::string file_name, Sub
     }
 }
 
-z3::Bool get_split_approx(z3::Solver &solver, Utility a, Utility b) {
+z3::Bool get_split_approx(const Options &options, z3::Solver &solver, Utility a, Utility b) {
 // split on a>=b
+	if (options.exact_splits)
+		return a >= b;
 
 	if (solver.solve({a.real < b.real}) == z3::Result::UNSAT) {
 		if (solver.solve({a.infinitesimal >= b.infinitesimal}) == z3::Result::UNSAT) {
@@ -329,7 +430,7 @@ bool weak_immunity_rec(const Input &input, z3::Solver &solver, const Options &op
 		if (consider_prob_groups) {
 			leaf.problematic_group = player;
 		}
-		leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(solver, utility, Utility {z3::Real::ZERO, z3::Real::ZERO});
+		leaf.reason = weaker ? utility.real >= z3::Real::ZERO : get_split_approx(options, solver, utility, Utility {z3::Real::ZERO, z3::Real::ZERO});
 		input.set_reset_point(leaf);
 		return false;
 
@@ -538,7 +639,7 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 
 			// look up whether this supergroup was already compared for another group
 			CrMemo &memo = supergroup_memo[supergroup.to_ullong()];
-			if (input.memo_valid(memo)) {
+			if (!options.no_cr_leaf_cache && input.memo_valid(memo)) {
 				if (memo.status == CrMemo::VIOLATED) {
 					if (!options.counterexamples)
 						return false;
@@ -583,7 +684,7 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 
 			// undecided for this supergroup: remember the first case split,
 			// but keep looking for a supergroup that violates the property in any case
-			memo = input.memo(CrMemo::UNDECIDED, get_split_approx(solver, honest_total, group_utility));
+			memo = input.memo(CrMemo::UNDECIDED, get_split_approx(options, solver, honest_total, group_utility));
 			if (reason.null())
 				reason = memo.reason;
 		}
@@ -770,9 +871,9 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 	if ((found_choice || options.counterexamples) && !supergroup_trivial) {
 		for (size_t i = 0; i < branch.choices.size(); i++) {
 			const Choice &choice = branch.choices[i];
-			if (passed_group[i] || &choice == honest_choice)
+			if (&choice == honest_choice || (passed_group[i] && !options.no_cr_implied_groups))
 				continue;
-			if (!(same_group && failed_group[i]) && check(choice, supergroup, supergroup_nr))
+			if (!(same_group && failed_group[i] && !options.no_cr_implied_groups) && check(choice, supergroup, supergroup_nr))
 				continue;
 
 			result = false;
@@ -787,14 +888,14 @@ bool collusion_resilience_rec_uncached(const Input &input, z3::Solver &solver, c
 					return false;
 			}
 		}
-	} else if (!reason.null() && !supergroup_trivial && !options.counterexamples) {
+	} else if (!reason.null() && !supergroup_trivial && !options.counterexamples && !options.no_cr_violated_lookup) {
 		// no choice passed for group but a case split might help:
 		// if a deviation is already known to be violated in any case, the case split is not needed
 		// (only look this up, checking the deviations costs more than the case split saves)
 		for (size_t i = 0; i < branch.choices.size(); i++) {
 			const Choice &choice = branch.choices[i];
 			bool known_violated = same_group && failed_group[i] && choice.node->reason.null();
-			if (!known_violated && !choice.node->cr_memo.empty()) {
+			if (!known_violated && !choice.node->cr_memo.empty() && !options.no_cr_node_cache) {
 				const CrMemo &memo = choice.node->cr_memo[supergroup_nr];
 				known_violated = input.memo_valid(memo) && memo.status == CrMemo::VIOLATED;
 			}
@@ -838,7 +939,7 @@ bool collusion_resilience_rec(const Input &input, z3::Solver &solver, const Opti
 		node->cr_memo.resize(all_players);
 	}
 	CrMemo &memo = node->cr_memo[group_nr];
-	if (input.memo_valid(memo)) {
+	if (!options.no_cr_node_cache && input.memo_valid(memo)) {
 		if (memo.status == CrMemo::HOLDS)
 			return true;
 		// counterexamples are collected while checking violated choices, so these have to be checked again
@@ -879,6 +980,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		//			if no: proceed to next PracticalitySubtreeResult
 
 		const auto &subtree = node->subtree();
+		// on failure no utilities must be left over from an earlier case
+		subtree.utilities = nullptr;
 
 		for (const PracticalitySubtreeResult &subtree_result: subtree.practicality) {
 			z3::Bool subtree_case = z3::conjunction(subtree_result._case);
@@ -905,7 +1008,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 						}
 						return false;
 					}
-					subtree.utilities = subtree_result.utilities;
+					subtree.utilities = &subtree_result.utilities;
 					return true;
 				}
 			} 
@@ -928,6 +1031,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 	// get practical strategies and corresponding utilities recursively
 	std::vector<UtilityTuplesSet> children;
 	std::vector<std::string> children_actions;
+	// with all_counterexamples, analysis continues past failed children, whose practical utilities are unreliable
+	std::vector<bool> children_failed;
 
 	UtilityTuplesSet honest_utilities;
 	unsigned int i = 0;
@@ -957,6 +1062,11 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 			
 			honest_utilities = choice.node->get_utilities();
+			// an honest subtree that is not practical has no honest utility to compare deviations with
+			if (honest_utilities.empty()) {
+				assert(!result);
+				return result;
+			}
 			honest_choice = choice.action;
 			branch.strategy = choice.action; // choose the honest action along the honest history
 			honest_index = i;
@@ -972,7 +1082,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 			std::vector<std::string> updated_actions;
 			updated_actions.insert(updated_actions.begin(), actions_so_far.begin(), actions_so_far.end());
 			updated_actions.push_back(choice.action);
-			if(!practicality_rec_old(input, options, solver, choice.node.get(), updated_actions, consider_prob_groups)) {
+			bool child_ok = practicality_rec_old(input, options, solver, choice.node.get(), updated_actions, consider_prob_groups);
+			if(!child_ok) {
 				if (result) {
 					branch.reason = choice.node->reason;
 					input.set_reset_point(branch);
@@ -984,6 +1095,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					return result;
 				}
 			}
+			children_failed.push_back(!child_ok);
 
 			
 			if (choice.node->get_utilities().size()==0){
@@ -1027,6 +1139,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 		unsigned int j = 0;
 		for (const auto& utilities : children) {
 			bool found = false;
+			bool undecided = false;
 			// does there exist a possible utility such that `maximum` is geq than it?				
 
 			for (const auto& utility : utilities) {
@@ -1040,8 +1153,9 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 					}
 					if (solver.solve({!condition}) == z3::Result::SAT) {
 						// might be maximal, just couldn't prove it
+						undecided = true;
 						if (result){
-							branch.reason =  get_split_approx(solver, maximum, utility[branch.player]); 
+							branch.reason =  get_split_approx(options, solver, maximum, utility[branch.player]); 
 							input.set_reset_point(branch);
 						}
 					}
@@ -1073,7 +1187,8 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 
 				std::string deviating_action = children_actions[j];
 
-				if(options.counterexamples && branch.reason.null()) {
+				// with all_counterexamples, an earlier violation keeps `reason` null even if this deviation is undecided
+				if(options.counterexamples && branch.reason.null() && !undecided && !children_failed[j]) {
 					input.counterexamples.push_back(input.root.get()->compute_pr_cecase(input.players, branch.player, actions_so_far, deviating_action, utilities));
 				}
 
@@ -1161,7 +1276,7 @@ bool practicality_rec_old(const Input &input, const Options &options, z3::Solver
 							calls_pr++;
 						}
 						if (solver.solve({!condition}) == z3::Result::SAT) {
-							branch.reason = get_split_approx(solver, dominatee, dominator); 
+							branch.reason = get_split_approx(options, solver, dominatee, dominator); 
 							input.set_reset_point(branch);
 							return false; 
 						}
@@ -1207,7 +1322,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 			if (!input.solved_for_group[player]) {
 				// problematic groups are only considered when we haven't found a case split point yet
 			
-				bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity, true);
+				bool weak_immune_for_player = weak_immunity_rec(input, solver, options, input.root.get(), player, property == PropertyType::WeakerImmunity, !options.no_problematic_groups);
 
 				if (!weak_immune_for_player) {
 
@@ -1275,7 +1390,7 @@ bool property_under_split(z3::Solver &solver, const Input &input, const Options 
 	}
 
 	else if (property == PropertyType::Practicality) {
-		bool pr_result = practicality_rec_old(input, options, solver, input.root.get(), {}, true);
+		bool pr_result = practicality_rec_old(input, options, solver, input.root.get(), {}, !options.no_problematic_groups);
 		if(pr_result && options.counterexamples && !input.root->branch().honest) {
 			CeCase pr_ce_case;
 			std::vector<CeChoice> pr_choices;
@@ -1307,6 +1422,8 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		if (!input.stop_log){
 			std::cout << "\tProperty satisfied for case: " << current_case << std::endl; 
 		}
+		if (json_cases)
+			json_cases->push_back({{"case", case_to_smt2(current_case)}, {"holds", true}});
 
 		if(options.subtree) {
 			PracticalitySubtreeResult subtree_result_pr;
@@ -1346,6 +1463,8 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		if (!input.stop_log){
 			std::cout << "\tProperty violated in case: " << current_case << std::endl;
 		}
+		if (json_cases)
+			json_cases->push_back({{"case", case_to_smt2(current_case)}, {"holds", false}});
 		if (options.preconditions){
 			input.add_unsat_case(current_case);
 			input.stop_logging();
@@ -1388,7 +1507,9 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		// reset reason and strategy
 		// ? should be the same point of reset
 		input.root->reset_reason();
-		if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
+		if (options.reset_from_root) {
+			input.root->reset_strategy();
+		} else if(!input.reset_point->is_leaf() && !input.reset_point->is_subtree()) {
 			auto &current_reset_branch = current_reset_point->branch();
 			current_reset_branch.reset_strategy();
 		}
@@ -1424,7 +1545,8 @@ bool property_rec(z3::Solver &solver, const Options &options, const Input &input
 		}
 
 		if (!attempt){
-			if ((!options.preconditions) && (!options.all_cases)){
+			// a subtree result must list every case it is practical in: the supertree treats unlisted cases as violated
+			if ((!options.preconditions) && (!options.all_cases) && (!options.subtree)){
 				return false;
 			}
 			else {
@@ -1450,11 +1572,11 @@ bool property_rec_subtree(z3::Solver &solver, const Options &options, const Inpu
 
 
 	if(property == PropertyType::CollusionResilience){
-		const Node &honest_leaf_pre = get_honest_leaf(input.root.get(), input.honest[history], 0);
-		// in subtree mode there cannot be subtrees in the input;
-		const Leaf &honest_leaf = honest_leaf_pre.leaf();
+		const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
+		// the honest history can end in a nested subtree
+		const std::vector<Utility> &honest_utility = honest_leaf.is_leaf() ? honest_leaf.leaf().utilities : honest_leaf.subtree().honest_utility;
 		group = group_nr;
-		property_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_leaf.utilities, input.players.size(), group_nr);
+		property_result = collusion_resilience_rec(input, solver, options, input.root.get(), group, honest_utility, input.players.size(), group_nr);
 	} else {
 		assert(property != PropertyType::Practicality);
 		assert(group_nr > 0); // set to i+1 in previous fct
@@ -1739,6 +1861,21 @@ void property(const Options &options, const Input &input, PropertyType property,
 
 	assert(solver.solve() == z3::Result::SAT);
 
+	json json_entry;
+	if (options.json_out) {
+		static const char *names[] = {"weak_immunity", "weaker_immunity", "collusion_resilience", "practicality"};
+		json_entry["property"] = names[static_cast<int>(property)];
+		if (history < input.honest.size()) {
+			json_entry["history"] = input.honest[history];
+		} else {
+			json_entry["history"] = nullptr;
+			if (property == PropertyType::CollusionResilience)
+				json_entry["honest_utility"] = history - input.honest.size();
+		}
+		json_entry["cases"] = json::array();
+		json_cases = &json_entry["cases"];
+	}
+
 	if (property == PropertyType::Practicality) {
 		input.reset_practical_utilities();
 		std::vector<PracticalitySubtreeResult> satisfied_in_case = {};
@@ -1783,6 +1920,8 @@ void property(const Options &options, const Input &input, PropertyType property,
 				z3::Bool raw_prec = conjunction(conjuncts);
 				z3::Bool simpl_prec = raw_prec.simplify();
 				std::cout << "Weakest Precondition: " << std::endl << "\t" << simpl_prec << std::endl;
+				if (options.json_out)
+					json_entry["precondition"] = simpl_prec.to_smt2();
 	}
 	
 	// generate strategies
@@ -1800,6 +1939,17 @@ void property(const Options &options, const Input &input, PropertyType property,
 	
 	if(options.counterexamples && prop_holds && history == input.honest.size() && property == PropertyType::Practicality) {
 		input.print_counterexamples(options, false, false);
+	}
+
+	if (options.json_out) {
+		json_cases = nullptr;
+		json_entry["holds"] = prop_holds;
+		// only what is printed: e.g. strategies of satisfied cases under a NO verdict can be incomplete
+		bool printed_ces = options.counterexamples && (!prop_holds
+			|| (history == input.honest.size() && property == PropertyType::Practicality));
+		json_entry["strategies"] = options.strategies && prop_holds ? strategies_to_json(input) : json::array();
+		json_entry["counterexamples"] = printed_ces ? counterexamples_to_json(input) : json::array();
+		json_results.push_back(json_entry);
 	}
 }
 
@@ -2330,7 +2480,7 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 		Subtree st({}, {}, {}, {}, {});
 		Subtree &subtree = st;
 		const Node &honest_leaf = get_honest_leaf(input.root.get(), input.honest[history], 0);
-		subtree.honest_utility = honest_leaf.leaf().utilities;
+		subtree.honest_utility = honest_leaf.is_leaf() ? honest_leaf.leaf().utilities : honest_leaf.subtree().honest_utility;
 
 		for (size_t i=0; i<property_chosen.size(); i++) {
 			if(property_chosen[i]) {
@@ -2363,6 +2513,8 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 		std::string file_name = options.input_path + std::string(".out");
         print_subtree_result_to_file(input, file_name, subtree);
+		if (options.json_out)
+			write_subtree_json_out(options, input, subtree);
 		
 	}
 
@@ -2488,6 +2640,8 @@ void analyse_properties_subtree(const Options &options, const Input &input) {
 
 			std::string file_name = options.input_path + std::string(".out");
         	print_subtree_result_to_file(input, file_name, subtree);
+			if (options.json_out)
+				write_subtree_json_out(options, input, subtree);
 			
 		}
 		
