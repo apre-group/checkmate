@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Fuzz checkmate with random games. Run from the repo root: scripts/fuzz.py [--num N] [--seed S]
+# Fuzz checkmate with random games. Run from the repo root: scripts/fuzz.py [--num N] [--seed S] [--quiet]
 
 import argparse
 import collections
@@ -100,6 +100,17 @@ def col(txt, code):
     return "\033[%sm%s\033[0m" % (code, txt) if _USE_COLOR else txt
 
 
+# with --quiet, the details of an iteration are held back and printed only if it finds a bug
+LOG = []
+
+
+def log(msg):
+    if args.quiet:
+        LOG.append(msg)
+    else:
+        print(msg)
+
+
 def unique_file(fname_begin, fname_end=".json", max_num_files=2700):
     counter = 1
     while True:
@@ -140,7 +151,7 @@ SANITIZER_ENV = {
 
 
 def run(cmd, tout):
-    print(col("--> Executing: ", BLUE) + fmt_cmd(cmd))
+    log(col("--> Executing: ", BLUE) + fmt_cmd(cmd))
     try:
         return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               universal_newlines=True, timeout=tout, env=dict(os.environ, **SANITIZER_ENV))
@@ -205,12 +216,12 @@ def compositional(game_json, base, rng, game, outs):
         return
     sub, hist = cut
     STATS["cut along honest" if sub["honest_histories"] else "cut off honest"] += 1
-    print("Cutting subtree at %s%s" % (list(hist), " (along the honest history)" if sub["honest_histories"] else ""))
+    log("Cutting subtree at %s%s" % (list(hist), " (along the honest history)" if sub["honest_histories"] else ""))
     if rng.random() < 0.3:
         inner = split(sub, rng)
         if inner is not None:
             STATS["cut nested"] += 1
-            print("Cutting nested subtree at %s inside it" % list(inner[1]))
+            log("Cutting nested subtree at %s inside it" % list(inner[1]))
             res = run_subtree(inner[0], game[:-5] + "-sub2.json", rng, outs)
             if res is None:
                 return
@@ -262,7 +273,7 @@ def run_checker(game, json_out, flags):
             STATS["verified strategies"] += len(r["strategies"])
             STATS["verified counterexamples"] += len(r["counterexamples"])
             STATS["verified preconditions"] += "precondition" in r
-    print(p.stdout.strip().split("\n")[-1])
+    log(p.stdout.strip().split("\n")[-1])
 
 
 def key(r):
@@ -320,6 +331,7 @@ def random_flags(rng):
 
 def fuzz_one(seed):
     rng = random.Random(seed)
+    LOG.clear()
     game = unique_file("fuzzTest")
     print(col("Seed: ", MAGENTA) + str(seed) + col("  file: ", MAGENTA) + game)
     if args.js_gen:
@@ -360,7 +372,7 @@ def fuzz_one(seed):
         outs.append(meta)
         with open(meta, "w") as f:
             json.dump(meta_json, f, indent=2)
-        print("Transforms: " + " + ".join(names))
+        log("Transforms: " + " + ".join(names))
         for t in names:
             STATS["transform " + t] += 1
         flags = random_opts(rng)
@@ -374,6 +386,8 @@ def fuzz_one(seed):
 
         compositional(game_json, base, rng, game, outs)
     except Bug as e:
+        for line in LOG:
+            print(line)
         print(col("=" * 60, RED))
         print(col("BUG: ", RED) + e.what)
         if e.cmd:
@@ -411,6 +425,8 @@ def main():
                     help="directory with checkmate.js and checkmate.wasm, default: html/")
     ap.add_argument("--js-gen", action="store_true", help="generate games with the web page's html/gen_game.js")
     ap.add_argument("--stats-every", type=int, default=10, help="print statistics every N iterations")
+    ap.add_argument("--quiet", "-q", action="store_true",
+                    help="print only seeds, statistics and bugs (with the details of the failing iteration)")
     args = ap.parse_args()
     os.makedirs("out", exist_ok=True)
 

@@ -15,6 +15,8 @@ import z3
 TIMEOUT_MS = 10000
 
 
+# Not examples/*/dsl.py: that builds expressions to print them into game files, while this evaluates
+# them in Z3, exactly (Fractions, not floats) and with infinitesimals compared lexicographically.
 class U:
     """A utility: real part plus infinitesimal part, compared lexicographically."""
 
