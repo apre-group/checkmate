@@ -542,7 +542,7 @@ def condition(conditions: Dict[Constraint, Tree], reveals: List[NameExpr] = None
     return Condition(conditions, reveals)
 
 class Branch(Tree):
-    def __init__(self, player: Player, actions: Dict[Action, Tree], condition: Constraint=Truth()):
+    def __init__(self, player: Player, actions: Dict[Action, Tree]):
         self.player = player
         self.actions = actions
 
