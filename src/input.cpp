@@ -4,6 +4,7 @@
 #include <set>
 #include <tuple>
 #include "json.hpp"
+#include "compact.hpp"
 
 #include "input.hpp"
 
@@ -724,13 +725,17 @@ static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const
 
 
 Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
-	// parse a JSON document from `path`
+	// parse the game from `path`, in JSON or the compact format
 	std::ifstream input(path);
 	json document;
 	Parser parser(utilities);
 	try {
 		input.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-		document = json::parse(input);
+		std::string text((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+		LineMap lines;
+		bool is_json = looks_like_json(text);
+		document = is_json ? json::parse(text) : from_compact(text, &lines);
+		validate_game(document, is_json ? nullptr : &lines);
 	}
 	catch (const std::ifstream::failure &fail) {
 		std::cerr << "checkmate: " << std::strerror(errno) << std::endl;
@@ -738,6 +743,14 @@ Input::Input(const char *path) : unsat_cases(), strategies() , stop_log(false) {
 	}
 	catch (const json::exception &err) {
 		std::cerr << "checkmate: " << err.what() << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+	catch (const CompactError &err) {
+		std::cerr << "checkmate: " << path << ": " << err.what() << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+	catch (const GameError &err) {
+		std::cerr << "checkmate: " << path << ": " << err.what() << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
 

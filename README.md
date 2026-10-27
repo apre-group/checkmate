@@ -54,6 +54,52 @@ All **expressions** throughout the input support the following symbols in infix 
 To express the conjunction of two expressions, list both.
 Additionally, all (real) numbers and all constants and infinitesimals declared in the dictionary are supported.
 
+### Compact format
+
+CheckMate also reads a compact, line-based format, which is easier to write and read than JSON.
+Here is the game of `examples/key_examples/splits_wi.json`:
+
+```
+players: D, G
+constants: a, b
+initial: a > 0
+honest: q
+honest: l r
+honest: l y
+
+D
+  q -> D: a, G: a
+  l -> G
+    r -> D: a, G: b
+    y -> D: a, G: -b
+```
+
+The header lines are `players:`, `constants:` and `infinitesimals:` (comma-separated names), and then one line per constraint or history:
+`initial:` for an initial constraint, `weak_immunity:`, `weaker_immunity:`, `collusion_resilience:` or `practicality:` for a property constraint, `honest:` for an honest history (actions separated by spaces), and `honest_utility:` for an honest utility (`PLAYER: utility, ...`).
+The tree starts at the first line that is not a header: the player at the root, and then one line per branch, indented below its node: `action -> PLAYER` for an internal node (whose branches follow, indented further), `action -> PLAYER: utility, ...` for a leaf, or `action -> subtree {...}` for a subtree result in JSON.
+The `actions` list is not needed; it is derived from the tree. `#` starts a comment.
+
+CheckMate treats a file as JSON if it starts with `{`, and as the compact format otherwise.
+`build/checkmate-convert GAME [OUTPUT]` converts a game from one format to the other.
+
+### Validation
+
+Before analyzing a game, CheckMate checks that it is well-formed, in either format: 
+- every name is declared once (and not both as a constant and as an infinitesimal), 
+- every internal node has children with distinct actions, 
+- every leaf has exactly one utility per player, 
+- all utilities and constraints parse,
+- every honest history exists in the tree and ends at a leaf or a subtree.
+A game with honest utilities instead of honest histories (a subtree off the honest history) is accepted as well.
+If a check fails, CheckMate stops with an error naming the line in the compact format, or the node in JSON:
+
+```
+checkmate: game.txt: line 2: q already ends at a leaf, but the honest history continues with x
+checkmate: game.json: node at b: action c appears twice
+```
+
+CheckMate also stops with an error if the initial constraints together with the constraints of a property are unsatisfiable, since every property would then hold vacuously.
+
 ## Build
 
 CheckMate is written in C++11. It requires:
@@ -77,6 +123,19 @@ You will then have a CheckMate binary in the `build` folder.
 Troubleshooting:
 * On macOS, linking can fail with `unknown architecture` errors in `.tbd` files if the Command Line Tools ship an SDK newer than their linker. Update the Command Line Tools, or point CMake to an older SDK, e.g. `-DCMAKE_OSX_SYSROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX26.sdk`.
 * If Z3 is installed in a non-standard location (e.g. Homebrew on Apple Silicon), pass its paths: `-DCMAKE_CXX_FLAGS=-I/opt/homebrew/include -DCMAKE_EXE_LINKER_FLAGS=-L/opt/homebrew/lib`.
+
+### In the browser
+
+`html/` contains a page that runs CheckMate in the browser, compiled to WebAssembly: pick an example or paste a game, run it, and see the verdicts, cases, strategies and counterexamples drawn on the game tree.
+To build it, install [Emscripten](https://emscripten.org/), get the [Z3](https://github.com/Z3Prover/z3) sources, and run, from the repository root:
+
+```shell
+source /path/to/emsdk/emsdk_env.sh
+scripts/build_emscripten.sh /path/to/z3   # builds Z3 for WebAssembly once, then CheckMate
+cd html && python3 -m http.server         # then open http://localhost:8000
+```
+
+The page must be served over HTTP (not opened as a file), but needs no special server headers.
 
 ## Run
 
@@ -175,6 +234,7 @@ Others, such as the auction benchmark, are provided in forms of scripts that gen
 
 Important benchmarks include `closing_game.py` that models the Closing Game proposed in [5] for the closing phase of the [Bitcoin Lightning protocol](https://lightning.network/lightning-network-paper.pdf) as well as `routing_game-three.py`, which models the routing module of the Lightning protocol [5] for three users.
 `routing_game-subtree-supertree.py` generates (compositionally, over several hours and with intermediate files) a supertree for four users, included for reference as `routing_game-four-supertree.json`.
+CheckMate currently rejects that file, since many of its nodes have two children with the same action (see [Validation](#validation)).
 Run the script from the `build` folder: it analyzes each of its 1440 subtrees with `./checkmate --subtree` and writes the supertree to `routing_game-supertree.json` there.
 Its intermediate files are temporary files that are not deleted afterwards; set `TMPDIR` to a folder of your choice to remove them easily (they take up about 150 GB).
 
