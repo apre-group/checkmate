@@ -1,0 +1,2583 @@
+#include <algorithm>
+#include <map>
+#include <fstream>
+#include <iostream>
+#include "../json.hpp"
+#include <optional>
+#include <variant>
+
+#include "input.hpp"
+#include "selectors.hpp"
+
+// imported from the cefg branch (c9c6e6f); wrapped in namespace cefg next to the EFG engine in src/
+namespace cefg {
+
+// a JSON number as an exact real value: integers of any sign and decimals, e.g. -1, 1.5 or 0.1 (exactly 1/10);
+// JSON may write numbers with an exponent, e.g. 1e+20 or 1.5e-07, which Z3 does not read, so they are expanded first
+static z3::Real json_number(const nlohmann::json &value) {
+	std::string text = value.dump();
+	size_t e = text.find_first_of("eE");
+	if (e != std::string::npos) {
+		long exponent = std::stol(text.substr(e + 1));
+		std::string mantissa = text.substr(0, e);
+		bool negative = !mantissa.empty() && mantissa[0] == '-';
+		if (negative) {
+			mantissa.erase(0, 1);
+		}
+		// the digits without the decimal point, and how many of them are before it
+		size_t point = mantissa.find('.');
+		std::string digits = mantissa;
+		long before = static_cast<long>(mantissa.size());
+		if (point != std::string::npos) {
+			digits.erase(point, 1);
+			before = static_cast<long>(point);
+		}
+		before += exponent;
+		if (before <= 0) {
+			digits = "0." + std::string(-before, '0') + digits;
+		} else if (before >= static_cast<long>(digits.size())) {
+			digits += std::string(before - digits.size(), '0');
+		} else {
+			digits.insert(before, ".");
+		}
+		text = (negative ? "-" : "") + digits;
+	}
+	return z3::Real::value(text);
+}
+
+// lexical analysis for expressions
+struct Lexer {
+	// possible tokens in expressions
+	enum class Token {
+		NUMERAL,
+		IDENTIFIER,
+		LPAREN,
+		RPAREN,
+		PLUS,
+		MINUS,
+		MULTIPLY,
+		DIVIDE,
+		NEGATE,
+		EQ,
+		NE,
+		GT,
+		GE,
+		LT,
+		LE,
+		AND,
+		OR,
+		IMPLIES,
+		NOT,
+		FORALL,
+		SELECTOR
+	};
+
+	// should the next '-' be negation or subtraction?
+	bool unary = false;
+	// the start of the current expression
+	const char *current = nullptr;
+	// cursor to the remaining part of `current`
+	const char *remaining = nullptr;
+	// NUL-terminated copy of the previous token
+	std::string buffer;
+	// the variables bound by the previous token, if it is FORALL, or the arguments, if it is SELECTOR
+	std::vector<std::string> bound;
+
+	// start analysis of the NUL-terminated expression `start`
+	void start(const char *start) {
+		unary = true;
+		current = start;
+		remaining = start;
+	}
+
+	// check if there are any more tokens, possibly advancing `remaining` past whitespace
+	bool has_more() {
+		while (std::isspace(*remaining)) remaining++;
+		return *remaining;
+	}
+
+	// a list of variables "[x, y]" after "forall" (`open` '[', `close` ']'), or of arguments "(x, y)" after a selector
+	// (`open` '(', `close` ')', possibly empty), read into `bound`
+	void variable_list(char open, char close, const char *what) {
+		bound.clear();
+		auto expect = [&](char expected) {
+			while (std::isspace(*remaining)) remaining++;
+			if (*remaining != expected) {
+				std::cerr << "checkmate: expected '" << expected << "' in the " << what << " in expression " << current << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+			remaining++;
+		};
+		expect(open);
+		while (std::isspace(*remaining)) remaining++;
+		if (open == '(' && *remaining == close) {
+			remaining++;
+			return;
+		}
+		do {
+			while (std::isspace(*remaining)) remaining++;
+			std::string name;
+			if (std::isalpha(*remaining))
+				while (std::isalnum(*remaining) || *remaining == '_')
+					name.push_back(*remaining++);
+			if (name.empty()) {
+				std::cerr << "checkmate: expected a constant in the " << what << " in expression " << current << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+			bound.push_back(name);
+			while (std::isspace(*remaining)) remaining++;
+		} while (*remaining == ',' && remaining++);
+		expect(close);
+	}
+
+	void bound_variables() {
+		variable_list('[', ']', "variable list after forall");
+	}
+
+	// get the next token or exit with failure
+	Token next() {
+		buffer.clear();
+		// a variable name
+		if (std::isalpha(*remaining)) {
+			buffer.push_back(*remaining++);
+			while (std::isalnum(*remaining) || *remaining == '_')
+				buffer.push_back(*remaining++);
+			if (buffer == "forall") {
+				bound_variables();
+				unary = true;
+				return Token::FORALL;
+			}
+			unary = false;
+			return Token::IDENTIFIER;
+		}
+		// a selector applied to constants, as written in practicality results of subtrees: @name(x, y)
+		else if (*remaining == '@') {
+			remaining++;
+			while (std::isalnum(*remaining) || *remaining == '_' || *remaining == '!')
+				buffer.push_back(*remaining++);
+			if (buffer.empty()) {
+				std::cerr << "checkmate: expected a selector name after '@' in expression " << current << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+			variable_list('(', ')', "arguments of a selector");
+			unary = false;
+			return Token::SELECTOR;
+		}
+		// number
+		else if (std::isdigit(*remaining)) {
+			buffer.push_back(*remaining++);
+			while (std::isdigit(*remaining) || *remaining == '.')
+				buffer.push_back(*remaining++);
+			unary = false;
+			return Token::NUMERAL;
+		}
+		else if(*remaining == '(') {
+			remaining++;
+			unary = true;
+			return Token::LPAREN;
+		}
+		else if(*remaining == ')') {
+			remaining++;
+			unary = false;
+			return Token::RPAREN;
+		}
+		// operators
+		else if (*remaining == '+') {
+			remaining++;
+			unary = true;
+			return Token::PLUS;
+		} else if (*remaining == '-') {
+			remaining++;
+			if (unary)
+				return Token::NEGATE;
+			unary = true;
+			return Token::MINUS;
+		} else if (*remaining == '*') {
+			remaining++;
+			unary = true;
+			return Token::MULTIPLY;
+		} else if (*remaining == '/') {
+			remaining++;
+			unary = true;
+			return Token::DIVIDE;
+		} else if (*remaining == '=' && remaining[1] == '>') {
+			remaining += 2;
+			unary = true;
+			return Token::IMPLIES;
+		} else if (*remaining == '=') {
+			remaining++;
+			unary = true;
+			return Token::EQ;
+		} else if (*remaining == '!' && remaining[1] == '=') {
+			remaining += 2;
+			unary = true;
+			return Token::NE;
+		} else if (*remaining == '!') {
+			// Boolean negation, as in the output of CheckMate: !(...)
+			remaining++;
+			unary = true;
+			return Token::NOT;
+		} else if (*remaining == '>') {
+			remaining++;
+			if (*remaining == '=') {
+				remaining++;
+				unary = true;
+				return Token::GE;
+			}
+			unary = true;
+			return Token::GT;
+		} else if (*remaining == '<') {
+			remaining++;
+			if (*remaining == '=') {
+				remaining++;
+				unary = true;
+				return Token::LE;
+			}
+			unary = true;
+			return Token::LT;
+		} else if (*remaining == '|') {
+			remaining++;
+			unary = true;
+			return Token::OR;
+		} else if (*remaining == '&') {
+			remaining++;
+			unary = true;
+			return Token::AND;
+		} else {
+			std::cerr << "checkmate: unexpected character '" << *remaining << "' in expression " << current << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+	}
+};
+
+// parsing for expressions based on the "shunting-yard" algorithm
+struct Parser {
+	// possible operators to apply to the stack
+	enum class Operation {
+		PAREN,
+		PLUS,
+		MINUS,
+		MULTIPLY,
+		DIVIDE,
+		NEGATE,
+		EQ,
+		NE,
+		GT,
+		GE,
+		LE,
+		LT,
+		AND,
+		OR,
+		IMPLIES,
+		NOT,
+		FORALL
+	};
+
+	// operator precedence classes, binding from loosest to tightest
+	enum class Precedence {
+		PAREN,
+		// a quantifier's body extends as far as possible, to the closing parenthesis or the end
+		FORALL,
+		IMPLIES,
+		ANDOR,
+		NOT,
+		COMPARISON,
+		PLUSMINUS,
+		DIVIDE,
+		MULTIPLY,
+		NEGATE,
+	};
+
+	// the precedence class of an operator
+	static Precedence precedence(Operation operation) {
+		switch (operation) {
+			case Operation::PAREN:
+				return Precedence::PAREN;
+			case Operation::PLUS:
+			case Operation::MINUS:
+				return Precedence::PLUSMINUS;
+			case Operation::MULTIPLY:
+				return Precedence::MULTIPLY;
+			case Operation::DIVIDE:
+				return Precedence::DIVIDE;
+			case Operation::NEGATE:
+				return Precedence::NEGATE;
+			case Operation::EQ:
+			case Operation::NE:
+			case Operation::GT:
+			case Operation::GE:
+				return Precedence::COMPARISON;
+			case Operation::LT:
+			case Operation::LE:
+				return Precedence::COMPARISON;
+			case Operation::AND:
+			case Operation::OR:
+				return Precedence::ANDOR;
+			case Operation::IMPLIES:
+				return Precedence::IMPLIES;
+			case Operation::NOT:
+				return Precedence::NOT;
+			case Operation::FORALL:
+				return Precedence::FORALL;
+		}
+		assert(false);
+		UNREACHABLE;
+	}
+
+	// construct a parser object based on `identifiers`, but don't parse anything yet
+	Parser(const std::unordered_map<std::string, Utility> &identifiers) : identifiers(identifiers) {}
+
+	// map from identifiers to utility terms
+	const std::unordered_map<std::string, Utility> &identifiers;
+	// lexer for tokenisation
+	Lexer lexer;
+	// identifiers occurring in the most recently parsed expression
+	std::unordered_set<std::string> identifiers_used;
+
+	// stack of operations
+	std::vector<Operation> operation_stack;
+	// stack of constructed utility terms
+	std::vector<Utility> utility_stack;
+	// stack of constructed Boolean expressions
+	std::vector<z3::Bool> constraint_stack;
+	// stack of the variables bound by the FORALL operations in `operation_stack`
+	std::vector<std::vector<z3::Real>> bound_stack;
+	// whether the expression being parsed may contain quantifiers
+	bool allow_quantifiers = false;
+	// while parsing the results of a subtree: its selectors, by their names in the results, renamed apart from the
+	// selectors of all other subtrees (null elsewhere, where selectors are not allowed)
+	std::map<std::string, Z3_func_decl> *selectors = nullptr;
+
+	// bail out from a malformed expression
+	[[noreturn]] void error() {
+		std::cerr << "checkmate: could not parse expression " << lexer.current << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+
+	// pop an operation from the stack
+	Operation pop_operation() {
+		auto operation = operation_stack.back();
+		operation_stack.pop_back();
+		return operation;
+	}
+
+	// pop a utility from the stack
+	Utility pop_utility() {
+		if (utility_stack.empty())
+			error();
+		auto utility = utility_stack.back();
+		utility_stack.pop_back();
+		return utility;
+	}
+
+	// pop a Boolean from the stack
+	z3::Bool pop_constraint() {
+		if (constraint_stack.empty())
+			error();
+		auto constraint = constraint_stack.back();
+		constraint_stack.pop_back();
+		return constraint;
+	}
+
+	// once we know we have to apply an operation, commit to it
+	void commit(Operation operation) {
+		switch (operation) {
+			case Operation::PAREN:
+				// nothing to do
+				break;
+			case Operation::PLUS: {
+				auto right = pop_utility();
+				auto left = pop_utility();
+				utility_stack.push_back(left + right);
+				break;
+			}
+			case Operation::MINUS: {
+				auto right = pop_utility();
+				auto left = pop_utility();
+				utility_stack.push_back(left - right);
+				break;
+			}
+			case Operation::MULTIPLY: {
+				auto right = pop_utility();
+				auto left = pop_utility();
+				utility_stack.push_back(left * right);
+				break;
+			}
+			case Operation::DIVIDE: {
+				auto right = pop_utility();
+				auto left = pop_utility();
+				utility_stack.push_back(left / right);
+				break;
+			}
+			case Operation::NEGATE: {
+				auto negate = pop_utility();
+				utility_stack.push_back(-negate);
+				break;
+			}
+			case Operation::EQ: {
+				auto right = pop_utility();
+				auto left = pop_utility();
+				constraint_stack.push_back(left == right);
+				break;
+			}
+			case Operation::NE: {
+				auto right = pop_utility();
+				auto left = pop_utility();
+				constraint_stack.push_back(left != right);
+				break;
+			}
+			case Operation::GT: {
+				auto right = pop_utility();
+				auto left = pop_utility();
+				constraint_stack.push_back(left > right);
+				break;
+			}
+			case Operation::GE: {
+				auto right = pop_utility();
+				auto left = pop_utility();
+				constraint_stack.push_back(left >= right);
+				break;
+			}
+			case Operation::LT: {
+				auto right = pop_utility();
+				auto left = pop_utility();
+				constraint_stack.push_back(left < right);
+				break;
+			}
+			case Operation::LE: {
+				auto right = pop_utility();
+				auto left = pop_utility();
+				constraint_stack.push_back(left <= right);
+				break;
+			}
+			case Operation::AND: {
+				auto right = pop_constraint();
+				auto left = pop_constraint();
+				constraint_stack.push_back(left && right);
+				break;
+			}
+			case Operation::OR: {
+				auto right = pop_constraint();
+				auto left = pop_constraint();
+				constraint_stack.push_back(left || right);
+				break;
+			}
+			case Operation::IMPLIES: {
+				auto right = pop_constraint();
+				auto left = pop_constraint();
+				constraint_stack.push_back(left.implies(right));
+				break;
+			}
+			case Operation::NOT: {
+				auto negate = pop_constraint();
+				constraint_stack.push_back(!negate);
+				break;
+			}
+			case Operation::FORALL: {
+				auto body = pop_constraint();
+				constraint_stack.push_back(z3::Bool::forall(bound_stack.back(), body));
+				bound_stack.pop_back();
+				break;
+			}
+		}
+	}
+
+	// handle a new `operation`, committing higher-precedence operations and then pushing it on `operation_stack`
+	void operation(Operation operation) {
+		// implication is right-associative, everything else left-associative
+		while (
+			!operation_stack.empty() && (
+				operation == Operation::IMPLIES
+					? precedence(operation_stack.back()) > precedence(operation)
+					: precedence(operation_stack.back()) >= precedence(operation)
+			)
+		)
+			commit(pop_operation());
+		operation_stack.push_back(operation);
+	}
+
+	// parse either a utility term or a Boolean expression, leaving it in the stack
+	void parse(const char *start) {
+		lexer.start(start);
+		identifiers_used.clear();
+		while (lexer.has_more()) {
+			Lexer::Token token = lexer.next();
+			switch (token) {
+				case Lexer::Token::NUMERAL:
+					utility_stack.push_back({z3::Real::value(lexer.buffer), z3::Real::ZERO});
+					break;
+				case Lexer::Token::IDENTIFIER: {
+					// Boolean constants, as the printer writes them
+					if (lexer.buffer == "true" || lexer.buffer == "false") {
+						constraint_stack.push_back(z3::Bool(lexer.buffer == "true"));
+						break;
+					}
+					Utility utility;
+					try {
+						utility = identifiers.at(lexer.buffer);
+					}
+					catch (const std::out_of_range &) {
+						std::cerr << "checkmate: undeclared constant " << lexer.buffer << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
+					identifiers_used.insert(lexer.buffer);
+					utility_stack.push_back(utility);
+					break;
+				}
+				case Lexer::Token::LPAREN: {
+					operation_stack.push_back(Operation::PAREN);
+					break;
+				}
+				case Lexer::Token::RPAREN: {
+					while (!operation_stack.empty() && operation_stack.back() != Operation::PAREN)
+						commit(pop_operation());
+					pop_operation();
+					break;
+				}
+				case Lexer::Token::PLUS:
+					operation(Operation::PLUS);
+					break;
+				case Lexer::Token::MINUS:
+					operation(Operation::MINUS);
+					break;
+				case Lexer::Token::MULTIPLY:
+					operation(Operation::MULTIPLY);
+					break;
+				case Lexer::Token::DIVIDE:
+					operation(Operation::DIVIDE);
+					break;
+				case Lexer::Token::NEGATE:
+					operation(Operation::NEGATE);
+					break;
+				case Lexer::Token::EQ:
+					operation(Operation::EQ);
+					break;
+				case Lexer::Token::NE:
+					operation(Operation::NE);
+					break;
+				case Lexer::Token::GT:
+					operation(Operation::GT);
+					break;
+				case Lexer::Token::GE:
+					operation(Operation::GE);
+					break;
+				case Lexer::Token::LT:
+					operation(Operation::LT);
+					break;
+				case Lexer::Token::LE:
+					operation(Operation::LE);
+					break;
+				case Lexer::Token::AND:
+					operation(Operation::AND);
+					break;
+				case Lexer::Token::OR:
+					operation(Operation::OR);
+					break;
+				case Lexer::Token::IMPLIES:
+					operation(Operation::IMPLIES);
+					break;
+				case Lexer::Token::NOT:
+					// prefix operator: its operand comes after it, so nothing on the stack is committed yet
+					operation_stack.push_back(Operation::NOT);
+					break;
+				case Lexer::Token::SELECTOR: {
+					if (!selectors) {
+						std::cerr << "checkmate: selector in expression " << lexer.current
+							<< ", selectors are only allowed in the results of subtrees" << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
+					std::vector<z3::Real> arguments;
+					for (const std::string &name : lexer.bound) {
+						if (!identifiers.count(name)) {
+							std::cerr << "checkmate: undeclared constant " << name << std::endl;
+							std::exit(EXIT_FAILURE);
+						}
+						arguments.push_back(z3::Real::constant(name));
+					}
+					auto found = selectors->find(lexer.buffer);
+					if (found == selectors->end()) {
+						// the number of candidates is the last part of the name: sel!<number>!<candidates>
+						size_t separator = lexer.buffer.rfind('!');
+						unsigned candidates = 0;
+						if (separator != std::string::npos)
+							candidates = std::strtoul(lexer.buffer.c_str() + separator + 1, nullptr, 10);
+						if (lexer.buffer.rfind("sel!", 0) != 0 || candidates == 0) {
+							std::cerr << "checkmate: unexpected selector " << lexer.buffer << " in expression " << lexer.current << std::endl;
+							std::exit(EXIT_FAILURE);
+						}
+						found = selectors->emplace(lexer.buffer, fresh_selector(arguments.size(), candidates)).first;
+					}
+					if (Z3_get_domain_size(z3::CONTEXT, found->second) != arguments.size()) {
+						std::cerr << "checkmate: selector " << lexer.buffer << " applied to different numbers of arguments" << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
+					std::vector<Z3_ast> raw;
+					for (const z3::Real &argument : arguments)
+						raw.push_back(argument.raw());
+					Z3_ast application = Z3_mk_app(z3::CONTEXT, found->second, raw.size(), raw.data());
+					utility_stack.push_back({z3::Real::wrap(application), z3::Real::ZERO});
+					break;
+				}
+				case Lexer::Token::FORALL: {
+					if (!allow_quantifiers) {
+						std::cerr << "checkmate: quantifier in expression " << lexer.current
+							<< ", quantifiers are only allowed in the results of subtrees" << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
+					// the variables are declared constants, bound by name (cf. z3::Bool::forall)
+					std::vector<z3::Real> bound;
+					for (const std::string &name : lexer.bound) {
+						if (!identifiers.count(name)) {
+							std::cerr << "checkmate: undeclared constant " << name << std::endl;
+							std::exit(EXIT_FAILURE);
+						}
+						bound.push_back(z3::Real::constant(name));
+					}
+					bound_stack.push_back(bound);
+					// prefix operator, as NOT
+					operation_stack.push_back(Operation::FORALL);
+					break;
+				}
+			}
+		}
+		// when there is no more input, we know all the operators have to be committed
+		while (!operation_stack.empty())
+			commit(pop_operation());
+	}
+
+	// parse a utility term, popping it out from the stack
+	Utility parse_utility(const char *start) {
+		parse(start);
+		if (!constraint_stack.empty() || utility_stack.size() != 1)
+			error();
+		auto utility = utility_stack.back();
+		utility_stack.clear();
+		return utility;
+	}
+
+	// parse a Boolean term, popping it out from the stack;
+	// quantifiers are rejected unless `allow_quantifiers`
+	// (only for weak(er) immunity and collusion resilience results of subtrees)
+	z3::Bool parse_constraint(const char *start, bool allow_quantifiers = false) {
+		this->allow_quantifiers = allow_quantifiers;
+		parse(start);
+		this->allow_quantifiers = false;
+		if (!utility_stack.empty() || constraint_stack.size() != 1)
+			error();
+		auto constraint = constraint_stack.back();
+		constraint_stack.clear();
+		return constraint;
+	}
+};
+
+// third-party library for parsing JSON
+using json = nlohmann::json;
+
+static z3::Bool parse_case(Parser &parser, const std::string &_case, bool allow_quantifiers = false) {
+	if(_case == "true")
+		return true;
+
+	return parser.parse_constraint(_case.c_str(), allow_quantifiers);
+}
+
+// Forward declarations
+static HonestUtilityElement parse_honest_utility_element(Parser &parser, const json &element, const Input &input);
+static HonestHistory parse_honest_history(Parser &parser, const json &history_json);
+
+// the results of one entry of a subtree node:
+// {weak_immunity, weaker_immunity, collusion_resilience, practicality, honest_utility}
+static SubtreeResults parse_subtree_results(Parser &parser, const json &subtree_json, const Input &input) {
+
+	std::vector<SubtreeResult> weak_immunity = {};
+	std::vector<SubtreeResult> weaker_immunity = {};
+	std::vector<SubtreeResult> collusion_resilience = {};
+	std::vector<PracticalitySubtreeResult> practicality = {};
+
+
+	if (subtree_json.contains("weak_immunity")){
+		for (const json &wi: subtree_json["weak_immunity"]) {
+			const json &players_json = wi["player_group"];
+			std::vector<std::string> player_group;
+			for (const auto &player : players_json){
+				if (player.is_string()){
+					player_group.push_back(player);
+				} else {
+					std::cerr << "checkmate: unsupported player value " << player << std::endl;
+					std::exit(EXIT_FAILURE);
+				}
+			}
+			std::vector<std::vector<z3::Bool>> satisfied_in_case = {};
+
+			const json &cases = wi["satisfied_in_case"];
+			for (const json &json_case: cases) {
+				std::vector<z3::Bool> _case = {};
+				for (const json &_case_entry: json_case) {
+					if(_case_entry != "true") {
+						const std::string &_case_e = _case_entry;
+						_case.push_back(parse_case(parser, _case_e, true));
+					}
+				}
+				satisfied_in_case.push_back(_case);					
+			}
+
+			SubtreeResult wi_result { player_group, satisfied_in_case };
+			weak_immunity.push_back(wi_result);
+		}
+	}
+
+	if (subtree_json.contains("weaker_immunity")){
+		for (const json &weri: subtree_json["weaker_immunity"]) {
+			const json &players_json = weri["player_group"];
+			std::vector<std::string> player_group = {};
+			for (const auto &player : players_json){
+				if (player.is_string()){
+					player_group.push_back(player);
+				} else {
+					std::cerr << "checkmate: unsupported player value " << player << std::endl;
+					std::exit(EXIT_FAILURE);
+				}
+			}
+			std::vector<std::vector<z3::Bool>> satisfied_in_case = {};
+
+			const json &cases = weri["satisfied_in_case"];
+			for (const json &json_case: cases) {
+				std::vector<z3::Bool> _case = {};
+				for (const json &_case_entry: json_case) {
+					if(_case_entry != "true") {
+						const std::string &_case_e = _case_entry;
+						_case.push_back(parse_case(parser, _case_e, true));
+					}
+				}
+				satisfied_in_case.push_back(_case);					
+			}
+
+			SubtreeResult weri_result { player_group, satisfied_in_case };
+			weaker_immunity.push_back(weri_result);
+		}
+	}
+
+	if (subtree_json.contains("collusion_resilience")){
+		for (const json &cr: subtree_json["collusion_resilience"]) {
+			const json &players_json = cr["player_group"];
+			std::vector<std::string> player_group = {};
+			for (const auto &player : players_json){
+				if (player.is_string()){
+					player_group.push_back(player);
+				} else {
+					std::cerr << "checkmate: unsupported player value " << player << std::endl;
+					std::exit(EXIT_FAILURE);
+				}
+			}
+			std::vector<std::vector<z3::Bool>> satisfied_in_case = {};
+
+			const json &cases = cr["satisfied_in_case"];
+			for (const json &json_case: cases) {
+				std::vector<z3::Bool> _case = {};
+				for (const json &_case_entry: json_case) {
+					if(_case_entry != "true") {
+						const std::string &_case_e = _case_entry;
+						_case.push_back(parse_case(parser, _case_e, true));
+					}
+				}
+				satisfied_in_case.push_back(_case);					
+			}
+
+			SubtreeResult cr_result { player_group, satisfied_in_case };
+			collusion_resilience.push_back(cr_result);
+		}
+	}
+
+	if (subtree_json.contains("practicality")) {
+		
+		for (const json &pr: subtree_json["practicality"]) {
+			const json &_case_pr = pr["case"];
+			std::vector<z3::Bool> _case = {};
+			for (const json &_case_entry: _case_pr) {
+				if(_case_entry != "true") {
+					const std::string &_case_e = _case_entry;
+					_case.push_back(parse_case(parser, _case_e, true));
+				}
+			}
+			std::vector<Cond_Utility> utilities = {};
+
+			for (const json& utility_tuple: pr["utilities"]) {
+
+				
+				using PlayerUtility = std::pair<std::string, Utility>;
+				std::vector<PlayerUtility> player_utilities;
+				for (const json &utility: utility_tuple["utility"]) {
+					const json &value = utility["value"];
+					// parse a utility expression
+					if (value.is_string()) {
+						const std::string &string = value;
+						player_utilities.push_back({
+														utility["player"],
+														parser.parse_utility(string.c_str())
+												});
+					}
+						// numeric utility, any JSON number, assumed real
+					else if (value.is_number()) {
+						player_utilities.push_back({
+														utility["player"],
+														{json_number(value), z3::Real::ZERO}
+												});
+					}
+						// foreign object, bail
+					else {
+						std::cerr << "checkmate: unsupported utility value " << value << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
+				}
+
+				// sort (player, utility) pairs alphabetically by player
+				sort(
+						player_utilities.begin(),
+						player_utilities.end(),
+						[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
+				);
+
+				std::vector<Utility> pr_utility = {};
+				for (auto &player_utility: player_utilities)
+					pr_utility.push_back(player_utility.second);
+
+				z3::Bool pr_condition = true;
+				if (utility_tuple["condition"] != "true") {
+					const json &pr_condition_json = utility_tuple["condition"];
+					assert(pr_condition_json.is_string());
+					const std::string &string = pr_condition_json;
+				
+					pr_condition = parser.parse_constraint(string.c_str(), true);
+				}
+
+				Cond_Utility cond_utility {pr_utility, pr_condition};
+				utilities.push_back(cond_utility);
+			}
+
+			PracticalitySubtreeResult pr_sub_result { _case, utilities };
+
+			practicality.push_back(pr_sub_result);
+		}
+	}
+
+	// Parse honest_utility (default to empty vector if not present)
+	HonestUtilityElement honest_utility = std::vector<Utility>();
+	if (subtree_json.contains("honest_utility")) {
+		honest_utility = parse_honest_utility_element(parser, subtree_json["honest_utility"], input);
+	}
+
+	return {weak_immunity, weaker_immunity, collusion_resilience, practicality, honest_utility};
+}
+
+
+/*
+ * Subtree results written by the subtree mode of the EFG analysis (src/property.cpp): a single object
+ * {weak_immunity, weaker_immunity, collusion_resilience, practicality, honest_utility} for one honest history or
+ * honest utility, in which a practical utility is a plain list of utilities. Whether the results belong to an honest
+ * history inside the subtree or to an honest utility is not recorded; as in the EFG analysis, it follows from whether
+ * the subtree is along the honest history of the supertree, so the results are offered as three entries:
+ * - for the honest history ending at the subtree's root (along the honest history): practical in the cases that list
+ *   a practical utility, which is then the honest one,
+ * - without honest history (off the honest history): every practical utility becomes a rationalizable utility set
+ *   of its own, as in an EFG the rationalizable utility sets are the singletons of the outcomes of subgame perfect
+ *   equilibria, and the EFG analysis compares a deviation with each of them,
+ * - for the honest utility, for collusion resilience off the honest history.
+ * The EFG analysis treats all constants as known, so they have to be known at the subtree node (`known`).
+ */
+static std::vector<SubtreeEntry> convert_efg_subtree(Parser &parser, const json &subtree_json, const Input &input,
+		const std::unordered_set<std::string> &known) {
+	if (!subtree_json.is_object()) {
+		std::cerr << "checkmate: unexpected subtree results " << subtree_json << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+
+	// all constants in the results have to be known at the subtree node
+	auto check_known = [&](const json &text, bool utility) {
+		if (!text.is_string() || text == "true") {
+			return;
+		}
+		const std::string &string = text;
+		if (utility) {
+			parser.parse_utility(string.c_str());
+		} else {
+			parser.parse_constraint(string.c_str(), true);
+		}
+		for (const std::string &identifier : parser.identifiers_used) {
+			if (!known.count(identifier)) {
+				std::cerr << "checkmate: the results of a subtree of an EFG use " << identifier
+					<< ", which is still unknown at the subtree; analyse the subtree as a CEFG (declare " << identifier
+					<< " as unknown there)" << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+		}
+	};
+	for (const char *property : {"weak_immunity", "weaker_immunity", "collusion_resilience"}) {
+		if (subtree_json.contains(property)) {
+			for (const json &result : subtree_json[property]) {
+				for (const json &cases : result["satisfied_in_case"]) {
+					for (const json &conjunct : cases) {
+						check_known(conjunct, false);
+					}
+				}
+			}
+		}
+	}
+	json converted = subtree_json;
+	if (converted.contains("practicality")) {
+		for (json &result : converted["practicality"]) {
+			for (const json &conjunct : result["case"]) {
+				check_known(conjunct, false);
+			}
+			// a practical utility of the EFG analysis is a plain list of utilities, here it has a liveness condition
+			json utilities = json::array();
+			for (const json &utility : result["utilities"]) {
+				for (const json &player_utility : utility) {
+					check_known(player_utility["value"], true);
+				}
+				utilities.push_back({{"utility", utility}, {"condition", "true"}});
+			}
+			result["utilities"] = utilities;
+		}
+	}
+	bool has_honest_utility = converted.contains("honest_utility") && !converted["honest_utility"].empty();
+	if (has_honest_utility) {
+		for (const json &player_utility : converted["honest_utility"]) {
+			check_known(player_utility["value"], true);
+		}
+	} else {
+		converted.erase("honest_utility");
+	}
+	SubtreeResults results = parse_subtree_results(parser, converted, input);
+
+	std::vector<SubtreeEntry> entries;
+
+	// along the honest history, which ends at the subtree's root
+	SubtreeEntry along {HonestHistory(), results};
+	along.results.practicality.clear();
+	for (const PracticalitySubtreeResult &result : results.practicality) {
+		if (!result.utilities.empty()) {
+			along.results.practicality.push_back(result);
+		}
+	}
+	entries.push_back(along);
+
+	// off the honest history: one rationalizable utility set per practical utility
+	SubtreeEntry off {std::monostate(), SubtreeResults()};
+	off.results.weak_immunity = results.weak_immunity;
+	off.results.weaker_immunity = results.weaker_immunity;
+	for (const PracticalitySubtreeResult &result : results.practicality) {
+		for (const Cond_Utility &utility : result.utilities) {
+			off.results.practicality.push_back({result._case, {utility}});
+		}
+	}
+	entries.push_back(off);
+
+	// for collusion resilience off the honest history
+	if (has_honest_utility) {
+		SubtreeEntry honest {results.honest_utility, SubtreeResults()};
+		honest.results.collusion_resilience = results.collusion_resilience;
+		honest.results.honest_utility = results.honest_utility;
+		entries.push_back(honest);
+	}
+	return entries;
+}
+
+/*
+ * load a tree from a JSON document `node`, assuming a certain format
+ * - `input` is the input parsed so far
+ * - `known` are the constants known at this point of the game: leaf utilities may only use these
+ * - `action_constraints` are filled out as we go
+ *
+ * TODO does not check all aspects
+ * (hoping to have new input format based on s-expressions, which would be much easier to parse)
+ */
+static std::unique_ptr<Node> load_tree(const Input &input, Parser &parser, const json &node, const std::unordered_set<std::string> &known) {
+	// branch
+	if (node.contains("children")) {
+		// do linear-time lookup for the index of the node's player in the input player list
+		unsigned player;
+		for (player = 0; player < input.players.size(); player++)
+			if (input.players[player] == node["player"])
+				break;
+		if (player == input.players.size())
+			throw std::logic_error("undeclared player in the input");
+
+		std::unique_ptr<Branch> branch(new Branch(player));
+		for (const json &child: node["children"]) {
+			auto loaded = load_tree(input, parser, child["child"], known);
+
+			branch->choices.push_back({child["action"], std::move(loaded)});
+		}
+		return branch;
+	}
+
+	// condition node
+	if (node.contains("condition")) {
+		std::unique_ptr<ConditionNode> condition_node(new ConditionNode());
+
+		// parse the condition constraints first: unknowns occurring in any of them are revealed
+		std::vector<z3::Bool> conditions;
+		std::unordered_set<std::string> revealed;
+		for (const json &cond: node["condition"]) {
+			const std::string &condition_str = cond["constraint"];
+			conditions.push_back(parser.parse_constraint(condition_str.c_str()));
+			for (const std::string &identifier: parser.identifiers_used)
+				if (input.unknowns.count(identifier))
+					revealed.insert(identifier);
+		}
+		// additionally revealed constants, e.g. those determined by the conditions' constants
+		if (node.contains("reveals"))
+			for (const json &reveal: node["reveals"]) {
+				const std::string &name = reveal;
+				if (!input.utilities.count(name)) {
+					std::cerr << "checkmate: condition node reveals undeclared constant " << name << std::endl;
+					std::exit(EXIT_FAILURE);
+				}
+				if (!input.unknowns.count(name)) {
+					std::cerr << "checkmate: condition node reveals " << name << ", which is not declared unknown" << std::endl;
+					std::exit(EXIT_FAILURE);
+				}
+				revealed.insert(name);
+			}
+
+		std::unordered_set<std::string> child_known(known);
+		for (const std::string &name: revealed)
+			if (child_known.insert(name).second)
+				condition_node->revealed.push_back(name);
+		sort(condition_node->revealed.begin(), condition_node->revealed.end());
+
+		size_t index = 0;
+		for (const json &cond: node["condition"]) {
+			// load the child subtree
+			auto loaded = load_tree(input, parser, cond["child"], child_known);
+			std::string name = cond.contains("name") ? std::string(cond["name"]) : "";
+			condition_node->conditions.push_back({conditions[index++], std::move(loaded), name});
+		}
+		return condition_node;
+	}
+
+	// leaf 
+	if (node.contains("utility")) {
+		// (player, utility) pairs
+		using PlayerUtility = std::pair<std::string, Utility>;
+		std::vector<PlayerUtility> player_utilities;
+		for (const json &utility: node["utility"]) {
+			const json &value = utility["value"];
+			// parse a utility expression
+			if (value.is_string()) {
+				const std::string &string = value;
+				player_utilities.push_back({
+												   utility["player"],
+												   parser.parse_utility(string.c_str())
+										   });
+				// utilities may only depend on constants known at this point of the game
+				for (const std::string &identifier: parser.identifiers_used)
+					if (!known.count(identifier)) {
+						std::cerr << "checkmate: utility " << string << " of player " << std::string(utility["player"])
+							<< " uses " << identifier << ", which is still unknown at this leaf" << std::endl;
+						std::exit(EXIT_FAILURE);
+					}
+			}
+				// numeric utility, any JSON number, assumed real
+			else if (value.is_number()) {
+				player_utilities.push_back({
+												   utility["player"],
+												   {json_number(value), z3::Real::ZERO}
+										   });
+			}
+				// foreign object, bail
+			else {
+				std::cerr << "checkmate: unsupported utility value " << value << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+		}
+
+		// sort (player, utility) pairs alphabetically by player
+		sort(
+				player_utilities.begin(),
+				player_utilities.end(),
+				[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
+		);
+
+		std::unique_ptr<Leaf> leaf(new Leaf);
+		for (auto &player_utility: player_utilities)
+			leaf->utilities.push_back(player_utility.second);
+		return leaf;
+	}
+
+	// subtree summary
+	if (node.contains("subtree")) {
+		const json &subtree_json = node["subtree"];
+
+		std::unique_ptr<Subtree> subtree(new Subtree());
+		// written by the subtree mode of the EFG analysis
+		if (!subtree_json.is_array()) {
+			subtree->entries = convert_efg_subtree(parser, subtree_json, input, known);
+			return subtree;
+		}
+		// written by subtree mode: a list of entries, each with the honest history or honest utility it was computed for
+		// (or none, for weak(er) immunity and practicality without honest history) and its results
+		// the selectors in the practicality results of this subtree get fresh names, different from those of other
+		// subtrees (the same results may be used for several subtrees, and every subtree file starts at sel!0)
+		std::map<std::string, Z3_func_decl> selectors;
+		parser.selectors = &selectors;
+		for (const json &entry : subtree_json) {
+			SubtreeEntry subtree_entry;
+			if (entry.contains("honest_history")) {
+				subtree_entry.key = parse_honest_history(parser, entry["honest_history"]);
+			} else if (entry.contains("honest_utility")) {
+				subtree_entry.key = parse_honest_utility_element(parser, entry["honest_utility"], input);
+			} else if (!entry.contains("no_honest_history")) {
+				std::cerr << "checkmate: subtree entry without honest_history, honest_utility or no_honest_history " << entry << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+			subtree_entry.results = parse_subtree_results(parser, entry["subtree"], input);
+			subtree->entries.push_back(subtree_entry);
+		}
+		parser.selectors = nullptr;
+		return subtree;
+	}
+
+	// foreign object, bail
+	std::cerr << "checkmate: unexpected object in tree position " << node << std::endl;
+	std::exit(EXIT_FAILURE);
+}
+
+// Parse a single honest history element (can be an action string or a list of conditional branches)
+static HonestHistoryElement parse_honest_history_element(Parser &parser, const json &element) {
+	// If it's a string, it's an action
+	if (element.is_string()) {
+		return HonestHistoryElement(std::string(element));
+	}
+	
+	// If it's an array of condition objects, parse each
+	if (element.is_array()) {
+		std::vector<HonestHistoryCondition> conditions;
+		for (const json &cond_obj : element) {
+			if (cond_obj.contains("condition")) {
+				const std::string &condition_str = cond_obj["condition"];
+				z3::Bool condition = parser.parse_constraint(condition_str.c_str());
+				
+				// Recursively parse the path
+				std::vector<HonestHistoryElement> path;
+				for (const json &path_element : cond_obj["path"]) {
+					path.push_back(parse_honest_history_element(parser, path_element));
+				}
+				
+				conditions.push_back(HonestHistoryCondition(condition, path));
+			}
+			else {
+				std::cerr << "checkmate: expected condition object in honest history element " << cond_obj << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+		}
+		return HonestHistoryElement(conditions);
+	}
+	
+	// Unknown format, bail
+	std::cerr << "checkmate: unexpected honest history element format " << element << std::endl;
+	std::exit(EXIT_FAILURE);
+}
+
+// Parse a complete honest history (sequence of elements)
+static HonestHistory parse_honest_history(Parser &parser, const json &history_json) {
+	HonestHistory history;
+	for (const json &element : history_json) {
+		history.push_back(parse_honest_history_element(parser, element));
+	}
+	return history;
+}
+
+// Parse utility vector from JSON (helper for honest_utility)
+static std::vector<Utility> parse_utility_vector(Parser &parser, const json &utility_json) {
+	using PlayerUtility = std::pair<std::string, Utility>;
+	std::vector<PlayerUtility> player_utilities;
+	
+	for (const json &utility: utility_json) {
+		const json &value = utility["value"];
+		// parse a utility expression
+		if (value.is_string()) {
+			const std::string &string = value;
+			player_utilities.push_back({
+											utility["player"],
+											parser.parse_utility(string.c_str())
+									});
+		}
+		// numeric utility, any JSON number, assumed real
+		else if (value.is_number()) {
+			player_utilities.push_back({
+											utility["player"],
+											{json_number(value), z3::Real::ZERO}
+									});
+		}
+		// foreign object, bail
+		else {
+			std::cerr << "checkmate: unsupported utility value " << value << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+	}
+
+	// sort (player, utility) pairs alphabetically by player
+	sort(
+			player_utilities.begin(),
+			player_utilities.end(),
+			[](const PlayerUtility &left, const PlayerUtility &right) { return left.first < right.first; }
+	);
+
+	std::vector<Utility> result;
+	for (auto &player_utility: player_utilities)
+		result.push_back(player_utility.second);
+	
+	return result;
+}
+
+// Parse a single honest utility element (can be a utility vector or a list of conditional branches)
+static HonestUtilityElement parse_honest_utility_element(Parser &parser, const json &element, const Input &input) {
+
+	// If it's an array, check if it contains condition objects or utility objects
+	if (element.is_array()) {
+		// Check first element to determine type
+		if (!element.empty() && element[0].is_object()) {
+			if (element[0].contains("condition")) {
+				// It's an array of condition objects
+				std::vector<HonestUtilityCondition> conditions;
+				for (const json &cond_obj : element) {
+					const std::string &condition_str = cond_obj["condition"];
+					z3::Bool condition = parser.parse_constraint(condition_str.c_str());
+					
+					// Recursively parse the utility
+					HonestUtilityElement utility_element = parse_honest_utility_element(parser, cond_obj["utility"], input);
+					
+					conditions.push_back(HonestUtilityCondition(condition, utility_element));
+				}
+				return HonestUtilityElement(conditions);
+			} else if (element[0].contains("player")) {
+				// It's a utility vector
+				return HonestUtilityElement(parse_utility_vector(parser, element));
+			}
+		}
+	}
+	
+	// Unknown format, bail
+	std::cerr << "checkmate: unexpected honest utility format " << element << std::endl;
+	std::exit(EXIT_FAILURE);
+}
+
+
+
+Input::Input(const char *path) : sat_cases(), strategies() , stop_log(false) {
+	// parse a JSON document from `path`
+	std::ifstream input(path);
+	json document;
+	try {
+		input.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+		document = json::parse(input);
+	}
+	catch (const std::ifstream::failure &fail) {
+		std::cerr << "checkmate: " << std::strerror(errno) << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+	catch (const json::exception &err) {
+		std::cerr << "checkmate: " << err.what() << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+
+	if (document["players"].size() > MAX_PLAYERS) {
+		std::cerr << "checkmate: more than 64 players not supported - are you sure you want this many?!" << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+
+	// load list of players and sort alphabetically
+	for (const json &player: document["players"])
+		players.push_back(std::string(player));
+	sort(players.begin(), players.end());
+
+	// load real/infinitesimal identifiers
+	// either a plain list (all known) or an object {"known": [...], "unknown": [...]}
+	std::unordered_set<std::string> known;
+	auto load_identifiers = [&](const json &declaration, bool infinitesimal) {
+		auto declare = [&](const json &identifier, bool is_known) {
+			const std::string &name = identifier;
+			if (utilities.count(name)) {
+				std::cerr << "checkmate: constant " << name << " declared more than once" << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+			auto constant = z3::Real::constant(name);
+			if (infinitesimal)
+				utilities.insert({name, {z3::Real::ZERO, constant}});
+			else
+				utilities.insert({name, {constant, z3::Real::ZERO}});
+			if (is_known)
+				known.insert(name);
+			else
+				unknowns.insert(name);
+		};
+		if (declaration.is_object()) {
+			if (declaration.contains("known"))
+				for (const json &identifier: declaration["known"])
+					declare(identifier, true);
+			if (declaration.contains("unknown"))
+				for (const json &identifier: declaration["unknown"])
+					declare(identifier, false);
+		}
+		else
+			for (const json &identifier: declaration)
+				declare(identifier, true);
+	};
+	load_identifiers(document["constants"], false);
+	load_identifiers(document["infinitesimals"], true);
+
+	Parser parser(utilities);
+	// load honest histories automatically
+	for (const json &history_json : document["honest_histories"]) {
+		honest.push_back(parse_honest_history(parser, history_json));
+	}
+
+
+
+	// load honest utilities
+	for (const auto &utility_dict : document["honest_utilities"]) {
+		// Parse the "utility" field which can be either a simple utility vector or conditional structure
+		HonestUtilityElement *element = new HonestUtilityElement(
+			parse_honest_utility_element(parser, utility_dict["utility"], *this)
+		);
+		
+		HonestUtilityTuple utilityTuple(*element);
+		honest_utilities.push_back(utilityTuple);
+	}
+
+
+	// reusable buffer for constraint conjuncts
+	std::vector<z3::Bool> conjuncts;
+
+	// initial constraints
+	for (const json &initial_constraint: document["initial_constraints"]) {
+		const std::string &constraint = initial_constraint;
+		conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
+	}
+	initial_constraint = z3::Bool::conjunction(conjuncts);
+
+
+	// weak immunity constraints
+	conjuncts.clear();
+	for (const json &weak_immunity_constraint: document["property_constraints"]["weak_immunity"]) {
+		const std::string &constraint = weak_immunity_constraint;
+		conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
+	}
+	weak_immunity_constraint = z3::Bool::conjunction(conjuncts);
+	
+
+	// weaker immunity constraints
+	conjuncts.clear();
+	for (const json &weaker_immunity_constraint: document["property_constraints"]["weaker_immunity"]) {
+		const std::string &constraint = weaker_immunity_constraint;
+		conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
+	}
+	weaker_immunity_constraint = z3::Bool::conjunction(conjuncts);
+	
+
+	// collusion resilience constraints
+	conjuncts.clear();
+	for (const json &collusion_resilience_constraint: document["property_constraints"]["collusion_resilience"]) {
+		const std::string &constraint = collusion_resilience_constraint;
+		conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
+	}
+	collusion_resilience_constraint = conjunction(conjuncts);
+
+	// practicality constraints
+	conjuncts.clear();
+	for (const json &practicality_constraint: document["property_constraints"]["practicality"]) {
+		const std::string &constraint = practicality_constraint;
+		conjuncts.push_back(parser.parse_constraint(constraint.c_str()));
+	}
+	practicality_constraint = conjunction(conjuncts);
+
+
+	// load the game tree and leak it so we can downcast to Branch or ConditionNode
+	auto node = load_tree(*this, parser, document["tree"], known).release();
+
+	if (node->is_leaf() || node->is_subtree()) {
+		std::cerr << "checkmate: root node is a leaf or a subtree (?!) - exiting" << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+	// un-leaked and downcasted here
+	root = std::unique_ptr<Node>(static_cast<Node *>(node));
+}
+
+
+
+std::vector<HistoryChoice> Node::compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const {
+
+		if (this -> is_leaf() || this->is_subtree()){
+			return {};
+		}
+		std::vector<HistoryChoice> strategy;
+
+		if (this->is_branch()) {
+			if (!this->branch().strategy.empty()){
+				HistoryChoice hist_choice;
+				hist_choice.player = players[this->branch().player];
+				hist_choice.choice = this->branch().strategy;
+				hist_choice.history = actions_so_far;
+
+				strategy.push_back(hist_choice);
+			}
+			
+			for (const Choice &choice: this->branch().choices) {
+				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+				updated_actions.push_back(choice.action);
+				std::vector<HistoryChoice> child_strategy = choice.node->compute_strategy(players, updated_actions);
+				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+			}
+		} else if (this->is_condition_node()) {
+			// For condition nodes, recursively compute strategy for all conditional branches
+			// since no action itself is taken at a condition node, we only track the condition in the history;
+			for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
+				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+				z3::Bool condition = cond_choice.condition;
+				updated_actions.push_back(condition.to_string()); // Add the condition to the history for tracking purposes
+				std::vector<HistoryChoice> child_strategy = cond_choice.node->compute_strategy(players, updated_actions);
+				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+			}
+		}
+		
+		return strategy;
+	}
+
+bool Node::cr_against_all() const {
+	bool cr_against_all = true;
+
+	for(auto violates_colluding_group : violates_cr) {
+
+		if(!violates_colluding_group.is(z3::Bool(false))) {
+			cr_against_all = false;
+		}
+	}
+
+	return cr_against_all;
+}
+
+std::vector<bool> convertToBinary(uint n)
+{
+	std::vector<bool> bit_reps;
+
+    if (n / 2 != 0) {
+        bit_reps = convertToBinary(n / 2);
+    }
+
+	bit_reps.push_back(n % 2 == 1);
+	return bit_reps;
+}
+
+z3::Bool Node::cr_against_supergroups_of(std::vector<uint> deviating_players, z3::Solver &solver) const {
+
+	std::vector<z3::Bool> cr_conditions = {};
+
+	for(uint64_t i=0; i < violates_cr.size(); i++) {
+		std::vector<bool> bin_rep = convertToBinary(i+1);
+
+		bool all_deviating_deviate = true;
+
+		for(auto player: deviating_players) {
+			if(player > bin_rep.size()) {
+				all_deviating_deviate = false;
+			} else {
+				if(!bin_rep[player-1]) {
+					all_deviating_deviate = false;
+				}
+			}			
+		}
+
+		if(all_deviating_deviate) {
+			cr_conditions.push_back(violates_cr[i].invert());
+		}
+
+	}
+	z3::Bool cr_if;
+	if (cr_conditions.size() == 0) {
+		cr_if = z3::Bool(true);
+		return cr_if;
+	} else {
+		cr_if = z3::Bool::conjunction(cr_conditions);
+	}
+
+	if (solver.solve(cr_conditions) == z3::Result::SAT) {
+		return cr_if.simplify();
+	}
+	return z3::Bool(false);
+
+}
+
+void Node::add_violation_cr() const {
+	violates_cr.push_back(false);
+
+	if (!this->is_leaf() && !this->is_subtree()){
+
+		if (this->is_branch()) {
+			for (const auto& child: this->branch().choices){
+				child.node->add_violation_cr();
+			}
+		} else if (this->is_condition_node()) {
+			for (const auto& cond_choice: this->condition_node().conditions) {
+				cond_choice.node->add_violation_cr();
+			}
+		}
+	}
+	return;
+}
+
+std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players, std::vector<std::string> conditions_so_far, z3::Solver &solver) const {
+
+		if (this -> is_leaf() || this->is_subtree()){
+			return {};
+		}
+		std::vector<HistoryChoice> strategy;
+		std::vector<Strat_Choice> strategy_choice;
+
+		if (this->is_branch()) {
+			
+			if (honest) {
+				for (const Choice &choice: this->branch().choices) {
+
+					if (choice.node->honest) {
+						assert(choice.node->cr_against_all());
+						HistoryChoice hist_choice;
+						hist_choice.player = players[this->branch().player];
+						hist_choice.choice = choice.action;
+						hist_choice.history = actions_so_far;
+						strategy_choice.push_back(Strat_Choice(choice.action, z3::Bool(true)));
+
+						strategy.push_back(hist_choice);
+						break;
+					}
+				}
+			} else {
+				for (const Choice &choice: this->branch().choices) {
+					z3::Bool cr_condition = choice.node->cr_against_supergroups_of(deviating_players, solver);
+					if (!cr_condition.is(z3::Bool(false))){ 
+						
+						HistoryChoice hist_choice;
+						hist_choice.player = players[this->branch().player];
+						hist_choice.choice = choice.action;
+						hist_choice.history = actions_so_far;
+						hist_choice.condition = conditions_so_far;
+						if (!cr_condition.is(z3::Bool(true))) {
+							hist_choice.condition.push_back(cr_condition.to_string());
+						}
+					
+						strategy_choice.push_back(Strat_Choice(choice.action, cr_condition)); 
+						strategy.push_back(hist_choice);
+					}
+
+				}
+			}
+			for (const Strat_Choice& strat_choice: strategy_choice) {
+				for (const Choice &choice: this->branch().choices) {
+					std::vector<uint> new_deviating_players;
+					new_deviating_players.insert(new_deviating_players.end(), deviating_players.begin(), deviating_players.end());
+
+					int cnt = std::count(deviating_players.begin(), deviating_players.end(), this->branch().player + 1);
+					if((choice.action != strat_choice.action) && (cnt == 0)) {
+						new_deviating_players.push_back(this->branch().player + 1);
+					}
+
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(choice.action);
+					std::vector<std::string> updated_conditions(conditions_so_far.begin(), conditions_so_far.end());
+					if (!strat_choice.condition.is(z3::Bool(true))) {
+						updated_conditions.push_back(strat_choice.condition.to_string());
+					}
+					solver.push();
+					solver.assert_(strat_choice.condition);
+					std::vector<HistoryChoice> child_strategy = choice.node->compute_cr_strategy(players, updated_actions, new_deviating_players, updated_conditions, solver); 
+					strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+					solver.pop();
+				}
+
+			}
+			
+
+
+
+		} else if (this->is_condition_node()) {
+			// For condition nodes, recursively compute cr_strategy for all conditional branches
+			for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
+
+				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+				z3::Bool condition = cond_choice.condition;
+				updated_actions.push_back(condition.to_string()); // Add the condition to the history for tracking purposes
+
+				std::vector<HistoryChoice> child_strategy = cond_choice.node->compute_cr_strategy(players, updated_actions, deviating_players, conditions_so_far, solver);
+				strategy.insert(strategy.end(), child_strategy.begin(), child_strategy.end());
+			}
+		}
+		
+		return strategy;
+	}
+
+std::vector<HistoryChoice> Node::compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, const StrategyElement& strategy_element, std::vector<std::string> conditions_so_far) const {
+
+	if (this -> is_leaf() || this->is_subtree()){
+		assert(std::holds_alternative<std::optional<Strategy>>(strategy_element));
+		assert(!std::get<std::optional<Strategy>>(strategy_element).has_value());
+		return {};
+	}
+
+	std::vector<HistoryChoice> choices;
+
+	if (std::holds_alternative<std::optional<Strategy>>(strategy_element)) {
+
+		assert(std::get<std::optional<Strategy>>(strategy_element).has_value());
+		const Strategy& given_strategy = std::get<std::optional<Strategy>>(strategy_element).value();
+
+		if (this->is_branch()){				
+			HistoryChoice hist_choice;
+			hist_choice.player = players[this->branch().player];
+			hist_choice.choice = given_strategy.root_action;
+			hist_choice.history = actions_so_far;
+			hist_choice.condition = conditions_so_far;
+			choices.push_back(hist_choice);
+
+			unsigned int i = 0;
+			for (const StrategyElement& child_strategy_element: given_strategy.children_strategies) {
+				std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+				updated_actions.push_back(this->branch().choices[i].action);
+				
+				std::vector<HistoryChoice> child_choices = this->branch().choices[i].node->compute_pr_strategy(players, updated_actions, child_strategy_element, conditions_so_far);
+
+
+				choices.insert(choices.end(), child_choices.begin(), child_choices.end());
+				i++;
+			}
+
+			return choices;
+
+		}
+		else if (this->is_condition_node()) {
+			// For condition nodes, only one condition is there since these are the strategies that make a specific utility practical,
+			// this condition probably has to be added to case
+
+			std::string current_condition = std::get<std::optional<Strategy>>(strategy_element).value().root_action;
+			assert(std::get<std::optional<Strategy>>(strategy_element).value().children_strategies.size() == 1); // should only be one child strategy since only one condition should make the utility practical
+			for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
+				if (cond_choice.condition.to_string() == current_condition) {
+
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(current_condition); // Add the condition to the history for tracking purposes
+					std::vector<HistoryChoice> child_choices = cond_choice.node->compute_pr_strategy(players, updated_actions, std::get<std::optional<Strategy>>(strategy_element).value().children_strategies[0], conditions_so_far);					// this condition is added later when different choices have to be combined (ConditionStrategy)
+					// for (StrategyCase& child_case: child_strategy_case) {
+					// 	child_case._case.push_back(cond_choice.condition); 
+					// }
+					
+					return child_choices;
+				}
+			}
+			assert(false); // should have found the condition in the condition node
+		}
+
+		return choices;
+
+	} else {
+		std::vector<ConditionStrategy> condition_strategies = std::get<std::vector<ConditionStrategy>>(strategy_element);
+
+		if (this->is_branch()){
+			assert(!condition_strategies.empty());
+			for (ConditionStrategy& condition_strategy: condition_strategies) {
+
+				assert(condition_strategy.strategy.has_value());
+				Strategy& given_strategy = condition_strategy.strategy.value();
+
+				std::vector<std::string> updated_conditions(conditions_so_far.begin(), conditions_so_far.end());
+				z3::Bool simpl_cond = condition_strategy.condition.simplify();
+				if (!simpl_cond.is(z3::Bool(true))) {
+					updated_conditions.push_back(simpl_cond.to_string());
+				}
+
+				HistoryChoice hist_choice;
+				hist_choice.player = players[this->branch().player];
+				hist_choice.choice = given_strategy.root_action;
+				hist_choice.history = actions_so_far;
+				hist_choice.condition = updated_conditions;
+				choices.push_back(hist_choice);
+
+				unsigned int i = 0;
+				for (const StrategyElement& child_strategy_element: given_strategy.children_strategies) {
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(this->branch().choices[i].action);
+					
+					std::vector<HistoryChoice> child_choices = this->branch().choices[i].node->compute_pr_strategy(players, updated_actions, child_strategy_element, updated_conditions);
+
+
+					choices.insert(choices.end(), child_choices.begin(), child_choices.end());
+					i++;
+				}
+	
+			}
+			return choices;
+			
+
+		} else {
+			assert(this->is_condition_node()); 
+			assert(!condition_strategies.empty());
+			for (ConditionStrategy& condition_strategy: condition_strategies) {
+				assert(condition_strategy.strategy.has_value());
+				Strategy& given_strategy = condition_strategy.strategy.value();
+
+				std::vector<std::string> updated_conditions(conditions_so_far.begin(), conditions_so_far.end());
+				z3::Bool simpl_cond = condition_strategy.condition.simplify();
+				if (!simpl_cond.is(z3::Bool(true))) {
+					updated_conditions.push_back(simpl_cond.to_string());
+				}
+
+				std::string current_condition = given_strategy.root_action;
+				assert(given_strategy.children_strategies.size() == 1); // should only be one child strategy since only one condition should make the utility practical
+				for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
+					if (cond_choice.condition.to_string() == current_condition) {
+
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+						updated_actions.push_back(current_condition); // Add the condition to the history for tracking purposes
+						std::vector<HistoryChoice> child_choices = cond_choice.node->compute_pr_strategy(players, updated_actions, given_strategy.children_strategies[0], updated_conditions);
+
+						// this condition is added later when different choices have to be combined (ConditionStrategy)
+						// for (StrategyCase& child_case: child_strategy_case) {
+						// 	child_case._case.push_back(cond_choice.condition); 
+						// }
+						
+						return child_choices;
+					}
+				}
+			}
+			assert(false); // should have found the condition in the condition node
+		}
+		
+	}
+	
+	return choices;
+}
+
+
+std::vector<CeChoice> Node::compute_wi_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
+
+		if (this->is_leaf() || this->is_subtree()){
+			return {};
+		}
+		std::vector<CeChoice> counterexample;
+
+		assert(player_group.size() == 1);
+
+		if (this->is_branch()){
+			if (player_group[0] == this->branch().player) {
+				if (honest){
+					for (auto& child: this->branch().choices){
+						if (child.node->honest) {
+							std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+							updated_actions.push_back(child.action);
+							counterexample = child.node->compute_wi_ce(players, updated_actions, player_group);
+							break;
+						}
+					}
+				} else {
+					for (auto& child: this->branch().choices){
+							std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+							updated_actions.push_back(child.action);
+							std::vector<CeChoice> child_counterexample = child.node->compute_wi_ce(players, updated_actions, player_group);
+							counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
+					}
+				}
+			} else {
+				assert(!this->branch().counterexample_choices.empty());
+				CeChoice ce_choice;
+				ce_choice.player = players[this->branch().player];
+				ce_choice.choices = this->branch().counterexample_choices;
+				ce_choice.history = actions_so_far;
+
+				counterexample.push_back(ce_choice);
+
+				for (const Choice &choice: this->branch().choices) {
+
+					int cnt = std::count(this->branch().counterexample_choices.begin(), this->branch().counterexample_choices.end(), choice.action);
+					if (cnt > 0) {
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+						updated_actions.push_back(choice.action);
+						std::vector<CeChoice> child_ce = choice.node->compute_wi_ce(players, updated_actions, player_group);
+						counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+					}
+				}
+			}
+		} else if (this->is_condition_node()) {
+			assert(!this->condition_node().counterexample_choices.empty());
+				CeChoice ce_choice;
+				ce_choice.player = std::nullopt; // no player associated with condition nodes
+				ce_choice.choices = this->condition_node().counterexample_choices;
+				ce_choice.history = actions_so_far;
+
+				counterexample.push_back(ce_choice);
+
+				for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
+				z3::Bool condition = cond_choice.condition;
+				int cnt = std::count(this->condition_node().counterexample_choices.begin(), this->condition_node().counterexample_choices.end(), condition.to_string());
+				if (cnt > 0) {
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+					}
+				}
+		}
+		return counterexample;
+	}
+
+std::vector<CeChoice> Node::compute_cr_ce(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<size_t> player_group) const {
+
+		if (this->is_leaf() || this->is_subtree()){
+			return {};
+		}
+		std::vector<CeChoice> counterexample;
+
+		assert(player_group.size() >= 1);
+
+		if (this->is_branch()){
+			int cnt = std::count(player_group.begin(), player_group.end(), this->branch().player);
+			if (cnt == 0) {
+				if (honest){
+					for (auto& child: this->branch().choices){
+						if (child.node->honest) {
+							std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+							updated_actions.push_back(child.action);
+							counterexample = child.node->compute_cr_ce(players, updated_actions, player_group);
+							break;
+						}
+					}
+				} else {
+					for (auto& child: this->branch().choices){
+							std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+							updated_actions.push_back(child.action);
+							std::vector<CeChoice> child_counterexample = child.node->compute_cr_ce(players, updated_actions, player_group);
+							counterexample.insert(counterexample.end(),child_counterexample.begin(), child_counterexample.end());
+					}
+				}
+			} else {
+				assert(!this->branch().counterexample_choices.empty());
+				CeChoice ce_choice;
+				ce_choice.player = players[this->branch().player];
+				ce_choice.choices = this->branch().counterexample_choices;
+				ce_choice.history = actions_so_far;
+
+				counterexample.push_back(ce_choice);
+
+				for (const Choice &choice: this->branch().choices) {
+
+					int cnt = std::count(this->branch().counterexample_choices.begin(), this->branch().counterexample_choices.end(), choice.action);
+					if (cnt > 0) {
+						std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+						updated_actions.push_back(choice.action);
+						std::vector<CeChoice> child_ce = choice.node->compute_cr_ce(players, updated_actions, player_group);
+						counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+					}
+				}
+			}
+		} else if (this->is_condition_node()) {
+			assert(this->condition_node().counterexample_choices.size()>0);
+			CeChoice ce_choice;
+			ce_choice.player = std::nullopt; // no player associated with condition nodes
+			ce_choice.choices = this->condition_node().counterexample_choices;
+			ce_choice.history = actions_so_far;
+
+			counterexample.push_back(ce_choice);
+
+			for (const ConditionChoice &cond_choice: this->condition_node().conditions) {
+				z3::Bool condition = cond_choice.condition;
+				int cnt = std::count(this->condition_node().counterexample_choices.begin(), this->condition_node().counterexample_choices.end(), condition.to_string());
+				if (cnt > 0) {
+					std::vector<std::string> updated_actions(actions_so_far.begin(), actions_so_far.end());
+					updated_actions.push_back(condition.to_string());
+					std::vector<CeChoice> child_ce = cond_choice.node->compute_cr_ce(players, updated_actions, player_group);
+					counterexample.insert(counterexample.end(), child_ce.begin(), child_ce.end());
+					}
+			}
+		}
+		return counterexample;
+	}
+
+CeCase Node::compute_pr_cecase(std::vector<std::string> players, unsigned current_player, std::vector<std::string> actions_so_far, std::string current_action, UtilityTuplesSet practical_utilities) const {
+	
+	// regular case (called from branch or a condition node)
+	if(current_player < players.size()) {
+		CeCase cecase;
+		cecase.player_group = {players[current_player]};
+
+		const Node* deviation_node = nullptr;
+
+		std::vector<std::string> actions_to_deviation;
+		actions_to_deviation.insert(actions_to_deviation.end(), actions_so_far.begin(), actions_so_far.end());
+		actions_to_deviation.push_back(current_action); // BE AWARE: current_action = action leading to subtree where pr histories are ce
+
+		deviation_node = compute_deviation_node(actions_to_deviation);
+		std::vector<CeChoice> rec_choices = deviation_node->compute_pr_ce(current_action, actions_so_far, practical_utilities);
+		cecase.counterexample.insert(cecase.counterexample.end(), rec_choices.begin(), rec_choices.end());
+		return cecase;
+	} else {
+		// called from subtree
+		CeCase cecase;
+		cecase.player_group = {}; // check and handle this when printing counterexamples
+
+		CeChoice deviation;
+		deviation.history = actions_so_far;
+		cecase.counterexample = {deviation};
+	
+		return cecase;
+
+	}
+}
+
+const Node* Node::compute_deviation_node(std::vector<std::string> actions_so_far) const {
+	
+	if(actions_so_far.size() > 0) { 
+		assert(!this->is_leaf());
+		assert(!this->is_subtree());
+		if (this->is_branch()) {
+			for (const auto &child: this->branch().choices){
+				if(child.action == actions_so_far[0]) {
+					actions_so_far.erase(actions_so_far.begin());
+					return child.node.get()->compute_deviation_node(actions_so_far);
+				}
+			}
+		} else if (this->is_condition_node()) {
+			for (const auto &cond_choice: this->condition_node().conditions) {
+				z3::Bool condition = cond_choice.condition;
+				if(condition.to_string() == actions_so_far[0]) {
+					actions_so_far.erase(actions_so_far.begin());
+					return cond_choice.node.get()->compute_deviation_node(actions_so_far);
+				}
+			}
+		}
+	}
+
+	return this;
+
+}
+
+// Be aware that return value represents a set of histories, rather than one partial strategy
+// This has to be taken into account when printing the counterexamples
+std::vector<CeChoice> Node::compute_pr_ce(std::string current_action, std::vector<std::string> actions_so_far, UtilityTuplesSet practical_utilities) const {
+	std::vector<CeChoice> cechoices;
+
+	for(auto &utility : practical_utilities) {
+
+		CeChoice cechoice;
+		cechoice.player = "";
+
+		cechoice.choices = {};
+		
+		std::vector<std::string> result_hist = strat2hist(utility.strategy);
+		for (auto &action: result_hist) {
+			cechoice.choices.push_back(CondAction(action));
+		}
+		cechoice.condition = utility.condition;
+		
+		std::vector<std::string> updated_history;
+		updated_history.insert(updated_history.end(), actions_so_far.begin(), actions_so_far.end());
+		updated_history.push_back(current_action);
+		cechoice.history = updated_history;
+		cechoices.push_back(cechoice);		
+
+	}
+
+	return cechoices;
+}
+
+std::vector<std::string> Node::strat2hist(std::optional<Strategy> &strategy) const {
+	
+	if(this->is_leaf()) {
+		return {};
+	} else if (this->is_subtree()) {
+		return {};
+	}
+
+	assert(strategy.has_value());
+
+	// std::vector<std::string> strategy_copy;
+	// strategy_copy.insert(strategy_copy.begin(), strategy.begin(), strategy.end());
+	
+	std::vector<std::string> hist_player_pairs;
+	std::string first_action = strategy.value().root_action;
+	// strategy_copy.erase(strategy_copy.begin());
+	hist_player_pairs.push_back(first_action);
+
+	bool found = false;
+	if (this->is_branch()) {
+		int i = 0;
+		for(auto &child: this->branch().choices) {
+			if(child.action == first_action) {
+				// along the utility's history it will always be a strategy not a condition strategy
+				assert(std::holds_alternative<std::optional<Strategy>>(strategy.value().children_strategies[i]));
+				std::vector<std::string> child_result = child.node->strat2hist(std::get<std::optional<Strategy>>(strategy.value().children_strategies[i]));
+				hist_player_pairs.insert(hist_player_pairs.end(), child_result.begin(), child_result.end());
+				found = true;
+			} 
+			// else {
+			// 	child.node->prune_actions_from_strategy(strategy_copy);
+			// }
+			i++;
+		}
+	} else if (this->is_condition_node()) { // assuming this is a strategy leading to one specific utility, there is only one condition (= child) there
+		assert(strategy.value().children_strategies.size() == 1);
+		// along the utility's history it will always be a strategy not a condition strategy
+		assert(std::holds_alternative<std::optional<Strategy>>(strategy.value().children_strategies[0]));
+		for (auto &cond_choice: this->condition_node().conditions) {
+			z3::Bool condition = cond_choice.condition;
+			if(condition.to_string() == first_action) {
+				std::vector<std::string> child_result = cond_choice.node->strat2hist(std::get<std::optional<Strategy>>(strategy.value().children_strategies[0]));
+				hist_player_pairs.insert(hist_player_pairs.end(), child_result.begin(), child_result.end());
+				found = true;
+			} 
+		}
+	}
+
+	assert(found);
+ 	
+	return hist_player_pairs;
+
+}
+
+// void Node::prune_actions_from_strategy(std::vector<std::string> &strategy) const {
+
+// 	if(this->is_leaf() || this->is_subtree()) {
+// 		return;
+// 	} 
+
+// 	assert(strategy.size() > 0);
+// 	std::string first_item = strategy[0];
+// 	strategy.erase(strategy.begin());
+// 	if (this->is_branch()) {
+// 		for(auto &child: this->branch().choices) {
+// 			child.node->prune_actions_from_strategy(strategy);
+// 		}
+// 	} else if (this->is_condition_node()) {
+// 		for (auto &cond_choice: this->condition_node().conditions) {
+// 			z3::Bool condition = cond_choice.condition;
+// 			if (condition.to_string() == first_item) {
+// 				cond_choice.node->prune_actions_from_strategy(strategy);
+// 			} 
+// 		}
+// 	}
+// }
+
+
+void Node::reset_violation_cr() const {
+	violates_cr = {};
+
+	if (!this->is_leaf() && !this->is_subtree()){
+
+		if (this->is_branch()) {
+			for (const auto& child: this->branch().choices){
+				child.node->reset_violation_cr();
+			}
+		} else if (this->is_condition_node()) {
+			for (const auto& cond_choice: this->condition_node().conditions) {
+				cond_choice.node->reset_violation_cr();
+			}
+		}
+	}
+	return;
+}
+
+std::vector<std::vector<z3::Bool>> Node::store_violation_cr() const {
+
+	std::vector<std::vector<z3::Bool>> violation = {violates_cr};
+
+	if (!this->is_branch()){
+
+		for (const auto& child: this->branch().choices){
+			std::vector<std::vector<z3::Bool>> child_violation = child.node->store_violation_cr();
+			violation.insert(violation.end(), child_violation.begin(), child_violation.end());
+		}
+
+	} else if (this->is_condition_node()) {
+
+		for (const auto& cond_choice: this->condition_node().conditions) {
+			std::vector<std::vector<z3::Bool>> child_violation = cond_choice.node->store_violation_cr();
+			violation.insert(violation.end(), child_violation.begin(), child_violation.end());
+		}
+	}
+	return violation;
+}
+
+void Node::restore_violation_cr(std::vector<std::vector<z3::Bool>> &violation) const {
+
+	assert(violation.size()>0);
+	violates_cr = violation[0];
+	violation.erase(violation.begin());
+
+	if (!this->is_branch()){
+
+		for (const auto& child: this->branch().choices){
+			child.node->restore_violation_cr(violation);
+		}
+	} else if (this->is_condition_node()) {
+
+		for (const auto& cond_choice: this->condition_node().conditions) {
+			cond_choice.node->restore_violation_cr(violation);
+		}
+	}
+
+	return;
+}
+
+void Node::reset_count_check(bool wi, bool weri, bool cr, bool pr) const {
+	if(wi)
+		checked_wi = false;
+
+	if(weri)
+		checked_weri = false;
+	
+	if(cr)
+		checked_cr = false;
+
+	if(pr)
+		checked_pr = false;
+
+	if(this->is_branch()) {
+		const auto &branch = this->branch();
+		for(auto &child : branch.choices) {
+			child.node.get()->reset_count_check(wi, weri, cr, pr);
+		}
+	} else if (this->is_condition_node()) {
+		const auto &cond_node = this->condition_node();
+		for(auto &cond_choice : cond_node.conditions) {
+			cond_choice.node.get()->reset_count_check(wi, weri, cr, pr);
+		}
+	}
+}
+
+
+
+
+void Branch::reset_counterexample_choices() const {
+	counterexample_choices = {};
+	for (auto& choice: choices) {
+		if (choice.node->is_branch()) {
+			choice.node->branch().reset_counterexample_choices();
+		} else if (choice.node->is_condition_node()){
+			choice.node->condition_node().reset_counterexample_choices();
+		} 
+	}
+}
+
+std::vector<z3::Bool> Branch::store_reason() const {
+
+	std::vector<z3::Bool> reason_vector = {reason};
+
+	for (const auto& child: choices){
+		if (child.node->is_branch()){
+			std::vector<z3::Bool> child_reason = child.node->branch().store_reason();
+			reason_vector.insert(reason_vector.end(), child_reason.begin(), child_reason.end());
+		} else if (child.node->is_leaf()){
+			reason_vector.push_back(child.node->leaf().reason);
+		} else if (child.node->is_subtree()) {
+			reason_vector.push_back(child.node->subtree().reason);
+		} else if (child.node->is_condition_node()) {
+			std::vector<z3::Bool> child_reason = child.node->condition_node().store_reason();
+			reason_vector.insert(reason_vector.end(), child_reason.begin(), child_reason.end());
+		}
+	}
+
+	return reason_vector;
+}
+
+void Branch::restore_reason(std::vector<z3::Bool> &reasons) const {
+
+	if (reasons.size() == 0) {
+		return;
+	}
+	reason = reasons[0];
+	reasons.erase(reasons.begin());
+
+	for (const auto& child: this->branch().choices){
+		if (child.node->is_branch()){
+			child.node->branch().restore_reason(reasons);
+		} else if (child.node->is_condition_node()) {
+			child.node->condition_node().restore_reason(reasons);
+		} else if (child.node->is_leaf()) {
+			if (reasons.size() == 0) {
+				return;
+			}
+			child.node->leaf().reason = reasons[0];
+			reasons.erase(reasons.begin());
+		} else {
+			if (reasons.size() == 0) {
+				return;
+			}
+			child.node->subtree().reason = reasons[0];
+			reasons.erase(reasons.begin());
+		}
+	}
+
+	return;
+}
+
+std::vector<uint64_t> Branch::store_problematic_groups() const {
+
+	std::vector<uint64_t> problematic_groups_vector = {problematic_group};
+
+	for (const auto& child: choices){
+		if(child.node->is_leaf()) {
+			problematic_groups_vector.push_back(child.node->leaf().problematic_group);
+		}
+		else if (child.node->is_subtree()){
+			problematic_groups_vector.push_back(child.node->subtree().problematic_group);
+		}
+		else if (child.node->is_condition_node()) {
+			std::vector<uint64_t> child_pg = child.node->condition_node().store_problematic_groups();
+			problematic_groups_vector.insert(problematic_groups_vector.end(), child_pg.begin(), child_pg.end());
+		}
+		else {
+			std::vector<uint64_t> child_pg = child.node->branch().store_problematic_groups();
+			problematic_groups_vector.insert(problematic_groups_vector.end(), child_pg.begin(), child_pg.end());
+		}
+	}
+	return problematic_groups_vector;
+}
+
+void Branch::restore_problematic_groups(std::vector<uint64_t> &pg) const {
+
+	if (pg.size() == 0) {
+		return;
+	}
+	problematic_group = pg[0];
+	pg.erase(pg.begin());
+
+	for (const auto& child: this->branch().choices){
+		if(child.node->is_leaf()){
+			child.node->leaf().problematic_group = pg[0];
+			pg.erase(pg.begin());
+		}
+		else if (child.node->is_subtree()) {
+			child.node->subtree().problematic_group = pg[0];
+			pg.erase(pg.begin());
+		}
+		else if (child.node->is_condition_node()) {
+			child.node->condition_node().restore_problematic_groups(pg);
+		}
+		else {
+			child.node->branch().restore_problematic_groups(pg);
+		}
+	}
+
+	return;
+}
+
+std::vector<std::vector<CondAction>> Branch::store_counterexample_choices() const {
+
+	std::vector<std::vector<CondAction>> counterexample_choices_vector = {counterexample_choices};
+
+	for (const auto& child: choices){
+		if (child.node->is_branch()) {
+			std::vector<std::vector<CondAction>> child_ces = child.node->branch().store_counterexample_choices();
+			counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
+		} else if (child.node->is_condition_node()) {
+			std::vector<std::vector<CondAction>> child_ces = child.node->condition_node().store_counterexample_choices();
+			counterexample_choices_vector.insert(counterexample_choices_vector.end(), child_ces.begin(), child_ces.end());
+		}
+	}
+
+	return counterexample_choices_vector;
+}
+
+void Branch::restore_counterexample_choices(std::vector<std::vector<CondAction>> &ces) const {
+
+	if (ces.size() == 0) {
+		return;
+	}
+	counterexample_choices = ces[0];
+	ces.erase(ces.begin());
+
+	for (const auto& child: this->branch().choices){
+		if (child.node->is_branch()){
+		child.node->branch().restore_counterexample_choices(ces);
+		} else if (child.node->is_condition_node()) {
+			child.node->condition_node().restore_counterexample_choices(ces);
+		}
+	}
+
+	return;
+}
+
+void Branch::mark_honest(const HonestHistory &history) const {
+	assert(!honest);
+	honest = true;
+	
+	if (history.empty()) {
+		std::cerr << "checkmate: honest history not fitting the game tree (too short)" << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+	
+	const auto &first_element = history[0];
+	
+	if (!std::holds_alternative<std::string>(first_element)) {
+		std::cerr << "checkmate: honest history does not fit tree shape (conditions provided where action expected)" << std::endl;
+		std::exit(EXIT_FAILURE);
+	}
+
+	else{
+		// Branch case: recurse on honest child
+		const std::string &action = std::get<std::string>(first_element);
+		const Choice *honest_choice = find_choice(action);
+		if (!honest_choice) {
+			std::cerr << "checkmate: honest history not fitting the game tree (action " << action << " not available, the actions are " << actions_list() << ")" << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
+		
+		// Prepare remaining history for recursion
+		HonestHistory remaining_history(history.begin() + 1, history.end());
+		
+		honest_choice->node->mark_honest(remaining_history);
+	} 
+}
+
+void Branch::reset_honest() const {
+	if(!honest)
+		return;
+
+	honest = false;
+	
+	this->branch().get_honest_child().node->reset_honest();
+
+}
+
+void Branch::reset_reason() const {
+	::new (&reason) z3::Bool();
+	for(auto &choice: choices)
+		if(choice.node->is_branch()){
+			choice.node->branch().reset_reason();
+		}
+		else if (choice.node->is_condition_node()) {
+			choice.node->condition_node().reset_reason();
+		}
+		else if (choice.node->is_leaf()) {
+			choice.node->leaf().reset_reason();
+		} else {
+			choice.node->subtree().reset_reason();
+		}
+}
+
+void Branch::reset_strategy() const {
+	strategy.clear();
+	for(auto &choice: choices)
+		if(choice.node->is_branch())
+			choice.node->branch().reset_strategy();
+		else if (choice.node->is_condition_node()) {
+			choice.node->condition_node().reset_strategy();
+		}
+}
+
+void Branch::reset_problematic_group(bool is_cr) const {
+	problematic_group = is_cr ? 1 : 0;
+	for(auto &choice: choices)
+		if(choice.node->is_branch()) {
+			choice.node->branch().reset_problematic_group(is_cr);
+		} else if (choice.node->is_condition_node()){
+			choice.node->condition_node().reset_problematic_group(is_cr);
+		} else if (choice.node->is_leaf()){
+			choice.node->leaf().reset_problematic_group(is_cr);
+		} else {
+			choice.node->subtree().reset_problematic_group(is_cr);
+		}
+}
+
+void Branch::reset_practical_utilities() const {
+	practical_utilities = {};
+	for (auto& choice: choices){
+		if (choice.node->is_condition_node()) {
+			choice.node->condition_node().reset_practical_utilities();
+		} else if (choice.node->is_branch()) {
+				choice.node->branch().reset_practical_utilities();
+			
+		} else if (choice.node->is_subtree()) {
+			choice.node->subtree().reset_practical_utilities();
+		}
+	}
+}
+
+// honest utilities (ustar), each with the conditions under which it is the honest utility
+
+static void add_honest_utility(const std::vector<Utility> &utilities, const std::vector<z3::Bool> &conditions, UtilityTuplesSet &ustar) {
+	// no conditions: true (Z3 would build an empty `and` instead)
+	ustar.insert(UtilityTuple(utilities, conditions.empty() ? z3::Bool(true) : z3::conjunction(conditions)));
+}
+
+// add all utilities of `element` to `ustar`, each with the conjunction of `conditions` and the conditions leading to it
+// (`element` must outlive `ustar`, as UtilityTuple only refers to its utilities)
+static void add_honest_utilities(const HonestUtilityElement &element, const std::vector<z3::Bool> &conditions, UtilityTuplesSet &ustar) {
+	if (std::holds_alternative<std::vector<Utility>>(element)) {
+		add_honest_utility(std::get<std::vector<Utility>>(element), conditions, ustar);
+		return;
+	}
+	for (const HonestUtilityCondition &utility_condition : std::get<std::vector<HonestUtilityCondition>>(element)) {
+		std::vector<z3::Bool> child_conditions = conditions;
+		child_conditions.push_back(utility_condition.condition);
+		add_honest_utilities(utility_condition.utility, child_conditions, ustar);
+	}
+}
+
+// walk the tree along `history` and add the utilities of all honest leaves (and honest subtrees) to `ustar`,
+// with `conditions` the conditions on the way there:
+// at a condition node, the honest history continues in every condition, so there can be several honest utilities
+static void add_honest_utilities(const Node *node, const HonestHistory &history, const std::vector<z3::Bool> &conditions, UtilityTuplesSet &ustar) {
+	if (node->is_leaf()) {
+		// not via HonestUtilityElement: that would be a temporary copy of the utilities, which ustar must not refer to
+		add_honest_utility(node->leaf().utilities, conditions, ustar);
+	} else if (node->is_subtree()) {
+		add_honest_utilities(node->subtree().current_honest_utility(), conditions, ustar);
+	} else if (node->is_branch()) {
+		assert(!history.empty() && std::holds_alternative<std::string>(history[0]));
+		HonestHistory next_history(history.begin() + 1, history.end());
+		add_honest_utilities(node->branch().get_choice(std::get<std::string>(history[0])).node.get(), next_history, conditions, ustar);
+	} else {
+		assert(node->is_condition_node());
+		assert(!history.empty() && std::holds_alternative<std::vector<HonestHistoryCondition>>(history[0]));
+		for (const HonestHistoryCondition &history_condition : std::get<std::vector<HonestHistoryCondition>>(history[0])) {
+			const Node *child = node->condition_node().get_choice(history_condition.condition).node.get();
+			std::vector<z3::Bool> child_conditions = conditions;
+			child_conditions.push_back(history_condition.condition);
+			add_honest_utilities(child, history_condition.path, child_conditions, ustar);
+		}
+	}
+}
+
+UtilityTuplesSet compute_ustar(const Node *root, const HonestHistory &history) {
+	UtilityTuplesSet ustar;
+	add_honest_utilities(root, history, {}, ustar);
+	return ustar;
+}
+
+UtilityTuplesSet compute_ustar(const HonestUtilityElement &element) {
+	UtilityTuplesSet ustar;
+	add_honest_utilities(element, {}, ustar);
+	return ustar;
+}
+
+// honest histories inside subtrees: one run per combination
+
+// are two honest histories the same (conditions are compared as when looking up the choice of a condition node)
+static bool same_honest_history(const HonestHistory &history, const HonestHistory &other) {
+	if (history.size() != other.size()) {
+		return false;
+	}
+	for (size_t i = 0; i < history.size(); i++) {
+		if (history[i].index() != other[i].index()) {
+			return false;
+		}
+		if (std::holds_alternative<std::string>(history[i])) {
+			if (std::get<std::string>(history[i]) != std::get<std::string>(other[i])) {
+				return false;
+			}
+			continue;
+		}
+		const auto &conditions = std::get<std::vector<HonestHistoryCondition>>(history[i]);
+		const auto &other_conditions = std::get<std::vector<HonestHistoryCondition>>(other[i]);
+		if (conditions.size() != other_conditions.size()) {
+			return false;
+		}
+		// the conditions may be listed in any order
+		for (const HonestHistoryCondition &condition : conditions) {
+			auto match = std::find_if(other_conditions.begin(), other_conditions.end(), [&](const HonestHistoryCondition &other_condition) {
+				return condition.condition.is_equal(other_condition.condition) && same_honest_history(condition.path, other_condition.path);
+			});
+			if (match == other_conditions.end()) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+const SubtreeEntry *Subtree::find_honest_history_entry(const HonestHistory &history) const {
+	for (const SubtreeEntry *entry : honest_history_entries()) {
+		if (same_honest_history(std::get<HonestHistory>(entry->key), history)) {
+			return entry;
+		}
+	}
+	return nullptr;
+}
+
+static void add_honest_subtrees(const Node *node, std::vector<const Subtree *> &subtrees) {
+	if (!node->honest) {
+		return;
+	}
+	if (node->is_subtree()) {
+		subtrees.push_back(&node->subtree());
+	} else if (node->is_branch()) {
+		add_honest_subtrees(node->branch().get_honest_child().node.get(), subtrees);
+	} else if (node->is_condition_node()) {
+		// the honest history continues in every condition
+		for (const ConditionChoice &choice : node->condition_node().conditions) {
+			add_honest_subtrees(choice.node.get(), subtrees);
+		}
+	}
+}
+
+std::vector<const Subtree *> honest_subtrees(const Node *root) {
+	std::vector<const Subtree *> subtrees;
+	add_honest_subtrees(root, subtrees);
+	return subtrees;
+}
+
+std::vector<std::vector<const SubtreeEntry *>> honest_subtree_histories(const std::vector<const Subtree *> &subtrees) {
+	std::vector<std::vector<const SubtreeEntry *>> choices = {{}};
+	for (const Subtree *subtree : subtrees) {
+		std::vector<const SubtreeEntry *> options;
+		if (subtree->honest_entry) {
+			// the honest history continues inside the subtree: only this honest history is considered
+			options = {subtree->honest_entry};
+		} else {
+			options = subtree->honest_history_entries();
+			if (options.empty()) {
+				std::cerr << "checkmate: subtree along the honest history has no results for an honest history inside it" << std::endl;
+				std::exit(EXIT_FAILURE);
+			}
+		}
+		std::vector<std::vector<const SubtreeEntry *>> extended;
+		for (const auto &choice : choices) {
+			for (const SubtreeEntry *option : options) {
+				extended.push_back(choice);
+				extended.back().push_back(option);
+			}
+		}
+		choices = extended;
+	}
+	return choices;
+}
+
+void mark_honest_subtree_histories(const std::vector<const Subtree *> &subtrees, const std::vector<const SubtreeEntry *> &subtrees_history) {
+	assert(subtrees.size() == subtrees_history.size());
+	for (size_t i = 0; i < subtrees.size(); i++) {
+		subtrees[i]->honest_entry = subtrees_history[i];
+	}
+}
+
+HonestHistory extend_honest_history(const Node *node, const HonestHistory &history) {
+	if (node->is_leaf()) {
+		return history;
+	}
+	if (node->is_subtree()) {
+		const SubtreeEntry *entry = node->subtree().honest_entry;
+		return entry ? std::get<HonestHistory>(entry->key) : history;
+	}
+	assert(!history.empty());
+	HonestHistory rest(history.begin() + 1, history.end());
+	if (node->is_branch()) {
+		const std::string &action = std::get<std::string>(history[0]);
+		HonestHistory result = {history[0]};
+		HonestHistory continued = extend_honest_history(node->branch().get_choice(action).node.get(), rest);
+		result.insert(result.end(), continued.begin(), continued.end());
+		return result;
+	}
+	assert(node->is_condition_node());
+	std::vector<HonestHistoryCondition> conditions;
+	for (const HonestHistoryCondition &history_condition : std::get<std::vector<HonestHistoryCondition>>(history[0])) {
+		const Node *child = node->condition_node().get_choice(history_condition.condition).node.get();
+		conditions.push_back(HonestHistoryCondition(history_condition.condition, extend_honest_history(child, history_condition.path)));
+	}
+	HonestHistory result = {conditions};
+	result.insert(result.end(), rest.begin(), rest.end());
+	return result;
+}
+
+} // namespace cefg

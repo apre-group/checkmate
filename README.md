@@ -26,6 +26,10 @@ For **practicality**, CheckMate checks whether the honest history is a subgame p
 working backwards from the leaves, in every subgame each player chooses an action maximizing their utility,
 and along the honest history no player can obtain a higher utility by deviating from the honest action.
 
+CheckMate also analyzes **conditional extensive form games (CEFGs)**: games in which some constants are unknown to the players
+until a *condition node* reveals them, e.g. prices or exchange rates that change during the game (see [Conditional games](#conditional-games-cefgs)).
+CheckMate decides from the input which kind of game it is given and analyzes it accordingly.
+
 The input for CheckMate is a JSON file representing a game with its initial constraints.
 The expected structure is explained in [the section below](#input).
 Examples for such instances can be found in the `examples` folder, alongside scripts to generate some instances.
@@ -48,6 +52,8 @@ Each **leaf node** is encoded as a dictionary with the only key `utility`. As a 
     * `player`: the name of the player whose utility it specified, and
     * `value`: the utility for the player. This can be any term over an infinitesimal occurring in `infinitesimals`, a constant contained in `constants`, and reals.
 Each **subtree** is a dictionary with exactly one key `subtree`. A subtree represents the *result* of analysing a subtree in the game, and is thus usually generated automatically (see [Compositional analysis](#compositional-analysis)). The value is another dictionary with values `honest_utility` (the utility at the end of the honest history inside the subtree, which the supertree needs; only relevant for the honest subtree, and not to be confused with the input key `honest_utilities`), and property results `weak_immunity`, `weaker_immunity`, `collusion_resilience` and `practicality`. Practicality results are a list of cases and utilities for each case. Other security properties are a list of player groups together with the cases in which the property holds for that player group. For collusion resilience, the list contains every group except the group of all players, including the empty group `[]`, which the supertree looks up when no player has deviated before reaching the subtree.
+
+Games with condition nodes are described in [Conditional games](#conditional-games-cefgs).
 
 All **expressions** throughout the input support the following symbols in infix notation: `+`, `-`, `*`
 (only if not both multiplicators are infinitesimal), `=`, `!=` (inequality), `<`, `>`, `<=` , `>=`, `|` (or).
@@ -91,6 +97,7 @@ Before analyzing a game, CheckMate checks that it is well-formed, in either form
 - all utilities and constraints parse,
 - every honest history exists in the tree and ends at a leaf or a subtree.
 A game with honest utilities instead of honest histories (a subtree off the honest history) is accepted as well.
+These checks apply to games without condition nodes; conditional games are checked while they are read.
 If a check fails, CheckMate stops with an error naming the line in the compact format, or the node in JSON:
 
 ```
@@ -102,11 +109,12 @@ CheckMate also stops with an error if the initial constraints together with the 
 
 ## Build
 
-CheckMate is written in C++11. It requires:
+CheckMate is written in C++17. It requires:
 
 * [CMake](https://cmake.org/) 3.25 or newer as a build system, although you could do without this in a pinch.
 * The [Z3](https://github.com/Z3Prover/z3) SMT solver, via its API. To obtain the Z3 API, follow the directions in Z3's README or use a recent prebuilt package - Debian has `libz3-dev`, Red Hat has `z3-devel`.
 * To generate some of the examples, [Python 3](https://www.python.org/downloads/) has to be installed as well.
+* Optionally, [cvc5](https://cvc5.github.io/) for practicality of some conditional games (see [Conditional games](#conditional-games-cefgs)).
 
 We also use [JSON for modern C++](https://json.nlohmann.me/), but this is already vendored in the source tree as `src/json.hpp`.
 
@@ -153,9 +161,12 @@ There are several options:
 * `--strategies`: If a property is satisfied, provide a witness strategy.
 * `--json-out FILE`: Also write the results as JSON to `FILE`: for each honest history and property, the verdict, every case checked (as a list of SMT-LIB 2 conditions) with whether the property holds in it, the strategies and counterexamples, exactly when the text output shows them, and the weakest precondition with `--preconditions`. With `--subtree`, `FILE` gets the subtree result instead: the same as `SUBTREE.out`, but with cases as SMT-LIB 2 conditions and utilities as SMT-LIB 2 real and infinitesimal parts.
 * If not all security properties should be analyzed, users can specify properties individually with some combination of `--weak_immunity`, `--weaker_immunity`, `--collusion_resilience`, and `--practicality`.
-* `--subtree` is used for [compositional analysis](#compositional-analysis). It cannot be combined with `--counterexamples`, `--all_counterexamples`, `--strategies` or `--preconditions`.
+* `--subtree` is used for [compositional analysis](#compositional-analysis). For games without condition nodes, it cannot be combined with `--counterexamples`, `--all_counterexamples`, `--strategies` or `--preconditions`.
 * `--count_nodes` and `--count_calls`: For experiments, report the number of checked tree nodes and of SMT solver calls per analyzed property.
 * `--no-cr-node-cache`, `--no-cr-leaf-cache`, `--no-cr-implied-groups`, `--no-cr-violated-lookup`, `--no-problematic-groups`, `--exact-splits`, `--reset-from-root`: For testing only, disable an optimization or heuristic. Results must not change; the fuzzer (`scripts/fuzz.py`, see [FUZZING.md](FUZZING.md)) checks this.
+
+For conditional games, only the properties and `--subtree` are available so far: `--counterexamples`, `--all_counterexamples`, `--strategies` and `--preconditions` are not yet implemented for them, and `--all_cases`, `--json-out`, `--count_nodes`, `--count_calls` and the testing options only apply to games without condition nodes.
+CheckMate prints a warning for each such option and ignores it, e.g. `checkmate: --counterexamples is not yet implemented for CEFGs and is ignored`.
 
 For instance, to run a security analysis on the Closing Game [5] with counterexample generation, but only considering weak immunity and collusion resilience, execute the following from the repository root:
 
@@ -225,7 +236,26 @@ Large games can be analyzed in parts [2]: subtrees are analyzed on their own, an
 3. In the supertree, replace the subtree by a node `{"subtree": ...}` containing the `subtree` dictionary from `SUBTREE.out`, and run `./checkmate SUPERTREE` as usual. Whenever the tree contains subtree results, counterexamples and strategies end at the subtrees, with a hint to run the subtree on its own.
 
 Subtrees may again contain subtrees, so results can be nested.
+A subtree without condition nodes may be part of a conditional supertree: its results (a dictionary, see [Input](#input)) are read by the analysis of conditional games as well.
+The constants in them have to be known at the subtree in the supertree; a subtree in which some constants are still unknown, or whose honest utility in `honest_utilities` depends on conditions of the supertree (see below), has to be analyzed as a conditional game.
+The results of a conditional subtree are a list instead (see [Conditional games](#conditional-games-cefgs)), so a supertree containing them is analyzed as a conditional game.
 Collusion resilience results of subtrees must have been computed with the current version of CheckMate: results from older versions may lack the empty group (CheckMate then stops with an error asking to recompute the subtree), and need not be consistent with the current way groups are checked.
+
+## Conditional games (CEFGs)
+
+A conditional game extends the input as follows.
+- `constants` (and `infinitesimals`) can be a dictionary `{"known": [...], "unknown": [...]}`: unknown constants are not known to the players until they are revealed.
+- A **condition node** is a dictionary with the key `condition`: a list of dictionaries with the keys `constraint` (an expression over the constants), `child` (the tree node after it) and optionally `name`. The constraints have to be mutually exclusive and cover all values allowed by the initial constraints. The unknown constants occurring in the constraints are revealed at the node, as are those listed in the optional key `reveals`. Utilities may only use constants that are known at their leaf.
+- An honest history continues in every condition of a condition node: at a condition node, it contains a list of dictionaries `{"condition": ..., "path": [...]}`, one per condition, with the rest of the honest history after it.
+- An honest utility in `honest_utilities` can likewise depend on conditions: its `utility` is then a list of dictionaries `{"condition": ..., "utility": [...]}`.
+
+CheckMate treats a game as conditional if it has a condition node, declares unknown constants, contains results of a conditional subtree, or has an honest utility that depends on conditions; it then prints e.g. `Game type: CEFG (condition nodes)`. Conditional games are only read in JSON, not in the compact format.
+
+Practicality of a conditional game may depend on how players break ties for different revealed values. If Z3 cannot decide this within 10 seconds, CheckMate asks [cvc5](https://cvc5.github.io/) to synthesize the tie-breaking (as `cvc5` on the `PATH`, or the program in the environment variable `CHECKMATE_CVC5`), for at most 20 minutes; this is not available in the browser. If neither decides it, the answer is `UNKNOWN` with the reason.
+
+With `--subtree`, the results of a conditional game are written to `GAME.out` as a list of entries, one for every honest history (`honest_history`) and honest utility (`honest_utility`) analyzed, and one without honest history (`no_honest_history`), each with the results in `subtree`. The whole list is the value of the subtree node in the supertree.
+
+The examples are in `examples/conditional_actions`, generated by Python scripts. `scripts/run_cefg_regressions.sh` runs them and compares the results with `tests/cefg_regressions/expected.txt`, as `scripts/run_regressions.sh` does for the other games.
 
 ## Examples
 

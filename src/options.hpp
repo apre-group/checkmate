@@ -6,6 +6,9 @@ struct Options {
 	// parse options from `argv` - exits the program on failure
 	Options(char **argv);
 
+	// print a message, the usage information and exit with failure code
+	[[noreturn]] static void bail(const char *msg);
+
 	// input game we should load
 	const char *input_path;
 

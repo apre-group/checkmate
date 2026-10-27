@@ -1,0 +1,108 @@
+== devcon_auction.json
+Checking history [bid_reserved, bid_reserved, {((((pl0 = 0.0) & (pl1 = 1.0)) & (pl2 = 2.0)) -> []), ((((pl0 = 0.0) & (pl2 = 1.0)) & (pl1 = 2.0)) -> []), ((((pl1 = 0.0) & (pl0 = 1.0)) & (pl2 = 2.0)) -> []), ((((pl1 = 0.0) & (pl2 = 1.0)) & (pl0 = 2.0)) -> []), ((((pl2 = 0.0) & (pl0 = 1.0)) & (pl1 = 2.0)) -> []), ((((pl2 = 0.0) & (pl1 = 1.0)) & (pl0 = 2.0)) -> [])}]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+NO, the game is not practical for the analyzed history.
+Checking history [bid_reserved, outbid, {((((pl0 = 0.0) & (pl1 = 1.0)) & (pl2 = 2.0)) -> []), ((((pl0 = 0.0) & (pl2 = 1.0)) & (pl1 = 2.0)) -> []), ((((pl1 = 0.0) & (pl0 = 1.0)) & (pl2 = 2.0)) -> []), ((((pl1 = 0.0) & (pl2 = 1.0)) & (pl0 = 2.0)) -> []), ((((pl2 = 0.0) & (pl0 = 1.0)) & (pl1 = 2.0)) -> []), ((((pl2 = 0.0) & (pl1 = 1.0)) & (pl0 = 2.0)) -> [])}]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+NO, the game is not practical for the analyzed history.
+Checking history [outbid, bid_reserved, {((((pl0 = 0.0) & (pl1 = 1.0)) & (pl2 = 2.0)) -> []), ((((pl0 = 0.0) & (pl2 = 1.0)) & (pl1 = 2.0)) -> []), ((((pl1 = 0.0) & (pl0 = 1.0)) & (pl2 = 2.0)) -> []), ((((pl1 = 0.0) & (pl2 = 1.0)) & (pl0 = 2.0)) -> []), ((((pl2 = 0.0) & (pl0 = 1.0)) & (pl1 = 2.0)) -> []), ((((pl2 = 0.0) & (pl1 = 1.0)) & (pl0 = 2.0)) -> [])}]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+NO, the game is not practical for the analyzed history.
+Checking history [outbid, outbid, {((((pl0 = 0.0) & (pl1 = 1.0)) & (pl2 = 2.0)) -> []), ((((pl0 = 0.0) & (pl2 = 1.0)) & (pl1 = 2.0)) -> []), ((((pl1 = 0.0) & (pl0 = 1.0)) & (pl2 = 2.0)) -> []), ((((pl1 = 0.0) & (pl2 = 1.0)) & (pl0 = 2.0)) -> []), ((((pl2 = 0.0) & (pl0 = 1.0)) & (pl1 = 2.0)) -> []), ((((pl2 = 0.0) & (pl1 = 1.0)) & (pl0 = 2.0)) -> [])}]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+NO, the game is not practical for the analyzed history.
+== fAsset-simplified-minting.json
+Checking history [pp]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+YES, the game is practical for the analyzed history.
+Checking no honest history
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+YES, the game is practical for the analyzed history.
+Checking honest utility [((mfee * l) * priceBTCinit) + (- epsilon), 0.0 + 0.0, 0.0 + ((alpha * l) - (2.0 * gas))]
+NO, the game is not collusion resilient for the analyzed history.
+== makerDAO.json
+Checking history [frob_close]
+YES, the game is weak immune for the analyzed history.
+YES, the game is weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+NO, the game is not practical for the analyzed history.
+Checking history [frob, {((((ink + dink) * prETH1) >= (lr * (1.0 + stability_fee))) -> []), ((((ink + dink) * prETH1) < (lr * (1.0 + stability_fee))) -> [bark, {((prAuction >= prETH2) -> []), ((prAuction < prETH2) -> [buy_all])}])}]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+NO, the game is not practical for the analyzed history.
+Checking history [frob, {((((ink + dink) * prETH1) >= (lr * (1.0 + stability_fee))) -> []), ((((ink + dink) * prETH1) < (lr * (1.0 + stability_fee))) -> [bark, {((prAuction >= prETH2) -> []), ((prAuction < prETH2) -> [buy_some, buy_all])}])}]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+NO, the game is not practical for the analyzed history.
+Checking history [frob, {((((ink + dink) * prETH1) >= (lr * (1.0 + stability_fee))) -> []), ((((ink + dink) * prETH1) < (lr * (1.0 + stability_fee))) -> [bark, {((prAuction >= prETH2) -> []), ((prAuction < prETH2) -> [buy_some, buy_some])}])}]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+NO, the game is not practical for the analyzed history.
+== mixed-2.json
+Checking history [hon]
+YES, the game is weak immune for the analyzed history.
+YES, the game is weaker immune for the analyzed history.
+YES, the game is collusion resilient for the analyzed history.
+YES, the game is practical for the analyzed history.
+== practicality-minimality.json
+Checking history [hon]
+YES, the game is weak immune for the analyzed history.
+YES, the game is weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+NO, the game is not practical for the analyzed history.
+== practicality-tie.json
+Checking history [hon]
+YES, the game is weak immune for the analyzed history.
+YES, the game is weaker immune for the analyzed history.
+YES, the game is collusion resilient for the analyzed history.
+YES, the game is practical for the analyzed history.
+== sign-2.json
+Checking history [hon]
+YES, the game is weak immune for the analyzed history.
+YES, the game is weaker immune for the analyzed history.
+YES, the game is collusion resilient for the analyzed history.
+YES, the game is practical for the analyzed history.
+== unknown-quantifier-cr-linked.json
+Checking history [h]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+NO, the game is not practical for the analyzed history.
+== unknown-quantifier-cr-unlinked.json
+Checking history [h]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+NO, the game is not practical for the analyzed history.
+== unknown-quantifier-wi-holds.json
+Checking history [h]
+YES, the game is weak immune for the analyzed history.
+YES, the game is weaker immune for the analyzed history.
+YES, the game is collusion resilient for the analyzed history.
+YES, the game is practical for the analyzed history.
+== unknown-quantifier-wi-linked.json
+Checking history [h]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+YES, the game is collusion resilient for the analyzed history.
+YES, the game is practical for the analyzed history.
+== unknown-quantifier-wi-unlinked.json
+Checking history [h]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+YES, the game is collusion resilient for the analyzed history.
+YES, the game is practical for the analyzed history.

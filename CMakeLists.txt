@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 project(checkmate)
-set(CMAKE_CXX_STANDARD 11)
+# C++17 for the CEFG engine in src/cefg/ (std::variant, std::optional)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 add_executable(checkmate
@@ -20,6 +21,28 @@ add_executable(checkmate
 	src/compact.cpp
 	src/validate.hpp
 	src/validate.cpp
+	src/game_type.hpp
+	src/game_type.cpp
+	# CEFG engine (conditional extensive form games), in namespace cefg
+	src/cefg/run.hpp
+	src/cefg/run.cpp
+	src/cefg/input.hpp
+	src/cefg/input.cpp
+	src/cefg/options.hpp
+	src/cefg/options.cpp
+	src/cefg/utility.hpp
+	src/cefg/z3++.hpp
+	src/cefg/z3++.cpp
+	src/cefg/default_mode.hpp
+	src/cefg/default_mode.cpp
+	src/cefg/subtree_mode.hpp
+	src/cefg/subtree_mode.cpp
+	src/cefg/property_checks.hpp
+	src/cefg/weak_immunity.cpp
+	src/cefg/collusion_resilience.cpp
+	src/cefg/practicality.cpp
+	src/cefg/selectors.hpp
+	src/cefg/selectors.cpp
 )
 target_link_libraries(checkmate z3)
 

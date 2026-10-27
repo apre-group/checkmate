@@ -47,7 +47,7 @@ class Expr:
         return mul_expr(other, self)
 
     def __truediv__(self, other: LExpr) -> LExpr:
-        return div_expr(other, self)
+        return div_expr(self, other)
 
     def __rtruediv__(self, other: LExpr) -> LExpr:
         return div_expr(other, self)
@@ -80,9 +80,12 @@ class Expr:
 
 class NameExpr(Expr):
     name: str
+    # is the value known to all players from the start of the game?
+    known: bool
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, known: bool = True):
         self.name = name
+        self.known = known
 
     def __repr__(self):
         return self.name
@@ -283,7 +286,7 @@ class Truth(Constraint):
         pass
 
     def __repr__(self) -> str:
-        return "True"
+        return "true"
 
 class Falsehood(Constraint):
 
@@ -291,7 +294,7 @@ class Falsehood(Constraint):
         pass
 
     def __repr__(self) -> str:
-        return "False"
+        return "false"
 
 
 class DisequationConstraint(Constraint):
@@ -319,6 +322,7 @@ class Conjunction(Constraint):
         for elem in self.args:
             result = result + f" & {elem}"
         result = result[3:]
+        result = f"( {result} )"
         return result
 
 def conjunction(*args) -> Conjunction:
@@ -339,6 +343,7 @@ class Disjunction(Constraint):
         for elem in self.args:
             result = result + f" | {elem}"
         result = result[3:]
+        result = f"( {result} )"
         return result
 
 def disjunction(*args) -> Disjunction:
@@ -348,21 +353,132 @@ def disjunction(*args) -> Disjunction:
     return Disjunction(arg_list)
 
 
+class Implication(Constraint):
+    premise: Constraint
+    conclusion: Constraint
+
+    def __init__(self, premise: Constraint, conclusion: Constraint):
+        self.premise = premise
+        self.conclusion = conclusion
+
+    def __repr__(self):
+        return f"( {self.premise} => {self.conclusion} )"
+
+def implies(premise: Constraint, conclusion: Constraint) -> Implication:
+    return Implication(premise, conclusion)
+
+
+class NamedConstraint(Constraint):
+    """A condition edge constraint together with a name for the edge"""
+    name: str
+    constraint: Constraint
+
+    def __init__(self, name: str, constraint: Constraint):
+        self.name = name
+        self.constraint = constraint
+
+    def __repr__(self):
+        return repr(self.constraint)
+
+def named(name: str, constraint: Constraint) -> NamedConstraint:
+    return NamedConstraint(name, constraint)
+
+
 
 class HistoryTree:
 
-    def __init__(self, action_name: str, children: List[HistoryTree]):
-        self.action = action_name
-        self.children = children
+    def __init__(self, path: List[Union[Action, List['HistoryTreeCondition']]]):
+        self.path = path
+
+    def json(self):
+        return [
+            [x.json() for x in ch] if isinstance(ch, list) else repr(ch)
+            for ch in self.path
+        ]
+
+class HistoryTreeCondition(HistoryTree):
+    def __init__(self, condition: Constraint, path: HistoryTree):
+        self.condition = condition
+        self.path = path
 
     def json(self):
         return {
-            'action': self.action,
-            'children': [
-                ch.json() for ch in self.children
-            ]
+            'condition': self.condition.json(),
+            'path': self.path.json()
         }
 
+class HonestUtility:
+    """Represents honest utility - either a simple utility mapping or conditional utilities"""
+    
+    def __init__(self, utility: Union[Dict[Player, LExpr], List['HonestUtilityCondition']]):
+        self.utility = utility
+
+    def json(self):
+        if isinstance(self.utility, dict):
+            # Simple utility mapping
+            return {
+                'utility': [
+                    {'player': player, 'value': utility}
+                    for player, utility in self.utility.items()
+                ]
+            }
+        else:
+            # Conditional utilities
+            return {
+                'utility': [cond.json() for cond in self.utility]
+            }
+        
+    def graphviz(self):
+        if isinstance(self.utility, dict):
+            print(f'\tn{id(self)} [label="HonestUtility"];')
+            for player, utility in self.utilities.items():
+                print(f'\tn{id(self)}_{player} [label="{utility}"];')
+                print(f'\tn{id(self)} -> n{id(self)}_{player} [label="{player}"];')
+            
+        else:
+            print(f'\tn{id(self)} [label="HonestUtility"];')
+            for cond in self.utility:
+                cond.graphviz()
+                print(f'\tn{id(self)} -> n{id(cond)};')
+
+
+class HonestUtilityCondition:
+    """Represents a conditional branch in honest utility"""
+    
+    def __init__(self, condition: Constraint, utility: Union[Dict[Player, LExpr], List['HonestUtilityCondition']]):
+        self.condition = condition
+        self.utility = utility
+    
+    def json(self):
+        if isinstance(self.utility, dict):
+            # Simple utility mapping
+            return {
+                'condition': self.condition.json(),
+                'utility': [
+                    {'player': player, 'value': utility_val}
+                    for player, utility_val in self.utility.items()
+                ]
+            }
+        else:
+            # Nested conditional utilities
+            return {
+                'condition': self.condition.json(),
+                'utility': [cond.json() for cond in self.utility]
+            }
+        
+    def graphviz(self):
+        print(f'\tn{id(self)} [label="*"];')
+        print(f'\tn{id(self)} -> n{id(self.condition)} [label="condition"];')
+        self.condition.graphviz()
+        
+        if isinstance(self.utility, dict):
+            for player, utility in self.utility.items():
+                print(f'\tn{id(self)}_{player} [label="{utility}"];')
+                print(f'\tn{id(self)} -> n{id(self)}_{player} [label="{player}"];')
+        else:
+            for cond in self.utility:
+                cond.graphviz()
+                print(f'\tn{id(self)} -> n{id(cond)};')
 
 class Tree:
     def graphviz(self):
@@ -370,26 +486,16 @@ class Tree:
 
 
 class Leaf(Tree):
-    def __init__(self, utilities: Dict[Player, LExpr], condition:Constraint=Truth()):
-        self.condition = condition
+    def __init__(self, utilities: Dict[Player, LExpr]):
         self.utilities = utilities
 
     def json(self):
-        if self.condition:
-            return {
-                'condition' : self.condition.json(),
-                'utility': [
-                    {'player': player, 'value': utility}
-                    for player, utility in self.utilities.items()
-                ]
-            }
-        else:
-            return {
-                'utility': [
-                    {'player': player, 'value': utility}
-                    for player, utility in self.utilities.items()
-                ]
-            }
+        return {
+            'utility': [
+                {'player': player, 'value': utility}
+                for player, utility in self.utilities.items()
+            ]
+        }
 
     def graphviz(self):
         print(f'\tn{id(self)} [label="*"];')
@@ -398,35 +504,56 @@ class Leaf(Tree):
             print(f'\tn{id(self)} -> n{id(self)}_{player} [label="{player}"];')
 
 
-def leaf(utilities: Dict[Player, LExpr], condition:Constraint=Truth()) -> Leaf:
-    return Leaf(utilities, condition)
+def leaf(utilities: Dict[Player, LExpr]) -> Leaf:
+    return Leaf(utilities)
 
+class Condition(Tree):
+    def __init__(self, conditions: Dict[Constraint, Tree], reveals: List[NameExpr] = None):
+        self.conditions = conditions
+        # unknowns revealed besides those occurring in the conditions
+        self.reveals = reveals or []
+        known = [repr(constant) for constant in self.reveals if constant.known]
+        if known:
+            raise ValueError(f"condition reveals constants that are not unknown: {', '.join(known)}")
+
+    def json(self):
+        result = {}
+        if self.reveals:
+            result['reveals'] = [repr(constant) for constant in self.reveals]
+        result['condition'] = []
+        for constraint, child in self.conditions.items():
+            edge = {}
+            if isinstance(constraint, NamedConstraint):
+                edge['name'] = constraint.name
+            edge['constraint'] = constraint.json()
+            edge['child'] = child
+            result['condition'].append(edge)
+        return result
+
+    def graphviz(self):
+        reveals = f"\\nreveals {', '.join(map(repr, self.reveals))}" if self.reveals else ''
+        print(f'\tn{id(self)} [label="Condition{reveals}"];')
+        for constraint, child in self.conditions.items():
+            child.graphviz()
+            label = f"{constraint.name}: {constraint}" if isinstance(constraint, NamedConstraint) else f"{constraint}"
+            print(f'\tn{id(self)} -> n{id(child)} [label="{label}"];')
+
+def condition(conditions: Dict[Constraint, Tree], reveals: List[NameExpr] = None) -> Condition:
+    return Condition(conditions, reveals)
 
 class Branch(Tree):
     def __init__(self, player: Player, actions: Dict[Action, Tree], condition: Constraint=Truth()):
         self.player = player
-        self.condition = condition
         self.actions = actions
-        self.condition = condition
 
     def json(self):
-        if self.condition:
-            return {
-                'player': self.player,
-                'condition' : self.condition.json(),
-                'children': [
-                    {'action': action, 'child': child}
-                    for action, child in self.actions.items()
-                ]
-            }
-        else:
-            return {
-                'player': self.player,
-                'children': [
-                    {'action': action, 'child': child}
-                    for action, child in self.actions.items()
-                ]
-            }
+        return {
+            'player': self.player,
+            'children': [
+                {'action': action, 'child': child}
+                for action, child in self.actions.items()
+            ]
+        }
 
     def graphviz(self):
         print(f'\tn{id(self)} [label="{self.player}"];')
@@ -435,8 +562,8 @@ class Branch(Tree):
             print(f'\tn{id(self)} -> n{id(child)} [label="{action}"];')
 
 
-def branch(player: Player, actions: Dict[Action, Tree], condition:Constraint=Truth()) -> Branch:
-    return Branch(player, actions, condition)
+def branch(player: Player, actions: Dict[Action, Tree]) -> Branch:
+    return Branch(player, actions)
 
 
 def players(*players: str) -> List[Player]:
@@ -451,11 +578,29 @@ def infinitesimals(*infs: str) -> List[Expr]:
     return [NameExpr(inf) for inf in infs]
 
 
+def unknown_infinitesimals(*infs: str) -> List[Expr]:
+    return [NameExpr(inf, known=False) for inf in infs]
+
+
 def constants(*constants: str) -> List[Expr]:
     return [NameExpr(constant) for constant in constants]
 
 
+def unknown_constants(*constants: str) -> List[Expr]:
+    return [NameExpr(constant, known=False) for constant in constants]
 
+
+
+
+
+def declarations(names: List[NameExpr]):
+    """plain list if everything is known, otherwise split into known and unknown"""
+    if all(name.known for name in names):
+        return names
+    return {
+        'known': [name for name in names if name.known],
+        'unknown': [name for name in names if not name.known]
+    }
 
 
 def finish(
@@ -468,8 +613,8 @@ def finish(
         weaker_immunity_constraints: List[Constraint],
         collusion_resilience_constraints: List[Constraint],
         practicality_constraints: List[Constraint],
-        honest_histories: List[List[Action]],
-        honest_utilities: List,
+        honest_histories: List[HistoryTree],
+        honest_utilities: List[HonestUtility],
         tree: Tree,
         file = None
 ):
@@ -483,8 +628,8 @@ def finish(
         json.dump({
             'players': players,
             'actions': actions,
-            'infinitesimals': infinitesimals,
-            'constants': constants,
+            'infinitesimals': declarations(infinitesimals),
+            'constants': declarations(constants),
             'initial_constraints': initial_constraints,
             'property_constraints': {
                 'weak_immunity': weak_immunity_constraints,
@@ -501,8 +646,8 @@ def finish(
         json.dump({
             'players': players,
             'actions': actions,
-            'infinitesimals': infinitesimals,
-            'constants': constants,
+            'infinitesimals': declarations(infinitesimals),
+            'constants': declarations(constants),
             'initial_constraints': initial_constraints,
             'property_constraints': {
                 'weak_immunity': weak_immunity_constraints,
