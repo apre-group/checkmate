@@ -431,7 +431,7 @@ class HonestUtility:
     def graphviz(self):
         if isinstance(self.utility, dict):
             print(f'\tn{id(self)} [label="HonestUtility"];')
-            for player, utility in self.utilities.items():
+            for player, utility in self.utility.items():
                 print(f'\tn{id(self)}_{player} [label="{utility}"];')
                 print(f'\tn{id(self)} -> n{id(self)}_{player} [label="{player}"];')
             
@@ -467,10 +467,8 @@ class HonestUtilityCondition:
             }
         
     def graphviz(self):
-        print(f'\tn{id(self)} [label="*"];')
-        print(f'\tn{id(self)} -> n{id(self.condition)} [label="condition"];')
-        self.condition.graphviz()
-        
+        print(f'\tn{id(self)} [label="{self.condition}"];')
+
         if isinstance(self.utility, dict):
             for player, utility in self.utility.items():
                 print(f'\tn{id(self)}_{player} [label="{utility}"];')
