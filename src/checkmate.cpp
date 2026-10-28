@@ -7,6 +7,7 @@
 #include "input.hpp"
 #include "options.hpp"
 #include "property.hpp"
+#include "validate.hpp"
 #include "cefg/run.hpp"
 
 // analyse a CEFG with the analysis in src/cefg/, leaving out the options it does not support (with a warning)
@@ -57,6 +58,13 @@ int main(int, char **argv) {
 		if (!file.is_json) {
 			std::cerr << "checkmate: " << options.input_path << ": games with " << reason
 				<< " (CEFGs) are only supported in the JSON format for now" << std::endl;
+			return EXIT_FAILURE;
+		}
+		try {
+			validate_cefg(file.document);
+		}
+		catch (const GameError &err) {
+			std::cerr << "checkmate: " << options.input_path << ": " << err.what() << std::endl;
 			return EXIT_FAILURE;
 		}
 		std::cout << "Game type: CEFG (" << reason << ")" << std::endl;

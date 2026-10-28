@@ -19,4 +19,8 @@ using LineMap = std::map<std::string, size_t>;
 // compact format) instead of a crash or a confusing error later. Throws GameError.
 void validate_game(const nlohmann::json &game, const LineMap *lines = nullptr);
 
+// The same for a CEFG (a game with condition nodes or unknown constants, see game_type.hpp), which is JSON only.
+// Throws GameError.
+void validate_cefg(const nlohmann::json &game);
+
 #endif

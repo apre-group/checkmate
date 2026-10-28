@@ -1,4 +1,5 @@
 #include <cctype>
+#include <map>
 #include <set>
 #include <vector>
 
@@ -38,20 +39,24 @@ std::string tree_key(const std::vector<std::string> &history) {
 }
 
 // ---- expressions, following the grammar of Parser in input.cpp ---------------------
+// (with `cefg`, the grammar of Parser in cefg/input.cpp: also '/', '=>', '!' and true/false)
 
 struct Expression {
 	const Context &ctx;
 	const std::string &text;
 	std::string where, what;
+	bool cefg;
 	size_t pos = 0;
 
-	enum Kind { NUMBER, NAME, OP, END };
+	enum Kind { NUMBER, NAME, BOOL, OP, END };
 	struct Token { Kind kind; std::string text; };
 	std::vector<Token> tokens;
 	size_t next = 0;
+	// the constants in the expression
+	std::set<std::string> used;
 
-	Expression(const Context &ctx, const std::string &text, std::string where, std::string what)
-		: ctx(ctx), text(text), where(std::move(where)), what(std::move(what)) {}
+	Expression(const Context &ctx, const std::string &text, std::string where, std::string what, bool cefg = false)
+		: ctx(ctx), text(text), where(std::move(where)), what(std::move(what)), cefg(cefg) {}
 
 	[[noreturn]] void fail(const std::string &message) {
 		ctx.fail(where, what, message + " in \"" + text + "\"");
@@ -72,15 +77,24 @@ struct Expression {
 				while (pos < text.size() && (std::isalnum(static_cast<unsigned char>(text[pos])) || text[pos] == '_'))
 					pos++;
 				std::string name = text.substr(start, pos - start);
+				if (cefg && (name == "true" || name == "false")) {
+					tokens.push_back({BOOL, name});
+					continue;
+				}
+				if (cefg && name == "forall")
+					fail("quantifiers are only allowed in the results of subtrees");
 				if (!ctx.symbols.count(name))
 					fail("undeclared constant " + name);
+				used.insert(name);
 				tokens.push_back({NAME, name});
+			} else if (cefg && c == '@') {
+				fail("selectors are only allowed in the results of subtrees");
 			} else {
 				std::string two = text.substr(pos, 2);
-				if (two == "<=" || two == ">=" || two == "!=") {
+				if (two == "<=" || two == ">=" || two == "!=" || (cefg && two == "=>")) {
 					tokens.push_back({OP, two});
 					pos += 2;
-				} else if (std::string("+-*()=<>|&").find(c) != std::string::npos) {
+				} else if (std::string("+-*()=<>|&").find(c) != std::string::npos || (cefg && (c == '/' || c == '!'))) {
 					tokens.push_back({OP, std::string(1, c)});
 					pos++;
 				} else {
@@ -103,7 +117,7 @@ struct Expression {
 		return t.kind == OP && (t.text == "=" || t.text == "!=" || t.text == "<" || t.text == "<=" || t.text == ">" || t.text == ">=");
 	}
 
-	// term := product (('+' | '-') product)*, product := unary ('*' unary)*, unary := '-' unary | atom
+	// term := product (('+' | '-') product)*, product := unary (('*' | '/') unary)*, unary := '-' unary | atom
 	void term() {
 		product();
 		while (accept("+") || accept("-"))
@@ -111,7 +125,7 @@ struct Expression {
 	}
 	void product() {
 		unary();
-		while (accept("*"))
+		while (accept("*") || (cefg && accept("/")))
 			unary();
 	}
 	void unary() {
@@ -131,11 +145,26 @@ struct Expression {
 	}
 
 	// constraint := conjunction ('|' conjunction)*, conjunction := atom ('&' atom)*,
-	// atom := term comparison term | '(' constraint ')'
+	// atom := term comparison term | '(' constraint ')';
+	// for CEFGs, constraint := connected ('=>' constraint)?, connected := negation (('&' | '|') negation)*,
+	// negation := '!' negation | atom, atom := 'true' | 'false' | term comparison term | '(' constraint ')'
 	void constraint() {
+		if (cefg) {
+			negation();
+			while (accept("&") || accept("|"))
+				negation();
+			if (accept("=>"))
+				constraint();
+			return;
+		}
 		conjunction();
 		while (accept("|"))
 			conjunction();
+	}
+	void negation() {
+		if (accept("!"))
+			return negation();
+		atom();
 	}
 	void conjunction() {
 		atom();
@@ -143,6 +172,10 @@ struct Expression {
 			atom();
 	}
 	void atom() {
+		if (peek().kind == BOOL) {
+			next++;
+			return;
+		}
 		// a parenthesis starts either a term or a constraint: try the term first
 		size_t start = next;
 		try {
@@ -178,6 +211,16 @@ struct Expression {
 		if (peek().kind != END)
 			fail("unexpected \"" + peek().text + "\"");
 	}
+
+	// the expression without whitespace and parentheses, to match the conditions of honest histories to those of
+	// condition nodes: equal for the same condition (up to parentheses and spacing), but also for some different ones
+	std::string normalised() {
+		std::string result;
+		for (const Token &t : tokens)
+			if (t.kind != END && t.text != "(" && t.text != ")")
+				result += t.text + " ";
+		return result;
+	}
 };
 
 void check_names(const Context &ctx, const json &game, const char *key, std::set<std::string> &into, bool required) {
@@ -194,7 +237,9 @@ void check_names(const Context &ctx, const json &game, const char *key, std::set
 	}
 }
 
-void check_utilities(const Context &ctx, const json &utilities, const std::string &where, const std::string &what) {
+// for CEFGs (`known` not null): any number, and expressions only of the constants in `known`
+void check_utilities(const Context &ctx, const json &utilities, const std::string &where, const std::string &what,
+		const std::set<std::string> *known = nullptr) {
 	if (!utilities.is_array())
 		ctx.fail(where, what, "utilities must be a list");
 	std::set<std::string> listed;
@@ -206,9 +251,17 @@ void check_utilities(const Context &ctx, const json &utilities, const std::strin
 			ctx.fail(where, what, "unknown player " + player);
 		if (!listed.insert(player).second)
 			ctx.fail(where, what, "utility of " + player + " given twice");
-		if (u["value"].is_string())
-			Expression(ctx, u["value"].get_ref<const std::string &>(), where, what).check_utility();
-		else if (!u["value"].is_number_unsigned())
+		if (u["value"].is_string()) {
+			Expression e(ctx, u["value"].get_ref<const std::string &>(), where, what, known);
+			e.check_utility();
+			if (known)
+				for (const std::string &name : e.used)
+					if (!known->count(name))
+						ctx.fail(where, what, "the utility of " + player + " uses " + name +
+							", which is still unknown here (reveal it at a condition node on the way)");
+		} else if (known && u["value"].is_number()) {
+			continue;
+		} else if (!u["value"].is_number_unsigned())
 			ctx.fail(where, what, "the utility of " + player + " must be an expression or a non-negative integer");
 	}
 	if (listed.size() != ctx.players.size())
@@ -271,6 +324,215 @@ void check_honest(const Context &ctx, const json &game, size_t index) {
 			", not at a leaf");
 }
 
+
+// ---- CEFGs (games with condition nodes or unknown constants), as read by cefg/input.cpp -----------
+
+struct Cefg {
+	Context ctx{nullptr, {}, {}};
+	std::set<std::string> known, unknown;
+
+	[[noreturn]] void fail(const std::string &what, const std::string &message) const {
+		ctx.fail("", what, message);
+	}
+
+	// constants or infinitesimals: a list (all known) or {"known": [...], "unknown": [...]}
+	void declarations(const json &game, const char *key) {
+		if (!game.contains(key))
+			return;
+		const json &d = game[key];
+		auto declare = [&](const json &names, std::set<std::string> &into, const std::string &what) {
+			if (!names.is_array())
+				fail(key, what + " must be a list of names");
+			for (const json &name : names) {
+				if (!name.is_string() || name.get<std::string>().empty())
+					fail(key, "names must be non-empty strings");
+				if (!ctx.symbols.insert(name.get<std::string>()).second)
+					fail(key, name.get<std::string>() + " is declared twice");
+				into.insert(name.get<std::string>());
+			}
+		};
+		if (d.is_array()) {
+			declare(d, known, key);
+		} else if (d.is_object()) {
+			for (const auto &item : d.items())
+				if (item.key() != "known" && item.key() != "unknown")
+					fail(key, "expected a list, or an object with known and unknown, not " + item.key());
+			if (d.contains("known"))
+				declare(d["known"], known, "known");
+			if (d.contains("unknown"))
+				declare(d["unknown"], unknown, "unknown");
+		} else {
+			fail(key, "must be a list, or an object with known and unknown");
+		}
+	}
+
+	void constraints(const json &list, const std::string &what) {
+		if (!list.is_array())
+			fail(what, "must be a list of constraints");
+		for (size_t i = 0; i < list.size(); i++) {
+			std::string w = what + " " + std::to_string(i + 1);
+			if (!list[i].is_string())
+				fail(w, "must be a string");
+			Expression(ctx, list[i].get_ref<const std::string &>(), "", w, true).check_constraint();
+		}
+	}
+
+	// `path`: actions, and "condition N" (from 1) below condition nodes;
+	// `known_here`: the constants known at `node`, i.e. the known ones and the unknowns revealed on the way
+	void tree(const json &node, std::vector<std::string> &path, const std::set<std::string> &known_here) {
+		std::string what = "node at " + history_text(path);
+		if (!node.is_object())
+			fail(what, "not a node");
+		int kinds = node.contains("children") + node.contains("condition") + node.contains("utility") + node.contains("subtree");
+		if (kinds != 1)
+			fail(what, kinds ? "a node must have only one of children, condition, utility and subtree"
+				: "a node must have children, a condition, a utility, or a subtree result");
+		if (node.contains("children")) {
+			if (!node.contains("player") || !node["player"].is_string() || !ctx.players.count(node["player"].get<std::string>()))
+				fail(what, "the player of a node must be declared in players");
+			if (!node["children"].is_array() || node["children"].empty())
+				fail(what, "a node of " + node["player"].get<std::string>() + " needs at least one action");
+			std::set<std::string> actions;
+			for (const json &child : node["children"]) {
+				if (!child.is_object() || !child.contains("action") || !child["action"].is_string() || !child.contains("child"))
+					fail(what, "every child needs an action and a child");
+				std::string action = child["action"];
+				if (!actions.insert(action).second)
+					fail(what, "action " + action + " appears twice");
+				path.push_back(action);
+				tree(child["child"], path, known_here);
+				path.pop_back();
+			}
+		} else if (node.contains("condition")) {
+			const json &conditions = node["condition"];
+			if (!conditions.is_array() || conditions.empty())
+				fail(what, "a condition node needs a list of at least one {constraint, child}");
+			// unknowns in the conditions, and those in reveals, are known below the node
+			std::set<std::string> below = known_here, texts;
+			for (size_t i = 0; i < conditions.size(); i++) {
+				const json &c = conditions[i];
+				std::string w = "condition " + std::to_string(i + 1) + " of the " + what;
+				if (!c.is_object() || !c.contains("constraint") || !c["constraint"].is_string() || !c.contains("child"))
+					fail(w, "needs a constraint and a child");
+				if (c.contains("name") && !c["name"].is_string())
+					fail(w, "the name must be a string");
+				Expression e(ctx, c["constraint"].get_ref<const std::string &>(), "", w, true);
+				e.check_constraint();
+				if (!texts.insert(e.normalised()).second)
+					fail(w, "the condition " + c["constraint"].get<std::string>() + " appears twice");
+				below.insert(e.used.begin(), e.used.end());
+			}
+			if (node.contains("reveals")) {
+				if (!node["reveals"].is_array())
+					fail(what, "reveals must be a list of constants");
+				for (const json &name : node["reveals"]) {
+					if (!name.is_string())
+						fail(what, "reveals must be a list of constants, not " + name.dump());
+					if (!ctx.symbols.count(name.get<std::string>()))
+						fail(what, "reveals " + name.get<std::string>() + ", which is not declared");
+					if (!unknown.count(name.get<std::string>()))
+						fail(what, "reveals " + name.get<std::string>() + ", which is not declared unknown");
+					below.insert(name.get<std::string>());
+				}
+			}
+			for (size_t i = 0; i < conditions.size(); i++) {
+				path.push_back("condition " + std::to_string(i + 1));
+				tree(conditions[i]["child"], path, below);
+				path.pop_back();
+			}
+		} else if (node.contains("utility")) {
+			check_utilities(ctx, node["utility"], "", what, &known_here);
+		} else if (node["subtree"].is_array()) {
+			// written by --subtree for a CEFG; its expressions are checked when they are read
+			for (const json &entry : node["subtree"])
+				if (!entry.is_object() || !entry.contains("subtree") ||
+						!(entry.contains("honest_history") || entry.contains("honest_utility") || entry.contains("no_honest_history")))
+					fail(what, "every subtree entry needs a subtree result and one of honest_history, honest_utility and no_honest_history");
+		} else if (!node["subtree"].is_object()) {
+			fail(what, "a subtree result must be a list of entries (of a CEFG) or an object (of an EFG)");
+		}
+	}
+
+	// the rest `history` of an honest history at `node`, reached by `path`
+	void honest(const json &node, const json &history, std::vector<std::string> &path, const std::string &what) {
+		if (!history.is_array())
+			fail(what, "must be a list of actions, and of conditions at condition nodes");
+		const json *at = &node;
+		for (size_t i = 0; i < history.size(); i++) {
+			const json &element = history[i];
+			if (at->contains("subtree"))
+				return;
+			if (at->contains("utility"))
+				fail(what, history_text(path) + " already ends at a leaf, but the honest history continues with " + element.dump());
+			if (at->contains("children")) {
+				if (!element.is_string())
+					fail(what, "expected an action at the node of " + (*at)["player"].get<std::string>() + " after " +
+						history_text(path) + ", not " + element.dump());
+				const json *found = nullptr;
+				for (const json &child : (*at)["children"])
+					if (child["action"] == element)
+						found = &child["child"];
+				if (!found)
+					fail(what, "no action " + element.get<std::string>() + " after " + history_text(path));
+				path.push_back(element);
+				at = found;
+				continue;
+			}
+			// a condition node: the history continues in every condition, so it ends here
+			const json &conditions = (*at)["condition"];
+			if (!element.is_array())
+				fail(what, "expected a list of {condition, path} at the condition node after " + history_text(path) + ", not " + element.dump());
+			if (i + 1 != history.size())
+				fail(what, "the conditions at the condition node after " + history_text(path) +
+					" must be the last element, the history continues in their paths");
+			if (element.size() != conditions.size())
+				fail(what, "the condition node after " + history_text(path) + " has " + std::to_string(conditions.size()) +
+					" conditions, but the honest history gives " + std::to_string(element.size()));
+			std::map<std::string, size_t> index;
+			for (size_t j = 0; j < conditions.size(); j++) {
+				Expression e(ctx, conditions[j]["constraint"].get_ref<const std::string &>(), "", what, true);
+				e.check_constraint();
+				index[e.normalised()] = j;
+			}
+			std::set<size_t> given;
+			for (const json &c : element) {
+				if (!c.is_object() || !c.contains("condition") || !c["condition"].is_string() || !c.contains("path"))
+					fail(what, "at the condition node after " + history_text(path) + ", every element needs a condition and a path");
+				Expression e(ctx, c["condition"].get_ref<const std::string &>(), "", what, true);
+				e.check_constraint();
+				// a condition written differently is matched (or not) by CheckMate itself
+				auto j = index.find(e.normalised());
+				if (j == index.end())
+					continue;
+				if (!given.insert(j->second).second)
+					fail(what, "the condition " + c["condition"].get<std::string>() + " after " + history_text(path) + " is given twice");
+				path.push_back("condition " + std::to_string(j->second + 1));
+				honest(conditions[j->second]["child"], c["path"], path, what);
+				path.pop_back();
+			}
+			return;
+		}
+		if (at->contains("children"))
+			fail(what, history_text(path) + " ends at a node of " + (*at)["player"].get<std::string>() + ", not at a leaf");
+		if (at->contains("condition"))
+			fail(what, history_text(path) + " ends at a condition node, not at a leaf (give the path for every condition)");
+	}
+
+	// an honest utility: a utility, or a list of {condition, utility}
+	void honest_utility(const json &utility, const std::string &what) {
+		if (utility.is_array() && !utility.empty() && utility[0].is_object() && utility[0].contains("condition")) {
+			for (const json &c : utility) {
+				if (!c.is_object() || !c.contains("condition") || !c["condition"].is_string() || !c.contains("utility"))
+					fail(what, "every conditional honest utility needs a condition and a utility");
+				Expression(ctx, c["condition"].get_ref<const std::string &>(), "", what, true).check_constraint();
+				honest_utility(c["utility"], what);
+			}
+			return;
+		}
+		std::set<std::string> all = ctx.symbols;
+		check_utilities(ctx, utility, "", what, &all);
+	}
+};
 }
 
 void validate_game(const json &game, const LineMap *lines) {
@@ -339,4 +601,59 @@ void validate_game(const json &game, const LineMap *lines) {
 	}
 	if (!honest)
 		throw GameError("the game needs an honest history (honest: ...), or honest utilities for a subtree");
+}
+
+
+void validate_cefg(const json &game) {
+	if (!game.is_object())
+		throw GameError("a game must be a JSON object");
+	Cefg cefg;
+	check_names(cefg.ctx, game, "players", cefg.ctx.players, true);
+	if (cefg.ctx.players.empty())
+		throw GameError("players: the game needs at least one player");
+	cefg.declarations(game, "constants");
+	cefg.declarations(game, "infinitesimals");
+
+	if (!game.contains("tree"))
+		throw GameError("the game has no tree");
+	if (!game["tree"].is_object() || !(game["tree"].contains("children") || game["tree"].contains("condition")))
+		throw GameError("tree: the root of the tree must be a node with actions or conditions");
+	std::vector<std::string> path;
+	cefg.tree(game["tree"], path, cefg.known);
+
+	if (game.contains("initial_constraints"))
+		cefg.constraints(game["initial_constraints"], "initial constraint");
+	// property constraints are optional for CEFGs, but must be lists if given
+	if (game.contains("property_constraints")) {
+		if (!game["property_constraints"].is_object())
+			throw GameError("property_constraints must be an object with a list for each property");
+		for (const char *p : {"weak_immunity", "weaker_immunity", "collusion_resilience", "practicality"})
+			if (game["property_constraints"].contains(p))
+				cefg.constraints(game["property_constraints"][p], std::string(p) + " constraint");
+	}
+
+	size_t honest = 0;
+	if (game.contains("honest_histories")) {
+		if (!game["honest_histories"].is_array())
+			throw GameError("honest_histories must be a list of histories");
+		for (size_t i = 0; i < game["honest_histories"].size(); i++) {
+			path.clear();
+			cefg.honest(game["tree"], game["honest_histories"][i], path, "honest history " + std::to_string(i + 1));
+		}
+		honest += game["honest_histories"].size();
+	}
+	if (game.contains("honest_utilities")) {
+		const json &us = game["honest_utilities"];
+		if (!us.is_array())
+			throw GameError("honest_utilities must be a list");
+		for (size_t i = 0; i < us.size(); i++) {
+			std::string what = "honest utility " + std::to_string(i + 1);
+			if (!us[i].is_object() || !us[i].contains("utility"))
+				throw GameError(what + ": must have a utility");
+			cefg.honest_utility(us[i]["utility"], what);
+		}
+		honest += us.size();
+	}
+	if (!honest)
+		throw GameError("the game needs honest_histories, or honest_utilities for a subtree");
 }

@@ -97,7 +97,14 @@ Before analyzing a game, CheckMate checks that it is well-formed, in either form
 - all utilities and constraints parse,
 - every honest history exists in the tree and ends at a leaf or a subtree.
 A game with honest utilities instead of honest histories (a subtree off the honest history) is accepted as well.
-These checks apply to games without condition nodes; conditional games are checked while they are read.
+For conditional games (JSON only), CheckMate also checks that:
+- constants and infinitesimals are a list or `{"known": [...], "unknown": [...]}`,
+- every condition node has at least one condition, each with a constraint and a child, and no condition twice,
+- `reveals` names only constants declared unknown,
+- the utilities at a leaf use only known constants and the unknowns revealed on the way to it,
+- an honest history gives, at a condition node, a path for each of its conditions, as its last element.
+
+Conditions in an honest history are matched to those of the condition node by CheckMate itself, which reports conditions that are not in the node.
 If a check fails, CheckMate stops with an error naming the line in the compact format, or the node in JSON:
 
 ```
