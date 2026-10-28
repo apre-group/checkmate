@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <variant>
 
+#include "../json.hpp"
 #include "utility.hpp"
 #include "../utils.hpp"
 #include "z3++.hpp"
@@ -1273,8 +1274,8 @@ struct Action {
 };
 
 struct Input {
-	// parse an input from `path`, exiting if malformed
-	Input(const char *path);
+	// load a game, read from JSON or the compact format, exiting if malformed (a copy: missing keys read as null)
+	Input(nlohmann::json document);
 
 	// list of players in alphabetical order
 	std::vector<std::string> players;

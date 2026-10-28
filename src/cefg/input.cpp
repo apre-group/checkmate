@@ -1264,23 +1264,7 @@ static HonestUtilityElement parse_honest_utility_element(Parser &parser, const j
 
 
 
-Input::Input(const char *path) : sat_cases(), strategies() , stop_log(false) {
-	// parse a JSON document from `path`
-	std::ifstream input(path);
-	json document;
-	try {
-		input.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-		document = json::parse(input);
-	}
-	catch (const std::ifstream::failure &fail) {
-		std::cerr << "checkmate: " << std::strerror(errno) << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
-	catch (const json::exception &err) {
-		std::cerr << "checkmate: " << err.what() << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
-
+Input::Input(json document) : sat_cases(), strategies() , stop_log(false) {
 	if (document["players"].size() > MAX_PLAYERS) {
 		std::cerr << "checkmate: more than 64 players not supported - are you sure you want this many?!" << std::endl;
 		std::exit(EXIT_FAILURE);

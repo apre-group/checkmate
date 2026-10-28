@@ -344,7 +344,7 @@ async function showGame(jsonText) {
     try {
         $('game').value = await converter(jsonText);
     } catch (e) {
-        // a game without a compact form (a CEFG) stays JSON; gameChanged would bring it back here
+        // a game without a compact form (e.g. names with spaces) stays JSON; gameChanged would bring it back here
         $('game').value = jsonText;
         results = null; selection = null;
         $('results').textContent = 'Run CheckMate to see results.';
@@ -552,10 +552,11 @@ function selectResult(i, td) {
 }
 
 function caseText(c) { return c.length ? c.join(' ∧ ') : '(any)'; }
-// in CEFGs, an element of a history can be a list of conditions, each with the history that continues under it
+// in CEFGs, an element of a history can be a list of conditions, each with the history that continues under it,
+// written as in the compact format: {if CONDITION → history; ...}
 function historyText(h) {
     return h.map(a => typeof a === 'string' ? a
-        : '{' + a.map(c => c.condition + ': ' + (historyText(c.path) || '(end)')).join(' | ') + '}').join(' → ');
+        : '{' + a.map(c => 'if ' + c.condition + (c.path.length ? ' → ' + historyText(c.path) : '')).join('; ') + '}').join(' → ');
 }
 // the actions of a history before its first condition, the part that can be drawn on the tree
 function actionPrefix(h) {

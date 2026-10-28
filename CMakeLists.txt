@@ -52,6 +52,8 @@ add_executable(checkmate-convert
 	src/compact.cpp
 	src/validate.hpp
 	src/validate.cpp
+	src/game_type.hpp
+	src/game_type.cpp
 	src/convert.cpp
 )
 

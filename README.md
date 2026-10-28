@@ -85,6 +85,30 @@ The header lines are `players:`, `constants:` and `infinitesimals:` (comma-separ
 The tree starts at the first line that is not a header: the player at the root, and then one line per branch, indented below its node: `action -> PLAYER` for an internal node (whose branches follow, indented further), `action -> PLAYER: utility, ...` for a leaf, or `action -> subtree {...}` for a subtree result in JSON.
 The `actions` list is not needed; it is derived from the tree. `#` starts a comment.
 
+[Conditional games](#conditional-games-cefgs) have a compact form as well:
+
+```
+players: A, B
+unknown_constants: y
+initial: y = 0 | y = 1
+honest: dev risk {if y = 0 -> l; if y = 1}
+
+A
+  hon -> A: 2, B: 0
+  dev -> A
+    safe -> A: 1, B: 0
+    risk -> ? reveals y
+      if low: y = 0 -> B
+        l -> A: 1, B: 1
+        r -> A: 0, B: 2
+      if y = 1 -> A: 3, B: 0
+```
+
+Unknown constants and infinitesimals are declared with `unknown_constants:` and `unknown_infinitesimals:`.
+A condition node is `?` (`action -> ?`, or `?` at the root), or `? reveals CONSTANT, ...` to reveal further unknowns, and its conditions follow, indented below it: `if CONDITION -> ...`, or `if NAME: CONDITION -> ...` for a named condition, followed by a node as after `action ->`.
+At a condition node, an honest history continues in every condition, in braces at its end: `{if CONDITION -> history; ...}`, where `if CONDITION` alone is a condition after which the history ends.
+An honest utility that depends on conditions is written in the same way: `honest_utility: {if CONDITION -> PLAYER: utility, ...; ...}`.
+
 CheckMate treats a file as JSON if it starts with `{`, and as the compact format otherwise.
 `build/checkmate-convert GAME [OUTPUT]` converts a game from one format to the other.
 
@@ -97,7 +121,7 @@ Before analyzing a game, CheckMate checks that it is well-formed, in either form
 - all utilities and constraints parse,
 - every honest history exists in the tree and ends at a leaf or a subtree.
 A game with honest utilities instead of honest histories (a subtree off the honest history) is accepted as well.
-For conditional games (JSON only), CheckMate also checks that:
+For conditional games, CheckMate also checks that:
 - constants and infinitesimals are a list or `{"known": [...], "unknown": [...]}`,
 - every condition node has at least one condition, each with a constraint and a child, and no condition twice,
 - `reveals` names only constants declared unknown,
@@ -257,7 +281,7 @@ A conditional game extends the input as follows.
 - An honest history continues in every condition of a condition node: at a condition node, it contains a list of dictionaries `{"condition": ..., "path": [...]}`, one per condition, with the rest of the honest history after it.
 - An honest utility in `honest_utilities` can likewise depend on conditions: its `utility` is then a list of dictionaries `{"condition": ..., "utility": [...]}`.
 
-CheckMate treats a game as conditional if it has a condition node, declares unknown constants, contains results of a conditional subtree, or has an honest utility that depends on conditions; it then prints e.g. `Game type: CEFG (condition nodes)`. Conditional games are only read in JSON, not in the compact format.
+CheckMate treats a game as conditional if it has a condition node, declares unknown constants, contains results of a conditional subtree, or has an honest utility that depends on conditions; it then prints e.g. `Game type: CEFG (condition nodes)`. Conditional games can be written in the [compact format](#compact-format) as well.
 
 Practicality of a conditional game may depend on how players break ties for different revealed values. If Z3 cannot decide this within 10 seconds, CheckMate asks [cvc5](https://cvc5.github.io/) to synthesize the tie-breaking (as `cvc5` on the `PATH`, or the program in the environment variable `CHECKMATE_CVC5`), for at most 20 minutes; this is not available in the browser. If neither decides it, the answer is `UNKNOWN` with the reason.
 
