@@ -13,6 +13,7 @@ const char *USAGE = R"(usage: checkmate PATH
 	--collusion_resilience
 	--practicality
 	--subtree
+	--json-out FILE
 )";
 // future options
 	// --counterexamples
@@ -68,6 +69,11 @@ Options::Options(char **argv) {
 		// 	strategies = true;
 		else if (!strcmp(*argv, "--subtree"))
 			subtree = true;
+		else if (!strcmp(*argv, "--json-out")) {
+			if (!*++argv)
+				bail("--json-out expects a file name");
+			json_out = *argv;
+		}
 		// else if (!strcmp(*argv, "--count_nodes"))
 		// 	count_nodes = true;
 		// else if (!strcmp(*argv, "--count_calls"))

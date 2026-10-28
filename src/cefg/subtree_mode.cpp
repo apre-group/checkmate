@@ -250,8 +250,7 @@ json subtree2json(const Input &input, const SubtreeResults &results) {
 	return subtree_json;
 }
 
-// an honest history in the input format: actions, and lists of {condition, path} at condition nodes
-static json history2json(const HonestHistory &history) {
+json history2json(const HonestHistory &history) {
 	json result = json::array();
 	for (const HonestHistoryElement &element : history) {
 		if (std::holds_alternative<std::string>(element)) {
@@ -269,7 +268,7 @@ static json history2json(const HonestHistory &history) {
 	return result;
 }
 
-void data2json(const Input &input, const std::vector<SubtreeData> &data, const std::string &file_name) {
+json data2json(const Input &input, const std::vector<SubtreeData> &data) {
 	json result = json::array();
 	for (const SubtreeData &entry : data) {
 		json entry_json;
@@ -284,14 +283,16 @@ void data2json(const Input &input, const std::vector<SubtreeData> &data, const s
 		entry_json["subtree"] = subtree2json(input, entry.result);
 		result.push_back(entry_json);
 	}
+	return result;
+}
 
+void write_json(const json &document, const std::string &file_name) {
 	std::ofstream output_file(file_name);
 	if (!output_file.is_open()) {
 		std::cerr << "checkmate: failed to create " << file_name << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
-	output_file << result.dump(4) << std::endl;
-	std::cout << "Subtree results written to " << file_name << std::endl;
+	output_file << document.dump(4) << std::endl;
 }
 
 } // namespace cefg

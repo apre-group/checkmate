@@ -30,14 +30,15 @@ static int run_cefg(char **argv) {
 	for (char **option = argv + 2; *option; option++) {
 		if (among(*option, SUPPORTED, sizeof SUPPORTED / sizeof *SUPPORTED)) {
 			arguments.push_back(*option);
+		} else if (!std::strcmp(*option, "--json-out")) {
+			// Options already checked that a file name follows
+			arguments.push_back(*option);
+			arguments.push_back(*++option);
 		} else if (among(*option, NOT_YET, sizeof NOT_YET / sizeof *NOT_YET)) {
 			std::cerr << "checkmate: " << *option << " is not yet implemented for CEFGs and is ignored" << std::endl;
 		} else {
 			// Options already rejected unknown options, so this one is for EFGs only
 			std::cerr << "checkmate: " << *option << " only applies to EFGs and is ignored" << std::endl;
-			if (!std::strcmp(*option, "--json-out")) {
-				option++;
-			}
 		}
 	}
 	arguments.push_back(nullptr);

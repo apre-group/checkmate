@@ -5,18 +5,20 @@
 // imported from the cefg branch (c9c6e6f); wrapped in namespace cefg next to the EFG engine in src/
 namespace cefg {
 
-void default_mode(const Options &options, const Input &input, const UtilityTuplesSet &ustar) {
-	// the chosen properties, with how to name them in the result
+void default_mode(const Options &options, const Input &input, const UtilityTuplesSet &ustar,
+		nlohmann::json &results, const nlohmann::json &run) {
+	// the chosen properties, with how to name them in the output and in the JSON result
 	struct ChosenProperty {
 		bool chosen;
 		PropertyType property;
 		const char *name;
+		const char *json_name;
 	};
 	std::vector<ChosenProperty> properties = {
-		{options.weak_immunity, PropertyType::WeakImmunity, "weak immune"},
-		{options.weaker_immunity, PropertyType::WeakerImmunity, "weaker immune"},
-		{options.collusion_resilience, PropertyType::CollusionResilience, "collusion resilient"},
-		{options.practicality, PropertyType::Practicality, "practical"}
+		{options.weak_immunity, PropertyType::WeakImmunity, "weak immune", "weak_immunity"},
+		{options.weaker_immunity, PropertyType::WeakerImmunity, "weaker immune", "weaker_immunity"},
+		{options.collusion_resilience, PropertyType::CollusionResilience, "collusion resilient", "collusion_resilience"},
+		{options.practicality, PropertyType::Practicality, "practical", "practicality"}
 	};
 
 	for (const ChosenProperty &property : properties) {
@@ -33,6 +35,17 @@ void default_mode(const Options &options, const Input &input, const UtilityTuple
 		} else {
 			std::cout << "NO, the game is not " << property.name << " for the analyzed history." << std::endl;
 		}
+
+		// as for EFGs, but `holds` is null if undecided (strategies and counterexamples are not implemented yet)
+		nlohmann::json entry = run;
+		entry["property"] = property.json_name;
+		entry["holds"] = satisfied ? nlohmann::json(*satisfied) : nlohmann::json(nullptr);
+		if (!satisfied) {
+			entry["undecided"] = undecided;
+		}
+		entry["strategies"] = nlohmann::json::array();
+		entry["counterexamples"] = nlohmann::json::array();
+		results.push_back(entry);
 	}
 }
 

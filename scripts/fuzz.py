@@ -441,9 +441,9 @@ def fuzz_efg(rng, game, outs):
 
 
 # ---- conditional games (CEFGs) ----------------------------------------------------
-# CEFGs have no --json-out: the verdicts are read from checkmate's output (parse_verdicts), keyed by
-# (kind, index, property) for the index-th honest history ("history"), honest utility ("utility") or the run
-# without honest history ("none").
+# The verdicts of a CEFG come from --json-out (cefg_verdicts), keyed by (kind, index, property) for the index-th
+# honest history ("history"), honest utility ("utility") or the run without honest history ("none"). They must
+# agree with the verdicts in the text output (parse_verdicts).
 
 # options the CEFG analysis ignores with a warning: running with them must not change anything
 CEFG_IGNORED = ["--counterexamples", "--all_counterexamples", "--all_cases", "--strategies", "--preconditions"] + NO_OPTS
@@ -471,23 +471,66 @@ def parse_verdicts(text):
     return verdicts
 
 
+def history_shape(history):
+    """An honest history without the conditions, which CheckMate writes in its own syntax."""
+    return [e if isinstance(e, str) else [history_shape(c["path"]) for c in e] for e in history]
+
+
+def cefg_verdicts(results, cmd):
+    """The verdicts in a CEFG's --json-out results, keyed as the text output (see parse_verdicts), and the
+    analysed honest histories: one for each run, i.e. a new one whenever the history changes or a property repeats."""
+    verdicts, histories, seen = {}, [], set()
+    for r in results:
+        p, h, holds = r["property"], r["history"], r["holds"]
+        if holds is None and (p != "practicality" or not r.get("undecided")):
+            raise Bug("%s is undecided without a reason, or not for practicality: %s" % (p, r), cmd)
+        if h is None:
+            key = ("utility", r["honest_utility"], p) if "honest_utility" in r else ("none", 0, p)
+        else:
+            if not histories or h != histories[-1] or p in seen:
+                histories.append(h)
+                seen = set()
+            seen.add(p)
+            key = ("history", len(histories) - 1, p)
+        if key in verdicts:
+            raise Bug("two results for %s" % (key,), cmd)
+        verdicts[key] = holds
+    return verdicts, histories
+
+
 def run_cefg(game, flags, outs, expect_cefg=True):
-    """Run checkmate on a CEFG, keep its output, return its verdicts (None on a timeout)."""
-    out = run_checkmate(game, flags, allowed=IGNORED_WARNING)
+    """Run checkmate on a CEFG, keep its output, return its verdicts (None on a timeout), checking that the
+    output and --json-out agree."""
+    json_out = game[:-5] + ("-flags" if flags else "") + ".out.json"
+    cmd = checkmate_cmd() + [game] + flags + ["--json-out", json_out]
+    out = run_checkmate(game, flags + ["--json-out", json_out], allowed=IGNORED_WARNING)
     if out is None:
         return None
-    txt = game[:-5] + ("-flags" if flags else "") + ".out.txt"
-    outs.append(txt)
+    txt = json_out[:-5] + ".txt"
+    outs += [txt, json_out]
     with open(txt, "w") as f:
         f.write(out)
     # a supertree whose condition nodes are all in the subtree is an EFG
     if expect_cefg and "Game type: CEFG" not in out:
-        raise Bug("the game was not analysed as a CEFG", checkmate_cmd() + [game] + flags, out)
-    return parse_verdicts(out)
+        raise Bug("the game was not analysed as a CEFG", cmd, out)
+    if "Game type: CEFG" not in out:
+        return parse_verdicts(out), None
+    verdicts, histories = cefg_verdicts(json.load(open(json_out))["results"], cmd)
+    printed = parse_verdicts(out)
+    if printed != verdicts:
+        raise Bug("the output says %s, --json-out says %s" % (sorted(printed.items()), sorted(verdicts.items())), cmd)
+    return verdicts, histories
 
 
-def check_cefg_runs(verdicts, game_json, flags, game):
-    """One verdict for each property chosen with `flags`, for each run CheckMate makes."""
+def check_cefg_runs(run, game_json, flags, game):
+    """One verdict for each property chosen with `flags`, for each run CheckMate makes, each for its honest history
+    (unless the game has subtree nodes, whose honest histories continue the ones of the game)."""
+    verdicts, histories = run
+    hists = game_json["honest_histories"]
+    if histories is not None and not any("subtree" in n for n in nodes(game_json["tree"])):
+        if [history_shape(h) for h in histories] != [history_shape(h) for h in hists]:
+            raise Bug("checkmate analysed the honest histories %s, expected %s" % (histories, hists),
+                      checkmate_cmd() + [game] + flags)
     props = [p for p in PROPS if "--" + p in flags] or PROPS
     expected = {("history", i, p) for i in range(len(game_json["honest_histories"])) for p in props}
     if game_json.get("honest_utilities"):
@@ -513,8 +556,6 @@ def cefg_flags(rng, game):
         flags += ["--" + p for p in rng.sample(PROPS, rng.randint(1, 3))]
     flags += [f for f in CEFG_IGNORED if rng.random() < 0.15]
     rng.shuffle(flags)
-    if rng.random() < 0.15:
-        flags += ["--json-out", game[:-5] + "-ignored.json"]
     return flags
 
 
@@ -526,10 +567,16 @@ def run_cefg_subtree(sub, path, outs):
     """Analyse `sub` in --subtree mode, return its results for the supertree."""
     with open(path, "w") as f:
         json.dump(sub, f, indent=2)
-    outs += [path, path + ".out"]
-    if run_checkmate(path, ["--subtree"], allowed=IGNORED_WARNING) is None:
+    json_out = path[:-5] + ".out.json"
+    outs += [path, path + ".out", json_out]
+    flags = ["--subtree", "--json-out", json_out]
+    if run_checkmate(path, flags, allowed=IGNORED_WARNING) is None:
         return None
-    return json.load(open(path + ".out"))
+    result = json.load(open(path + ".out"))
+    # the EFG engine writes its result (a node, not a list) with SMT-LIB 2 cases instead
+    if isinstance(result, list) and json.load(open(json_out)) != {"version": 1, "subtree": result}:
+        raise Bug("--json-out differs from %s.out" % path, checkmate_cmd() + [path] + flags)
+    return result
 
 
 def cefg_compositional(game_json, base, rng, game, outs):
@@ -561,11 +608,11 @@ def cefg_compositional(game_json, base, rng, game, outs):
     outs.append(sup)
     with open(sup, "w") as f:
         json.dump(sup_json, f, indent=2)
-    results = run_cefg(sup, [], outs, expect_cefg=False)
-    if results is None:
+    run = run_cefg(sup, [], outs, expect_cefg=False)
+    if run is None:
         return
-    check_cefg_runs(results, sup_json, [], sup)
-    compare_cefg(base, results, "with the subtree at %s analysed separately" % fmt_steps(steps),
+    check_cefg_runs(run, sup_json, [], sup)
+    compare_cefg(base, run[0], "with the subtree at %s analysed separately" % fmt_steps(steps),
                  keys=lambda k: (k[0], j, k[2]))
     STATS["cefg compared supertree"] += 1
 
@@ -594,20 +641,21 @@ def fuzz_cefg(rng, game, outs):
     with open(game, "w") as f:
         json.dump(game_json, f, indent=2)
 
-    base = run_cefg(game, [], outs)
-    if base is None:
+    run = run_cefg(game, [], outs)
+    if run is None:
         return
-    check_cefg_runs(base, game_json, [], game)
+    check_cefg_runs(run, game_json, [], game)
+    base = run[0]
     note_cefg(game_json, base, efg_verdicts is not None)
     if efg_verdicts is not None:
         compare_cefg(efg_verdicts, base, "for the CEFG", base_what="for the EFG embedded into it")
         STATS["cefg compared with EFG"] += 1
 
     flags = cefg_flags(rng, game)
-    other = run_cefg(game, flags, outs)
-    if other is not None:
-        check_cefg_runs(other, game_json, flags, game)
-        compare_cefg(base, other, "with %s" % fmt_cmd(flags))
+    run = run_cefg(game, flags, outs)
+    if run is not None:
+        check_cefg_runs(run, game_json, flags, game)
+        compare_cefg(base, run[0], "with %s" % fmt_cmd(flags))
         STATS["cefg compared options"] += 1
 
     meta_json, names, _, props = random_transform(game_json, rng)
@@ -618,10 +666,10 @@ def fuzz_cefg(rng, game, outs):
     log("Transforms: " + " + ".join(names))
     for t in names:
         STATS["cefg transform " + t] += 1
-    other = run_cefg(meta, [], outs)
-    if other is not None:
-        check_cefg_runs(other, meta_json, [], meta)
-        compare_cefg(base, other, "after transforms %s" % " + ".join(names), props)
+    run = run_cefg(meta, [], outs)
+    if run is not None:
+        check_cefg_runs(run, meta_json, [], meta)
+        compare_cefg(base, run[0], "after transforms %s" % " + ".join(names), props)
         STATS["cefg compared transformed"] += 1
 
     cefg_compositional(game_json, base, rng, game, outs)

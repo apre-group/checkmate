@@ -75,10 +75,12 @@ The verdicts must also agree:
 
 About a third of the CEFGs are EFGs embedded into a CEFG: the EFG gets condition nodes with a copy of the same subtree below every condition, deep in the tree on known constants, and at the root revealing constants that are now unknown. This cannot change any verdict, so the CEFG analysis must agree with the EFG analysis of the original game, which `check_result.py` verifies. This is the only independent check of CEFG verdicts; everything else compares CheckMate with itself.
 
-CEFGs have no `--json-out`, so the verdicts are read from CheckMate's output. For each game, the fuzzer checks that:
+The verdicts of a CEFG come from its `--json-out` result, which has the verdicts only (CEFGs have no strategies, counterexamples or cases yet). For each game, the fuzzer checks that:
 
-- CheckMate analyses it as a CEFG, with one verdict per property for every honest history and honest utility;
-- the verdicts do not change with a subset of the properties, with the options that CEFGs ignore (`--counterexamples`, `--all_cases`, `--json-out`, the testing switches, …), after the transforms above (which also permute conditions and rename unknowns), and when a random subtree is analyzed separately with `--subtree` and spliced into the supertree, sometimes nested.
+- CheckMate analyses it as a CEFG, with one verdict per property for every honest history and honest utility, and the honest histories of the game in their order (conditions are not compared, CheckMate writes them in its own syntax);
+- the text output has the same verdicts as `--json-out`, and an undecided verdict (`"holds": null`) is for practicality and has a reason;
+- with `--subtree`, `--json-out` has the same result as `SUBTREE.out`;
+- the verdicts do not change with a subset of the properties, with the options that CEFGs ignore (`--counterexamples`, `--all_cases`, the testing switches, …), after the transforms above (which also permute conditions and rename unknowns), and when a random subtree is analyzed separately with `--subtree` and spliced into the supertree, sometimes nested.
 
 Verdicts that are `UNKNOWN` (practicality that neither Z3 nor cvc5 decided) are not compared.
 
