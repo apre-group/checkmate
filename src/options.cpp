@@ -9,16 +9,18 @@ const char *USAGE = R"(usage: checkmate PATH
 	--weaker_immunity
 	--collusion_resilience
 	--practicality
+	--subtree
+not yet implemented for CEFGs (games with condition nodes), ignored for them:
 	--counterexamples
 	--all_counterexamples
-	--all_cases
 	--preconditions
 	--strategies
+only for EFGs (games without condition nodes), ignored for CEFGs:
+	--all_cases
 	--json-out FILE
-	--subtree
 	--count_nodes
 	--count_calls
-testing only, disable optimizations/heuristics:
+testing only, disable optimizations/heuristics (only for EFGs):
 	--no-cr-node-cache
 	--no-cr-leaf-cache
 	--no-cr-implied-groups
@@ -29,7 +31,7 @@ testing only, disable optimizations/heuristics:
 )";
 
 // print a message, the usage information and exit with failure code
-[[noreturn]] static void bail(const char *msg) {
+[[noreturn]] void Options::bail(const char *msg) {
 	std::cerr << "checkmate: " << msg << std::endl;
 	std::cerr << USAGE;
 	std::exit(EXIT_FAILURE);
@@ -99,12 +101,6 @@ Options::Options(char **argv) {
 		else
 			bail("unknown option");
 		argv++;
-	}
-
-	if(subtree) {
-		if(counterexamples || all_counterexamples || strategies || preconditions) {
-			bail("cannot combine subtree with any other option");
-		}
 	}
 
 	// analyze everything by default

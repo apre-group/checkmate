@@ -61,12 +61,10 @@
   "honest_utilities": [],
   "tree": {
     "player": "B",
-    "condition": "True",
     "children": [
       {
         "action": "J",
         "child": {
-          "condition": "True",
           "utility": [
             {
               "player": "A",
@@ -91,12 +89,10 @@
         "action": "S_H",
         "child": {
           "player": "A",
-          "condition": "True",
           "children": [
             {
               "action": "I_L",
               "child": {
-                "condition": "True",
                 "utility": [
                   {
                     "player": "A",
@@ -121,12 +117,10 @@
               "action": "L_(A,0,[A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -151,12 +145,10 @@
                     "action": "L_(A,1,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -10438,12 +10430,10 @@
                     "action": "L_(A,1,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -25009,12 +24999,10 @@
                     "action": "L_(A,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -42975,12 +42963,10 @@
                     "action": "L_(A,2,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -53204,12 +53190,10 @@
                     "action": "L_(A,2,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -67464,12 +67448,10 @@
                     "action": "L_(A,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -87121,12 +87103,10 @@
                     "action": "L_(A,3,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -96561,12 +96541,10 @@
                     "action": "L_(A,3,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -111362,12 +111340,10 @@
                     "action": "L_(A,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -128727,12 +128703,10 @@
               "action": "L_(A,0,[B, A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -128757,12 +128731,10 @@
                     "action": "L_(A,1,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -133642,12 +133614,10 @@
                     "action": "L_(A,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -143551,12 +143521,10 @@
                     "action": "L_(A,2,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -148855,12 +148823,10 @@
                     "action": "L_(A,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -158559,12 +158525,10 @@
                     "action": "L_(A,3,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -163562,12 +163526,10 @@
                     "action": "L_(A,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -172937,12 +172899,10 @@
               "action": "L_(A,1,[A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -172967,12 +172927,10 @@
                     "action": "L_(A,0,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -183254,12 +183212,10 @@
                     "action": "L_(A,0,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -195827,12 +195783,10 @@
                     "action": "L_(A,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -213826,12 +213780,10 @@
                     "action": "L_(A,2,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -224713,12 +224665,10 @@
                     "action": "L_(A,2,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -237706,12 +237656,10 @@
                     "action": "L_(A,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -256287,12 +256235,10 @@
                     "action": "L_(A,3,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -266974,12 +266920,10 @@
                     "action": "L_(A,3,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -279991,12 +279935,10 @@
                     "action": "L_(A,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -296806,12 +296748,10 @@
               "action": "L_(A,1,[B, A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -296836,12 +296776,10 @@
                     "action": "L_(A,0,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -301721,12 +301659,10 @@
                     "action": "L_(A,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -311630,12 +311566,10 @@
                     "action": "L_(A,2,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -317222,12 +317156,10 @@
                     "action": "L_(A,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -326894,12 +326826,10 @@
                     "action": "L_(A,3,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -332185,12 +332115,10 @@
                     "action": "L_(A,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -341528,12 +341456,10 @@
               "action": "L_(A,2,[A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -341558,12 +341484,10 @@
                     "action": "L_(A,0,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -352193,12 +352117,10 @@
                     "action": "L_(A,0,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -364093,12 +364015,10 @@
                     "action": "L_(A,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -380711,12 +380631,10 @@
                     "action": "L_(A,1,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -391384,12 +391302,10 @@
                     "action": "L_(A,1,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -403595,12 +403511,10 @@
                     "action": "L_(A,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -420576,12 +420490,10 @@
                     "action": "L_(A,3,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -433127,12 +433039,10 @@
                     "action": "L_(A,3,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -445392,12 +445302,10 @@
                     "action": "L_(A,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -463499,12 +463407,10 @@
               "action": "L_(A,2,[B, A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -463529,12 +463435,10 @@
                     "action": "L_(A,0,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -468774,12 +468678,10 @@
                     "action": "L_(A,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -478683,12 +478585,10 @@
                     "action": "L_(A,1,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -484275,12 +484175,10 @@
                     "action": "L_(A,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -494055,12 +493953,10 @@
                     "action": "L_(A,3,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -499634,12 +499530,10 @@
                     "action": "L_(A,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -508750,12 +508644,10 @@
               "action": "L_(A,3,[A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -508780,12 +508672,10 @@
                     "action": "L_(A,0,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -520524,12 +520414,10 @@
                     "action": "L_(A,0,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -532579,12 +532467,10 @@
                     "action": "L_(A,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -549795,12 +549681,10 @@
                     "action": "L_(A,1,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -562118,12 +562002,10 @@
                     "action": "L_(A,1,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -574453,12 +574335,10 @@
                     "action": "L_(A,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -592329,12 +592209,10 @@
                     "action": "L_(A,2,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -604211,12 +604089,10 @@
                     "action": "L_(A,2,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -614318,12 +614194,10 @@
                     "action": "L_(A,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -631827,12 +631701,10 @@
               "action": "L_(A,3,[B, A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -631857,12 +631729,10 @@
                     "action": "L_(A,0,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -637462,12 +637332,10 @@
                     "action": "L_(A,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -647845,12 +647713,10 @@
                     "action": "L_(A,1,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -653797,12 +653663,10 @@
                     "action": "L_(A,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -663918,12 +663782,10 @@
                     "action": "L_(A,2,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -669497,12 +669359,10 @@
                     "action": "L_(A,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -678613,12 +678473,10 @@
               "action": "L_(None,0,[A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -678643,12 +678501,10 @@
                     "action": "L_(I1,1,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -683291,12 +683147,10 @@
                     "action": "L_(I1,1,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -688988,12 +688842,10 @@
                     "action": "L_(I1,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -697336,12 +697188,10 @@
                     "action": "L_(I1,2,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -701651,12 +701501,10 @@
                     "action": "L_(I1,2,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -707354,12 +707202,10 @@
                     "action": "L_(I1,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -716235,12 +716081,10 @@
                     "action": "L_(I1,3,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -720409,12 +720253,10 @@
                     "action": "L_(I1,3,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -726344,12 +726186,10 @@
                     "action": "L_(I1,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -734312,12 +734152,10 @@
                     "action": "L_(None,1,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -737793,12 +737631,10 @@
                     "action": "L_(None,1,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -741422,12 +741258,10 @@
                     "action": "L_(None,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -746292,12 +746126,10 @@
                     "action": "L_(None,2,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -749686,12 +749518,10 @@
                     "action": "L_(None,2,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -753251,12 +753081,10 @@
                     "action": "L_(None,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -758209,12 +758037,10 @@
                     "action": "L_(None,3,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -761652,12 +761478,10 @@
                     "action": "L_(None,3,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -765281,12 +765105,10 @@
                     "action": "L_(None,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -769830,12 +769652,10 @@
               "action": "L_(None,0,[B, A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -769860,12 +769680,10 @@
                     "action": "L_(I1,1,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -772833,12 +772651,10 @@
                     "action": "L_(I1,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -779486,12 +779302,10 @@
                     "action": "L_(I1,2,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -782848,12 +782662,10 @@
                     "action": "L_(I1,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -789165,12 +788977,10 @@
                     "action": "L_(I1,3,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -792252,12 +792062,10 @@
                     "action": "L_(I1,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -798406,12 +798214,10 @@
                     "action": "L_(None,1,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -800629,12 +800435,10 @@
                     "action": "L_(None,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -804360,12 +804164,10 @@
                     "action": "L_(None,2,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -806596,12 +806398,10 @@
                     "action": "L_(None,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -810198,12 +809998,10 @@
                     "action": "L_(None,3,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -812437,12 +812235,10 @@
                     "action": "L_(None,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -815901,12 +815697,10 @@
               "action": "L_(None,1,[A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -815931,12 +815725,10 @@
                     "action": "L_(I1,0,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -820579,12 +820371,10 @@
                     "action": "L_(I1,0,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -825502,12 +825292,10 @@
                     "action": "L_(I1,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -833591,12 +833379,10 @@
                     "action": "L_(I1,2,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -838252,12 +838038,10 @@
                     "action": "L_(I1,2,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -844221,12 +844005,10 @@
                     "action": "L_(I1,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -852895,12 +852677,10 @@
                     "action": "L_(I1,3,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -857222,12 +857002,10 @@
                     "action": "L_(I1,3,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -863191,12 +862969,10 @@
                     "action": "L_(I1,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -871004,12 +870780,10 @@
                     "action": "L_(None,0,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -874485,12 +874259,10 @@
                     "action": "L_(None,0,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -878114,12 +877886,10 @@
                     "action": "L_(None,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -882958,12 +882728,10 @@
                     "action": "L_(None,2,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -886352,12 +886120,10 @@
                     "action": "L_(None,2,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -889971,12 +889737,10 @@
                     "action": "L_(None,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -894883,12 +894647,10 @@
                     "action": "L_(None,3,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -898280,12 +898042,10 @@
                     "action": "L_(None,3,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -901899,12 +901659,10 @@
                     "action": "L_(None,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -906448,12 +906206,10 @@
               "action": "L_(None,1,[B, A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -906478,12 +906234,10 @@
                     "action": "L_(I1,0,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -909451,12 +909205,10 @@
                     "action": "L_(I1,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -916104,12 +915856,10 @@
                     "action": "L_(I1,2,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -919592,12 +919342,10 @@
                     "action": "L_(I1,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -925940,12 +925688,10 @@
                     "action": "L_(I1,3,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -929153,12 +928899,10 @@
                     "action": "L_(I1,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -935338,12 +935082,10 @@
                     "action": "L_(None,0,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -937561,12 +937303,10 @@
                     "action": "L_(None,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -941292,12 +941032,10 @@
                     "action": "L_(None,2,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -943582,12 +943320,10 @@
                     "action": "L_(None,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -947184,12 +946920,10 @@
                     "action": "L_(None,3,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -949477,12 +949211,10 @@
                     "action": "L_(None,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -952941,12 +952673,10 @@
               "action": "L_(None,2,[A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -952971,12 +952701,10 @@
                     "action": "L_(I1,0,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -957755,12 +957483,10 @@
                     "action": "L_(I1,0,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -962926,12 +962652,10 @@
                     "action": "L_(I1,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -970491,12 +970215,10 @@
                     "action": "L_(I1,1,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -974972,12 +974694,10 @@
                     "action": "L_(I1,1,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -980065,12 +979785,10 @@
                     "action": "L_(I1,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -987846,12 +987564,10 @@
                     "action": "L_(I1,3,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -992301,12 +992017,10 @@
                     "action": "L_(I1,3,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -998304,12 +998018,10 @@
                     "action": "L_(I1,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1006494,12 +1006206,10 @@
                     "action": "L_(None,0,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1009939,12 +1009649,10 @@
                     "action": "L_(None,0,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1013622,12 +1013330,10 @@
                     "action": "L_(None,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1018412,12 +1018118,10 @@
                     "action": "L_(None,1,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1021770,12 +1021474,10 @@
                     "action": "L_(None,1,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1025453,12 +1025155,10 @@
                     "action": "L_(None,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1030240,12 +1029940,10 @@
                     "action": "L_(None,3,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1033737,12 +1033435,10 @@
                     "action": "L_(None,3,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1037346,12 +1037042,10 @@
                     "action": "L_(None,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1041940,12 +1041634,10 @@
               "action": "L_(None,2,[B, A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -1041970,12 +1041662,10 @@
                     "action": "L_(I1,0,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1045123,12 +1044813,10 @@
                     "action": "L_(I1,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1051776,12 +1051464,10 @@
                     "action": "L_(I1,1,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1055264,12 +1054950,10 @@
                     "action": "L_(I1,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1061684,12 +1061368,10 @@
                     "action": "L_(I1,3,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1065023,12 +1064705,10 @@
                     "action": "L_(I1,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1071239,12 +1070919,10 @@
                     "action": "L_(None,0,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1073516,12 +1073194,10 @@
                     "action": "L_(None,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1077247,12 +1076923,10 @@
                     "action": "L_(None,1,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1079537,12 +1079211,10 @@
                     "action": "L_(None,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1083139,12 +1082811,10 @@
                     "action": "L_(None,3,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1085486,12 +1085156,10 @@
                     "action": "L_(None,3,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1088950,12 +1088618,10 @@
               "action": "L_(None,3,[A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -1088980,12 +1088646,10 @@
                     "action": "L_(I1,0,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1094042,12 +1093706,10 @@
                     "action": "L_(I1,0,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1099461,12 +1099123,10 @@
                     "action": "L_(I1,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1107488,12 +1107148,10 @@
                     "action": "L_(I1,1,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1112303,12 +1111961,10 @@
                     "action": "L_(I1,1,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1117643,12 +1117299,10 @@
                     "action": "L_(I1,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1125947,12 +1125601,10 @@
                     "action": "L_(I1,2,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1130492,12 +1130144,10 @@
                     "action": "L_(I1,2,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1134599,12 +1134249,10 @@
                     "action": "L_(I1,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1142628,12 +1142276,10 @@
                     "action": "L_(None,0,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1146045,12 +1145691,10 @@
                     "action": "L_(None,0,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1149782,12 +1149426,10 @@
                     "action": "L_(None,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1154572,12 +1154214,10 @@
                     "action": "L_(None,1,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1157902,12 +1157542,10 @@
                     "action": "L_(None,1,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1161639,12 +1161277,10 @@
                     "action": "L_(None,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1166426,12 +1166062,10 @@
                     "action": "L_(None,2,[A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1169759,12 +1169393,10 @@
                     "action": "L_(None,2,[B, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1173496,12 +1173128,10 @@
                     "action": "L_(None,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1178289,12 +1177919,10 @@
               "action": "L_(None,3,[B, A])",
               "child": {
                 "player": "I1",
-                "condition": "True",
                 "children": [
                   {
                     "action": "I_L",
                     "child": {
-                      "condition": "True",
                       "utility": [
                         {
                           "player": "A",
@@ -1178319,12 +1177947,10 @@
                     "action": "L_(I1,0,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1181652,12 +1181278,10 @@
                     "action": "L_(I1,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1188624,12 +1188248,10 @@
                     "action": "L_(I1,1,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1192292,12 +1191914,10 @@
                     "action": "L_(I1,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1198822,12 +1198442,10 @@
                     "action": "L_(I1,2,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1202161,12 +1201779,10 @@
                     "action": "L_(I1,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1208377,12 +1207993,10 @@
                     "action": "L_(None,0,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1210708,12 +1210322,10 @@
                     "action": "L_(None,0,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1214493,12 +1214105,10 @@
                     "action": "L_(None,1,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1216837,12 +1216447,10 @@
                     "action": "L_(None,1,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1220493,12 +1220101,10 @@
                     "action": "L_(None,2,[B, A, I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",
@@ -1222844,12 +1222450,10 @@
                     "action": "L_(None,2,[I1])",
                     "child": {
                       "player": "I2",
-                      "condition": "True",
                       "children": [
                         {
                           "action": "I_L",
                           "child": {
-                            "condition": "True",
                             "utility": [
                               {
                                 "player": "A",

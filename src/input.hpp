@@ -11,6 +11,7 @@
 #include "utils.hpp"
 #include "z3++.hpp"
 #include "options.hpp"
+#include "game_type.hpp"
 
 // forward declarations for Node methods
 class Leaf;
@@ -618,6 +619,8 @@ struct Action {
 struct Input {
 	// parse an input from `path`, exiting if malformed
 	Input(const char *path);
+	// the same for an input already read from `path` (see read_game)
+	Input(const char *path, GameFile file);
 
 	// list of players in alphabetical order
 	std::vector<std::string> players;

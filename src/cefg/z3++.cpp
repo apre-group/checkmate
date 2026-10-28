@@ -1,0 +1,143 @@
+#include "z3++.hpp"
+
+// imported from the cefg branch (c9c6e6f); wrapped in namespace cefg next to the EFG engine in src/
+namespace cefg {
+
+namespace z3 {
+	// the only Z3 context - mostly just hangs out here to be passed to the Z3 API
+	Z3_context CONTEXT = nullptr;
+
+	Z3_sort Expression::BOOL_SORT = nullptr;
+	Z3_sort Expression::REAL_SORT = nullptr;
+
+	Real Real::ZERO;
+
+	// Not done by a static constructor, as for the EFG engine: when Z3 is linked statically (e.g. for WebAssembly),
+	// a context created before Z3's own static initializers have run gets strict inequalities wrong.
+	void initialize() {
+		Z3_config config = Z3_mk_config();
+		CONTEXT = Z3_mk_context(config);
+		Z3_del_config(config);
+		check_error();
+		Expression::BOOL_SORT = Z3_mk_bool_sort(CONTEXT);
+		Expression::REAL_SORT = Z3_mk_real_sort(CONTEXT);
+		Real::ZERO = Real::value(0);
+	}
+
+	struct Global {
+		~Global() {
+			if (CONTEXT)
+				Z3_del_context(CONTEXT);
+		}
+	} GLOBAL;
+
+	// TODO keep track of precedence
+	std::ostream &operator<<(std::ostream &out, z3::Real expr) {
+		auto op = expr.op();
+		switch(op) {
+		case Real::Operator::NUMERAL: {
+			// Z3 writes a fraction as (/ n d), which is not the infix syntax the parser reads
+			Z3_ast denominator = Z3_get_denominator(CONTEXT, expr.ast);
+			Z3_ast numerator = Z3_get_numerator(CONTEXT, expr.ast);
+			check_error();
+			if (std::string(Z3_get_numeral_string(CONTEXT, denominator)) != "1")
+				return out << '(' << Z3_ast_to_string(CONTEXT, numerator) << " / " << Z3_ast_to_string(CONTEXT, denominator) << ')';
+			out << Z3_ast_to_string(CONTEXT, expr.ast);
+			check_error();
+			return out;
+		}
+		case Real::Operator::CONSTANT: {
+			// a function applied to arguments (selectors of practicality) as the parser reads it: @name(x, y)
+			unsigned arguments = expr.num_args();
+			if (arguments > 0) {
+				Z3_func_decl decl = Z3_get_app_decl(CONTEXT, Z3_to_app(CONTEXT, expr.ast));
+				out << '@' << Z3_get_symbol_string(CONTEXT, Z3_get_decl_name(CONTEXT, decl)) << '(';
+				for (unsigned i = 0; i < arguments; i++)
+					out << (i ? ", " : "") << expr.real_child(i);
+				return out << ')';
+			}
+			out << Z3_ast_to_string(CONTEXT, expr.ast);
+			check_error();
+			return out;
+		}
+		case Real::Operator::MIN:
+			return out << '(' << op << ' ' << expr.real_child(0) << ')';
+		case Real::Operator::ADD:
+		case Real::Operator::SUB:
+		case Real::Operator::MUL:
+		case Real::Operator::DIV:
+			out << '(';
+			for(unsigned i = 0; i < expr.num_args(); i++) {
+				if(i)
+					out << ' ' << op << ' ';
+				out << expr.real_child(i);
+			}
+			out << ')';
+			return out;
+		}
+		assert(false);
+		UNREACHABLE;
+	}
+
+	// TODO keep track of precedence
+	std::ostream &operator<<(std::ostream &out, z3::Bool expr) {
+		auto op = expr.op();
+		switch(op) {
+		case Bool::Operator::TRUE:
+			return out << "true";
+		case Bool::Operator::FALSE:
+			return out << "false";
+		case Bool::Operator::NOT:
+			return out << "!(" << expr.bool_child(0) << ")";
+		case Bool::Operator::AND:
+		case Bool::Operator::OR:
+			// the empty conjunction/disjunction, as the parser reads it
+			if (expr.num_args() == 0)
+				return out << (op == Bool::Operator::AND ? "true" : "false");
+			out << '(';
+			for(unsigned i = 0; i < expr.num_args(); i++) {
+				if(i)
+					out << ' ' << op << ' ';
+				out << expr.bool_child(i);
+			}
+			out << ')';
+			return out;
+		case Bool::Operator::EQ:
+		case Bool::Operator::NE:
+			// EQ and NE can compare either Bools or Reals
+			// Check the sort of the first argument
+			{
+				Z3_app app = Z3_to_app(CONTEXT, expr.ast);
+				Z3_ast first_arg = Z3_get_app_arg(CONTEXT, app, 0);
+				Z3_sort arg_sort = Z3_get_sort(CONTEXT, first_arg);
+				check_error();
+				
+				if (arg_sort == Expression::BOOL_SORT) {
+					return out << '(' << expr.bool_child(0) << ' ' << op << ' ' << expr.bool_child(1) << ')';
+				} else {
+					return out << '(' << expr.real_child(0) << ' ' << op << ' ' << expr.real_child(1) << ')';
+				}
+			}
+		case Bool::Operator::IMPLIES:
+			return out << '(' << expr.bool_child(0) << ' ' << op << ' ' << expr.bool_child(1) << ')';
+		case Bool::Operator::FORALL: {
+			// as the parser reads it: (forall [x, y] body)
+			out << '(' << op << " [";
+			std::vector<Real> variables = expr.bound_variables();
+			for (size_t i = 0; i < variables.size(); i++)
+				out << (i ? ", " : "") << variables[i];
+			return out << "] " << expr.body() << ')';
+		}
+		case Bool::Operator::LT:
+		case Bool::Operator::LE:
+		case Bool::Operator::GT:
+		case Bool::Operator::GE:
+			// These only compare Reals
+			return out << '(' << expr.real_child(0) << ' ' << op << ' ' << expr.real_child(1) << ')';
+		}
+		assert(false);
+		UNREACHABLE;
+	}
+}
+
+} // namespace cefg
