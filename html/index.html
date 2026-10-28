@@ -151,6 +151,8 @@
         .no { color: var(--ce); }
         td.selected.yes { background: var(--yes-bg); }
         td.selected.no { background: var(--no-bg); }
+        .undecided { color: var(--muted); }
+        td.selected.undecided { background: var(--hover); }
         #cases { margin-top: 10px; }
         #cases div { cursor: pointer; padding: 4px 10px; font-family: var(--mono); font-size: 12.5px; border-radius: 5px; }
         #cases div:hover { background: var(--hover); }
@@ -342,7 +344,17 @@ async function showGame(jsonText) {
     try {
         $('game').value = await converter(jsonText);
     } catch (e) {
+        // a game without a compact form (a CEFG) stays JSON; gameChanged would bring it back here
         $('game').value = jsonText;
+        results = null; selection = null;
+        $('results').textContent = 'Run CheckMate to see results.';
+        $('cases').innerHTML = '';
+        game = JSON.parse(jsonText);
+        $('parse-error').textContent = '';
+        errorLine = 0;
+        highlight();
+        drawTree();
+        return;
     }
     gameChanged();
 }
@@ -491,14 +503,22 @@ function showResults(rs) {
     results = rs; selection = null;
     $('cases').innerHTML = '';
     if (!rs) { $('results').textContent = 'No results (see the output below).'; drawTree(); return; }
-    const histories = [...new Map(rs.map(r => [JSON.stringify(r.history), r.history])).values()];
+    // a row per honest history; CEFGs also have runs without one, collusion resilience once per honest utility
+    const rowKey = r => JSON.stringify([r.history, r.honest_utility]);
+    const rows = [...new Map(rs.map(r => [rowKey(r), r])).values()];
     const props = Object.keys(NAMES).filter(p => rs.some(r => r.property === p));
     let html = '<table><tr><th>honest history</th>' + props.map(p => `<th>${NAMES[p]}</th>`).join('') + '</tr>';
-    for (const h of histories) {
-        html += `<tr><td>${h ? h.join(' → ') || '(empty)' : '(no honest history)'}</td>`;
+    for (const row of rows) {
+        const label = row.history ? historyText(row.history) || '(empty)'
+            : row.honest_utility !== undefined ? `(honest utility ${row.honest_utility + 1})` : '(no honest history)';
+        html += `<tr><td>${escapeHtml(label)}</td>`;
         for (const p of props) {
-            const i = rs.findIndex(r => r.property === p && JSON.stringify(r.history) === JSON.stringify(h));
-            html += i < 0 ? '<td></td>' : `<td class="verdict ${rs[i].holds ? 'yes' : 'no'}" data-i="${i}">${rs[i].holds ? 'YES' : 'NO'}</td>`;
+            const i = rs.findIndex(r => r.property === p && rowKey(r) === rowKey(row));
+            if (i < 0) { html += '<td></td>'; continue; }
+            // CEFGs: holds is null if practicality could not be decided
+            const [cls, text] = rs[i].holds === null ? ['undecided', '?'] : rs[i].holds ? ['yes', 'YES'] : ['no', 'NO'];
+            const title = rs[i].undecided ? ` title="${escapeHtml(rs[i].undecided)}"` : '';
+            html += `<td class="verdict ${cls}" data-i="${i}"${title}>${text}</td>`;
         }
         html += '</tr>';
     }
@@ -513,9 +533,10 @@ function selectResult(i, td) {
     td.classList.add('selected');
     const r = results[i];
     const items = [];
-    r.cases.forEach(c => items.push({ label: (c.holds ? '✔ holds' : '✘ violated') + ' in case ' + caseText(c.case), r, kind: 'case', c }));
-    r.strategies.forEach(s => items.push({ label: 'strategy for case ' + caseText(s.case), r, kind: 'strategy', s }));
-    r.counterexamples.forEach(ce => items.push({ label: 'counterexample for case ' + caseText(ce.case), r, kind: 'ce', ce }));
+    // CEFG results have no cases (nor strategies or counterexamples) yet
+    (r.cases || []).forEach(c => items.push({ label: (c.holds ? '✔ holds' : '✘ violated') + ' in case ' + caseText(c.case), r, kind: 'case', c }));
+    (r.strategies || []).forEach(s => items.push({ label: 'strategy for case ' + caseText(s.case), r, kind: 'strategy', s }));
+    (r.counterexamples || []).forEach(ce => items.push({ label: 'counterexample for case ' + caseText(ce.case), r, kind: 'ce', ce }));
     if (r.precondition) items.push({ label: 'weakest precondition: ' + r.precondition, r, kind: 'case' });
     $('cases').innerHTML = items.map((it, k) => `<div data-k="${k}">${escapeHtml(it.label)}</div>`).join('');
     $('cases').querySelectorAll('div').forEach(div => div.addEventListener('click', () => {
@@ -531,6 +552,16 @@ function selectResult(i, td) {
 }
 
 function caseText(c) { return c.length ? c.join(' ∧ ') : '(any)'; }
+// in CEFGs, an element of a history can be a list of conditions, each with the history that continues under it
+function historyText(h) {
+    return h.map(a => typeof a === 'string' ? a
+        : '{' + a.map(c => c.condition + ': ' + (historyText(c.path) || '(end)')).join(' | ') + '}').join(' → ');
+}
+// the actions of a history before its first condition, the part that can be drawn on the tree
+function actionPrefix(h) {
+    const i = h.findIndex(a => typeof a !== 'string');
+    return i < 0 ? h : h.slice(0, i);
+}
 function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 // ---- tree drawing -------------------------------------------------------------
@@ -660,7 +691,8 @@ $('fold-default').addEventListener('click', () => { folded = null; drawTree(); }
 function highlights() {
     const h = { honest: new Set(), strategy: new Set(), ce: new Set(), ceLeaf: new Set() };
     const key = (hist, a) => JSON.stringify(hist.concat([a]));
-    const honest = selection ? selection.r.history : (game.honest_histories || [])[0];
+    let honest = selection ? selection.r.history : (game.honest_histories || [])[0];
+    if (honest) honest = actionPrefix(honest);
     if (honest) honest.forEach((a, i) => h.honest.add(key(honest.slice(0, i), a)));
     if (!selection) return h;
     if (selection.kind === 'strategy') selection.s.strategy.forEach(e => h.strategy.add(key(e.history, e.action)));

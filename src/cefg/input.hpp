@@ -375,7 +375,7 @@ public:
 
 	std::vector<HistoryChoice> compute_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far) const;
 
-	std::vector<HistoryChoice> compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players, std::vector<std::string> conditions_so_far, z3::Solver &solver) const;
+	std::vector<HistoryChoice> compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<unsigned> deviating_players, std::vector<std::string> conditions_so_far, z3::Solver &solver) const;
 
 	std::vector<HistoryChoice> compute_pr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, const StrategyElement& strategy_element, std::vector<std::string> conditions_so_far) const;
 
@@ -399,7 +399,7 @@ public:
 
 	bool cr_against_all() const;
 
-	z3::Bool cr_against_supergroups_of(std::vector<uint> deviating_players, z3::Solver &solver) const;
+	z3::Bool cr_against_supergroups_of(std::vector<unsigned> deviating_players, z3::Solver &solver) const;
 
 	void restore_violation_cr(std::vector<std::vector<z3::Bool>> &violation) const;
 
@@ -1328,7 +1328,7 @@ struct Input {
 
 	void init_solved_for_group(size_t number_groups) const {
 		solved_for_group = {};
-		for ( uint i = 0; i< number_groups; i++) {
+		for ( unsigned i = 0; i< number_groups; i++) {
 			solved_for_group.push_back(false);
 		}
 		
