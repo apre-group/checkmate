@@ -6,6 +6,7 @@ import copy
 import re
 
 from gen_game import lin_term
+from gen_cefg import declare, declared, map_history, utility_tuples
 
 ALL_PROPS = {"weak_immunity", "weaker_immunity", "collusion_resilience", "practicality"}
 IDENT = re.compile(r"[A-Za-z_]\w*")
@@ -13,12 +14,44 @@ IDENT = re.compile(r"[A-Za-z_]\w*")
 
 def nodes(tree):
     yield tree
-    for c in tree.get("children", []):
+    for c in tree.get("children", []) + tree.get("condition", []):
         yield from nodes(c["child"])
 
 
 def leaves(tree):
     return [n for n in nodes(tree) if "utility" in n]
+
+
+def utilities(game):
+    """The utility lists of the leaves and of the honest utilities (of CEFGs, given without honest history)."""
+    for l in leaves(game["tree"]):
+        yield l["utility"]
+    for h in game.get("honest_utilities", []):
+        yield from utility_tuples(h["utility"])
+
+
+def conditions(game):
+    """The places of conditions in a CEFG, as (dict, key): condition nodes, honest histories and honest utilities."""
+    for n in nodes(game["tree"]):
+        for c in n.get("condition", []):
+            yield c, "constraint"
+
+    def history(h):
+        for e in h:
+            if not isinstance(e, str):
+                for c in e:
+                    yield c, "condition"
+                    yield from history(c["path"])
+
+    def utility(element):
+        if element and "condition" in element[0]:
+            for e in element:
+                yield e, "condition"
+                yield from utility(e["utility"])
+    for h in game["honest_histories"]:
+        yield from history(h)
+    for h in game.get("honest_utilities", []):
+        yield from utility(h["utility"])
 
 
 def rename_players(game, rng):
@@ -35,7 +68,8 @@ def rename_players(game, rng):
     for n in nodes(g["tree"]):
         if "player" in n:
             n["player"] = m[n["player"]]
-        for u in n.get("utility", []):
+    for us in utilities(g):
+        for u in us:
             u["player"] = m[u["player"]]
     return g, {}, ALL_PROPS
 
@@ -45,6 +79,8 @@ def permute_children(game, rng):
     for n in nodes(g["tree"]):
         if "children" in n:
             rng.shuffle(n["children"])
+        if "condition" in n:
+            rng.shuffle(n["condition"])
     return g, {}, ALL_PROPS
 
 
@@ -57,13 +93,14 @@ def rename_actions(game, rng):
     for n in nodes(g["tree"]):
         for c in n.get("children", []):
             c["action"] = m[c["action"]]
-    g["honest_histories"] = [[m[a] for a in h] for h in g["honest_histories"]]
+    g["honest_histories"] = [map_history(h, m.get) for h in g["honest_histories"]]
     return g, m, ALL_PROPS
 
 
 def rename_symbols(game, rng):
     g = copy.deepcopy(game)
-    syms = g["constants"] + g["infinitesimals"]
+    known, unknown = declared(g["constants"])
+    syms = known + unknown + g["infinitesimals"]
     new = ["v%d" % i for i in range(len(syms))]
     rng.shuffle(new)
     m = dict(zip(syms, new))
@@ -71,22 +108,29 @@ def rename_symbols(game, rng):
     def ren(expr):
         return IDENT.sub(lambda t: m.get(t.group(0), t.group(0)), str(expr))
 
-    g["constants"] = [m[c] for c in g["constants"]]
+    known, unknown = [m[c] for c in known], [m[c] for c in unknown]
     g["infinitesimals"] = [m[e] for e in g["infinitesimals"]]
-    rng.shuffle(g["constants"])
+    rng.shuffle(known)
+    rng.shuffle(unknown)
+    g["constants"] = declare(known, unknown)
     g["initial_constraints"] = [ren(c) for c in g["initial_constraints"]]
     g["property_constraints"] = {p: [ren(c) for c in cs] for p, cs in g["property_constraints"].items()}
-    for l in leaves(g["tree"]):
-        for u in l["utility"]:
+    for us in utilities(g):
+        for u in us:
             u["value"] = ren(u["value"])
+    for d, k in conditions(g):
+        d[k] = ren(d[k])
+    for n in nodes(g["tree"]):
+        if "reveals" in n:
+            n["reveals"] = [m[r] for r in n["reveals"]]
     return g, {}, ALL_PROPS
 
 
 def scale_utilities(game, rng):
     g = copy.deepcopy(game)
     k = rng.choice([2, 3, 5])
-    for l in leaves(g["tree"]):
-        for u in l["utility"]:
+    for us in utilities(g):
+        for u in us:
             u["value"] = "%d*(%s)" % (k, u["value"])
     return g, {}, ALL_PROPS
 
@@ -96,9 +140,10 @@ def shift_player(game, rng):
     # both sides, so adding the same term everywhere cancels; weak immunity compares with 0.
     g = copy.deepcopy(game)
     p = rng.choice(g["players"])
-    term = lin_term(rng, g["constants"], 2, 3)
-    for l in leaves(g["tree"]):
-        for u in l["utility"]:
+    # only known constants: every leaf may use them
+    term = lin_term(rng, declared(g["constants"])[0], 2, 3)
+    for us in utilities(g):
+        for u in us:
             if u["player"] == p:
                 u["value"] = "(%s) + (%s)" % (u["value"], term)
     return g, {}, {"collusion_resilience", "practicality"}
