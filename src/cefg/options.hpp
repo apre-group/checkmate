@@ -28,6 +28,9 @@ struct Options {
 	// write the results as JSON to this file: the verdicts in default mode, the subtree results in subtree mode
 	const char *json_out = nullptr;
 
+	// check that the conditions of condition nodes do not overlap and leave no gap (see condition_checks.hpp)
+	bool validate_conditions = true;
+
 	// future options
 	// compute counterexamples
 	// bool counterexamples = false;

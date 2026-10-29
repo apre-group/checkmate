@@ -1,3 +1,4 @@
+#include "condition_checks.hpp"
 #include "input.hpp"
 #include "options.hpp"
 #include "default_mode.hpp"
@@ -10,6 +11,9 @@ int run(char **argv) {
 	z3::initialize();
 	Options options(argv);
 	Input input(options.input_path);
+	if (options.validate_conditions) {
+		check_conditions(input, options);
+	}
 
 	if (input.honest.empty() && input.honest_utilities.empty()) {
 		std::cerr << "checkmate: the input has neither honest_histories nor honest_utilities, nothing to analyse" << std::endl;

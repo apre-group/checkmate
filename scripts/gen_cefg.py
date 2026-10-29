@@ -149,8 +149,12 @@ SIZES = {
 }
 
 
-def gen_conditions(rng, unknown, domains, known):
-    """The conditions of a condition node on `unknown` (or, if None, on a known constant): mostly a partition."""
+def gen_conditions(rng, unknown, domains, known, defects=None):
+    """The conditions of a condition node on `unknown` (or, if None, on a known constant): mostly a partition.
+    Conditions on an unknown sometimes overlap or leave a gap; then "overlap" or "gap" is added to `defects`
+    (CheckMate rejects such games unless the constraints make the defect unreachable)."""
+    if defects is None:
+        defects = []
     if unknown is None:
         c = rng.choice(known)
         t = rng.randint(-1, 2)
@@ -164,18 +168,29 @@ def gen_conditions(rng, unknown, domains, known):
         k = rng.randint(2, len(vals))
         cuts = sorted(rng.sample(range(1, len(vals)), k - 1))
         groups = [vals[i:j] for i, j in zip([0] + cuts, cuts + [len(vals)])]
+        if rng.random() < 0.1:
+            # a gap: one value of the domain is in no group
+            groups = [g for g in ([v for v in g if v != vals[0]] for g in groups) if g]
+            defects.append("gap")
         return [" | ".join("%s = %d" % (unknown, v) for v in g) for g in groups]
     if known and rng.random() < 0.3:
         bound = lin_term(rng, known, 1, 2)
     else:
         bound = str(rng.randint(-1, 3))
-    if rng.random() < 0.1:
+    r = rng.random()
+    if r < 0.1:
         # overlapping conditions: both hold at the bound
+        defects.append("overlap")
         return ["%s >= %s" % (unknown, bound), "%s <= %s" % (unknown, bound)]
+    if r < 0.2:
+        # a gap: neither holds at the bound
+        defects.append("gap")
+        return ["%s > %s" % (unknown, bound), "%s < %s" % (unknown, bound)]
     return ["%s >= %s" % (unknown, bound), "%s < %s" % (unknown, bound)]
 
 
-def gen_cefg(rng):
+def gen_cefg(rng, defects=None):
+    """A random CEFG; the defects of its conditions ("overlap", "gap", see gen_conditions) are added to `defects`."""
     size = rng.choices(list(SIZES), [w for w, *_ in SIZES.values()])[0]
     _, n_players, depth, branch, stop_rate = SIZES[size]
     players = ["A", "B", "C", "D", "E"][:rng.randint(*n_players)]
@@ -215,6 +230,9 @@ def gen_cefg(rng):
         seen.append((frozenset(names), copy.deepcopy(u)))
         return u
 
+    if defects is None:
+        defects = []
+
     def gen_tree(depth, is_root, names, revealed):
         if not is_root and (depth == 0 or rng.random() < stop_rate):
             return {"utility": new_leaf(names)}
@@ -224,7 +242,8 @@ def gen_cefg(rng):
                 u = rng.choice(hidden)
             else:
                 u = rng.choice([u for u in unknowns if u in revealed] or [None])
-            conds = gen_conditions(rng, u, domains, known)
+            before = len(defects)
+            conds = gen_conditions(rng, u, domains, known, defects)
             node = {"condition": []}
             here = set(IDENT.findall(" ".join(conds))) & set(unknowns)
             others = [v for v in hidden if v not in here]
@@ -232,6 +251,7 @@ def gen_cefg(rng):
                 node["reveals"] = [rng.choice(others)]
             if TRUE_CONDITIONS and hidden and rng.random() < 0.15:
                 conds, node["reveals"] = ["true"], [rng.choice(hidden)]
+                del defects[before:]
             here |= set(node.get("reveals", []))
             # condition nodes count towards the depth only sometimes, to keep the trees small
             below = depth - 1 if rng.random() < 0.5 else depth
@@ -246,6 +266,7 @@ def gen_cefg(rng):
     # at least one condition node, otherwise it is an EFG (or the unknowns do not matter)
     while True:
         seen.clear()
+        defects.clear()
         tree = gen_tree(depth, True, set(known), frozenset())
         if any(is_condition(n) for n in nodes(tree)):
             break

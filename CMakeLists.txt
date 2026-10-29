@@ -43,6 +43,8 @@ add_executable(checkmate
 	src/cefg/practicality.cpp
 	src/cefg/selectors.hpp
 	src/cefg/selectors.cpp
+	src/cefg/condition_checks.hpp
+	src/cefg/condition_checks.cpp
 )
 target_link_libraries(checkmate z3)
 

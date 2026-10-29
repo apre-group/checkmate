@@ -13,7 +13,8 @@
 // analyse a CEFG with the analysis in src/cefg/, leaving out the options it does not support (with a warning)
 static int run_cefg(char **argv) {
 	// options the CEFG analysis understands
-	static const char *SUPPORTED[] = {"--weak_immunity", "--weaker_immunity", "--collusion_resilience", "--practicality", "--subtree"};
+	static const char *SUPPORTED[] = {"--weak_immunity", "--weaker_immunity", "--collusion_resilience", "--practicality", "--subtree",
+		"--no_validate_conditions"};
 	// options of the EFG analysis that the CEFG analysis does not have yet
 	static const char *NOT_YET[] = {"--counterexamples", "--all_counterexamples", "--preconditions", "--strategies"};
 
@@ -69,6 +70,10 @@ int main(int, char **argv) {
 		}
 		std::cout << "Game type: CEFG (" << reason << ")" << std::endl;
 		return run_cefg(argv);
+	}
+
+	if (!options.validate_conditions) {
+		std::cerr << "checkmate: --no_validate_conditions only applies to CEFGs and is ignored" << std::endl;
 	}
 
 	if (options.subtree && (options.counterexamples || options.all_counterexamples || options.strategies || options.preconditions)) {

@@ -38,6 +38,9 @@ struct Options {
 	// reason over a subtree, to be plugged into a supertree later
 	bool subtree = false;
 
+	// only for CEFGs: check that the conditions of condition nodes do not overlap and leave no gap (on by default)
+	bool validate_conditions = true;
+
 	// used for experiments
 	bool count_nodes = false;
 	bool count_calls = false;
