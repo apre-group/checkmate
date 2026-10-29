@@ -421,6 +421,21 @@ async function gameChanged() {
 // A fresh worker per run: checkmate keeps global state, and cancelling means terminating the worker.
 function workerSource() {
     return `
+        // cvc5 on a SyGuS problem, for run_cvc5 in src/cefg/selectors.cpp: a fresh instance for every problem, as
+        // cvc5 runs as a program for each; null if the page did not load cvc5. Checkmate waits for the answer, so
+        // the instance is set up synchronously, from the bytes of cvc5.wasm (an instantiateWasm hook would
+        // finish the set-up only after an await)
+        self.cvc5Run = (problem, timeout) => {
+            if (!self.cvc5) return null;
+            const out = [], cvc5 = { print: t => out.push(t), printErr: t => out.push(t), wasmBinary: self.cvc5 };
+            createCvc5(cvc5);
+            cvc5.FS.writeFile('/problem.sy', problem);
+            // --tlimit needs a timer signal, which cannot interrupt a computation in the browser
+            try { cvc5.callMain(['--lang', 'sygus2', '--tlimit-per=' + timeout, '/problem.sy']); } catch (err) {
+                if (!(err && err.name === 'ExitStatus')) out.push('error: ' + err);
+            }
+            return out.join('\\n');
+        };
         var Module = {
             noInitialRun: true,
             print: t => postMessage({ type: 'output', content: t }),
@@ -432,6 +447,8 @@ function workerSource() {
             if (e.data.type === 'init') {
                 self.base = e.data.base;
                 self.v = e.data.v;
+                self.cvc5 = e.data.cvc5 && new Uint8Array(e.data.cvc5);
+                if (self.cvc5) importScripts(e.data.base + 'cvc5.js' + self.v);
                 importScripts(e.data.base + 'checkmate.js' + self.v);
             } else if (e.data.type === 'run') {
                 let result = null;
@@ -445,6 +462,25 @@ function workerSource() {
                 postMessage({ type: 'done', result });
             }
         };`;
+}
+
+// cvc5 compiled to WebAssembly (by scripts/build_emscripten.sh), for the practicality of conditional games when
+// Z3 cannot decide it: loaded once, when a run first needs it, and handed to the worker of every run that does;
+// null if it is not on the page
+let cvc5Loaded = null;
+function cvc5Wasm() {
+    if (!cvc5Loaded)
+        cvc5Loaded = version.then(v => fetch('cvc5.wasm' + v)).then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+            .catch(() => null);
+    return cvc5Loaded;
+}
+
+// is the game conditional (as detect_game_type in src/game_type.cpp decides), so that its practicality may need cvc5?
+function isCefg(g) {
+    const unknowns = ['constants', 'infinitesimals'].some(k => g[k] && (g[k].unknown || []).length);
+    const conditional = n => isCondition(n) || Array.isArray(n.subtree) || (n.children || []).some(c => conditional(c.child));
+    const honest = (g.honest_utilities || []).some(u => (u.utility || []).some(e => e && e.condition !== undefined));
+    return unknowns || conditional(g.tree) || honest;
 }
 
 function parseArgs(str) {
@@ -462,6 +498,7 @@ $('run').addEventListener('click', () => {
     $('run').disabled = true;
     $('cancel').disabled = false;
     const started = performance.now();
+    const needsCvc5 = (props.length === 4 || props.includes('--practicality')) && isCefg(game);
     const url = URL.createObjectURL(new Blob([workerSource()], { type: 'application/javascript' }));
     worker = new Worker(url);
     const out = [];
@@ -481,7 +518,12 @@ $('run').addEventListener('click', () => {
         }
     };
     const w = worker;
-    version.then(v => w.postMessage({ type: 'init', base: new URL('.', location.href).href, v }));
+    if (needsCvc5 && !cvc5Loaded) $('status').textContent = 'Loading cvc5…';
+    Promise.all([version, needsCvc5 ? cvc5Wasm() : null]).then(([v, cvc5]) => {
+        if (worker !== w) return;  // cancelled meanwhile
+        $('status').textContent = 'Running…';
+        w.postMessage({ type: 'init', base: new URL('.', location.href).href, v, cvc5 });
+    });
 });
 
 $('cancel').addEventListener('click', () => { finish('Cancelled'); });

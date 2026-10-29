@@ -170,10 +170,11 @@ To build it, install [Emscripten](https://emscripten.org/), get the [Z3](https:/
 
 ```shell
 source /path/to/emsdk/emsdk_env.sh
-scripts/build_emscripten.sh /path/to/z3   # builds Z3 for WebAssembly once, then CheckMate
-cd html && python3 -m http.server         # then open http://localhost:8000
+scripts/build_emscripten.sh /path/to/z3 [/path/to/cvc5]   # builds Z3 (and cvc5) for WebAssembly once, then CheckMate
+cd html && python3 -m http.server                         # then open http://localhost:8000
 ```
 
+With the [cvc5](https://github.com/cvc5/cvc5) sources (which need Emscripten 6.0.8 or later), the page also uses cvc5 for the practicality of conditional games, as CheckMate does (see [Conditional games](#conditional-games-cefgs)); it loads cvc5 only for runs of conditional games that check practicality.
 The page must be served over HTTP (not opened as a file), but needs no special server headers.
 
 ## Run
@@ -283,7 +284,7 @@ A conditional game extends the input as follows.
 
 CheckMate treats a game as conditional if it has a condition node, declares unknown constants, contains results of a conditional subtree, or has an honest utility that depends on conditions; it then prints e.g. `Game type: CEFG (condition nodes)`. Conditional games can be written in the [compact format](#compact-format) as well.
 
-Practicality of a conditional game may depend on how players break ties for different revealed values. If Z3 cannot decide this within 10 seconds, CheckMate asks [cvc5](https://cvc5.github.io/) to synthesize the tie-breaking (as `cvc5` on the `PATH`, or the program in the environment variable `CHECKMATE_CVC5`), for at most 20 minutes; this is not available in the browser. If neither decides it, the answer is `UNKNOWN` with the reason.
+Practicality of a conditional game may depend on how players break ties for different revealed values. If Z3 cannot decide this within 10 seconds, CheckMate asks [cvc5](https://cvc5.github.io/) to synthesize the tie-breaking (as `cvc5` on the `PATH`, or the program in the environment variable `CHECKMATE_CVC5`), for at most 20 minutes; in the browser, if the page was built with cvc5, it runs cvc5 compiled to WebAssembly instead (where its time limit is checked only between its steps, so it may take longer to stop). If neither decides it, the answer is `UNKNOWN` with the reason.
 
 With `--subtree`, the results of a conditional game are written to `GAME.out` as a list of entries, one for every honest history (`honest_history`) and honest utility (`honest_utility`) analyzed, and one without honest history (`no_honest_history`), each with the results in `subtree`. The whole list is the value of the subtree node in the supertree.
 
