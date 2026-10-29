@@ -22,9 +22,15 @@ struct SubtreeData {
 // analyse the chosen properties in subtree mode, with `ustar` the honest utilities (only needed for collusion resilience)
 SubtreeResults subtree_mode(const Options &options, const Input &input, const UtilityTuplesSet &ustar);
 
-// write all collected subtree results to `file_name` as a list of keyed entries
-// {honest_history | honest_utility | no_honest_history, subtree}, which as a whole can be the value of a "subtree" node in a supertree
-void data2json(const Input &input, const std::vector<SubtreeData> &data, const std::string &file_name);
+// all collected subtree results as a list of keyed entries {honest_history | honest_utility | no_honest_history, subtree},
+// which as a whole can be the value of a "subtree" node in a supertree
+nlohmann::json data2json(const Input &input, const std::vector<SubtreeData> &data);
+
+// write `document` to `file_name`, exits the program on failure
+void write_json(const nlohmann::json &document, const std::string &file_name);
+
+// an honest history in the input format: actions, and lists of {condition, path} at condition nodes
+nlohmann::json history2json(const HonestHistory &history);
 
 // JSON conversion of (parts of) subtree results
 nlohmann::json parse_sat_case(std::vector<z3::Bool> sat_case);

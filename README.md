@@ -97,7 +97,14 @@ Before analyzing a game, CheckMate checks that it is well-formed, in either form
 - all utilities and constraints parse,
 - every honest history exists in the tree and ends at a leaf or a subtree.
 A game with honest utilities instead of honest histories (a subtree off the honest history) is accepted as well.
-These checks apply to games without condition nodes; conditional games are checked while they are read.
+For conditional games (JSON only), CheckMate also checks that:
+- constants and infinitesimals are a list or `{"known": [...], "unknown": [...]}`,
+- every condition node has at least one condition, each with a constraint and a child, and no condition twice,
+- `reveals` names only constants declared unknown,
+- the utilities at a leaf use only known constants and the unknowns revealed on the way to it,
+- an honest history gives, at a condition node, a path for each of its conditions, as its last element.
+
+Conditions in an honest history are matched to those of the condition node by CheckMate itself, which reports conditions that are not in the node.
 If a check fails, CheckMate stops with an error naming the line in the compact format, or the node in JSON:
 
 ```
@@ -165,7 +172,8 @@ There are several options:
 * `--count_nodes` and `--count_calls`: For experiments, report the number of checked tree nodes and of SMT solver calls per analyzed property.
 * `--no-cr-node-cache`, `--no-cr-leaf-cache`, `--no-cr-implied-groups`, `--no-cr-violated-lookup`, `--no-problematic-groups`, `--exact-splits`, `--reset-from-root`: For testing only, disable an optimization or heuristic. Results must not change; the fuzzer (`scripts/fuzz.py`, see [FUZZING.md](FUZZING.md)) checks this.
 
-For conditional games, only the properties and `--subtree` are available so far: `--counterexamples`, `--all_counterexamples`, `--strategies` and `--preconditions` are not yet implemented for them, and `--all_cases`, `--json-out`, `--count_nodes`, `--count_calls` and the testing options only apply to games without condition nodes.
+For conditional games, only the properties, `--subtree` and `--json-out` are available so far: `--counterexamples`, `--all_counterexamples`, `--strategies` and `--preconditions` are not yet implemented for them, and `--all_cases`, `--count_nodes`, `--count_calls` and the testing options only apply to games without condition nodes.
+With `--json-out`, the JSON result of a conditional game has one entry per run and property, as for other games but without cases: `history` is the honest history analysed (in the input format, with conditions in CheckMate's syntax, and continued into subtree nodes), with the index of the honest history in `honest_histories` under `honest_history` (several runs share an index if the history ends in a subtree node with several honest histories inside), or `null` for the runs without honest history, which have the index of the honest utility under `honest_utility` for collusion resilience, and `holds` is `true`, `false`, or `null` if practicality could not be decided, with the reason under `undecided`. With `--subtree`, `FILE` gets `{"version": 1, "subtree": ...}` with the same list as `SUBTREE.out`.
 CheckMate prints a warning for each such option and ignores it, e.g. `checkmate: --counterexamples is not yet implemented for CEFGs and is ignored`.
 
 For instance, to run a security analysis on the Closing Game [5] with counterexample generation, but only considering weak immunity and collusion resilience, execute the following from the repository root:

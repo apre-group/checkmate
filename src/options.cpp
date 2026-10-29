@@ -10,6 +10,7 @@ const char *USAGE = R"(usage: checkmate PATH
 	--collusion_resilience
 	--practicality
 	--subtree
+	--json-out FILE
 not yet implemented for CEFGs (games with condition nodes), ignored for them:
 	--counterexamples
 	--all_counterexamples
@@ -17,7 +18,6 @@ not yet implemented for CEFGs (games with condition nodes), ignored for them:
 	--strategies
 only for EFGs (games without condition nodes), ignored for CEFGs:
 	--all_cases
-	--json-out FILE
 	--count_nodes
 	--count_calls
 testing only, disable optimizations/heuristics (only for EFGs):

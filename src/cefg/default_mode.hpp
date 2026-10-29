@@ -6,12 +6,15 @@
 
 #include "input.hpp"
 #include "options.hpp"
+#include "../json.hpp"
 
 // imported from the cefg branch (c9c6e6f); wrapped in namespace cefg next to the EFG engine in src/
 namespace cefg {
 
-// analyse the chosen properties in default mode, with `ustar` the honest utilities (only needed for collusion resilience)
-void default_mode(const Options &options, const Input &input, const UtilityTuplesSet &ustar);
+// analyse the chosen properties in default mode, with `ustar` the honest utilities (only needed for collusion resilience);
+// for --json-out, one entry per property is appended to `results`: `run` (what was analysed) with the verdict added
+void default_mode(const Options &options, const Input &input, const UtilityTuplesSet &ustar,
+	nlohmann::json &results, const nlohmann::json &run);
 
 // whether the game satisfies `property` for the honest history currently marked in `input`,
 // with `ustar` the honest utilities (only needed for collusion resilience);

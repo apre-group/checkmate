@@ -1,14 +1,14 @@
 # Fuzzing CheckMate
 
-`scripts/fuzz.py` tests CheckMate on random games. It runs CheckMate on each game, then checks every answer independently: a separate checker verifies the results, and the verdicts must not change when the flags, the optimizations or the game itself change in ways that cannot affect them.
+`scripts/fuzz.py` tests CheckMate on random games, both ordinary games (EFGs) and conditional games (CEFGs, see the [README](README.md#conditional-games-cefgs)). It runs CheckMate on each game, then checks every answer independently: a separate checker verifies the results, and the verdicts must not change when the flags, the optimizations or the game itself change in ways that cannot affect them.
 
 ## Quick start
 
 Build CheckMate as described in the [README](README.md#build), then run from the repository root:
 
 ```shell
-scripts/fuzz.py --num 100                 # 100 random games
-scripts/fuzz.py                           # until it finds a bug
+scripts/fuzz.py --num 100                 # 100 random games, EFGs and CEFGs
+scripts/fuzz.py --games cefg              # only CEFGs, until it finds a bug
 scripts/run_regressions.sh                # rerun the games of previously fixed bugs
 ```
 
@@ -37,14 +37,18 @@ seq 10 | xargs -P10 -I{} sh -c 'scripts/fuzz.py --num 100 > out/fuzz_{}.log 2>&1
 | Option | Meaning |
 |---|---|
 | `--num N`, `-n N` | Number of iterations. Default: run until a bug is found. |
+| `--games efg\|cefg\|both` | Which games to fuzz: EFGs, CEFGs, or both (default; the seed decides which). |
 | `--seed S` | Use seed `S` for every iteration, to reproduce a bug. Combine it with `--num 1`. |
 | `--quiet`, `-q` | Print only the seed of each iteration, the statistics and bugs. When an iteration finds a bug, its full output is printed too. |
 | `--stats-every N` | Print statistics every `N` iterations (default 10). |
 | `--tout T`, `-t T` | Timeout in seconds per CheckMate call (default 20). Timeouts are skipped and counted. |
 | `--check-tout T` | Timeout in seconds per checker call (default 20). |
 | `--checkmate PATH` | The CheckMate binary (default `build/checkmate`). |
+| `--js-gen` | Generate the EFGs with the web page's generator, `html/gen_game.js`. |
 
 ## What each iteration checks
+
+### EFGs
 
 For each random game, the fuzzer runs CheckMate:
 
@@ -65,6 +69,21 @@ The verdicts must also agree:
 - after transforms that cannot change them: renaming players (which changes their order), permuting children, renaming actions or constants, scaling or shifting utilities;
 - when a random subtree is analyzed separately with `--subtree` and spliced into the rest of the game (the supertree), sometimes with a second subtree nested inside the first. The subtree results are also checked directly.
 
+### CEFGs
+
+`scripts/gen_cefg.py` generates conditional games: known and unknown constants, condition nodes that reveal unknowns (or split on known constants), and honest histories that continue in every condition. The unknowns usually take a few values only (an initial constraint `u0 = 0 | u0 = 2`), otherwise they are real. Some games have only an honest utility, as for a subtree off the honest history.
+
+About a third of the CEFGs are EFGs embedded into a CEFG: the EFG gets condition nodes with a copy of the same subtree below every condition, deep in the tree on known constants, and at the root revealing constants that are now unknown. This cannot change any verdict, so the CEFG analysis must agree with the EFG analysis of the original game, which `check_result.py` verifies. This is the only independent check of CEFG verdicts; everything else compares CheckMate with itself.
+
+The verdicts of a CEFG come from its `--json-out` result, which has the verdicts only (CEFGs have no strategies, counterexamples or cases yet). For each game, the fuzzer checks that:
+
+- CheckMate analyses it as a CEFG, with one verdict per property for every honest history and honest utility, and, under the index of each honest history (`honest_history`), that honest history (conditions are not compared, CheckMate writes them in its own syntax);
+- the text output has the same verdicts as `--json-out`, and an undecided verdict (`"holds": null`) is for practicality and has a reason;
+- with `--subtree`, `--json-out` has the same result as `SUBTREE.out`;
+- the verdicts do not change with a subset of the properties, with the options that CEFGs ignore (`--counterexamples`, `--all_cases`, the testing switches, …), after the transforms above (which also permute conditions and rename unknowns), and when a random subtree is analyzed separately with `--subtree` and spliced into the supertree, sometimes nested.
+
+Verdicts that are `UNKNOWN` (practicality that neither Z3 nor cvc5 decided) are not compared.
+
 ## When it finds a bug
 
 The fuzzer prints a red block with:
@@ -81,14 +100,14 @@ To work on it:
 2. Run the command from `Command was:` directly on the kept game. Long CheckMate output is cut in the bug report; all of it is in `out/fuzzTest_N-failure.txt`.
 3. After the fix, add the game to `tests/regressions/` (to `tests/regressions/subtree_mode/` if it has to be analyzed with `--subtree`). `scripts/run_regressions.sh` runs CheckMate on every game there with several flag sets and verifies each result.
 
-The checker can also be run by itself on any game and result:
+The checkers can also be run by themselves on any game and result:
 
 ```shell
 build/checkmate game.json --strategies --counterexamples --json-out result.json
 scripts/check_result.py game.json result.json            # add --complete-cases after --all_cases
 ```
 
-It exits with 0 if the result is correct, 1 if it is wrong, and 2 if it could not decide (solver timeout).
+They exit with 0 if the result is correct, 1 if it is wrong, and 2 if they could not decide (solver timeout).
 
 ## Statistics
 
@@ -96,6 +115,7 @@ Every `--stats-every` iterations, and at the end, the fuzzer prints what it has 
 
 ```
 === Statistics after 80 iterations ===
+  EFGs: 41 games
   players: 2 23, 3 29, 4 12, 5 12, 6 4
   leaves: 1-3 26, 4-8 30, 9-16 14, 17-32 7, 33+ 3
   depth: 1 13, 2 11, 3 22, 4 18, 5 12, 6 4
@@ -118,6 +138,27 @@ Every `--stats-every` iterations, and at the end, the fuzzer prints what it has 
 - **verified:** how many results the checker accepted, and how many strategies, counterexamples and preconditions they contained.
 - **skipped:** results that timed out or that the checker could not decide or does not support.
 
+For CEFGs, a second block follows:
+
+```
+  CEFGs: 39 games, 12 of them embedded EFGs
+  players: 2 19, 3 15, 4 5
+  leaves: 1-3 4, 4-8 21, 9-16 11, 17-32 3
+  unknowns: 0 5, 1 18, 2 16
+  condition nodes: 0 2, 1 14, 2-3 15, 4-6 8
+  games: with revealing condition nodes 27, honest through conditions 25, honest utility only 4
+  weak_immunity         YES  41%, NO  58%, UNKNOWN   0% of 44 runs
+  ...
+  subtrees: cut along honest 15, cut off honest 18, cut nested 9
+  transforms: permute_children 14, rename_symbols 12, ...
+  compared: with EFG 12, options 35, transformed 37, supertree 30
+```
+
+- **unknowns, condition nodes:** how many games had each number of unknown constants and of condition nodes.
+- **games:** how many games had condition nodes revealing unknowns, honest histories through condition nodes, or only an honest utility.
+- **per property:** how often the verdict was YES, NO or UNKNOWN.
+- **compared:** how often the verdicts were compared with the EFG analysis of an embedded EFG, with other options, after transforms and with a supertree.
+
 If a number stays at zero, that part of CheckMate is not being tested, and the generator in `scripts/gen_game.py` may need tuning. `scripts/gen_stats.py --num 500` measures the generated games without the checker, so you can compare generator changes quickly.
 
 ## Sanitizer builds
@@ -139,6 +180,7 @@ The fuzzer sets the sanitizer options itself, so a sanitizer report stops CheckM
 | `scripts/fuzz.py` | The fuzzer. |
 | `scripts/fuzz_session.sh` | Runs several fuzzers in a tmux session. |
 | `scripts/gen_game.py` | Generates random games (`scripts/gen_game.py --seed S -o game.json` writes one). |
+| `scripts/gen_cefg.py` | Generates random CEFGs (`--embed`: an EFG embedded into a CEFG), and has the helpers for walking them. |
 | `scripts/check_result.py` | Checks a `--json-out` result independently of CheckMate. |
 | `scripts/transform.py` | Transforms that must not change the verdicts. |
 | `scripts/compose.py` | Splits a game into a subtree and a supertree for the `--subtree` check. |

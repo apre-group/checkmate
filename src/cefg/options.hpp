@@ -25,6 +25,9 @@ struct Options {
 	// reason over a subtree, to be plugged into a supertree later
 	bool subtree = false;
 
+	// write the results as JSON to this file: the verdicts in default mode, the subtree results in subtree mode
+	const char *json_out = nullptr;
+
 	// future options
 	// compute counterexamples
 	// bool counterexamples = false;

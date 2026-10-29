@@ -7,6 +7,7 @@
 #include "input.hpp"
 #include "options.hpp"
 #include "property.hpp"
+#include "validate.hpp"
 #include "cefg/run.hpp"
 
 // analyse a CEFG with the analysis in src/cefg/, leaving out the options it does not support (with a warning)
@@ -30,14 +31,15 @@ static int run_cefg(char **argv) {
 	for (char **option = argv + 2; *option; option++) {
 		if (among(*option, SUPPORTED, sizeof SUPPORTED / sizeof *SUPPORTED)) {
 			arguments.push_back(*option);
+		} else if (!std::strcmp(*option, "--json-out")) {
+			// Options already checked that a file name follows
+			arguments.push_back(*option);
+			arguments.push_back(*++option);
 		} else if (among(*option, NOT_YET, sizeof NOT_YET / sizeof *NOT_YET)) {
 			std::cerr << "checkmate: " << *option << " is not yet implemented for CEFGs and is ignored" << std::endl;
 		} else {
 			// Options already rejected unknown options, so this one is for EFGs only
 			std::cerr << "checkmate: " << *option << " only applies to EFGs and is ignored" << std::endl;
-			if (!std::strcmp(*option, "--json-out")) {
-				option++;
-			}
 		}
 	}
 	arguments.push_back(nullptr);
@@ -56,6 +58,13 @@ int main(int, char **argv) {
 		if (!file.is_json) {
 			std::cerr << "checkmate: " << options.input_path << ": games with " << reason
 				<< " (CEFGs) are only supported in the JSON format for now" << std::endl;
+			return EXIT_FAILURE;
+		}
+		try {
+			validate_cefg(file.document);
+		}
+		catch (const GameError &err) {
+			std::cerr << "checkmate: " << options.input_path << ": " << err.what() << std::endl;
 			return EXIT_FAILURE;
 		}
 		std::cout << "Game type: CEFG (" << reason << ")" << std::endl;
