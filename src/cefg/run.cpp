@@ -6,10 +6,10 @@
 
 namespace cefg {
 
-int run(char **argv) {
+int run(char **argv, const nlohmann::json &game) {
 	z3::initialize();
 	Options options(argv);
-	Input input(options.input_path);
+	Input input(game);
 
 	if (input.honest.empty() && input.honest_utilities.empty()) {
 		std::cerr << "checkmate: the input has neither honest_histories nor honest_utilities, nothing to analyse" << std::endl;

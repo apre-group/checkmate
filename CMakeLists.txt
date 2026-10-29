@@ -52,6 +52,8 @@ add_executable(checkmate-convert
 	src/compact.cpp
 	src/validate.hpp
 	src/validate.cpp
+	src/game_type.hpp
+	src/game_type.cpp
 	src/convert.cpp
 )
 
@@ -68,10 +70,11 @@ if(EMSCRIPTEN)
 	target_link_directories(checkmate PRIVATE ${Z3_WASM_DIR}/build-wasm)
 	target_compile_options(checkmate PRIVATE -fwasm-exceptions)
 	# as in arjun; the page starts main itself (noInitialRun), in a fresh worker per run
+	# (the string functions are for passing problems to cvc5 and its answers back, see run_cvc5 in cefg/selectors.cpp)
 	target_link_options(checkmate PRIVATE -fwasm-exceptions
 		"SHELL:-s ALLOW_MEMORY_GROWTH=1"
 		"SHELL:-s STACK_SIZE=10MB"
-		"SHELL:-s EXPORTED_RUNTIME_METHODS='[\"callMain\", \"FS\"]'"
+		"SHELL:-s EXPORTED_RUNTIME_METHODS='[\"callMain\", \"FS\", \"UTF8ToString\", \"stringToNewUTF8\"]'"
 		"SHELL:-s FORCE_FILESYSTEM=1")
 	target_compile_options(checkmate-convert PRIVATE -fwasm-exceptions)
 	target_link_options(checkmate-convert PRIVATE -fwasm-exceptions

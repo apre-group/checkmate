@@ -1264,23 +1264,7 @@ static HonestUtilityElement parse_honest_utility_element(Parser &parser, const j
 
 
 
-Input::Input(const char *path) : sat_cases(), strategies() , stop_log(false) {
-	// parse a JSON document from `path`
-	std::ifstream input(path);
-	json document;
-	try {
-		input.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-		document = json::parse(input);
-	}
-	catch (const std::ifstream::failure &fail) {
-		std::cerr << "checkmate: " << std::strerror(errno) << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
-	catch (const json::exception &err) {
-		std::cerr << "checkmate: " << err.what() << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
-
+Input::Input(json document) : sat_cases(), strategies() , stop_log(false) {
 	if (document["players"].size() > MAX_PLAYERS) {
 		std::cerr << "checkmate: more than 64 players not supported - are you sure you want this many?!" << std::endl;
 		std::exit(EXIT_FAILURE);
@@ -1456,7 +1440,7 @@ bool Node::cr_against_all() const {
 	return cr_against_all;
 }
 
-std::vector<bool> convertToBinary(uint n)
+std::vector<bool> convertToBinary(unsigned n)
 {
 	std::vector<bool> bit_reps;
 
@@ -1468,7 +1452,7 @@ std::vector<bool> convertToBinary(uint n)
 	return bit_reps;
 }
 
-z3::Bool Node::cr_against_supergroups_of(std::vector<uint> deviating_players, z3::Solver &solver) const {
+z3::Bool Node::cr_against_supergroups_of(std::vector<unsigned> deviating_players, z3::Solver &solver) const {
 
 	std::vector<z3::Bool> cr_conditions = {};
 
@@ -1525,7 +1509,7 @@ void Node::add_violation_cr() const {
 	return;
 }
 
-std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<uint> deviating_players, std::vector<std::string> conditions_so_far, z3::Solver &solver) const {
+std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> players, std::vector<std::string> actions_so_far, std::vector<unsigned> deviating_players, std::vector<std::string> conditions_so_far, z3::Solver &solver) const {
 
 		if (this -> is_leaf() || this->is_subtree()){
 			return {};
@@ -1572,7 +1556,7 @@ std::vector<HistoryChoice> Node::compute_cr_strategy(std::vector<std::string> pl
 			}
 			for (const Strat_Choice& strat_choice: strategy_choice) {
 				for (const Choice &choice: this->branch().choices) {
-					std::vector<uint> new_deviating_players;
+					std::vector<unsigned> new_deviating_players;
 					new_deviating_players.insert(new_deviating_players.end(), deviating_players.begin(), deviating_players.end());
 
 					int cnt = std::count(deviating_players.begin(), deviating_players.end(), this->branch().player + 1);

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-# Fuzz the compact format: JSON -> compact -> JSON -> compact must be stable and analyse the same.
+# Fuzz the compact format: JSON -> compact -> JSON -> compact must be stable and analyse the same,
+# for EFGs and CEFGs (games with condition nodes).
 # Run from the repo root: scripts/fuzz_compact.py [--num N] [--seed S] [--js-gen]
 
 import argparse
@@ -15,6 +16,7 @@ SCRIPTS = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPTS)
 from compose import split, splice
 from fuzz import unique_file
+from gen_cefg import embed_efg, gen_cefg
 from gen_game import gen_game
 
 PROPS = ["weak_immunity", "weaker_immunity", "collusion_resilience", "practicality"]
@@ -37,22 +39,46 @@ def convert(path, out):
     return open(out).read()
 
 
+def is_condition(node):
+    return isinstance(node.get("condition"), list)
+
+
 def normalize(game):
-    """The game as checkmate sees it: actions are derived from the tree, empty lists may be missing."""
+    """The game as checkmate sees it: actions are derived from the tree, empty lists may be missing,
+    and constants without unknown ones are a list."""
     g = copy.deepcopy(game)
     g.pop("actions", None)
     g["property_constraints"] = {p: g.get("property_constraints", {}).get(p, []) for p in PROPS}
     if not g.get("honest_utilities"):
         g.pop("honest_utilities", None)
-    for k in ("constants", "infinitesimals", "initial_constraints"):
-        g.setdefault(k, [])
+    for k in ("constants", "infinitesimals"):
+        d = g.get(k, [])
+        if isinstance(d, dict):
+            d = {"known": d.get("known", []), "unknown": d["unknown"]} if d.get("unknown") else d.get("known", [])
+        g[k] = d
+    g.setdefault("initial_constraints", [])
+
+    def utilities(us):
+        for u in us:
+            if "condition" in u:
+                utilities(u["utility"])
+            else:
+                u["value"] = str(u["value"])
 
     def walk(t):
-        for u in t.get("utility", []):
-            u["value"] = str(u["value"])
+        utilities(t.get("utility", []))
         for c in t.get("children", []):
             walk(c["child"])
+        if is_condition(t):
+            if not t.get("reveals", True):
+                del t["reveals"]
+            for c in t["condition"]:
+                walk(c["child"])
+        else:
+            t.pop("condition", None)  # "True", written on every node by older versions of examples/dsl.py
     walk(g["tree"])
+    for u in g.get("honest_utilities", []):
+        utilities(u["utility"])
     return g
 
 
@@ -64,6 +90,9 @@ def tree_actions(tree):
             if c["action"] not in seen:
                 seen.append(c["action"])
             walk(c["child"])
+        if is_condition(t):
+            for c in t["condition"]:
+                walk(c["child"])
     walk(tree)
     return seen
 
@@ -74,9 +103,13 @@ def make_game(rng, base):
         game = json.loads(p.stdout)
     else:
         game = gen_game(rng)
-    kind = rng.choice(["plain", "plain", "subtree", "supertree"])
+    kind = rng.choice(["plain", "plain", "subtree", "supertree", "cefg", "cefg", "embedded"])
     if kind == "plain":
         return game, kind
+    if kind == "cefg":
+        return gen_cefg(rng), kind
+    if kind == "embedded":
+        return embed_efg(game, rng)[0], "cefg (embedded EFG)"
     whole = dict(game, honest_histories=[rng.choice(game["honest_histories"])])
     cut = split(whole, rng)
     if cut is None:
@@ -104,7 +137,7 @@ def mutate(rng, text):
             lines[i] = lines[i][:rng.randrange(len(lines[i]) + 1)]
         elif lines[i]:
             j = rng.randrange(len(lines[i]))
-            ch = rng.choice(" :,>-#{}()abAx0\t") if op == "insert char" else ""
+            ch = rng.choice(" :,;>-#{}()?abAxu0\t") if op == "insert char" else ""
             lines[i] = lines[i][:j] + ch + lines[i][j + (op == "delete char"):]
         if not lines:
             lines = [""]
@@ -135,14 +168,22 @@ def fuzz_one(seed, stats):
 
         r0, r1 = base + "-json.out.json", base + "-compact.out.json"
         files += [r0, r1]
-        flags = rng.choice([[], ["--strategies", "--counterexamples"], ["--all_cases", "--preconditions"]])
-        a = run([args.checkmate, j0] + flags + ["--json-out", r0], check_rc=False)
-        b = run([args.checkmate, c1] + flags + ["--json-out", r1], check_rc=False)
-        if a.returncode != b.returncode:
+        # (CEFGs ignore these options)
+        flags = [] if kind.startswith("cefg") else \
+            rng.choice([[], ["--strategies", "--counterexamples"], ["--all_cases", "--preconditions"]])
+        try:
+            a = run([args.checkmate, j0] + flags + ["--json-out", r0], check_rc=False)
+            b = run([args.checkmate, c1] + flags + ["--json-out", r1], check_rc=False)
+        except subprocess.TimeoutExpired:
+            a = b = None
+            stats["analysis timeouts"] = stats.get("analysis timeouts", 0) + 1
+        if a is None:
+            pass
+        elif a.returncode != b.returncode:
             raise Bug("checkmate exits with %d on the JSON but %d on the compact file" % (a.returncode, b.returncode))
-        if a.returncode == 0 and json.load(open(r0)) != json.load(open(r1)):
+        elif a.returncode == 0 and json.load(open(r0)) != json.load(open(r1)):
             raise Bug("checkmate results differ between %s and %s (%s)" % (j0, c1, " ".join(flags)))
-        stats["analysed"] = stats.get("analysed", 0) + (a.returncode == 0)
+        stats["analysed"] = stats.get("analysed", 0) + (a is not None and a.returncode == 0)
 
         for k in range(5):
             m = base + "-mutated%d.game" % k

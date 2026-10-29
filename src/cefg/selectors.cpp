@@ -7,6 +7,9 @@
 #include <sstream>
 #include <unistd.h>
 #include <sys/wait.h>
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include "property_checks.hpp"
 #include "selectors.hpp"
@@ -738,12 +741,25 @@ std::optional<bool> z3_satisfiable(Z3_ast formula, unsigned timeout) {
 	return result == Z3_L_TRUE;
 }
 
+#ifdef __EMSCRIPTEN__
+// in the browser, there are no processes: the page's worker runs cvc5 compiled to WebAssembly (cvc5Run in
+// html/index.html) on the problem and returns its output, or null if cvc5 is not loaded
+EM_JS(char *, run_cvc5_in_browser, (const char *problem, unsigned timeout), {
+	const output = typeof globalThis.cvc5Run === "function" ? globalThis.cvc5Run(UTF8ToString(problem), timeout) : null;
+	return output === null ? 0 : stringToNewUTF8(output);
+});
+#endif
+
 std::string run_cvc5(const std::string &problem, std::string &how) {
 #ifdef __EMSCRIPTEN__
-	// no processes in the browser
-	(void) problem;
-	how = "cvc5 is not available in the web build";
-	return "";
+	char *output = run_cvc5_in_browser(problem.c_str(), CVC5_TIMEOUT);
+	if (!output) {
+		how = "cvc5 is not available on this page";
+		return "";
+	}
+	std::string result(output);
+	std::free(output);
+	return result;
 #else
 	char path[] = "/tmp/checkmate-XXXXXX.sy";
 	int descriptor = mkstemps(path, 3);

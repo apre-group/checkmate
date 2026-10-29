@@ -11,7 +11,22 @@ function highlightCompact(text, errorLine) {
         const m = part.match(/^(\s*)([^:]+?)(\s*:\s*)(.*)$/);
         return m ? esc(m[1]) + span('h-player', m[2]) + esc(m[3]) + expression(m[4]) : esc(part);
     }).join('');
-    const NAME_KEYS = ['players', 'constants', 'infinitesimals'];
+    // CEFGs: {if CONDITION -> rest; ...} in honest histories and utilities, with `rest` highlighted by `inner`
+    const conditional = (s, inner) => {
+        let afterIf = false;
+        return s.split(/(\{|\}|;|->|\bif\b)/).map(p => {
+            if (p === 'if') { afterIf = true; return span('h-key', p); }
+            if (p === '->' || p === ';' || p === '}') { afterIf = false; return span('h-arrow', p); }
+            if (p === '{') return span('h-arrow', p);
+            return afterIf ? expression(p) : inner(p);
+        }).join('');
+    };
+    // a node with lines below it: a player, or ? [reveals CONSTANT, ...] for a condition node
+    const head = s => {
+        const m = s.match(/^\?(\s*)(reveals\b)?(.*)$/);
+        return m ? span('h-key', '?') + esc(m[1]) + span('h-key', m[2] || '') + names(m[3], 'h-const') : span('h-player', s);
+    };
+    const NAME_KEYS = ['players', 'constants', 'infinitesimals', 'unknown_constants', 'unknown_infinitesimals'];
     let inTree = false;
 
     const lines = text.split('\n').map((line, k) => {
@@ -19,25 +34,30 @@ function highlightCompact(text, errorLine) {
         const code = hash < 0 ? line : line.slice(0, hash);
         const comment = hash < 0 ? '' : line.slice(hash);
         let html;
+        // (the value of a conditional honest history or utility has -> in it)
         const header = !inTree && code.match(/^([A-Za-z_]+)(\s*:\s*)(.*)$/);
         if (!code.trim()) {
             html = esc(code);
-        } else if (header && !code.includes('->')) {
+        } else if (header) {
             const [, key, sep, value] = header;
             html = span('h-key', key) + esc(sep) + (
                 NAME_KEYS.includes(key) ? names(value, key === 'players' ? 'h-player' : 'h-const') :
-                key === 'honest' ? names(value, 'h-action') :
-                key === 'honest_utility' ? utilities(value) : expression(value));
+                key === 'honest' ? conditional(value, p => names(p, 'h-action')) :
+                key === 'honest_utility' ? conditional(value, utilities) : expression(value));
         } else {
             inTree = true;
             const m = code.match(/^(\s*)(.*?)(\s*->\s*)(.*)$/);
             if (!m) {
-                html = esc(code.match(/^\s*/)[0]) + span('h-player', code.trim());  // the root
+                html = esc(code.match(/^\s*/)[0]) + head(code.trim());  // the root
             } else {
                 const [, indent, action, arrow, rest] = m;
-                html = esc(indent) + span('h-action', action) + span('h-arrow', arrow) + (
+                // below a condition node: if [NAME:] CONDITION
+                const c = action.match(/^if(\s+)(?:([^\s:]+)(\s*:\s*))?(.*)$/);
+                html = esc(indent) + (c ? span('h-key', 'if') + esc(c[1]) + span('h-action', c[2] || '') + esc(c[3] || '') +
+                                          expression(c[4])
+                                        : span('h-action', action)) + span('h-arrow', arrow) + (
                     rest.startsWith('subtree') ? span('h-subtree', rest) :
-                    rest.includes(':') ? utilities(rest) : span('h-player', rest));
+                    rest.includes(':') ? utilities(rest) : head(rest));
             }
         }
         html += span('h-comment', comment);
