@@ -266,25 +266,10 @@ namespace z3 {
 			return child;
 		}
 
-		// TODO is this just checking that two things are syntactically identical?
+		// are the two syntactically identical? Z3 stores every term once per context, so this compares the terms
+		// themselves, whatever their number of arguments (e.g. `true`, `!a` or quantifiers)
 		bool is_equal(const Bool other) const {
-			Z3_app app = Z3_to_app(CONTEXT, ast);
-			Z3_ast ast_left = Z3_get_app_arg(CONTEXT, app, 0);
-			Z3_ast ast_right = Z3_get_app_arg(CONTEXT, app, 1);
-			Z3_func_decl func_decl = Z3_get_app_decl(CONTEXT, app);
-			Z3_decl_kind decl_kind = Z3_get_decl_kind(CONTEXT, func_decl);
-			
-			Z3_app other_app = Z3_to_app(CONTEXT, other.ast);
-			Z3_ast other_ast_left = Z3_get_app_arg(CONTEXT, other_app, 0);
-			Z3_ast other_ast_right = Z3_get_app_arg(CONTEXT, other_app, 1);
-			Z3_func_decl other_func_decl = Z3_get_app_decl(CONTEXT, other_app);
-			Z3_decl_kind other_decl_kind = Z3_get_decl_kind(CONTEXT, other_func_decl);
-
-			if ((ast_left == other_ast_left) && (ast_right == other_ast_right) && (decl_kind == other_decl_kind)) {
-				return true;
-			} else {
-				return false;
-			}
+			return Z3_is_eq_ast(CONTEXT, ast, other.ast);
 		}
 
 		Bool invert() const {
