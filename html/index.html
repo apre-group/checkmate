@@ -105,10 +105,13 @@
         #status { color: var(--muted); font-size: 13px; }
 
         button.small { padding: 4px 10px; font-size: 13px; }
-        #tree-box { position: relative; border: 1px solid var(--border); border-radius: 8px; overflow: auto; max-height: 580px; background: var(--surface-2); }
-        #tree-tip { position: absolute; z-index: 1; pointer-events: none; white-space: nowrap; background: var(--surface);
+        #tree-box { position: relative; border: 1px solid var(--border); border-radius: 8px; overflow: auto; max-height: max(580px, calc(100vh - 40px)); background: var(--surface-2); }
+        #tree { display: block; }  /* not inline, which leaves a gap below for descenders */
+        #tree-tip { position: absolute; z-index: 1; pointer-events: none; overflow-wrap: anywhere; background: var(--surface);
                     border: 1px solid var(--border-strong); border-radius: 6px; padding: 6px 10px; font: 12px/1.5 var(--mono);
-                    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); }
+                    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15); box-sizing: border-box; }
+        /* long utilities wrap with their continuation lines indented */
+        #tree-tip div { padding-left: 2ch; text-indent: -2ch; }
         #tree-tip .tip-path { color: var(--muted); }
         #tree-tip b { color: var(--h-player); }
         .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
@@ -125,6 +128,10 @@
         .t-halo { paint-order: stroke; stroke: var(--surface-2); stroke-width: 4; stroke-linejoin: round; }
         .t-node { fill: var(--surface); stroke: var(--text); stroke-width: 1.2; }
         .t-player { font-size: 13px; font-weight: 600; }
+        .t-cond-node { stroke: var(--h-key); }
+        .t-cond-mark { font-size: 14px; font-weight: 700; fill: var(--h-key); }
+        .t-cond { font: italic 12px var(--mono); fill: var(--h-key); }
+        .t-reveals { font: italic 12px var(--mono); fill: var(--h-key); }
         .t-subtree { fill: var(--surface); stroke: var(--text); }
         .t-muted { fill: var(--muted) !important; }
         .t-leaf { fill: var(--leaf); }
@@ -558,11 +565,6 @@ function historyText(h) {
     return h.map(a => typeof a === 'string' ? a
         : '{' + a.map(c => 'if ' + c.condition + (c.path.length ? ' → ' + historyText(c.path) : '')).join('; ') + '}').join(' → ');
 }
-// the actions of a history before its first condition, the part that can be drawn on the tree
-function actionPrefix(h) {
-    const i = h.findIndex(a => typeof a !== 'string');
-    return i < 0 ? h : h.slice(0, i);
-}
 function escapeHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 // ---- tree drawing -------------------------------------------------------------
@@ -575,9 +577,19 @@ let folded = null, revealed, treeTips = [], foldable = [];
 
 const histKey = hist => JSON.stringify(hist);
 
+// a condition node of a CEFG (older versions of examples/dsl.py write "condition": "True" on every node)
+const isCondition = node => Array.isArray(node.condition);
+const isInner = node => !!node.children || isCondition(node);
+// the branches below an inner node: its actions, or the conditions of a condition node, each with the step it adds
+// to the history ({c: index} for a condition, so it cannot be taken for an action)
+function branches(node) {
+    if (node.children) return node.children.map(c => ({ step: c.action, child: c.child }));
+    return node.condition.map((c, i) => ({ step: { c: i }, child: c.child, cond: c }));
+}
+
 function countLeaves(node) {
     if (node._leaves === undefined)
-        node._leaves = node.children ? node.children.reduce((n, c) => n + countLeaves(c.child), 0) : 1;
+        node._leaves = isInner(node) ? branches(node).reduce((n, c) => n + countLeaves(c.child), 0) : 1;
     return node._leaves;
 }
 
@@ -585,7 +597,7 @@ function countLeaves(node) {
 function showingNodes(tree, folds) {
     const out = [];
     (function collect(node, hist) {
-        if (node.children && !folds.has(histKey(hist))) node.children.forEach(c => collect(c.child, hist.concat([c.action])));
+        if (isInner(node) && !folds.has(histKey(hist))) branches(node).forEach(c => collect(c.child, hist.concat([c.step])));
         else out.push(node);
     })(tree, []);
     return out;
@@ -594,7 +606,7 @@ function showingNodes(tree, folds) {
 // payoffs are 12px JetBrains Mono, about 7.3px per character
 function slots(showing, avail) {
     const longest = Math.max(0, ...showing.flatMap(n => (n.utility || []).map(u => `${u.player}: ${u.value}`.length)));
-    const width = w => showing.reduce((s, n) => s + (n.children ? Math.max(w, FOLDED_W) : w), 2 * PAD);
+    const width = w => showing.reduce((s, n) => s + (isInner(n) ? Math.max(w, FOLDED_W) : w), 2 * PAD);
     const wide = Math.max(90, longest * 7.3 + 20);
     return width(wide) <= avail ? { leafW: wide, inline: true, width: width(wide) }
                                 : { leafW: NARROW_W, inline: false, width: width(NARROW_W) };
@@ -604,9 +616,9 @@ function defaultFolds(tree, avail) {
     const foldAt = depth => {
         const set = new Set();
         (function fold(node, hist) {
-            if (!node.children) return;
+            if (!isInner(node)) return;
             if (hist.length === depth) return set.add(histKey(hist));
-            node.children.forEach(c => fold(c.child, hist.concat([c.action])));
+            branches(node).forEach(c => fold(c.child, hist.concat([c.step])));
         })(tree, []);
         return set;
     };
@@ -621,16 +633,16 @@ function defaultFolds(tree, avail) {
 // unfold one level: the node's inner children start folded
 function unfoldOne(node, hist) {
     folded.delete(histKey(hist));
-    node.children.forEach(c => { if (c.child.children) folded.add(histKey(hist.concat([c.action]))); });
+    branches(node).forEach(c => { if (isInner(c.child)) folded.add(histKey(hist.concat([c.step]))); });
 }
 
 // unfold the nodes on the way to the end of `path`, keeping the branches off it folded
 function unfoldPath(path) {
     let node = game.tree;
-    for (let i = 0; i < path.length && node && node.children; i++) {
+    for (let i = 0; i < path.length && node && isInner(node); i++) {
         const hist = path.slice(0, i);
         if (folded.has(histKey(hist))) unfoldOne(node, hist);
-        node = (node.children.find(c => c.action === path[i]) || {}).child;
+        node = (branches(node).find(c => histKey([c.step]) === histKey([path[i]])) || {}).child;
     }
 }
 
@@ -644,12 +656,30 @@ function hiddenKind(hist, h) {
     return hides(h.ce) || hides(h.ceLeaf) ? ' ce' : hides(h.strategy) ? ' strategy' : '';
 }
 
-function layout(node, depth, hist, state) {
-    node._hist = hist; node._depth = depth;
-    node._folded = !!node.children && folded.has(histKey(hist));
-    if (node.children && !node._folded) {
-        node.children.forEach(c => layout(c.child, depth + 1, hist.concat([c.action]), state));
-        const xs = node.children.map(c => c.child._x);
+// the unknown constants and infinitesimals of a CEFG
+function unknowns() {
+    return new Set(['constants', 'infinitesimals'].flatMap(k => (game[k] && game[k].unknown) || []));
+}
+
+// the unknowns that condition node `node` reveals, in its `reveals` or in its conditions, and that are not yet
+// in `known` (those revealed on the way to it)
+function newlyRevealed(node, known) {
+    const unknown = unknowns(), names = node.condition.flatMap(c => c.constraint.match(/[A-Za-z_]\w*/g) || []);
+    return [...new Set([...(node.reveals || []), ...names])].filter(n => unknown.has(n) && !known.has(n));
+}
+
+// `text`: the history as shown in tooltips; `known`: the unknowns revealed on the way to `node`
+function layout(node, depth, hist, text, known, state) {
+    node._hist = hist; node._text = text; node._depth = depth;
+    node._folded = isInner(node) && folded.has(histKey(hist));
+    if (isCondition(node)) {
+        node._revealed = newlyRevealed(node, known);
+        known = new Set([...known, ...node._revealed]);
+    }
+    if (isInner(node) && !node._folded) {
+        const bs = branches(node);
+        bs.forEach(c => layout(c.child, depth + 1, hist.concat([c.step]), text.concat([c.cond ? `[${conditionText(c.cond)}]` : c.step]), known, state));
+        const xs = bs.map(c => c.child._x);
         node._x = (Math.min(...xs) + Math.max(...xs)) / 2;
     } else {
         const w = node._folded ? Math.max(state.leafW, FOLDED_W) : state.leafW;
@@ -659,8 +689,16 @@ function layout(node, depth, hist, state) {
     state.maxDepth = Math.max(state.maxDepth, depth);
 }
 
+// the label `text` of condition `number` in `fits` characters: cut short with …, or else the number
+function shorten(text, number, fits) {
+    return text.length <= fits ? text : fits >= 8 ? text.slice(0, fits - 1) + '…' : String(number);
+}
+
+// a condition as written in the compact format, with its name if it has one
+const conditionText = c => (c.name ? c.name + ': ' : '') + c.constraint;
+
 function leafTip(node) {
-    return `<div class="tip-path">${escapeHtml(node._hist.join(' ')) || '(root)'}</div>` +
+    return `<div class="tip-path">${escapeHtml(node._text.join(' ')) || '(root)'}</div>` +
         (node.utility || []).map(u => `<div><b>${escapeHtml(u.player)}</b>: ${escapeHtml(u.value)}</div>`).join('');
 }
 
@@ -678,23 +716,63 @@ $('tree').addEventListener('mousemove', e => {
     if (!t) { tip.hidden = true; return; }
     tip.innerHTML = treeTips[+t.dataset.tip];
     tip.hidden = false;
+    // at most as wide as the visible part of the box (long utilities wrap); measured at its left edge, where the
+    // whole width is available
+    const MARGIN = 6, visible = box.clientWidth - 2 * MARGIN;
+    tip.style.maxWidth = visible + 'px';
+    tip.style.left = box.scrollLeft + 'px';
     const r = box.getBoundingClientRect();
     let left = e.clientX - r.left + box.scrollLeft + 14;
-    // flip to the left of the pointer near the right edge, so the tooltip does not widen the scroll area
+    // flip to the left of the pointer near the right edge, so the tooltip does not widen the scroll area,
+    // and keep it inside the visible part of the box, so all of it can be read
     if (left + tip.offsetWidth > box.scrollLeft + box.clientWidth) left -= tip.offsetWidth + 28;
+    left = Math.max(box.scrollLeft + MARGIN, Math.min(left, box.scrollLeft + MARGIN + visible - tip.offsetWidth));
     tip.style.left = left + 'px';
-    tip.style.top = (e.clientY - r.top + box.scrollTop + 14) + 'px';
+    // likewise above the pointer near the bottom, so that it does not lengthen the scroll area
+    let top = e.clientY - r.top + box.scrollTop + 14;
+    if (top + tip.offsetHeight > box.scrollTop + box.clientHeight) top -= tip.offsetHeight + 28;
+    tip.style.top = Math.max(box.scrollTop + MARGIN, top) + 'px';
 });
 $('tree').addEventListener('mouseleave', () => { $('tree-tip').hidden = true; });
 $('unfold-all').addEventListener('click', () => { folded = new Set(); revealed = selection; drawTree(); });
 $('fold-default').addEventListener('click', () => { folded = null; drawTree(); });
 
+// conditions as checkmate prints them have more parentheses, and numbers as 0.0
+const sameCondition = (a, b) => {
+    const norm = s => s.replace(/[\s()]/g, '').replace(/(\d)\.0+(?!\d)/g, '$1');
+    return norm(a) === norm(b);
+};
+
+// add the edges of honest history `history` from `node`, reached by `hist`, to `out`; in CEFGs, it continues in every
+// condition of a condition node, matched by its text, or else by its position
+function honestEdges(node, hist, history, out) {
+    for (const element of history) {
+        if (typeof element === 'string') {
+            const c = (node.children || []).find(c => c.action === element);
+            if (!c) return;
+            hist = hist.concat([element]);
+            out.add(histKey(hist));
+            node = c.child;
+            continue;
+        }
+        if (!isCondition(node)) return;
+        element.forEach((e, i) => {
+            let j = node.condition.findIndex(c => sameCondition(c.constraint, e.condition));
+            if (j < 0 && element.length === node.condition.length) j = i;
+            if (j < 0) return;
+            const below = hist.concat([{ c: j }]);
+            out.add(histKey(below));
+            honestEdges(node.condition[j].child, below, e.path, out);
+        });
+        return;
+    }
+}
+
 function highlights() {
     const h = { honest: new Set(), strategy: new Set(), ce: new Set(), ceLeaf: new Set() };
     const key = (hist, a) => JSON.stringify(hist.concat([a]));
-    let honest = selection ? selection.r.history : (game.honest_histories || [])[0];
-    if (honest) honest = actionPrefix(honest);
-    if (honest) honest.forEach((a, i) => h.honest.add(key(honest.slice(0, i), a)));
+    const honest = selection ? selection.r.history : (game.honest_histories || [])[0];
+    if (honest) honestEdges(game.tree, [], honest, h.honest);
     if (!selection) return h;
     if (selection.kind === 'strategy') selection.s.strategy.forEach(e => h.strategy.add(key(e.history, e.action)));
     if (selection.kind === 'ce') {
@@ -728,47 +806,96 @@ function drawTree() {
     }
     const { leafW, inline } = slots(showingNodes(game.tree, folded), avail);
     const state = { next: 0, maxDepth: 0, leafW };
-    layout(game.tree, 0, [], state);
-    const players = game.players || [];
+    layout(game.tree, 0, [], [], new Set(), state);
     const treeWidth = state.next + 2 * PAD;
     const width = Math.max(treeWidth, avail);
     const shift = (width - treeWidth) / 2;
-    const height = state.maxDepth * LEVEL_H + 2 * PAD + Math.max(60, inline ? 20 + 17 * players.length : 0);
-    svg.setAttribute('width', width);
-    svg.setAttribute('height', height);
+    // the rightmost point drawn beyond the layout (the unknowns revealed at a condition node), for the width
+    let right = width;
     treeTips = []; foldable = [];
+    // the lowest point drawn, for the height of the drawing, so that no space is left below it
+    let bottom = 0;
     const y = d => PAD + 10 + d * LEVEL_H;
     // colours come from CSS classes so the tree follows the theme; labels get a halo (t-halo) in the
     // background colour so they stay readable on top of edges
     let bands = '', edges = '', labels = '', nodes = '';
+    // what is drawn where, as boxes, so that condition labels beside their edges can be shortened to the space
+    // they have: those are placed (in `besides`) once everything else is drawn
+    const boxes = [], besides = [], box = (l, r, t, b) => boxes.push({ l, r, t, b });
     (function draw(node) {
         const x = node._x + shift, yy = y(node._depth);
-        if (node.children) {
-            if (!node._folded) for (const c of node.children) {
-                const k = JSON.stringify(node._hist.concat([c.action]));
+        if (isInner(node)) {
+            const bs = node._folded ? [] : branches(node);
+            // A condition is labelled by its name, or else its constraint (the tooltip has both). Up to three sit
+            // beside their edges as actions do, as long as the space up to what is drawn next to them allows; more
+            // sit just above the node they lead to, as wide as the space between those nodes. Where too little
+            // would fit, the number of the condition stands in.
+            const beside = bs.length <= 3;
+            const gap = Math.min(...bs.slice(1).map((c, i) => c.child._x - bs[i].child._x));
+            const fits = Math.floor((gap * 0.8) / 7.3);
+            for (const c of bs) {
+                const k = JSON.stringify(node._hist.concat([c.step]));
                 const cx = c.child._x + shift, cy = y(c.child._depth);
                 // the honest history is a band underneath, so strategies and counterexamples on it stay visible
                 if (h.honest.has(k))
                     bands += `<line x1="${x}" y1="${yy}" x2="${cx}" y2="${cy}" class="t-band"/>`;
                 const kind = h.ce.has(k) ? ' ce' : h.strategy.has(k) ? ' strategy' : h.honest.has(k) ? ' honest' : '';
                 edges += `<line x1="${x}" y1="${yy}" x2="${cx}" y2="${cy}" class="t-edge${kind}"/>`;
-                labels += `<text x="${(x + cx) / 2 + (cx < x ? -6 : 6)}" y="${(yy + cy) / 2}" font-size="13" ` +
-                          `text-anchor="${cx < x ? 'end' : 'start'}" class="t-halo t-action">${escapeHtml(c.action)}</text>`;
+                if (c.cond) {
+                    const text = c.cond.name || c.cond.constraint, number = c.step.c + 1;
+                    const tip = treeTips.push(`<div class="tip-path">condition ${number}</div><div>${escapeHtml(conditionText(c.cond))}</div>`) - 1;
+                    if (beside) {
+                        besides.push({ x: (x + cx) / 2 + (cx < x ? -6 : 6), y: (yy + cy) / 2, left: cx < x, text, number, tip });
+                    } else {
+                        const short = shorten(text, number, fits), lx = x + (cx - x) * 0.78, ly = yy + (cy - yy) * 0.78 - 6;
+                        box(lx - 3.65 * short.length, lx + 3.65 * short.length, ly - 10, ly + 3);
+                        labels += `<text x="${lx}" y="${ly}" text-anchor="middle" class="t-halo t-cond" data-tip="${tip}">${escapeHtml(short)}</text>`;
+                    }
+                } else {
+                    // action labels are 13px, about 7.8px per character
+                    const lx = (x + cx) / 2 + (cx < x ? -6 : 6), ly = (yy + cy) / 2, w = 7.8 * c.step.length;
+                    box(cx < x ? lx - w : lx, cx < x ? lx : lx + w, ly - 11, ly + 3);
+                    labels += `<text x="${lx}" y="${ly}" font-size="13" ` +
+                              `text-anchor="${cx < x ? 'end' : 'start'}" class="t-halo t-action">${escapeHtml(c.step)}</text>`;
+                }
                 draw(c.child);
             }
             const n = foldable.push({ node, hist: node._hist }) - 1;
-            const tip = treeTips.push(node._folded ? `${countLeaves(node)} leaves folded, click to unfold` : 'click to fold') - 1;
+            const reveals = isCondition(node) && (node.reveals || []).length ? `reveals ${node.reveals.join(', ')}, ` : '';
+            const tip = treeTips.push((isCondition(node) ? 'condition node, ' + reveals : '') +
+                (node._folded ? `${countLeaves(node)} leaves folded, click to unfold` : 'click to fold')) - 1;
             nodes += `<g class="t-click" data-n="${n}" data-tip="${tip}">`;
+            bottom = Math.max(bottom, yy + (node._folded ? 59 : 16));
+            box(x - 16, x + 16, yy - 16, node._folded ? yy + 59 : yy + 16);
+            if (isCondition(node) && node._revealed.length) {
+                const w = 7.3 * node._revealed.join(', ').length;
+                box(x + 22, x + 22 + w, yy - 9, yy + 4);
+                right = Math.max(right, x + 22 + w + 10);
+            }
             if (node._folded)
                 nodes += `<polygon points="${x},${yy + 8} ${x - 15},${yy + 40} ${x + 15},${yy + 40}" class="t-folded${hiddenKind(node._hist, h)}"/>` +
                          `<text x="${x}" y="${yy + 55}" font-size="11" text-anchor="middle" class="t-muted">${countLeaves(node)} leaves</text>`;
-            nodes += `<circle cx="${x}" cy="${yy}" r="14" class="t-node"/>` +
-                     `<text x="${x}" y="${yy + 4}" font-size="12" text-anchor="middle" class="t-player">${escapeHtml(node.player)}</text></g>`;
+            nodes += isCondition(node)
+                ? `<polygon points="${x},${yy - 16} ${x + 16},${yy} ${x},${yy + 16} ${x - 16},${yy}" class="t-node t-cond-node"/>` +
+                  `<text x="${x}" y="${yy + 5}" text-anchor="middle" class="t-cond-mark">?</text></g>` +
+                  // what the node reveals, also in the tooltip
+                  (node._revealed.length ? `<text x="${x + 22}" y="${yy + 4}" class="t-halo t-reveals">${escapeHtml(node._revealed.join(', '))}</text>` : '')
+                : `<circle cx="${x}" cy="${yy}" r="14" class="t-node"/>` +
+                  `<text x="${x}" y="${yy + 4}" font-size="12" text-anchor="middle" class="t-player">${escapeHtml(node.player)}</text></g>`;
         } else if (node.subtree) {
+            bottom = Math.max(bottom, yy + 32);
+            box(x - 16, x + 16, yy - 14, yy + 32);
             nodes += `<polygon points="${x},${yy - 14} ${x - 16},${yy + 12} ${x + 16},${yy + 12}" class="t-subtree"/>` +
                      `<text x="${x}" y="${yy + 28}" font-size="11" text-anchor="middle" class="t-muted">subtree</text>`;
         } else {
             const mark = h.ceLeaf.has(JSON.stringify(node._hist));
+            bottom = Math.max(bottom, yy + (inline ? 25 + 15 * ((node.utility || []).length - 1) : 12));
+            box(x - 6, x + 6, yy - 6, yy + 6);
+            // payoffs are 11px, about 6.6px per character
+            if (inline && (node.utility || []).length) {
+                const w = 6.6 * Math.max(...node.utility.map(u => `${u.player}: ${u.value}`.length));
+                box(x - w / 2, x + w / 2, yy + 11, yy + 25 + 15 * (node.utility.length - 1));
+            }
             nodes += `<g data-tip="${treeTips.push(leafTip(node)) - 1}">` +
                      `<rect x="${x - 12}" y="${yy - 12}" width="24" height="24" class="t-hit"/>` +
                      `<rect x="${x - 5}" y="${yy - 5}" width="10" height="10" rx="2" class="t-leaf${mark ? ' ce' : ''}"/></g>`;
@@ -778,6 +905,25 @@ function drawTree() {
             });
         }
     })(game.tree);
+    // condition labels beside their edges: as far as the next box on their side of the same height, or the edge
+    // of the drawing (with a little space), and at most BESIDE_MAX characters
+    const BESIDE_MAX = 28;
+    for (const c of besides) {
+        const t = c.y - 10, b = c.y + 3;
+        let room = c.left ? c.x : right - c.x;
+        for (const o of boxes) {
+            if (o.b < t || o.t > b) continue;
+            if (c.left && o.l < c.x) room = Math.min(room, Math.max(0, c.x - o.r));
+            if (!c.left && o.r > c.x) room = Math.min(room, Math.max(0, o.l - c.x));
+        }
+        const short = shorten(c.text, c.number, Math.min(BESIDE_MAX, Math.floor((room - 6) / 7.3)));
+        const w = 7.3 * short.length;
+        box(c.left ? c.x - w : c.x, c.left ? c.x : c.x + w, t, b);
+        labels += `<text x="${c.x}" y="${c.y}" text-anchor="${c.left ? 'end' : 'start'}" class="t-halo t-cond" ` +
+                  `data-tip="${c.tip}">${escapeHtml(short)}</text>`;
+    }
+    svg.setAttribute('height', bottom + PAD);
+    svg.setAttribute('width', right);
     svg.innerHTML = bands + edges + labels + nodes;
 }
 </script>
