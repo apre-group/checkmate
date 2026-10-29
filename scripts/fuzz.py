@@ -478,24 +478,26 @@ def history_shape(history):
 
 def cefg_verdicts(results, cmd):
     """The verdicts in a CEFG's --json-out results, keyed as the text output (see parse_verdicts), and the
-    analysed honest histories: one for each run, i.e. a new one whenever the history changes or a property repeats."""
-    verdicts, histories, seen = {}, [], set()
+    analysed honest histories, by the index of the honest history in the game. A history ending in a subtree node
+    gets one run for each honest history inside the subtree; the fuzzer's subtrees have only one."""
+    verdicts, histories = {}, {}
     for r in results:
         p, h, holds = r["property"], r["history"], r["holds"]
         if holds is None and (p != "practicality" or not r.get("undecided")):
             raise Bug("%s is undecided without a reason, or not for practicality: %s" % (p, r), cmd)
         if h is None:
+            if "honest_history" in r:
+                raise Bug("a run without honest history has an honest history index: %s" % r, cmd)
             key = ("utility", r["honest_utility"], p) if "honest_utility" in r else ("none", 0, p)
         else:
-            if not histories or h != histories[-1] or p in seen:
-                histories.append(h)
-                seen = set()
-            seen.add(p)
-            key = ("history", len(histories) - 1, p)
+            i = r["honest_history"]
+            if histories.setdefault(i, h) != h:
+                raise Bug("two honest histories for index %d: %s and %s" % (i, histories[i], h), cmd)
+            key = ("history", i, p)
         if key in verdicts:
             raise Bug("two results for %s" % (key,), cmd)
         verdicts[key] = holds
-    return verdicts, histories
+    return verdicts, [histories[i] for i in sorted(histories)]
 
 
 def run_cefg(game, flags, outs, expect_cefg=True):

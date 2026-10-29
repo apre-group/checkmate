@@ -40,7 +40,8 @@ int run(char **argv) {
 	};
 
 	// first for every honest history...
-	for (const HonestHistory &history : input.honest) {
+	for (size_t i = 0; i < input.honest.size(); i++) {
+		const HonestHistory &history = input.honest[i];
 		input.root->reset_honest();
 		input.root->mark_honest(history);
 
@@ -55,7 +56,9 @@ int run(char **argv) {
 			if (options.collusion_resilience || options.practicality) {
 				ustar = compute_ustar(input.root.get(), history);
 			}
-			run(options, ustar, full_history, &history, {{"history", history2json(full_history)}});
+			// the index, as conditions in `history` are written in CheckMate's syntax rather than as in the input
+			run(options, ustar, full_history, &history,
+				{{"history", history2json(full_history)}, {"honest_history", i}});
 		}
 	}
 
