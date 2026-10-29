@@ -11,7 +11,7 @@
 #include "cefg/run.hpp"
 
 // analyse a CEFG with the analysis in src/cefg/, leaving out the options it does not support (with a warning)
-static int run_cefg(char **argv) {
+static int run_cefg(char **argv, const nlohmann::json &game) {
 	// options the CEFG analysis understands
 	static const char *SUPPORTED[] = {"--weak_immunity", "--weaker_immunity", "--collusion_resilience", "--practicality", "--subtree",
 		"--no_validate_conditions"};
@@ -44,7 +44,7 @@ static int run_cefg(char **argv) {
 		}
 	}
 	arguments.push_back(nullptr);
-	return cefg::run(arguments.data());
+	return cefg::run(arguments.data(), game);
 }
 
 int main(int, char **argv) {
@@ -56,20 +56,15 @@ int main(int, char **argv) {
 
 	std::string reason;
 	if (detect_game_type(file.document, reason) == GameType::CEFG) {
-		if (!file.is_json) {
-			std::cerr << "checkmate: " << options.input_path << ": games with " << reason
-				<< " (CEFGs) are only supported in the JSON format for now" << std::endl;
-			return EXIT_FAILURE;
-		}
 		try {
-			validate_cefg(file.document);
+			validate_cefg(file.document, &file.lines);
 		}
 		catch (const GameError &err) {
 			std::cerr << "checkmate: " << options.input_path << ": " << err.what() << std::endl;
 			return EXIT_FAILURE;
 		}
 		std::cout << "Game type: CEFG (" << reason << ")" << std::endl;
-		return run_cefg(argv);
+		return run_cefg(argv, file.document);
 	}
 
 	if (!options.validate_conditions) {

@@ -5,6 +5,7 @@
 #include <iterator>
 
 #include "compact.hpp"
+#include "game_type.hpp"
 
 int main(int argc, char **argv) {
 	if (argc < 2 || argc > 3 || !std::strcmp(argv[1], "--help")) {
@@ -20,14 +21,22 @@ int main(int argc, char **argv) {
 	std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 	std::string result;
 	try {
+		// CEFGs (games with condition nodes or unknown constants) are checked as checkmate checks them
+		auto validate = [](const nlohmann::json &game, const LineMap *lines) {
+			std::string reason;
+			if (detect_game_type(game, reason) == GameType::CEFG)
+				validate_cefg(game, lines);
+			else
+				validate_game(game, lines);
+		};
 		if (looks_like_json(text)) {
 			nlohmann::json game = nlohmann::json::parse(text);
-			validate_game(game);
+			validate(game, nullptr);
 			result = to_compact(game);
 		} else {
 			LineMap lines;
 			nlohmann::json game = from_compact(text, &lines);
-			validate_game(game, &lines);
+			validate(game, &lines);
 			result = game.dump(2) + "\n";
 		}
 	} catch (const nlohmann::json::exception &e) {
