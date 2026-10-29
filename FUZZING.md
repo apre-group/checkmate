@@ -75,6 +75,8 @@ The verdicts must also agree:
 
 About a third of the CEFGs are EFGs embedded into a CEFG: the EFG gets condition nodes with a copy of the same subtree below every condition, deep in the tree on known constants, and at the root revealing constants that are now unknown. This cannot change any verdict, so the CEFG analysis must agree with the EFG analysis of the original game, which `check_result.py` verifies. This is the only independent check of CEFG verdicts; everything else compares CheckMate with itself.
 
+About one in ten condition nodes on an unknown gets overlapping conditions (`u0 >= 1` and `u0 <= 1`), and about one in ten a gap (`u0 > 1` and `u0 < 1`, or a partition of the finite domain that leaves out a value). CheckMate must reject such a game with an error about the overlap or the gap, unless the constraints and the conditions on the way to the node make it unreachable; the other games must pass these checks. The analysis of a game with such conditions then runs with `--no_validate_conditions`. A subtree cut for the compositional check gets the conditions on the way to it as additional initial constraints, and is only cut where these conditions can hold.
+
 The verdicts of a CEFG come from its `--json-out` result, which has the verdicts only (CEFGs have no strategies, counterexamples or cases yet). For each game, the fuzzer checks that:
 
 - CheckMate analyses it as a CEFG, with one verdict per property for every honest history and honest utility, and, under the index of each honest history (`honest_history`), that honest history (conditions are not compared, CheckMate writes them in its own syntax);
@@ -149,6 +151,7 @@ For CEFGs, a second block follows:
   games: with revealing condition nodes 27, honest through conditions 25, honest utility only 4
   weak_immunity         YES  41%, NO  58%, UNKNOWN   0% of 44 runs
   ...
+  conditions: rejected overlap 3, rejected gap 4, defect unreachable 2
   subtrees: cut along honest 15, cut off honest 18, cut nested 9
   transforms: permute_children 14, rename_symbols 12, ...
   compared: with EFG 12, options 35, transformed 37, supertree 30
@@ -157,6 +160,7 @@ For CEFGs, a second block follows:
 - **unknowns, condition nodes:** how many games had each number of unknown constants and of condition nodes.
 - **games:** how many games had condition nodes revealing unknowns, honest histories through condition nodes, or only an honest utility.
 - **per property:** how often the verdict was YES, NO or UNKNOWN.
+- **conditions:** how many games with overlapping conditions or a gap CheckMate rejected, and how many it accepted because the constraints make the defect unreachable.
 - **compared:** how often the verdicts were compared with the EFG analysis of an embedded EFG, with other options, after transforms and with a supertree.
 
 If a number stays at zero, that part of CheckMate is not being tested, and the generator in `scripts/gen_game.py` may need tuning. `scripts/gen_stats.py --num 500` measures the generated games without the checker, so you can compare generator changes quickly.

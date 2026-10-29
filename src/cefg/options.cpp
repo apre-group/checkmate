@@ -14,6 +14,7 @@ const char *USAGE = R"(usage: checkmate PATH
 	--practicality
 	--subtree
 	--json-out FILE
+	--no_validate_conditions
 )";
 // future options
 	// --counterexamples
@@ -74,6 +75,8 @@ Options::Options(char **argv) {
 				bail("--json-out expects a file name");
 			json_out = *argv;
 		}
+		else if (!strcmp(*argv, "--no_validate_conditions"))
+			validate_conditions = false;
 		// else if (!strcmp(*argv, "--count_nodes"))
 		// 	count_nodes = true;
 		// else if (!strcmp(*argv, "--count_calls"))

@@ -11,6 +11,9 @@ const char *USAGE = R"(usage: checkmate PATH
 	--practicality
 	--subtree
 	--json-out FILE
+only for CEFGs (games with condition nodes), ignored for EFGs:
+	--no_validate_conditions  do not check that the conditions of a condition node
+	                          are mutually exclusive and leave no gap
 not yet implemented for CEFGs (games with condition nodes), ignored for them:
 	--counterexamples
 	--all_counterexamples
@@ -80,6 +83,8 @@ Options::Options(char **argv) {
 		}
 		else if (!strcmp(*argv, "--subtree"))
 			subtree = true;
+		else if (!strcmp(*argv, "--no_validate_conditions"))
+			validate_conditions = false;
 		else if (!strcmp(*argv, "--count_nodes"))
 			count_nodes = true;
 		else if (!strcmp(*argv, "--count_calls"))

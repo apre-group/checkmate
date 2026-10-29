@@ -129,6 +129,21 @@ For conditional games, CheckMate also checks that:
 - an honest history gives, at a condition node, a path for each of its conditions, as its last element.
 
 Conditions in an honest history are matched to those of the condition node by CheckMate itself, which reports conditions that are not in the node.
+
+For conditional games, CheckMate then checks the conditions of every condition node with Z3. The checks use the initial constraints, the constraints of each analyzed property, and the conditions on the way to the node:
+- the conditions are mutually exclusive: no two of them hold for the same values,
+- the conditions leave no gap: for all values, one of them holds,
+- at least one of the conditions can hold.
+
+The constraints may rule out some of the conditions of a node, e.g. to try out what happens for a narrower range of values, but not all of them; CheckMate prints a note for every condition that can never hold and does not check the nodes below it:
+
+```
+checkmate: note: condition 2 (x < 0.0) of the condition node after hon can never hold (given the initial constraints and the conditions on the way)
+checkmate: game.json: condition 1 (x >= 0.0) and condition 2 (x <= 0.0) of the condition node after hon overlap: both hold for some values (given the initial constraints and the conditions on the way) (turn this check off with --no_validate_conditions)
+```
+
+`--no_validate_conditions` turns these checks off and keeps only the checks of the input format above. If Z3 cannot decide a check within 10 seconds, CheckMate warns and goes on.
+
 If a check fails, CheckMate stops with an error naming the line in the compact format, or the node in JSON:
 
 ```
@@ -194,10 +209,11 @@ There are several options:
 * `--json-out FILE`: Also write the results as JSON to `FILE`: for each honest history and property, the verdict, every case checked (as a list of SMT-LIB 2 conditions) with whether the property holds in it, the strategies and counterexamples, exactly when the text output shows them, and the weakest precondition with `--preconditions`. With `--subtree`, `FILE` gets the subtree result instead: the same as `SUBTREE.out`, but with cases as SMT-LIB 2 conditions and utilities as SMT-LIB 2 real and infinitesimal parts.
 * If not all security properties should be analyzed, users can specify properties individually with some combination of `--weak_immunity`, `--weaker_immunity`, `--collusion_resilience`, and `--practicality`.
 * `--subtree` is used for [compositional analysis](#compositional-analysis). For games without condition nodes, it cannot be combined with `--counterexamples`, `--all_counterexamples`, `--strategies` or `--preconditions`.
+* `--no_validate_conditions`: Only for conditional games: do not check that the conditions of every condition node are mutually exclusive, leave no gap, and can hold (see [Validation](#validation)). For games without condition nodes, CheckMate warns and ignores it.
 * `--count_nodes` and `--count_calls`: For experiments, report the number of checked tree nodes and of SMT solver calls per analyzed property.
 * `--no-cr-node-cache`, `--no-cr-leaf-cache`, `--no-cr-implied-groups`, `--no-cr-violated-lookup`, `--no-problematic-groups`, `--exact-splits`, `--reset-from-root`: For testing only, disable an optimization or heuristic. Results must not change; the fuzzer (`scripts/fuzz.py`, see [FUZZING.md](FUZZING.md)) checks this.
 
-For conditional games, only the properties, `--subtree` and `--json-out` are available so far: `--counterexamples`, `--all_counterexamples`, `--strategies` and `--preconditions` are not yet implemented for them, and `--all_cases`, `--count_nodes`, `--count_calls` and the testing options only apply to games without condition nodes.
+For conditional games, only the properties, `--subtree`, `--json-out` and `--no_validate_conditions` are available so far: `--counterexamples`, `--all_counterexamples`, `--strategies` and `--preconditions` are not yet implemented for them, and `--all_cases`, `--count_nodes`, `--count_calls` and the testing options only apply to games without condition nodes.
 With `--json-out`, the JSON result of a conditional game has one entry per run and property, as for other games but without cases: `history` is the honest history analysed (in the input format, with conditions in CheckMate's syntax, and continued into subtree nodes), with the index of the honest history in `honest_histories` under `honest_history` (several runs share an index if the history ends in a subtree node with several honest histories inside), or `null` for the runs without honest history, which have the index of the honest utility under `honest_utility` for collusion resilience, and `holds` is `true`, `false`, or `null` if practicality could not be decided, with the reason under `undecided`. With `--subtree`, `FILE` gets `{"version": 1, "subtree": ...}` with the same list as `SUBTREE.out`.
 CheckMate prints a warning for each such option and ignores it, e.g. `checkmate: --counterexamples is not yet implemented for CEFGs and is ignored`.
 
@@ -264,7 +280,7 @@ If the game contains subtree results, the counterexample can instead say that a 
 
 Large games can be analyzed in parts [2]: subtrees are analyzed on their own, and their results replace them in a smaller supertree.
 
-1. Write the subtree as an input file of its own. If it lies along the honest history, give the rest of the honest history in `honest_histories`; otherwise give the honest utility of the whole game in `honest_utilities`.
+1. Write the subtree as an input file of its own. If it lies along the honest history, give the rest of the honest history in `honest_histories`; otherwise give the honest utility of the whole game in `honest_utilities`. Its initial constraints are those of the supertree, together with all conditions of condition nodes on the way to the subtree in the supertree; its property constraints are those of the supertree. A subtree below a condition that the constraints of the supertree rule out is never reached and need not be analyzed.
 2. Run `./checkmate SUBTREE --subtree`. The results are written to `SUBTREE.out`.
 3. In the supertree, replace the subtree by a node `{"subtree": ...}` containing the `subtree` dictionary from `SUBTREE.out`, and run `./checkmate SUPERTREE` as usual. Whenever the tree contains subtree results, counterexamples and strategies end at the subtrees, with a hint to run the subtree on its own.
 
@@ -278,7 +294,7 @@ Collusion resilience results of subtrees must have been computed with the curren
 
 A conditional game extends the input as follows.
 - `constants` (and `infinitesimals`) can be a dictionary `{"known": [...], "unknown": [...]}`: unknown constants are not known to the players until they are revealed.
-- A **condition node** is a dictionary with the key `condition`: a list of dictionaries with the keys `constraint` (an expression over the constants), `child` (the tree node after it) and optionally `name`. The constraints have to be mutually exclusive and cover all values allowed by the initial constraints. The unknown constants occurring in the constraints are revealed at the node, as are those listed in the optional key `reveals`. Utilities may only use constants that are known at their leaf.
+- A **condition node** is a dictionary with the key `condition`: a list of dictionaries with the keys `constraint` (an expression over the constants), `child` (the tree node after it) and optionally `name`. The constraints have to be mutually exclusive and cover all values allowed by the initial constraints and the conditions on the way to the node; the constraints may rule out some of them, but not all (CheckMate checks this, see [Validation](#validation)). The unknown constants occurring in the constraints are revealed at the node, as are those listed in the optional key `reveals`. Utilities may only use constants that are known at their leaf.
 - An honest history continues in every condition of a condition node: at a condition node, it contains a list of dictionaries `{"condition": ..., "path": [...]}`, one per condition, with the rest of the honest history after it.
 - An honest utility in `honest_utilities` can likewise depend on conditions: its `utility` is then a list of dictionaries `{"condition": ..., "utility": [...]}`.
 

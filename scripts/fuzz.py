@@ -144,6 +144,7 @@ def print_cefg_stats(line):
             print("  %-21s YES %3d%%, NO %3d%%, UNKNOWN %3d%% of %d runs"
                   % (p, 100 * STATS["cefg %s YES" % p] // n, 100 * STATS["cefg %s NO" % p] // n,
                      100 * STATS["cefg %s UNKNOWN" % p] // n, n))
+    print(line("conditions", ["cefg rejected overlap", "cefg rejected gap", "cefg defect unreachable"], "cefg "))
     print(line("subtrees", ["cefg cut along honest", "cefg cut off honest", "cefg cut nested"], "cefg "))
     print(line("transforms", sorted(k for k in STATS if k.startswith("cefg transform ")), "cefg transform "))
     print(line("compared", ["cefg compared with EFG", "cefg compared options", "cefg compared transformed",
@@ -447,7 +448,16 @@ def fuzz_efg(rng, game, outs):
 
 # options the CEFG analysis ignores with a warning: running with them must not change anything
 CEFG_IGNORED = ["--counterexamples", "--all_counterexamples", "--all_cases", "--strategies", "--preconditions"] + NO_OPTS
-IGNORED_WARNING = re.compile(r"checkmate: --[\w-]+ (is not yet implemented for CEFGs|only applies to EFGs) and is ignored$")
+IGNORED_WARNING = re.compile(r"checkmate: (--[\w-]+ (is not yet implemented for CEFGs|only applies to C?EFGs) and is ignored$"
+                             r"|note: condition \d+ .* can never hold"
+                             r"|warning: could not check whether .*, Z3 gave up$)")
+
+# --no_validate_conditions for the game being fuzzed if its conditions overlap or leave a gap (see check_conditions),
+# so that the analysis runs anyway
+CONDITION_FLAGS = []
+# the errors of CheckMate's checks of the conditions, by the defect gen_cefg records
+CONDITION_ERRORS = {"overlap": re.compile(r"checkmate: .*\boverlap: both hold for some values"),
+                    "gap": re.compile(r"checkmate: .*(leave a gap: no condition holds|no condition of .* can hold)")}
 
 VERDICT = re.compile(r"^(YES|NO|UNKNOWN), .*?\b(weaker immune|weak immune|collusion resilient|practical)\b")
 PROPERTY = {"weak immune": "weak_immunity", "weaker immune": "weaker_immunity",
@@ -504,6 +514,7 @@ def run_cefg(game, flags, outs, expect_cefg=True):
     """Run checkmate on a CEFG, keep its output, return its verdicts (None on a timeout), checking that the
     output and --json-out agree."""
     json_out = game[:-5] + ("-flags" if flags else "") + ".out.json"
+    flags = flags + CONDITION_FLAGS
     cmd = checkmate_cmd() + [game] + flags + ["--json-out", json_out]
     out = run_checkmate(game, flags + ["--json-out", json_out], allowed=IGNORED_WARNING)
     if out is None:
@@ -571,7 +582,7 @@ def run_cefg_subtree(sub, path, outs):
         json.dump(sub, f, indent=2)
     json_out = path[:-5] + ".out.json"
     outs += [path, path + ".out", json_out]
-    flags = ["--subtree", "--json-out", json_out]
+    flags = ["--subtree", "--json-out", json_out] + CONDITION_FLAGS
     if run_checkmate(path, flags, allowed=IGNORED_WARNING) is None:
         return None
     result = json.load(open(path + ".out"))
@@ -619,8 +630,33 @@ def cefg_compositional(game_json, base, rng, game, outs):
     STATS["cefg compared supertree"] += 1
 
 
+def check_conditions(game, defects, outs):
+    """CheckMate (without --no_validate_conditions) must reject a game whose conditions overlap or leave a gap, unless
+    the constraints and the conditions on the way make that defect unreachable; other games must pass the checks."""
+    if not defects:
+        # the analysis runs without --no_validate_conditions, where run_checkmate rejects any condition error
+        return
+    cmd = checkmate_cmd() + [game, "--weak_immunity"]
+    p = run(cmd, args.tout)
+    if p is None:
+        STATS["checkmate timeouts"] += 1
+        return
+    txt = game[:-5] + "-conditions.txt"
+    outs.append(txt)
+    with open(txt, "w") as f:
+        f.write(p.stdout)
+    if p.returncode == 0:
+        STATS["cefg defect unreachable"] += 1
+        return
+    errors = [l for l in p.stdout.split("\n") if l.startswith("checkmate:") and not IGNORED_WARNING.match(l)]
+    if p.returncode != 1 or len(errors) != 1 or not any(CONDITION_ERRORS[d].match(errors[0]) for d in defects):
+        raise Bug("expected an error about the %s of the conditions" % " or ".join(sorted(set(defects))), cmd, p.stdout)
+    STATS["cefg rejected " + next(d for d in sorted(set(defects)) if CONDITION_ERRORS[d].match(errors[0]))] += 1
+
+
 def fuzz_cefg(rng, game, outs):
     efg_verdicts = None
+    defects = []
     if rng.random() < 0.3:
         # an EFG embedded into a CEFG: the CEFG analysis must agree with the (checked) EFG analysis
         efg_json = gen_game(rng)
@@ -639,9 +675,13 @@ def fuzz_cefg(rng, game, outs):
         hists = efg_json["honest_histories"]
         efg_verdicts = {("history", hists.index(r["history"]), r["property"]): r["holds"] for r in results}
     else:
-        game_json = gen_cefg(rng)
+        game_json = gen_cefg(rng, defects)
     with open(game, "w") as f:
         json.dump(game_json, f, indent=2)
+    if defects:
+        log("Conditions with defects: " + ", ".join(sorted(set(defects))))
+    check_conditions(game, defects, outs)
+    CONDITION_FLAGS[:] = ["--no_validate_conditions"] if defects else []
 
     run = run_cefg(game, [], outs)
     if run is None:

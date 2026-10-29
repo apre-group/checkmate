@@ -2,8 +2,9 @@
 
 import copy
 
-from gen_cefg import declare, declared, edges, follow_honest, honest_utility, revealed_at, truncate_honest
+from gen_cefg import PROPS, declare, declared, edges, follow_honest, honest_utility, revealed_at, truncate_honest
 from gen_cefg import node_at as cefg_node_at
+from gen_game import satisfiable
 
 
 def branches(tree, hist=()):
@@ -50,22 +51,39 @@ def splice(game, hist, subtree_result):
 def cefg_split(game, rng):
     """Cut below a random node other than the root (a branch or condition node) of a CEFG with one honest history
     or one honest utility. Returns (subtree game, steps to the cut, whether the cut is along the honest history) or None.
-    Constants revealed on the way to the cut are known in the subtree."""
+    Constants revealed on the way to the cut are known in the subtree, and the conditions on the way are added to its
+    initial constraints (as for a subgame in the paper)."""
     candidates = []
 
-    def walk(node, steps, revealed):
+    def walk(node, steps, revealed, conditions):
         if steps and ("children" in node or "condition" in node):
-            candidates.append((steps, node, revealed))
+            candidates.append((steps, node, revealed, conditions))
         below = revealed | revealed_at(node, unknown) if "condition" in node else revealed
         for step, c in edges(node):
-            walk(c, steps + [step], below)
+            taken = conditions + [node["condition"][step[1]]["constraint"]] if step[0] == "c" else conditions
+            walk(c, steps + [step], below, taken)
     known, unknown = declared(game["constants"])
-    walk(game["tree"], [], frozenset())
-    if not candidates:
+    walk(game["tree"], [], frozenset(), [])
+
+    # a cut where the constraints of some property rule out the conditions on the way is never reached for that
+    # property, and its subtree would have unsatisfiable initial and property constraints
+    def reachable(conditions):
+        props = game.get("property_constraints", {})
+        names = known + unknown + sum(declared(game.get("infinitesimals", [])), [])
+        try:
+            return all(satisfiable(game.get("initial_constraints", []) + props.get(p, []) +
+                                   [c for c in conditions if c != "true"], names, [])
+                       for p in PROPS)
+        except Exception:
+            # a constraint the simple translation in gen_game cannot read: let CheckMate decide
+            return True
+    cut = next((c for c in rng.sample(candidates, len(candidates)) if reachable(c[3])), None)
+    if cut is None:
         return None
-    steps, node, revealed = rng.choice(candidates)
+    steps, node, revealed, conditions = cut
     sub = {k: copy.deepcopy(v) for k, v in game.items() if k not in ("tree", "honest_histories", "honest_utilities")}
     sub["constants"] = declare(known + [u for u in unknown if u in revealed], [u for u in unknown if u not in revealed])
+    sub["initial_constraints"] = game.get("initial_constraints", []) + [c for c in conditions if c != "true"]
     sub["tree"] = copy.deepcopy(node)
     honest = game["honest_histories"][0] if game["honest_histories"] else None
     rest = follow_honest(game["tree"], honest, steps) if honest is not None else None

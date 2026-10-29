@@ -1,3 +1,4 @@
+#include "condition_checks.hpp"
 #include "input.hpp"
 #include "options.hpp"
 #include "default_mode.hpp"
@@ -9,7 +10,10 @@ namespace cefg {
 int run(char **argv, const nlohmann::json &game) {
 	z3::initialize();
 	Options options(argv);
-	Input input(game);
+	Input input(options.input_path);
+	if (options.validate_conditions) {
+		check_conditions(input, options);
+	}
 
 	if (input.honest.empty() && input.honest_utilities.empty()) {
 		std::cerr << "checkmate: the input has neither honest_histories nor honest_utilities, nothing to analyse" << std::endl;

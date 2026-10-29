@@ -106,3 +106,46 @@ NO, the game is not weak immune for the analyzed history.
 NO, the game is not weaker immune for the analyzed history.
 YES, the game is collusion resilient for the analyzed history.
 YES, the game is practical for the analyzed history.
+== cefg_conditions/excluded-all.json
+checkmate: excluded-all.json: no condition of the condition node after hon can hold (given the initial constraints and the conditions on the way) (turn this check off with --no_validate_conditions)
+== cefg_conditions/excluded-one.json
+checkmate: note: condition 2 (x < 0.0) of the condition node after hon can never hold (given the initial constraints and the conditions on the way)
+Checking history [hon, {((x >= 0.0) -> []), ((x < 0.0) -> [])}]
+YES, the game is weak immune for the analyzed history.
+YES, the game is weaker immune for the analyzed history.
+YES, the game is collusion resilient for the analyzed history.
+YES, the game is practical for the analyzed history.
+== cefg_conditions/gap.json
+checkmate: gap.json: the conditions of the condition node after hon leave a gap: no condition holds for some values (given the initial constraints and the conditions on the way) (turn this check off with --no_validate_conditions)
+== cefg_conditions/ic-unsatisfiable.json
+checkmate: ic-unsatisfiable.json: the initial constraints are unsatisfiable (turn this check off with --no_validate_conditions)
+== cefg_conditions/overlap-unchecked.json
+Checking history [hon, {((x >= 0.0) -> []), ((x <= 0.0) -> [])}]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+NO, the game is not practical for the analyzed history.
+== cefg_conditions/overlap-unreachable.json
+checkmate: note: condition 2 (x < 0.0) of the condition node after hon can never hold (given the initial constraints and the conditions on the way)
+Checking history [hon, {((x >= 0.0) -> []), ((x < 0.0) -> [{((y >= 0.0) -> []), ((y <= 0.0) -> [])}])}]
+YES, the game is weak immune for the analyzed history.
+YES, the game is weaker immune for the analyzed history.
+YES, the game is collusion resilient for the analyzed history.
+YES, the game is practical for the analyzed history.
+== cefg_conditions/overlap.json
+checkmate: overlap.json: condition 1 (x >= 0.0) and condition 2 (x <= 0.0) of the condition node after hon overlap: both hold for some values (given the initial constraints and the conditions on the way) (turn this check off with --no_validate_conditions)
+== cefg_conditions/pc-excludes-one.json
+checkmate: note: condition 2 (x < 0.0) of the condition node after hon can never hold (given the initial and practicality constraints and the conditions on the way)
+Checking history [hon, {((x >= 0.0) -> []), ((x < 0.0) -> [])}]
+NO, the game is not weak immune for the analyzed history.
+NO, the game is not weaker immune for the analyzed history.
+NO, the game is not collusion resilient for the analyzed history.
+YES, the game is practical for the analyzed history.
+== cefg_conditions/pc-unsatisfiable.json
+checkmate: pc-unsatisfiable.json: the initial and weak immunity constraints are unsatisfiable (turn this check off with --no_validate_conditions)
+== cefg_conditions/valid.json
+Checking history [hon, {((x >= 0.0) -> []), ((x < 0.0) -> [])}]
+YES, the game is weak immune for the analyzed history.
+YES, the game is weaker immune for the analyzed history.
+YES, the game is collusion resilient for the analyzed history.
+YES, the game is practical for the analyzed history.
