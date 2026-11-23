@@ -428,10 +428,7 @@ def fuzz_one(seed, stats):
             if actual["honest_histories"] != honest:
                 raise Bug("honest histories %s, expected %s" % (actual["honest_histories"], honest))
             stats["compiled"] = stats.get("compiled", 0) + 1
-            # (checkmate aborts when Z3 cannot decide nonlinear payoffs, such as c0 * c0)
-            if re.search(r"[A-Za-z_]\w* \* [A-Za-z_]", open(game).read()):
-                stats["nonlinear"] = stats.get("nonlinear", 0) + 1
-            elif rng.random() < args.analyse:
+            if rng.random() < args.analyse:
                 try:
                     run([args.checkmate, game], timeout=args.tout)
                     stats["analysed"] = stats.get("analysed", 0) + 1
