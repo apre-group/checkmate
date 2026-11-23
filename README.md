@@ -181,13 +181,15 @@ Troubleshooting:
 ### In the browser
 
 `html/` contains a page that runs CheckMate in the browser, compiled to WebAssembly: pick an example or paste a game, run it, and see the verdicts, cases, strategies and counterexamples drawn on the game tree.
-To build it, install [Emscripten](https://emscripten.org/), get the [Z3](https://github.com/Z3Prover/z3) sources, and run, from the repository root:
+To build it, install [Emscripten](https://emscripten.org/) and run, from the repository root:
 
 ```shell
-source /path/to/emsdk/emsdk_env.sh
-scripts/build_emscripten.sh /path/to/z3 [/path/to/cvc5]   # builds Z3 (and cvc5) for WebAssembly once, then CheckMate
-cd html && python3 -m http.server                         # then open http://localhost:8000
+scripts/build_emscripten.sh [/path/to/z3 [/path/to/cvc5]]   # builds Z3 (and cvc5) for WebAssembly once, then CheckMate
+cd html && python3 -m http.server                           # then open http://localhost:8000
 ```
+
+Without a Z3 path, the script uses `../z3-4.16.0` next to the repository, cloning the [Z3](https://github.com/Z3Prover/z3) 4.16.0 sources there if it does not exist.
+If `emcc` is not on `PATH`, it sources `../emsdk/emsdk_env.sh` next to the repository, or `$EMSDK_ENV` if set.
 
 With the [cvc5](https://github.com/cvc5/cvc5) sources (which need Emscripten 6.0.8 or later), the page also uses cvc5 for the practicality of conditional games, as CheckMate does (see [Conditional games](#conditional-games-cefgs)); it loads cvc5 only for runs of conditional games that check practicality.
 The page must be served over HTTP (not opened as a file), but needs no special server headers.
