@@ -164,7 +164,7 @@ Each move starts with `move NAME by PLAYER, ...`, or `honest move ...` for a mov
 In a move by several players, `me` is the player who moves, and in a game of two players, `other` is the other one.
 The tree has a node wherever a player moves: its branches are the moves of that player that are possible, in the order of the rules, and the payoff at a leaf is the sum of everything paid on the way, simplified.
 The honest histories are the plays along honest moves from the start; where several honest moves are possible, each gives an honest history.
-It is an error if a player who moves has no possible move, if two possible moves have the same name, if the honest play reaches a player without a possible honest move, or if the game does not end within 100 moves; errors name the line of the rules.
+It is an error if a player who moves has no possible move, if two possible moves have the same name, if the honest play reaches a player without a possible honest move, if a number in the state gets larger than 2^64, or if the game does not end within 100 moves; errors name the line of the rules.
 A comment after a move describes it, as a comment after a branch does in the compact format.
 
 ### Validation

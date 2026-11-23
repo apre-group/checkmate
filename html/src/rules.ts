@@ -19,7 +19,7 @@ export interface Compiled {
     leaves: number;
 }
 
-const MAX_DEPTH = 100, MAX_LEAVES = 100000;
+const MAX_DEPTH = 100, MAX_LEAVES = 100000, MAX_NUMBER = 2n ** 64n;
 
 // ---- expressions ---------------------------------------------------------------
 
@@ -288,11 +288,14 @@ function evaluate(e: Expr, pos: Position, players: string[], line: number, where
                 return e.op === '=' ? same : !same;
             }
             const a = number(l), b = number(r);
+            // e.g. a number squared in every move would outgrow memory
+            const small = (v: Rational) => (v.n < 0n ? -v.n : v.n) > MAX_NUMBER || v.d > MAX_NUMBER
+                ? fail(`a number in the state gets larger than 2^64`) : v;
             switch (e.op) {
-                case '+': return a.add(b);
-                case '-': return a.add(b.neg());
-                case '*': return a.mul(b);
-                case '/': return b.isZero() ? fail('division by zero') : a.div(b);
+                case '+': return small(a.add(b));
+                case '-': return small(a.add(b.neg()));
+                case '*': return small(a.mul(b));
+                case '/': return b.isZero() ? fail('division by zero') : small(a.div(b));
             }
             const diff = a.add(b.neg()).n;
             return e.op === '<' ? diff < 0n : e.op === '<=' ? diff <= 0n : e.op === '>' ? diff > 0n : diff >= 0n;

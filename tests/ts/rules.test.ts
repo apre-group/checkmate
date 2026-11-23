@@ -210,6 +210,8 @@ test('errors while playing the game out', () => {
     fails('players: A\nstate: b = yes\nhonest move go by A\n  pay A: b\n  end\n', 4, /b is true, not a number/);
     fails('players: A\nconstants: c\nhonest move go by A\n  pay A: 1 / c\n  end\n', 4, /divided by a number/);
     fails('players: A\nconstants: c\nhonest move go by A\n  pay A: c / 3\n  end\n', 3, /1\/3/);
+    fails('players: A\nstate: n = 2\nhonest move square by A\n  set n = n * n\n  next A\n', 4, /larger than 2\^64 \(after square square square square square square\)/);
+    fails('players: A\nstate: n = 1\nhonest move halve by A\n  set n = n / 3\n  next A\n', 4, /larger than 2\^64/);
 });
 
 test('every example compiles', () => {
