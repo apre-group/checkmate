@@ -9,6 +9,7 @@
  **/
 
 #include <cassert>
+#include <cstdlib>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -31,7 +32,12 @@ namespace z3 {
 	// check for Z3 errors in debug mode
 	inline void check_error() {
 		assert(CONTEXT && "z3::initialize() must be called before using Z3");
-		assert(Z3_get_error_code(CONTEXT) == Z3_OK);
+		// Z3 reports errors here rather than exiting (see initialize)
+		Z3_error_code code = Z3_get_error_code(CONTEXT);
+		if (code != Z3_OK) {
+			std::cerr << "checkmate: Z3 error: " << Z3_get_error_msg(CONTEXT, code) << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
 	}
 
 	class Solver;
@@ -576,7 +582,8 @@ namespace z3 {
 		// invoke the solver
 		Result solve() {
 			Z3_lbool result = Z3_solver_check(CONTEXT, solver);
-			check_error();
+			if (Z3_get_error_code(CONTEXT) != Z3_OK)
+				return solve_nonlinear({});
 			switch (result) {
 				case Z3_L_FALSE:
 					return Result::UNSAT;
@@ -596,7 +603,9 @@ namespace z3 {
 					// safety: Z3_ast should have the same size/alignment as Bool
 					reinterpret_cast<const Z3_ast *>(assumptions.data())
 			);
-			check_error();
+			// the default solver can also fail with an error on nonlinear arithmetic, such as "canceled"
+			if (Z3_get_error_code(CONTEXT) != Z3_OK)
+				return solve_nonlinear(assumptions);
 			switch (result) {
 				case Z3_L_FALSE:
 					return Result::UNSAT;
@@ -633,7 +642,11 @@ namespace z3 {
 				Z3_solver_assert(CONTEXT, nlsat, assumption.ast);
 			check_error();
 			Z3_lbool result = Z3_solver_check(CONTEXT, nlsat);
-			std::string reason = result == Z3_L_UNDEF ? Z3_solver_get_reason_unknown(CONTEXT, nlsat) : "";
+			Z3_error_code code = Z3_get_error_code(CONTEXT);
+			std::string reason = code != Z3_OK ? Z3_get_error_msg(CONTEXT, code)
+				: result == Z3_L_UNDEF ? Z3_solver_get_reason_unknown(CONTEXT, nlsat) : "";
+			if (code != Z3_OK)
+				result = Z3_L_UNDEF;
 			Z3_ast_vector_dec_ref(CONTEXT, assertions);
 			Z3_solver_dec_ref(CONTEXT, nlsat);
 			Z3_tactic_dec_ref(CONTEXT, tactic);
