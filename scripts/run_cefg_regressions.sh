@@ -6,6 +6,7 @@
 # sign-2 and mixed-2 need cvc5 (on the PATH or in CHECKMATE_CVC5); --update rewrites the expected results.
 
 CHECKMATE=$(realpath "${1:-build/checkmate}")
+export LC_ALL=C  # glob order of the games, as in expected.txt
 EXPECTED=tests/cefg_regressions/expected.txt
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT

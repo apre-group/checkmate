@@ -17,6 +17,8 @@ namespace z3 {
 	void initialize() {
 		Z3_config config = Z3_mk_config();
 		CONTEXT = Z3_mk_context(config);
+		// errors are checked for after each call (check_error), so a failing check can be handled
+		Z3_set_error_handler(CONTEXT, nullptr);
 		Z3_del_config(config);
 		check_error();
 		Expression::BOOL_SORT = Z3_mk_bool_sort(CONTEXT);

@@ -10,7 +10,7 @@ namespace cefg {
 int run(char **argv, const nlohmann::json &game) {
 	z3::initialize();
 	Options options(argv);
-	Input input(options.input_path);
+	Input input(game);
 	if (options.validate_conditions) {
 		check_conditions(input, options);
 	}
