@@ -1,0 +1,106 @@
+{
+  "actions": [
+    "stay_out",
+    "enter",
+    "share",
+    "fight"
+  ],
+  "constants": [
+    "profit",
+    "war_cost"
+  ],
+  "descriptions": {
+    "Incumbent": "the firm that has the market to itself",
+    "Newcomer": "a firm that considers entering the market",
+    "profit": "what a firm makes in the market",
+    "war_cost": "what a price war costs each firm"
+  },
+  "honest_histories": [
+    [
+      "stay_out"
+    ],
+    [
+      "enter",
+      "share"
+    ],
+    [
+      "enter",
+      "fight"
+    ]
+  ],
+  "infinitesimals": [],
+  "initial_constraints": [
+    "profit > 0",
+    "war_cost > 0"
+  ],
+  "players": [
+    "Newcomer",
+    "Incumbent"
+  ],
+  "property_constraints": {
+    "collusion_resilience": [],
+    "practicality": [],
+    "weak_immunity": [],
+    "weaker_immunity": []
+  },
+  "tree": {
+    "children": [
+      {
+        "action": "stay_out",
+        "child": {
+          "utility": [
+            {
+              "player": "Newcomer",
+              "value": "0"
+            },
+            {
+              "player": "Incumbent",
+              "value": "profit * profit"
+            }
+          ]
+        },
+        "description": "the incumbent keeps the whole market"
+      },
+      {
+        "action": "enter",
+        "child": {
+          "children": [
+            {
+              "action": "share",
+              "child": {
+                "utility": [
+                  {
+                    "player": "Newcomer",
+                    "value": "profit"
+                  },
+                  {
+                    "player": "Incumbent",
+                    "value": "profit"
+                  }
+                ]
+              }
+            },
+            {
+              "action": "fight",
+              "child": {
+                "utility": [
+                  {
+                    "player": "Newcomer",
+                    "value": "-war_cost"
+                  },
+                  {
+                    "player": "Incumbent",
+                    "value": "-war_cost"
+                  }
+                ]
+              },
+              "description": "a price war"
+            }
+          ],
+          "player": "Incumbent"
+        }
+      }
+    ],
+    "player": "Newcomer"
+  }
+}
