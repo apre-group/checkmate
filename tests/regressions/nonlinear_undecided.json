@@ -1,10 +1,9 @@
 {
   "actions": [
     "up",
-    "fold",
     "quit",
     "left",
-    "pass"
+    "fold"
   ],
   "constants": [
     "c0",
@@ -15,100 +14,11 @@
     [
       "up",
       "up",
-      "up",
-      "up",
-      "quit"
-    ],
-    [
-      "up",
-      "up",
-      "up",
-      "up",
-      "left"
-    ],
-    [
-      "up",
-      "up",
-      "up",
-      "quit"
-    ],
-    [
-      "up",
-      "up",
-      "up",
-      "left"
-    ],
-    [
-      "up",
-      "up",
-      "quit"
-    ],
-    [
-      "up",
-      "up",
-      "left"
-    ],
-    [
-      "up",
-      "quit"
-    ],
-    [
-      "up",
-      "left"
-    ],
-    [
-      "quit"
-    ],
-    [
-      "pass",
-      "up",
-      "up",
-      "up",
-      "quit"
-    ],
-    [
-      "pass",
-      "up",
-      "up",
-      "up",
-      "left"
-    ],
-    [
-      "pass",
-      "up",
-      "up",
-      "quit"
-    ],
-    [
-      "pass",
-      "up",
-      "up",
-      "left"
-    ],
-    [
-      "pass",
-      "up",
-      "quit"
-    ],
-    [
-      "pass",
-      "up",
-      "left"
-    ],
-    [
-      "pass",
-      "quit"
-    ],
-    [
-      "pass",
       "left"
     ]
   ],
-  "infinitesimals": [
-    "e0"
-  ],
+  "infinitesimals": [],
   "initial_constraints": [
-    "c0 > 0",
     "c2 > 0"
   ],
   "players": [
@@ -132,263 +42,20 @@
               "child": {
                 "children": [
                   {
-                    "action": "up",
-                    "child": {
-                      "children": [
-                        {
-                          "action": "up",
-                          "child": {
-                            "children": [
-                              {
-                                "action": "fold",
-                                "child": {
-                                  "utility": [
-                                    {
-                                      "player": "Ann",
-                                      "value": "c2 - c0"
-                                    },
-                                    {
-                                      "player": "Bob",
-                                      "value": "4 * c2 - 3 * c0 + 2 * e0 + 1 - c1 * c1 - c1"
-                                    }
-                                  ]
-                                },
-                                "description": "a < b & c"
-                              },
-                              {
-                                "action": "quit",
-                                "child": {
-                                  "utility": [
-                                    {
-                                      "player": "Ann",
-                                      "value": "c2 - c0"
-                                    },
-                                    {
-                                      "player": "Bob",
-                                      "value": "3 * c2 - 3 * c0"
-                                    }
-                                  ]
-                                }
-                              },
-                              {
-                                "action": "left",
-                                "child": {
-                                  "utility": [
-                                    {
-                                      "player": "Ann",
-                                      "value": "c2 - c0 - e0 - 0.45"
-                                    },
-                                    {
-                                      "player": "Bob",
-                                      "value": "3 * c2 - 3 * c0"
-                                    }
-                                  ]
-                                }
-                              }
-                            ],
-                            "player": "Ann"
-                          }
-                        },
-                        {
-                          "action": "quit",
-                          "child": {
-                            "utility": [
-                              {
-                                "player": "Ann",
-                                "value": "c2 - c0"
-                              },
-                              {
-                                "player": "Bob",
-                                "value": "2 * c2 - 2 * c0"
-                              }
-                            ]
-                          }
-                        },
-                        {
-                          "action": "left",
-                          "child": {
-                            "utility": [
-                              {
-                                "player": "Ann",
-                                "value": "c2 - c0 - e0 - 0.45"
-                              },
-                              {
-                                "player": "Bob",
-                                "value": "2 * c2 - 2 * c0"
-                              }
-                            ]
-                          }
-                        }
-                      ],
-                      "player": "Ann"
-                    }
-                  },
-                  {
-                    "action": "quit",
+                    "action": "fold",
                     "child": {
                       "utility": [
                         {
                           "player": "Ann",
-                          "value": "c2 - c0"
+                          "value": "0"
                         },
                         {
                           "player": "Bob",
-                          "value": "c2 - c0"
+                          "value": "4*c2-c1*c1-c1"
                         }
                       ]
-                    }
-                  },
-                  {
-                    "action": "left",
-                    "child": {
-                      "utility": [
-                        {
-                          "player": "Ann",
-                          "value": "c2 - c0 - e0 - 0.45"
-                        },
-                        {
-                          "player": "Bob",
-                          "value": "c2 - c0"
-                        }
-                      ]
-                    }
-                  }
-                ],
-                "player": "Ann"
-              }
-            },
-            {
-              "action": "quit",
-              "child": {
-                "utility": [
-                  {
-                    "player": "Ann",
-                    "value": "c2 - c0"
-                  },
-                  {
-                    "player": "Bob",
-                    "value": "0"
-                  }
-                ]
-              }
-            },
-            {
-              "action": "left",
-              "child": {
-                "utility": [
-                  {
-                    "player": "Ann",
-                    "value": "c2 - c0 - e0 - 0.45"
-                  },
-                  {
-                    "player": "Bob",
-                    "value": "0"
-                  }
-                ]
-              }
-            }
-          ],
-          "player": "Ann"
-        }
-      },
-      {
-        "action": "quit",
-        "child": {
-          "utility": [
-            {
-              "player": "Ann",
-              "value": "0"
-            },
-            {
-              "player": "Bob",
-              "value": "0"
-            }
-          ]
-        }
-      },
-      {
-        "action": "pass",
-        "child": {
-          "children": [
-            {
-              "action": "up",
-              "child": {
-                "children": [
-                  {
-                    "action": "up",
-                    "child": {
-                      "children": [
-                        {
-                          "action": "up",
-                          "child": {
-                            "children": [
-                              {
-                                "action": "quit",
-                                "child": {
-                                  "utility": [
-                                    {
-                                      "player": "Ann",
-                                      "value": "0"
-                                    },
-                                    {
-                                      "player": "Bob",
-                                      "value": "4 * c2 - 0.6 - 4 * c0"
-                                    }
-                                  ]
-                                }
-                              },
-                              {
-                                "action": "left",
-                                "child": {
-                                  "utility": [
-                                    {
-                                      "player": "Ann",
-                                      "value": "-e0 - 0.45"
-                                    },
-                                    {
-                                      "player": "Bob",
-                                      "value": "4 * c2 - 0.6 - 4 * c0"
-                                    }
-                                  ]
-                                }
-                              }
-                            ],
-                            "player": "Ann"
-                          }
-                        },
-                        {
-                          "action": "quit",
-                          "child": {
-                            "utility": [
-                              {
-                                "player": "Ann",
-                                "value": "0"
-                              },
-                              {
-                                "player": "Bob",
-                                "value": "3 * c2 - 0.6 - 3 * c0"
-                              }
-                            ]
-                          }
-                        },
-                        {
-                          "action": "left",
-                          "child": {
-                            "utility": [
-                              {
-                                "player": "Ann",
-                                "value": "-e0 - 0.45"
-                              },
-                              {
-                                "player": "Bob",
-                                "value": "3 * c2 - 0.6 - 3 * c0"
-                              }
-                            ]
-                          }
-                        }
-                      ],
-                      "player": "Ann"
-                    }
+                    },
+                    "description": "a < b & c"
                   },
                   {
                     "action": "quit",
@@ -400,7 +67,7 @@
                         },
                         {
                           "player": "Bob",
-                          "value": "2 * c2 - 0.6 - 2 * c0"
+                          "value": "-3*c0"
                         }
                       ]
                     }
@@ -411,11 +78,11 @@
                       "utility": [
                         {
                           "player": "Ann",
-                          "value": "-e0 - 0.45"
+                          "value": "c2-c0-0.45"
                         },
                         {
                           "player": "Bob",
-                          "value": "2 * c2 - 0.6 - 2 * c0"
+                          "value": "-3*c0"
                         }
                       ]
                     }
@@ -434,7 +101,7 @@
                   },
                   {
                     "player": "Bob",
-                    "value": "c2 - 0.6 - c0"
+                    "value": "-2*c0"
                   }
                 ]
               }
@@ -445,11 +112,11 @@
                 "utility": [
                   {
                     "player": "Ann",
-                    "value": "-e0 - 0.45"
+                    "value": "0"
                   },
                   {
                     "player": "Bob",
-                    "value": "c2 - 0.6 - c0"
+                    "value": "2 * c2 - 2 * c0"
                   }
                 ]
               }
@@ -459,6 +126,6 @@
         }
       }
     ],
-    "player": "Bob"
+    "player": "Ann"
   }
 }
