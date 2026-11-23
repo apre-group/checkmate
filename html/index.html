@@ -183,8 +183,19 @@
                     border-radius: 8px; padding: 10px 14px; margin: 8px 0; color: var(--text); overflow-x: auto; }
         #help ul { margin: 6px 0; padding-left: 22px; }
         #output { border: 1px solid var(--border); padding: 12px 14px; white-space: pre-wrap; background: var(--surface-2);
-                  border-radius: 8px; font: 12px/1.55 var(--mono); max-height: 400px; overflow-y: auto; }
+                  border-radius: 8px; font: 12px/1.55 var(--mono); max-height: 400px; overflow-y: auto;
+                  font-variant-ligatures: none; }
         #output:empty::before { content: 'Nothing yet.'; color: var(--muted); font-family: var(--sans); }
+        /* terminal colours in checkmate's output (html/src/ansi.ts), in the page's own colours */
+        .a-bold { font-weight: 700; }
+        .a-dim { opacity: 0.6; }
+        .a-fg1, .a-fg9 { color: var(--ce); }
+        .a-fg2, .a-fg10 { color: var(--strategy); }
+        .a-fg3, .a-fg11 { color: var(--h-num); }
+        .a-fg4, .a-fg12 { color: var(--honest); }
+        .a-fg5, .a-fg13 { color: var(--h-key); }
+        .a-fg6, .a-fg14 { color: var(--h-const); }
+        .a-fg0, .a-fg8 { color: var(--muted); }
 
         @media (max-width: 600px) {
             body { padding: 18px 16px 40px; }

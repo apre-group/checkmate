@@ -4,6 +4,7 @@ import { highlightCompact, highlightRules } from './highlight.ts';
 import { compileRules, looksLikeRules, RulesError, type Compiled } from './rules.ts';
 import { explain, type Item } from './explain.ts';
 import { NAMES, caseText, escapeHtml, historyText } from './text.ts';
+import { ansiToHtml } from './ansi.ts';
 
 // the page's elements exist, so this is never null
 const $ = <T extends Element = HTMLElement>(id: string) => document.getElementById(id) as Element as T;
@@ -287,7 +288,8 @@ $<HTMLButtonElement>('run').addEventListener('click', () => {
     const props = [...document.querySelectorAll<HTMLInputElement>('.prop:checked')].map(c => c.value);
     const args = (props.length === 4 ? [] : props)
         .concat([...document.querySelectorAll<HTMLInputElement>('.opt:checked')].map(c => c.value))
-        .concat(parseArgs($<HTMLInputElement>('extra').value));
+        .concat(parseArgs($<HTMLInputElement>('extra').value))
+        .concat(['--color=always']);
     $('output').textContent = '';
     $('status').textContent = 'Running…';
     $<HTMLButtonElement>('run').disabled = true;
@@ -302,11 +304,11 @@ $<HTMLButtonElement>('run').addEventListener('click', () => {
         const d = e.data;
         if (d.type === 'output') {
             out.push(d.content);
-            if (out.length % 50 === 0) $('output').textContent = out.join('\n');
+            if (out.length % 50 === 0) $('output').innerHTML = ansiToHtml(out.join('\n'));
         } else if (d.type === 'ready') {
             w.postMessage({ type: 'run', game: compiled ? compiled.text : $<HTMLTextAreaElement>('game').value, args });
         } else if (d.type === 'done') {
-            $('output').textContent = out.join('\n');
+            $('output').innerHTML = ansiToHtml(out.join('\n'));
             finish(d.result ? 'Done in ' + ((performance.now() - started) / 1000).toFixed(2) + ' s'
                             : 'Failed, see the output below');
             URL.revokeObjectURL(url);
