@@ -110,22 +110,30 @@ async function selectExample(name) {
     // wait until the game in the editor is the example's (an example changes the editor once loaded)
     const before = await evaluate(`document.getElementById('game').value`);
     await evaluate(`{ const s = document.getElementById('example'); s.value = ${JSON.stringify(name)}; s.dispatchEvent(new Event('change')); }`);
-    await waitFor(`document.getElementById('game').value !== ${JSON.stringify(before)} || ${JSON.stringify(name)} === 'market_entry.rules'`, name);
+    await waitFor(`document.getElementById('game').value !== ${JSON.stringify(before)} || ${JSON.stringify(name)} === 'loan.rules'`, name);
     await waitFor(`document.querySelectorAll('#tree .t-node').length > 0 || document.getElementById('parse-error').textContent`, name);
 }
 
 const SCENARIOS = {
     async 'the default example'() {
-        equal(await evaluate(`document.getElementById('example').value`), 'market_entry.rules', 'example');
+        equal(await evaluate(`document.getElementById('example').value`), 'loan.rules', 'example');
         check(!(await evaluate(`document.getElementById('generated').hidden`)), 'the generated tree is hidden');
         equal(await text('generated-count'), '3 ways to play', 'generated');
-        check((await text('glossary')).includes('Newcomer a firm that considers entering the market'), 'glossary: ' + await text('glossary'));
-        equal((await players()).sort().join(), 'Incumbent,Newcomer', 'players');
-        equal(await evaluate(`[...document.querySelectorAll('#tree .t-described')].map(t => t.textContent).join()`), 'stay_out,fight', 'described actions');
+        check((await text('glossary')).includes('Alice has money to lend'), 'glossary: ' + await text('glossary'));
+        equal((await players()).sort().join(), 'Alice,Bob', 'players');
+        equal(await evaluate(`[...document.querySelectorAll('#tree .t-described')].map(t => t.textContent).sort().join()`), 'keep,refuse,repay', 'described actions');
         equal(await evaluate(`document.querySelectorAll('#tree .t-leaf').length`), 3, 'leaves');
+        await run();
+        equal(await verdicts(), 'lend → repay NO NO NO NO', 'verdicts');
+        await evaluate(`document.querySelectorAll('.verdict')[3].click()`);
+        check((await text('explain')).includes('Bob is better off playing keep after lend'), await text('explain'));
+        await selectExample('loan_with_deposit.rules');
+        await run();
+        equal(await verdicts(), 'lend → repay YES YES YES YES', 'verdicts with a deposit');
     },
 
     async 'running it, and the results in words'() {
+        await selectExample('market_entry.rules');
         await run();
         equal(await verdicts(), 'stay_out YES YES YES NO | enter → share NO NO YES YES | enter → fight NO NO NO NO', 'verdicts');
         const n = await evaluate(`document.querySelectorAll('.verdict').length`);

@@ -32,7 +32,7 @@ fetch('examples/index.json').then(r => r.json()).then((names: string[]) => {
     $<HTMLSelectElement>('example').innerHTML = group('Rules', names.filter(n => n.endsWith('.rules'))) +
         group('Game trees', names.filter(n => n.endsWith('.game'))) +
         group('From the papers', names.filter(n => n.endsWith('.json')));
-    const start = ['market_entry.rules', 'market_entry.game', 'market_entry_game.json'].find(n => names.includes(n)) || names[0];
+    const start = ['loan.rules', 'market_entry.rules', 'market_entry_game.json'].find(n => names.includes(n)) || names[0];
     $<HTMLSelectElement>('example').value = start;
     loadExample(start);
 }).catch(() => { $<HTMLSelectElement>('example').innerHTML = '<option value="">(no examples found)</option>'; });

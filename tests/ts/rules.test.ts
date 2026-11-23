@@ -215,7 +215,7 @@ test('errors while playing the game out', () => {
 });
 
 test('every example compiles', () => {
-    for (const name of ['market_entry', 'closing_channel', 'centipede']) {
+    for (const name of ['loan', 'loan_with_deposit', 'market_entry', 'closing_channel', 'centipede']) {
         const { text, leaves } = compileRules(readFileSync(`examples/readable/${name}.rules`, 'utf8'));
         assert.ok(leaves > 0 && text.includes('honest'), name);
     }
