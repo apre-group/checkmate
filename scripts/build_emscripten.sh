@@ -56,5 +56,6 @@ echo "{\"id\": \"$(date +%s)\"}" > html/build.json
 # examples over 1 MB (routing_game-four-supertree.json is 57 MB) would hang the page while loading
 rm -rf html/examples
 mkdir -p html/examples
-find examples -name '*.json' -size -1024k -exec cp {} html/examples/ \;
-(cd html/examples && ls *.json | grep -v '^index.json$' | python3 -c 'import json, sys; print(json.dumps(sys.stdin.read().split()))' > index.json)
+find examples \( -name '*.json' -o -name '*.game' \) -size -1024k -exec cp {} html/examples/ \;
+# the readable games (in the compact format) first
+(cd html/examples && { ls *.game; ls *.json | grep -v '^index.json$'; } | python3 -c 'import json, sys; print(json.dumps(sys.stdin.read().split()))' > index.json)

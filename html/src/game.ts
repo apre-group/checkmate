@@ -37,6 +37,7 @@ export interface TreeNode {
     _folded?: boolean;
     _revealed?: string[];
     _x?: number;
+    _desc?: string;
 }
 
 export type Declarations = string[] | { known?: string[]; unknown?: string[] };

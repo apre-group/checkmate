@@ -1,21 +1,14 @@
-import type { Condition, Counterexample, Game, HistoryElement, Result, Step, Strategy, TreeNode } from './game.ts';
+import type { Condition, Declarations, Game, HistoryElement, Result, Step, TreeNode } from './game.ts';
 import { genGame } from './gen_game.ts';
 import { highlightCompact } from './highlight.ts';
+import { explain, type Item } from './explain.ts';
+import { NAMES, caseText, escapeHtml, historyText } from './text.ts';
 
 // the page's elements exist, so this is never null
 const $ = <T extends Element = HTMLElement>(id: string) => document.getElementById(id) as Element as T;
 // the build id makes browsers fetch the modules again after a rebuild, and cache them otherwise
 const version: Promise<string> = fetch('build.json', { cache: 'no-store' }).then(r => r.json())
     .then((b: { id: string }) => '?v=' + b.id).catch(() => '');
-
-// a line below the results: a case, or a strategy or counterexample to show in the tree
-interface Item {
-    label?: string;
-    r: Result;
-    kind: 'case' | 'strategy' | 'ce';
-    s?: Strategy;
-    ce?: Counterexample;
-}
 
 let game: Game | null = null, results: Result[] | null = null, selection: Item | null = null, worker: Worker | null = null;
 
@@ -33,8 +26,11 @@ $('theme').addEventListener('click', () => {
 // ---- examples -------------------------------------------------------------
 
 fetch('examples/index.json').then(r => r.json()).then((names: string[]) => {
-    $<HTMLSelectElement>('example').innerHTML = names.map(n => `<option>${n}</option>`).join('');
-    const start = names.includes('market_entry_game.json') ? 'market_entry_game.json' : names[0];
+    const group = (label: string, ns: string[]) =>
+        ns.length ? `<optgroup label="${label}">` + ns.map(n => `<option>${n}</option>`).join('') + '</optgroup>' : '';
+    $<HTMLSelectElement>('example').innerHTML = group('Readable examples', names.filter(n => n.endsWith('.game'))) +
+        group('From the papers', names.filter(n => !n.endsWith('.game')));
+    const start = ['market_entry.game', 'market_entry_game.json'].find(n => names.includes(n)) || names[0];
     $<HTMLSelectElement>('example').value = start;
     loadExample(start);
 }).catch(() => { $<HTMLSelectElement>('example').innerHTML = '<option value="">(no examples found)</option>'; });
@@ -113,6 +109,7 @@ async function showGame(jsonText: string) {
         results = null; selection = null;
         $('results').textContent = 'Run CheckMate to see results.';
         $('cases').innerHTML = '';
+        $('explain').innerHTML = '';
         game = JSON.parse(jsonText);
         $('parse-error').textContent = '';
         errorLine = 0;
@@ -125,7 +122,13 @@ async function showGame(jsonText: string) {
 
 function loadExample(name: string) {
     if (!name) return;
-    fetch('examples/' + name).then(r => r.text()).then(showGame);
+    fetch('examples/' + name).then(r => r.text()).then(text => {
+        if (looksLikeJson(text)) return showGame(text);
+        $<HTMLTextAreaElement>('game').value = text;
+        $<HTMLTextAreaElement>('game').scrollTop = 0;
+        folded = null;
+        return gameChanged();
+    });
 }
 
 let editTimer: ReturnType<typeof setTimeout> | undefined, errorLine = 0;
@@ -149,6 +152,7 @@ async function gameChanged() {
     results = null; selection = null;
     $('results').textContent = 'Run CheckMate to see results.';
     $('cases').innerHTML = '';
+    $('explain').innerHTML = '';
     const text = $<HTMLTextAreaElement>('game').value;
     highlight();
     if (looksLikeJson(text)) {
@@ -303,12 +307,10 @@ fetch('checkmate.wasm', { method: 'HEAD' }).then(r => {
 
 // ---- results ----------------------------------------------------------------
 
-const NAMES: Record<string, string> = { weak_immunity: 'weak immunity', weaker_immunity: 'weaker immunity',
-                collusion_resilience: 'collusion resilience', practicality: 'practicality' };
-
 function showResults(rs: Result[] | null) {
     results = rs; selection = null;
     $('cases').innerHTML = '';
+    $('explain').innerHTML = '';
     if (!rs) { $('results').textContent = 'No results (see the output below).'; drawTree(); return; }
     // a row per honest history; CEFGs also have runs without one, collusion resilience once per honest utility
     const rowKey = (r: Result) => JSON.stringify([r.history, r.honest_utility]);
@@ -350,22 +352,16 @@ function selectResult(i: number, td: HTMLElement) {
         $('cases').querySelectorAll('div').forEach(x => x.classList.remove('selected'));
         div.classList.add('selected');
         selection = items[+div.dataset.k!];
+        $('explain').innerHTML = explain(game!, selection);
         drawTree();
     }));
     const firstOverlay = items.findIndex(it => it.kind !== 'case');
     selection = firstOverlay >= 0 ? items[firstOverlay] : { r, kind: 'case' };
     if (firstOverlay >= 0) $('cases').querySelectorAll('div')[firstOverlay].classList.add('selected');
+    $('explain').innerHTML = explain(game!, selection);
     drawTree();
 }
 
-function caseText(c: string[]) { return c.length ? c.join(' ∧ ') : '(any)'; }
-// in CEFGs, an element of a history can be a list of conditions, each with the history that continues under it,
-// written as in the compact format: {if CONDITION → history; ...}
-function historyText(h: HistoryElement[]): string {
-    return h.map(a => typeof a === 'string' ? a
-        : '{' + a.map(c => 'if ' + c.condition + (c.path.length ? ' → ' + historyText(c.path) : '')).join('; ') + '}').join(' → ');
-}
-function escapeHtml(s: unknown) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 // ---- tree drawing -------------------------------------------------------------
 
@@ -386,10 +382,11 @@ interface View {
     step: Step;
     child: TreeNode;
     cond?: Condition;
+    desc?: string;
 }
 function branches(node: TreeNode): View[] {
-    if (node.children) return node.children.map(c => ({ step: c.action, child: c.child }));
-    return (node.condition as Condition[]).map((c, i) => ({ step: { c: i }, child: c.child, cond: c }));
+    if (node.children) return node.children.map(c => ({ step: c.action, child: c.child, desc: c.description }));
+    return (node.condition as Condition[]).map((c, i) => ({ step: { c: i }, child: c.child, cond: c, desc: c.description }));
 }
 
 function countLeaves(node: TreeNode): number {
@@ -475,8 +472,9 @@ function newlyRevealed(node: TreeNode & { condition: Condition[] }, known: Set<s
 
 // `text`: the history as shown in tooltips; `known`: the unknowns revealed on the way to `node`
 interface LayoutState { next: number; maxDepth: number; leafW: number }
-function layout(node: TreeNode, depth: number, hist: Step[], text: string[], known: Set<string>, state: LayoutState) {
-    node._hist = hist; node._text = text; node._depth = depth;
+// `desc`: the description of the branch to `node`
+function layout(node: TreeNode, depth: number, hist: Step[], text: string[], known: Set<string>, state: LayoutState, desc?: string) {
+    node._hist = hist; node._text = text; node._depth = depth; node._desc = desc;
     node._folded = isInner(node) && folded!.has(histKey(hist));
     if (isCondition(node)) {
         node._revealed = newlyRevealed(node, known);
@@ -484,7 +482,7 @@ function layout(node: TreeNode, depth: number, hist: Step[], text: string[], kno
     }
     if (isInner(node) && !node._folded) {
         const bs = branches(node);
-        bs.forEach(c => layout(c.child, depth + 1, hist.concat([c.step]), text.concat([c.cond ? `[${conditionText(c.cond)}]` : c.step as string]), known, state));
+        bs.forEach(c => layout(c.child, depth + 1, hist.concat([c.step]), text.concat([c.cond ? `[${conditionText(c.cond)}]` : c.step as string]), known, state, c.desc));
         const xs = bs.map(c => c.child._x!);
         node._x = (Math.min(...xs) + Math.max(...xs)) / 2;
     } else {
@@ -505,6 +503,7 @@ const conditionText = (c: Condition) => (c.name ? c.name + ': ' : '') + c.constr
 
 function leafTip(node: TreeNode) {
     return `<div class="tip-path">${escapeHtml(node._text!.join(' ')) || '(root)'}</div>` +
+        (node._desc ? `<div class="tip-path">${escapeHtml(node._desc)}</div>` : '') +
         (node.utility || []).map(u => `<div><b>${escapeHtml(u.player)}</b>: ${escapeHtml(u.value)}</div>`).join('');
 }
 
@@ -601,11 +600,40 @@ function highlights(): Highlights {
     return h;
 }
 
+// players, constants and infinitesimals with a description, in the order they are declared
+function showGlossary() {
+    const d = game?.descriptions || {};
+    const declared = (k: Declarations | undefined) => !k ? [] : Array.isArray(k) ? k : (k.known || []).concat(k.unknown || []);
+    const names = game ? [...game.players, ...declared(game.constants), ...declared(game.infinitesimals)].filter(n => d[n]) : [];
+    $('glossary').innerHTML = names.map(n => `<b>${escapeHtml(n)}</b> ${escapeHtml(d[n])}`).join(' &nbsp;·&nbsp; ');
+}
+
+// Players are drawn as pills with their names, cut short (with …) to what fits between the closest players on
+// one level; the tooltip has the whole name. Names are 13px semibold Inter, about 8.2px per character.
+const PLAYER_MAX = 14;
+function playerChars(tree: Laid) {
+    const levels = new Map<number, number[]>();
+    (function collect(node: Laid) {
+        if (!isInner(node)) return;
+        if (!isCondition(node)) levels.set(node._depth, (levels.get(node._depth) || []).concat([node._x]));
+        if (!node._folded) branches(node).forEach(c => collect(c.child as Laid));
+    })(tree);
+    let gap = Infinity;
+    for (const xs of levels.values()) {
+        xs.sort((a, b) => a - b);
+        xs.slice(1).forEach((x, i) => { gap = Math.min(gap, x - xs[i]); });
+    }
+    return Math.max(1, Math.min(PLAYER_MAX, Math.floor((gap - 18) / 8.2)));
+}
+const playerLabel = (p: string, chars: number) => p.length <= chars ? p : chars >= 4 ? p.slice(0, chars - 1) + '…' : p.slice(0, chars);
+const playerHalf = (label: string) => Math.max(14, 4.1 * label.length + 9);
+
 // a node after layout()
 type Laid = TreeNode & { _hist: Step[]; _text: string[]; _depth: number; _folded: boolean; _x: number; _revealed: string[] };
 
 function drawTree() {
     const svg = $<SVGSVGElement>('tree');
+    showGlossary();
     if (!game || !game.tree) { svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.innerHTML = ''; return; }
     const avail = $('tree-box').clientWidth - 2;
     if (folded === null) { folded = defaultFolds(game.tree, avail); revealed = undefined; }
@@ -619,6 +647,7 @@ function drawTree() {
     const { leafW, inline } = slots(showingNodes(game.tree, folded), avail);
     const state = { next: 0, maxDepth: 0, leafW };
     layout(game.tree, 0, [], [], new Set(), state);
+    const chars = playerChars(game.tree as Laid);
     const treeWidth = state.next + 2 * PAD;
     const width = Math.max(treeWidth, avail);
     const shift = (width - treeWidth) / 2;
@@ -657,7 +686,8 @@ function drawTree() {
                 edges += `<line x1="${x}" y1="${yy}" x2="${cx}" y2="${cy}" class="t-edge${kind}"/>`;
                 if (c.cond) {
                     const text = c.cond.name || c.cond.constraint, number = (c.step as { c: number }).c + 1;
-                    const tip = treeTips.push(`<div class="tip-path">condition ${number}</div><div>${escapeHtml(conditionText(c.cond))}</div>`) - 1;
+                    const tip = treeTips.push(`<div class="tip-path">condition ${number}</div><div>${escapeHtml(conditionText(c.cond))}</div>` +
+                        (c.desc ? `<div class="tip-path">${escapeHtml(c.desc)}</div>` : '')) - 1;
                     if (beside) {
                         besides.push({ x: (x + cx) / 2 + (cx < x ? -6 : 6), y: (yy + cy) / 2, left: cx < x, text, number, tip });
                     } else {
@@ -670,18 +700,23 @@ function drawTree() {
                     const action = c.step as string;
                     const lx = (x + cx) / 2 + (cx < x ? -6 : 6), ly = (yy + cy) / 2, w = 7.8 * action.length;
                     box(cx < x ? lx - w : lx, cx < x ? lx : lx + w, ly - 11, ly + 3);
-                    labels += `<text x="${lx}" y="${ly}" font-size="13" ` +
-                              `text-anchor="${cx < x ? 'end' : 'start'}" class="t-halo t-action">${escapeHtml(action)}</text>`;
+                    const tip = c.desc ? ` data-tip="${treeTips.push(`<div><b>${escapeHtml(node.player)}</b> plays ${escapeHtml(action)}</div>` +
+                        `<div class="tip-path">${escapeHtml(c.desc)}</div>`) - 1}"` : '';
+                    labels += `<text x="${lx}" y="${ly}" font-size="13" text-anchor="${cx < x ? 'end' : 'start'}" ` +
+                              `class="t-halo t-action${c.desc ? ' t-described' : ''}"${tip}>${escapeHtml(action)}</text>`;
                 }
                 draw(child);
             }
             const n = foldable.push({ node, hist: node._hist }) - 1;
-            const reveals = isCondition(node) && node.reveals && node.reveals.length ? `reveals ${node.reveals.join(', ')}, ` : '';
-            const tip = treeTips.push((isCondition(node) ? 'condition node, ' + reveals : '') +
-                (node._folded ? `${countLeaves(node)} leaves folded, click to unfold` : 'click to fold')) - 1;
+            const reveals = isCondition(node) && node.reveals && node.reveals.length ? `reveals ${escapeHtml(node.reveals.join(', '))}, ` : '';
+            const desc = !isCondition(node) && game!.descriptions?.[node.player!];
+            const label = isCondition(node) ? '' : playerLabel(node.player!, chars), half = isCondition(node) ? 16 : playerHalf(label) + 2;
+            const tip = treeTips.push((isCondition(node) ? 'condition node, ' + reveals
+                    : `<div><b>${escapeHtml(node.player)}</b> moves${desc ? ': ' + escapeHtml(desc) : ''}</div>`) +
+                `<div class="tip-path">${node._folded ? `${countLeaves(node)} leaves folded, click to unfold` : 'click to fold'}</div>`) - 1;
             nodes += `<g class="t-click" data-n="${n}" data-tip="${tip}">`;
             bottom = Math.max(bottom, yy + (node._folded ? 59 : 16));
-            box(x - 16, x + 16, yy - 16, node._folded ? yy + 59 : yy + 16);
+            box(x - half, x + half, yy - 16, node._folded ? yy + 59 : yy + 16);
             if (isCondition(node) && node._revealed.length) {
                 const w = 7.3 * node._revealed.join(', ').length;
                 box(x + 22, x + 22 + w, yy - 9, yy + 4);
@@ -695,8 +730,8 @@ function drawTree() {
                   `<text x="${x}" y="${yy + 5}" text-anchor="middle" class="t-cond-mark">?</text></g>` +
                   // what the node reveals, also in the tooltip
                   (node._revealed.length ? `<text x="${x + 22}" y="${yy + 4}" class="t-halo t-reveals">${escapeHtml(node._revealed.join(', '))}</text>` : '')
-                : `<circle cx="${x}" cy="${yy}" r="14" class="t-node"/>` +
-                  `<text x="${x}" y="${yy + 4}" font-size="12" text-anchor="middle" class="t-player">${escapeHtml(node.player)}</text></g>`;
+                : `<rect x="${x - half + 2}" y="${yy - 14}" width="${2 * half - 4}" height="28" rx="14" class="t-node"/>` +
+                  `<text x="${x}" y="${yy + 4.5}" text-anchor="middle" class="t-player">${escapeHtml(label)}</text></g>`;
         } else if (node.subtree) {
             bottom = Math.max(bottom, yy + 32);
             box(x - 16, x + 16, yy - 14, yy + 32);
