@@ -9,6 +9,7 @@
 #include "property.hpp"
 #include "validate.hpp"
 #include "cefg/run.hpp"
+#include "cefg/z3++.hpp"
 
 // analyse a CEFG with the analysis in src/cefg/, leaving out the options it does not support (with a warning)
 static int run_cefg(char **argv, const nlohmann::json &game) {
@@ -47,7 +48,7 @@ static int run_cefg(char **argv, const nlohmann::json &game) {
 	return cefg::run(arguments.data(), game);
 }
 
-int main(int, char **argv) {
+static int analyse(char **argv) {
 	// first, as for the EFG analysis before (its results may depend on where Z3 allocates its terms)
 	z3::initialize();
 	// checks all options, also those that are ignored for CEFGs
@@ -87,4 +88,15 @@ int main(int, char **argv) {
 	}
 
 	return EXIT_SUCCESS;
+}
+
+int main(int, char **argv) {
+	try {
+		return analyse(argv);
+	} catch (const z3::Undecided &err) {
+		std::cerr << "checkmate: " << err.what() << std::endl;
+	} catch (const cefg::z3::Undecided &err) {
+		std::cerr << "checkmate: " << err.what() << std::endl;
+	}
+	return EXIT_FAILURE;
 }
