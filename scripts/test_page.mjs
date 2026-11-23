@@ -268,6 +268,30 @@ honest move stop by Captain_Anne_Bonny, Bosun_Bartholomew_Roberts
         check((await evaluate(`document.querySelector('#tree [data-tip]') !== null`)), 'no tooltips');
     },
 
+    async 'the editor fits the game, and can be resized'() {
+        const height = () => evaluate(`document.querySelector('.editor').offsetHeight`);
+        const scrolls = () => evaluate(`{ const g = document.getElementById('game'); g.scrollHeight > g.clientHeight; }`);
+        check(await height() > 340 && !(await scrolls()), `the editor does not fit the default example (${await height()} px)`);
+        // a real drag, with the mouse (pointer capture needs real pointer events)
+        const box = await evaluate(`{ const r = document.getElementById('editor-resize').getBoundingClientRect(); [r.x + r.width / 2, r.y + r.height / 2]; }`);
+        const mouse = (type, y) => send('Input.dispatchMouseEvent', { type, x: box[0], y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 });
+        const before = await height();
+        await mouse('mousePressed', box[1]);
+        await mouse('mouseMoved', box[1] - 60);
+        await mouse('mouseMoved', box[1] - 150);
+        await mouse('mouseReleased', box[1] - 150);
+        equal(await height(), before - 150, 'height after dragging up by 150 px');
+        // the chosen height stays, also after loading the page again and another example
+        await load();
+        equal(await height(), before - 150, 'height after reloading');
+        await selectExample('centipede.rules');
+        equal(await height(), before - 150, 'height after another example');
+        // a double click fits the game again, and forgets the chosen height
+        await evaluate(`document.getElementById('editor-resize').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
+        check(!(await scrolls()), 'the editor does not fit after a double click');
+        equal(await evaluate(`localStorage.getItem('editorHeight')`), null, 'the chosen height is forgotten');
+    },
+
     async 'the theme switches'() {
         const before = await evaluate(`getComputedStyle(document.body).backgroundColor`);
         await evaluate(`document.getElementById('theme').click()`);

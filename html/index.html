@@ -70,7 +70,11 @@
         input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; vertical-align: -2px; margin: 0 4px 0 0; }
 
         /* the editor: a transparent textarea over a <pre> with the highlighted text; both must lay out identically */
-        .editor { position: relative; height: 340px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+        .editor { position: relative; height: 340px; min-height: 120px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); }
+        /* the bar below the editor: drag it to resize the editor, double-click it to fit the game */
+        #editor-resize { height: 12px; margin: 1px 0 -4px; cursor: ns-resize; touch-action: none; display: flex; align-items: center; justify-content: center; }
+        #editor-resize::before { content: ''; width: 44px; height: 4px; border-radius: 2px; background: var(--border-strong); }
+        #editor-resize:hover::before, #editor-resize.dragging::before { background: var(--accent); }
         .editor:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
         .editor textarea, .editor pre { position: absolute; inset: 0; margin: 0; padding: 12px 14px; border: 0;
             box-sizing: border-box; width: 100%; height: 100%; font: 13px/1.6 var(--mono); white-space: pre;
@@ -237,6 +241,7 @@
         <pre id="highlight" aria-hidden="true"></pre>
         <textarea id="game" spellcheck="false" wrap="off"></textarea>
     </div>
+    <div id="editor-resize" title="Drag to resize the editor, double-click to fit the game"></div>
     <div id="parse-error" class="no"></div>
     <details id="generated" hidden>
         <summary>The game tree these rules give (<span id="generated-count"></span>)</summary>

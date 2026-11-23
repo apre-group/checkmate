@@ -106,6 +106,7 @@ async function showGame(jsonText: string) {
     folded = null;  // a new game gets the default folding
     try {
         $<HTMLTextAreaElement>('game').value = await converter(jsonText);
+        if (!savedEditorHeight()) fitEditor();
     } catch (e) {
         // a game without a compact form (e.g. names with spaces) stays JSON; gameChanged would bring it back here
         $<HTMLTextAreaElement>('game').value = jsonText;
@@ -129,8 +130,50 @@ function loadExample(name: string) {
         if (looksLikeJson(text)) return showGame(text);
         $<HTMLTextAreaElement>('game').value = text;
         $<HTMLTextAreaElement>('game').scrollTop = 0;
+        if (!savedEditorHeight()) fitEditor();
         folded = null;
         return gameChanged();
+    });
+}
+
+// ---- the editor's height --------------------------------------------------------
+
+// a height the user chose by dragging, kept across visits; until then, the editor fits each game loaded
+const savedEditorHeight = () => { try { return Number(localStorage.getItem('editorHeight')) || 0; } catch (e) { return 0; } };
+const MIN_EDITOR = 120;
+
+function setEditorHeight(height: number) {
+    $('game').parentElement!.style.height = Math.max(MIN_EDITOR, Math.round(height)) + 'px';
+    syncScroll();
+}
+
+// as high as the game in it (with room for a horizontal scroll bar), up to three quarters of the window
+function fitEditor() {
+    const game = $<HTMLTextAreaElement>('game'), editor = game.parentElement!;
+    editor.style.height = MIN_EDITOR + 'px';
+    setEditorHeight(Math.min(game.scrollHeight + 2 + 14, Math.max(340, window.innerHeight * 0.75)));
+}
+
+{
+    const handle = $('editor-resize');
+    if (savedEditorHeight()) setEditorHeight(savedEditorHeight());
+    let start: { y: number, height: number } | null = null;
+    handle.addEventListener('pointerdown', e => {
+        start = { y: e.clientY, height: $('game').parentElement!.offsetHeight };
+        handle.setPointerCapture(e.pointerId);
+        handle.classList.add('dragging');
+        e.preventDefault();
+    });
+    handle.addEventListener('pointermove', e => { if (start) setEditorHeight(start.height + e.clientY - start.y); });
+    handle.addEventListener('pointerup', () => {
+        if (!start) return;
+        start = null;
+        handle.classList.remove('dragging');
+        try { localStorage.setItem('editorHeight', String($('game').parentElement!.offsetHeight)); } catch (e) {}
+    });
+    handle.addEventListener('dblclick', () => {
+        try { localStorage.removeItem('editorHeight'); } catch (e) {}
+        fitEditor();
     });
 }
 
