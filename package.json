@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "tsc -p html",
+    "watch": "tsc -p html --watch"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}

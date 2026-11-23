@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build checkmate as WebAssembly into html/. Usage:
+# Build checkmate as WebAssembly, and the web page, into html/. Usage:
 #   scripts/build_emscripten.sh [Z3_SOURCE_TREE [CVC5_SOURCE_TREE]]
 # Z3_SOURCE_TREE defaults to ../z3-4.16.0 next to the repository, cloned if missing.
 # Unless emcc is on PATH, sources $EMSDK_ENV (default: ../emsdk/emsdk_env.sh next to the repository).
@@ -14,6 +14,10 @@ if ! command -v emcc >/dev/null; then
     source "$EMSDK_ENV" >/dev/null 2>&1
     set -u
 fi
+
+# the page's TypeScript (html/src) into html/js; `npm run watch` rebuilds just that
+[ -d node_modules ] || npm ci
+npx tsc -p html
 
 Z3_VERSION=4.16.0
 Z3=${1:-$PARENT/z3-$Z3_VERSION}

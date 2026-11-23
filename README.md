@@ -203,6 +203,7 @@ cd html && python3 -m http.server                           # then open http://l
 
 Without a Z3 path, the script uses `../z3-4.16.0` next to the repository, cloning the [Z3](https://github.com/Z3Prover/z3) 4.16.0 sources there if it does not exist.
 If `emcc` is not on `PATH`, it sources `../emsdk/emsdk_env.sh` next to the repository, or `$EMSDK_ENV` if set.
+The page is written in TypeScript (`html/src/`), which the script compiles into `html/js/` with the TypeScript compiler from npm (`npm ci` installs it); to work on the page alone, `npm run watch` recompiles it on every change.
 
 With the [cvc5](https://github.com/cvc5/cvc5) sources (which need Emscripten 6.0.8 or later), the page also uses cvc5 for the practicality of conditional games, as CheckMate does (see [Conditional games](#conditional-games-cefgs)); it loads cvc5 only for runs of conditional games that check practicality.
 The page must be served over HTTP (not opened as a file), but needs no special server headers.
