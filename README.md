@@ -51,7 +51,10 @@ We support an extension of the original CheckMate input format, i.e. a dictionar
 Each **leaf node** is encoded as a dictionary with the only key `utility`. As a leaf node represents one way of terminating the game, it contains the pay-off information for each player in this scenario. Hence, `utility` is a list containing the players' utilities. Therefore, each element is a dictionary with the two following keys:
     * `player`: the name of the player whose utility it specified, and
     * `value`: the utility for the player. This can be any term over an infinitesimal occurring in `infinitesimals`, a constant contained in `constants`, and reals.
+A branch can also have a `description`, a text that CheckMate ignores (the web page shows it).
 Each **subtree** is a dictionary with exactly one key `subtree`. A subtree represents the *result* of analysing a subtree in the game, and is thus usually generated automatically (see [Compositional analysis](#compositional-analysis)). The value is another dictionary with values `honest_utility` (the utility at the end of the honest history inside the subtree, which the supertree needs; only relevant for the honest subtree, and not to be confused with the input key `honest_utilities`), and property results `weak_immunity`, `weaker_immunity`, `collusion_resilience` and `practicality`. Practicality results are a list of cases and utilities for each case. Other security properties are a list of player groups together with the cases in which the property holds for that player group. For collusion resilience, the list contains every group except the group of all players, including the empty group `[]`, which the supertree looks up when no player has deviated before reaching the subtree.
+
+10. `descriptions` (optional): texts describing players, constants and infinitesimals, as `{"NAME": "text", ...}`; CheckMate ignores them.
 
 Games with condition nodes are described in [Conditional games](#conditional-games-cefgs).
 
@@ -63,27 +66,35 @@ Additionally, all (real) numbers and all constants and infinitesimals declared i
 ### Compact format
 
 CheckMate also reads a compact, line-based format, which is easier to write and read than JSON.
-Here is the game of `examples/key_examples/splits_wi.json`:
+Here is the market entry game of `examples/readable/market_entry.game`, a version of `examples/key_examples/market_entry_game.json` with longer names:
 
 ```
-players: D, G
-constants: a, b
-initial: a > 0
-honest: q
-honest: l r
-honest: l y
+players: Newcomer   # a firm that considers entering the market
+players: Incumbent  # the firm that has the market to itself
+constants: profit   # what a firm makes in the market
+constants: war_cost # what a price war costs each firm
+initial: profit > 0
+initial: war_cost > 0
 
-D
-  q -> D: a, G: a
-  l -> G
-    r -> D: a, G: b
-    y -> D: a, G: -b
+Newcomer
+  honest stay_out -> Newcomer: 0, Incumbent: profit * profit  # the incumbent keeps the whole market
+  honest enter -> Incumbent
+    honest share -> Newcomer: profit, Incumbent: profit
+    honest fight -> Newcomer: -war_cost, Incumbent: -war_cost  # a price war
 ```
 
-The header lines are `players:`, `constants:` and `infinitesimals:` (comma-separated names), and then one line per constraint or history:
+The header lines are `players:`, `constants:` and `infinitesimals:` (comma-separated names, possibly over several lines), and then one line per constraint or history:
 `initial:` for an initial constraint, `weak_immunity:`, `weaker_immunity:`, `collusion_resilience:` or `practicality:` for a property constraint, `honest:` for an honest history (actions separated by spaces), and `honest_utility:` for an honest utility (`PLAYER: utility, ...`).
 The tree starts at the first line that is not a header: the player at the root, and then one line per branch, indented below its node: `action -> PLAYER` for an internal node (whose branches follow, indented further), `action -> PLAYER: utility, ...` for a leaf, or `action -> subtree {...}` for a subtree result in JSON.
 The `actions` list is not needed; it is derived from the tree. `#` starts a comment.
+
+Instead of `honest:` lines, the honest histories can be marked in the tree, by writing `honest` before their actions: they are then the paths from the root along marked actions to a leaf or subtree, in the order of the tree.
+Above, these are `stay_out`, `enter share` and `enter fight`, which CheckMate analyzes one after the other; with `honest: enter share` instead, only `enter` and `share` would be marked.
+Every node that such a path reaches needs a marked action, and a game gives its honest histories either by `honest:` lines or by marks, not both.
+`checkmate-convert` marks them whenever that gives the same histories in the same order.
+
+A comment at the end of a branch describes its action, and one at the end of a `players:`, `constants:` or `infinitesimals:` line with a single name describes that name.
+CheckMate ignores descriptions, but keeps them when converting to JSON (as `description` in the branch and `descriptions` in the game), and the web page shows them.
 
 [Conditional games](#conditional-games-cefgs) have a compact form as well:
 
@@ -107,6 +118,7 @@ A
 Unknown constants and infinitesimals are declared with `unknown_constants:` and `unknown_infinitesimals:`.
 A condition node is `?` (`action -> ?`, or `?` at the root), or `? reveals CONSTANT, ...` to reveal further unknowns, and its conditions follow, indented below it: `if CONDITION -> ...`, or `if NAME: CONDITION -> ...` for a named condition, followed by a node as after `action ->`.
 At a condition node, an honest history continues in every condition, in braces at its end: `{if CONDITION -> history; ...}`, where `if CONDITION` alone is a condition after which the history ends.
+Marked in the tree instead, by `honest dev`, `honest risk` and `honest l`, an honest path continues in every condition of a condition node.
 An honest utility that depends on conditions is written in the same way: `honest_utility: {if CONDITION -> PLAYER: utility, ...; ...}`.
 
 CheckMate treats a file as JSON if it starts with `{`, and as the compact format otherwise.
@@ -119,7 +131,8 @@ Before analyzing a game, CheckMate checks that it is well-formed, in either form
 - every internal node has children with distinct actions, 
 - every leaf has exactly one utility per player, 
 - all utilities and constraints parse,
-- every honest history exists in the tree and ends at a leaf or a subtree.
+- every honest history exists in the tree and ends at a leaf or a subtree,
+- descriptions are texts, of declared players, constants and infinitesimals.
 A game with honest utilities instead of honest histories (a subtree off the honest history) is accepted as well.
 For conditional games, CheckMate also checks that:
 - constants and infinitesimals are a list or `{"known": [...], "unknown": [...]}`,

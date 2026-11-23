@@ -53,8 +53,10 @@ function highlightCompact(text, errorLine) {
                 const [, indent, action, arrow, rest] = m;
                 // below a condition node: if [NAME:] CONDITION
                 const c = action.match(/^if(\s+)(?:([^\s:]+)(\s*:\s*))?(.*)$/);
+                const marked = action.match(/^honest(\s+)(.*)$/);
                 html = esc(indent) + (c ? span('h-key', 'if') + esc(c[1]) + span('h-action', c[2] || '') + esc(c[3] || '') +
                                           expression(c[4])
+                                        : marked ? span('h-key', 'honest') + esc(marked[1]) + span('h-action', marked[2])
                                         : span('h-action', action)) + span('h-arrow', arrow) + (
                     rest.startsWith('subtree') ? span('h-subtree', rest) :
                     rest.includes(':') ? utilities(rest) : head(rest));
