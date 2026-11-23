@@ -1,0 +1,6 @@
+# expect: line 5: y in a payoff must be a constant, an infinitesimal, or a number in the state
+players: A, B
+constants: x
+honest move go by A
+  pay A: y
+  end

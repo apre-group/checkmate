@@ -1,0 +1,8 @@
+# expect: line 7: unknown name opne
+players: A, B
+constants: x
+state: phase = open
+
+honest move go by A
+  if phase = opne
+  end

@@ -1,0 +1,7 @@
+# expect: line 4: B moves next (after go), but none of their moves is possible
+players: A, B
+
+honest move go by A
+  next B
+move stop by A
+  end

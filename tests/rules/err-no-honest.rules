@@ -1,0 +1,4 @@
+# expect: line 2: the honest play reaches A (at the start), but none of their possible moves (go) is honest
+players: A, B
+move go by A
+  end

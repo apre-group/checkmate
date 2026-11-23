@@ -1,6 +1,7 @@
 import type { Condition, Declarations, Game, HistoryElement, Result, Step, TreeNode } from './game.ts';
 import { genGame } from './gen_game.ts';
-import { highlightCompact } from './highlight.ts';
+import { highlightCompact, highlightRules } from './highlight.ts';
+import { compileRules, looksLikeRules, RulesError, type Compiled } from './rules.ts';
 import { explain, type Item } from './explain.ts';
 import { NAMES, caseText, escapeHtml, historyText } from './text.ts';
 
@@ -28,9 +29,10 @@ $('theme').addEventListener('click', () => {
 fetch('examples/index.json').then(r => r.json()).then((names: string[]) => {
     const group = (label: string, ns: string[]) =>
         ns.length ? `<optgroup label="${label}">` + ns.map(n => `<option>${n}</option>`).join('') + '</optgroup>' : '';
-    $<HTMLSelectElement>('example').innerHTML = group('Readable examples', names.filter(n => n.endsWith('.game'))) +
-        group('From the papers', names.filter(n => !n.endsWith('.game')));
-    const start = ['market_entry.game', 'market_entry_game.json'].find(n => names.includes(n)) || names[0];
+    $<HTMLSelectElement>('example').innerHTML = group('Rules', names.filter(n => n.endsWith('.rules'))) +
+        group('Game trees', names.filter(n => n.endsWith('.game'))) +
+        group('From the papers', names.filter(n => n.endsWith('.json')));
+    const start = ['market_entry.rules', 'market_entry.game', 'market_entry_game.json'].find(n => names.includes(n)) || names[0];
     $<HTMLSelectElement>('example').value = start;
     loadExample(start);
 }).catch(() => { $<HTMLSelectElement>('example').innerHTML = '<option value="">(no examples found)</option>'; });
@@ -131,10 +133,20 @@ function loadExample(name: string) {
     });
 }
 
+// the game tree that the rules in the editor give, if the editor has rules
+let compiled: Compiled | null = null;
+
 let editTimer: ReturnType<typeof setTimeout> | undefined, errorLine = 0;
 function highlight() {
-    $('highlight').innerHTML = highlightCompact($<HTMLTextAreaElement>('game').value, errorLine);
+    const text = $<HTMLTextAreaElement>('game').value;
+    $('highlight').innerHTML = (looksLikeRules(text) ? highlightRules : highlightCompact)(text, errorLine);
     syncScroll();
+}
+function showGenerated() {
+    $('generated').hidden = !compiled;
+    if (!compiled) return;
+    $('generated-count').textContent = `${compiled.leaves} way${compiled.leaves === 1 ? '' : 's'} to play`;
+    $('generated-text').innerHTML = highlightCompact(compiled.text, 0);
 }
 function syncScroll() {
     $('highlight').scrollTop = $<HTMLTextAreaElement>('game').scrollTop;
@@ -155,12 +167,28 @@ async function gameChanged() {
     $('explain').innerHTML = '';
     const text = $<HTMLTextAreaElement>('game').value;
     highlight();
+    compiled = null;
     if (looksLikeJson(text)) {
+        showGenerated();
         try { JSON.parse(text); } catch (e) { $('parse-error').textContent = 'Invalid JSON: ' + (e as Error).message; return; }
         return showGame(text);
     }
+    if (looksLikeRules(text)) {
+        try {
+            compiled = compileRules(text);
+        } catch (e) {
+            if (!(e instanceof RulesError)) throw e;
+            $('parse-error').textContent = e.message;
+            errorLine = e.line;
+            highlight();
+            showGenerated();
+            return;  // keep showing the last good tree
+        }
+    }
+    showGenerated();
+    const generated = compiled;
     try {
-        const jsonText = await converter(text);
+        const jsonText = await converter(generated ? generated.text : text);
         if ($<HTMLTextAreaElement>('game').value !== text) return;  // edited again meanwhile
         game = JSON.parse(jsonText);
         $('parse-error').textContent = '';
@@ -168,10 +196,15 @@ async function gameChanged() {
         highlight();
     } catch (e) {
         if ($<HTMLTextAreaElement>('game').value !== text) return;
-        const message = (e as Error).message;
-        $('parse-error').textContent = message;
+        let message = (e as Error).message;
         const m = message.match(/^line (\d+):/);
         errorLine = m ? +m[1] : 0;
+        // an error in the generated tree, at the line of the rules that gave it
+        if (generated && m) {
+            errorLine = generated.lines[errorLine] || 0;
+            message = `line ${errorLine}: ` + message.slice(m[0].length).trim();
+        }
+        $('parse-error').textContent = message;
         highlight();
         return;  // keep showing the last good tree
     }
@@ -271,7 +304,7 @@ $<HTMLButtonElement>('run').addEventListener('click', () => {
             out.push(d.content);
             if (out.length % 50 === 0) $('output').textContent = out.join('\n');
         } else if (d.type === 'ready') {
-            w.postMessage({ type: 'run', game: $<HTMLTextAreaElement>('game').value, args });
+            w.postMessage({ type: 'run', game: compiled ? compiled.text : $<HTMLTextAreaElement>('game').value, args });
         } else if (d.type === 'done') {
             $('output').textContent = out.join('\n');
             finish(d.result ? 'Done in ' + ((performance.now() - started) / 1000).toFixed(2) + ' s'

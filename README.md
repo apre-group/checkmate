@@ -124,6 +124,49 @@ An honest utility that depends on conditions is written in the same way: `honest
 CheckMate treats a file as JSON if it starts with `{`, and as the compact format otherwise.
 `build/checkmate-convert GAME [OUTPUT]` converts a game from one format to the other.
 
+### Rules
+
+Instead of writing the tree, a game can be described by its rules: who may make which move when, how it changes the state of the game and the payoffs, and who moves next.
+`scripts/rules.mjs GAME.rules [OUTPUT]` plays out every possible way the game can go and writes the tree in the compact format; the web page does this as you type.
+Here is the centipede game of `examples/readable/centipede.rules`, which gives a tree of 7 leaves:
+
+```
+players: Ann, Bob
+constants: coin  # the value of a coin
+initial: coin > 0
+
+start: Ann
+state: round = 1
+
+move take by Ann, Bob  # takes the larger part of the pile, which ends the game
+  pay me: (round + 1) * coin, other: (round - 1) * coin
+  end
+
+honest move pass by Ann, Bob  # lets the pile grow
+  if round < 6
+  set round = round + 1
+  next other
+
+honest move pass by Ann, Bob  # the last round: they share the pile
+  if round = 6
+  pay Ann: 6 * coin, Bob: 6 * coin
+  end
+```
+
+The `players:`, `constants:`, `infinitesimals:`, `initial:` and property constraint lines are as in the compact format, and are copied into the tree.
+`start: PLAYER` says who moves first (by default the first player), and `state: NAME = value, ...` lists what the game keeps track of: `yes`/`no`, numbers, or names (such as `phase = open`).
+Each move starts with `move NAME by PLAYER, ...`, or `honest move ...` for a move of the honest play, and has lines indented below it:
+- `if CONDITION`: the move is possible only when the condition holds (several `if` lines must all hold); conditions use `=`, `!=`, `<`, `<=`, `>`, `>=`, `and`, `or`, `not`, `+`, `-`, `*`, `/` and parentheses,
+- `set NAME = value, ...`: changes the state (all values are computed from the state before the move),
+- `pay PLAYER: amount, ...`: adds the amount, an expression over constants, infinitesimals and numbers in the state (before the move), to the player's payoff,
+- `next PLAYER` (any expression that gives a player) or `end`.
+
+In a move by several players, `me` is the player who moves, and in a game of two players, `other` is the other one.
+The tree has a node wherever a player moves: its branches are the moves of that player that are possible, in the order of the rules, and the payoff at a leaf is the sum of everything paid on the way, simplified.
+The honest histories are the plays along honest moves from the start; where several honest moves are possible, each gives an honest history.
+It is an error if a player who moves has no possible move, if two possible moves have the same name, if the honest play reaches a player without a possible honest move, or if the game does not end within 100 moves; errors name the line of the rules.
+A comment after a move describes it, as a comment after a branch does in the compact format.
+
 ### Validation
 
 Before analyzing a game, CheckMate checks that it is well-formed, in either format: 

@@ -1,0 +1,7 @@
+# expect: line 6: two moves go are possible at once (at the start)
+players: A, B
+honest move go by A
+  end
+
+move go by A
+  end

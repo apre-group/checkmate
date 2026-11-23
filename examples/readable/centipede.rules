@@ -1,0 +1,23 @@
+# The centipede game: Ann and Bob take turns at a pile of coins that grows each round. Whoever moves can take
+# the larger part of it, ending the game, or pass and leave the choice to the other. The honest play is to pass
+# until the end, when they share the pile equally. Change the 6 (twice) to make the game longer.
+players: Ann, Bob
+constants: coin  # the value of a coin
+initial: coin > 0
+
+start: Ann
+state: round = 1
+
+move take by Ann, Bob  # takes the larger part of the pile, which ends the game
+  pay me: (round + 1) * coin, other: (round - 1) * coin
+  end
+
+honest move pass by Ann, Bob  # lets the pile grow
+  if round < 6
+  set round = round + 1
+  next other
+
+honest move pass by Ann, Bob  # the last round: they share the pile
+  if round = 6
+  pay Ann: 6 * coin, Bob: 6 * coin
+  end

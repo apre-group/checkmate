@@ -173,8 +173,12 @@
         #glossary { font-size: 13px; color: var(--muted); margin: -4px 0 10px; }
         #glossary:empty { display: none; }
         #glossary b { color: var(--text); font: 600 12.5px var(--mono); }
-        #help { margin-top: 10px; font-size: 13.5px; color: var(--muted); }
-        #help summary { cursor: pointer; color: var(--link); }
+        #help, #generated { margin-top: 10px; font-size: 13.5px; color: var(--muted); }
+        #help summary, #generated summary { cursor: pointer; color: var(--link); }
+        #help p { margin: 8px 0; }
+        #generated pre { font: 12.5px/1.6 var(--mono); background: var(--surface-2); border: 1px solid var(--border);
+                         border-radius: 8px; padding: 10px 14px; margin: 8px 0; color: var(--text); overflow: auto; max-height: 340px; }
+        #help pre, #generated pre { font-variant-ligatures: none; }
         #help pre { font: 12.5px/1.6 var(--mono); background: var(--surface-2); border: 1px solid var(--border);
                     border-radius: 8px; padding: 10px 14px; margin: 8px 0; color: var(--text); overflow-x: auto; }
         #help ul { margin: 6px 0; padding-left: 22px; }
@@ -195,8 +199,9 @@
     <div>
         <h1><span class="mark">♚</span>CheckMate in your browser</h1>
         <p class="intro">CheckMate checks game-theoretic security properties of games: weak immunity, weaker immunity,
-            collusion resilience and practicality. Pick an example or write a game in the
-            <a href="https://github.com/apre-group/checkmate#compact-format">compact format</a>, then click Run.
+            collusion resilience and practicality. Pick an example or describe a game by its
+            <a href="https://github.com/apre-group/checkmate#rules">rules</a> (or write its tree in the
+            <a href="https://github.com/apre-group/checkmate#compact-format">compact format</a>), then click Run.
             Everything runs locally in your browser (WebAssembly).</p>
     </div>
     <button id="theme" class="secondary" title="Switch between light and dark" aria-label="Switch between light and dark">◐</button>
@@ -222,29 +227,48 @@
         <textarea id="game" spellcheck="false" wrap="off"></textarea>
     </div>
     <div id="parse-error" class="no"></div>
+    <details id="generated" hidden>
+        <summary>The game tree these rules give (<span id="generated-count"></span>)</summary>
+        <pre id="generated-text"></pre>
+    </details>
     <details id="help">
         <summary>How to write a game</summary>
-        <pre>players: Alice  # a comment after a single name describes it
-players: Bob
+        <p>Describe a game by its rules: who may make which move when, what it changes, what it pays, and who moves
+            next. The page plays out every possible way the game can go, and CheckMate checks the tree that results.</p>
+        <pre>players: Alice, Bob  # a comment after a single name describes it
 constants: price, cost
 initial: price > cost
 
-Alice
-  honest offer -> Bob             # Alice moves first; "honest" marks the intended play
-    honest accept -> Alice: price - cost, Bob: 0
-    reject -> Alice: -cost, Bob: 0  # a leaf: the payoff of every player
-  wait -> Alice: 0, Bob: 0</pre>
+start: Alice
+state: offered = no
+
+honest move offer by Alice      # a comment here describes the move
+  set offered = yes
+  next Bob
+
+honest move accept by Bob
+  if offered
+  pay Alice: price - cost, Bob: 0
+  end
+
+move reject by Bob
+  pay Alice: -cost
+  end</pre>
         <ul>
             <li>Declare the <code>players:</code>, and the symbols in payoffs as <code>constants:</code> (or <code>infinitesimals:</code>, for
                 amounts smaller than any constant); <code>initial:</code> lines constrain them.</li>
-            <li>The tree starts with the player at the root. Each line below it is an action:
-                <code>action -> PLAYER</code> when that player moves next (their actions follow, indented further), or
-                <code>action -> PLAYER: payoff, ...</code> when the game ends there.</li>
-            <li>Mark the actions of the intended play with <code>honest</code>. If a player has several honest actions,
-                each of the resulting histories is checked in turn.</li>
-            <li>A comment after an action describes it; hover over the action in the tree to see it.</li>
+            <li><code>start:</code> says who moves first, and <code>state:</code> lists what the game keeps track of, with
+                its starting values: <code>yes</code>/<code>no</code>, numbers, or names.</li>
+            <li>A move belongs to one or more players (<code>by Alice, Bob</code>; then <code>me</code> is the one who
+                moves, and with two players <code>other</code> is the other one). Below it: <code>if</code> conditions on
+                the state, <code>set</code> to change it, <code>pay</code> to add to payoffs, and then
+                <code>next PLAYER</code> or <code>end</code>.</li>
+            <li>Mark the moves of the intended play with <code>honest</code>. Where several honest moves are possible,
+                each of the resulting plays is checked in turn.</li>
         </ul>
-        See the <a href="https://github.com/apre-group/checkmate#compact-format">compact format</a> for all of it.
+        <p>A game can also be written as its tree directly; pick one of the game trees among the examples, or open
+            the tree the rules give above. See the <a href="https://github.com/apre-group/checkmate#rules">rules</a> and the
+            <a href="https://github.com/apre-group/checkmate#compact-format">compact format</a> for all of it.</p>
     </details>
     <div class="row">
         <span class="group-label">Properties</span>

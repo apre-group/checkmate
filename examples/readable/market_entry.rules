@@ -1,0 +1,25 @@
+# The market entry game (as examples/readable/market_entry.game), described by its rules. Each of the
+# three ways the game can go is checked as the honest one, in turn.
+players: Newcomer   # a firm that considers entering the market
+players: Incumbent  # the firm that has the market to itself
+constants: profit   # what a firm makes in the market
+constants: war_cost # what a price war costs each firm
+initial: profit > 0
+initial: war_cost > 0
+
+start: Newcomer
+
+honest move stay_out by Newcomer  # the incumbent keeps the whole market
+  pay Incumbent: profit * profit
+  end
+
+honest move enter by Newcomer
+  next Incumbent
+
+honest move share by Incumbent
+  pay Newcomer: profit, Incumbent: profit
+  end
+
+honest move fight by Incumbent  # a price war
+  pay Newcomer: -war_cost, Incumbent: -war_cost
+  end
