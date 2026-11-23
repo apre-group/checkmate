@@ -101,4 +101,119 @@ namespace z3 {
 		assert(false);
 		UNREACHABLE;
 	}
+
+	namespace {
+		// precedence, loosest first
+		enum { SUM = 1, PRODUCT, NEGATION, ATOM };
+		enum { OR = 1, AND, NOT, COMPARISON };
+
+		std::string wrap(const std::string &text, int precedence, int outer) {
+			return precedence < outer ? "(" + text + ")" : text;
+		}
+
+		bool negative(Real expr) {
+			return expr.op() == Real::Operator::MIN || (expr.op() == Real::Operator::NUMERAL && expr.numeral()[0] == '-');
+		}
+
+		// -x for a negative number or a negation x
+		std::string negated(Real expr, int outer);
+
+		std::string pretty(Real expr, int outer) {
+			switch (expr.op()) {
+			case Real::Operator::NUMERAL: {
+				std::string number = expr.numeral();
+				int precedence = number[0] == '-' ? NEGATION : number.find('/') != std::string::npos ? PRODUCT : ATOM;
+				return wrap(number, precedence, outer);
+			}
+			case Real::Operator::CONSTANT:
+				return expr.name();
+			case Real::Operator::MIN:
+				return wrap("-" + pretty(expr.real_child(0), NEGATION), NEGATION, outer);
+			case Real::Operator::ADD:
+			case Real::Operator::SUB: {
+				std::string text = pretty(expr.real_child(0), SUM);
+				for (unsigned i = 1; i < expr.num_args(); i++) {
+					Real child = expr.real_child(i);
+					bool minus = expr.op() == Real::Operator::SUB;
+					// a + -b is written a - b, and a - -b as a + b
+					if (negative(child))
+						text += (minus ? " + " : " - ") + negated(child, minus ? SUM : PRODUCT);
+					else
+						text += (minus ? " - " : " + ") + pretty(child, minus ? PRODUCT : SUM);
+				}
+				return wrap(text, SUM, outer);
+			}
+			case Real::Operator::MUL:
+			case Real::Operator::DIV: {
+				std::string text = pretty(expr.real_child(0), PRODUCT);
+				for (unsigned i = 1; i < expr.num_args(); i++)
+					text += expr.op() == Real::Operator::MUL ? " * " + pretty(expr.real_child(i), PRODUCT)
+						: " / " + pretty(expr.real_child(i), NEGATION);
+				return wrap(text, PRODUCT, outer);
+			}
+			}
+			assert(false);
+			UNREACHABLE;
+		}
+
+		std::string negated(Real expr, int outer) {
+			if (expr.op() == Real::Operator::MIN)
+				return pretty(expr.real_child(0), outer);
+			std::string number = expr.numeral();
+			return wrap(number.substr(1), number.find('/') != std::string::npos ? PRODUCT : ATOM, outer);
+		}
+
+		const char *comparison(Bool::Operator op, bool inverted) {
+			switch (op) {
+			case Bool::Operator::EQ: return inverted ? "!=" : "=";
+			case Bool::Operator::NE: return inverted ? "=" : "!=";
+			case Bool::Operator::LT: return inverted ? ">=" : "<";
+			case Bool::Operator::LE: return inverted ? ">" : "<=";
+			case Bool::Operator::GT: return inverted ? "<=" : ">";
+			case Bool::Operator::GE: return inverted ? "<" : ">=";
+			default: return nullptr;
+			}
+		}
+
+		std::string pretty(Bool expr, int outer) {
+			auto op = expr.op();
+			switch (op) {
+			case Bool::Operator::TRUE:
+				return "true";
+			case Bool::Operator::FALSE:
+				return "false";
+			case Bool::Operator::NOT: {
+				// not (a >= b) is written a < b
+				Bool child = expr.bool_child(0);
+				if (const char *inverse = comparison(child.op(), true))
+					return wrap(pretty(child.real_child(0), SUM) + " " + inverse + " " + pretty(child.real_child(1), SUM),
+						COMPARISON, outer);
+				return wrap("not " + pretty(child, NOT), NOT, outer);
+			}
+			case Bool::Operator::AND:
+			case Bool::Operator::OR: {
+				int precedence = op == Bool::Operator::AND ? AND : OR;
+				std::string text;
+				for (unsigned i = 0; i < expr.num_args(); i++)
+					text += (i ? (op == Bool::Operator::AND ? " and " : " or ") : "") + pretty(expr.bool_child(i), precedence);
+				return wrap(text, precedence, outer);
+			}
+			default:
+				return wrap(pretty(expr.real_child(0), SUM) + " " + comparison(op, false) + " " + pretty(expr.real_child(1), SUM),
+					COMPARISON, outer);
+			}
+		}
+	}
+
+	std::string pretty(Real expr) {
+		std::string text = pretty(expr, 0);
+		check_error();
+		return text;
+	}
+
+	std::string pretty(Bool expr) {
+		std::string text = pretty(expr, 0);
+		check_error();
+		return text;
+	}
 }

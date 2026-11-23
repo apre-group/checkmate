@@ -11,6 +11,8 @@ const char *USAGE = R"(usage: checkmate PATH
 	--practicality
 	--subtree
 	--json-out FILE
+	--color=auto|always|never  terminal colours (auto: if the output is a terminal)
+	--verbose                  also print how the analysis splits into cases
 only for CEFGs (games with condition nodes), ignored for EFGs:
 	--no_validate_conditions  do not check that the conditions of a condition node
 	                          are mutually exclusive and leave no gap
@@ -81,6 +83,14 @@ Options::Options(char **argv) {
 				bail("--json-out expects a file name");
 			json_out = *++argv;
 		}
+		else if (!strcmp(*argv, "--color=auto"))
+			color = Color::AUTO;
+		else if (!strcmp(*argv, "--color=always") || !strcmp(*argv, "--color"))
+			color = Color::ALWAYS;
+		else if (!strcmp(*argv, "--color=never"))
+			color = Color::NEVER;
+		else if (!strcmp(*argv, "--verbose"))
+			verbose = true;
 		else if (!strcmp(*argv, "--subtree"))
 			subtree = true;
 		else if (!strcmp(*argv, "--no_validate_conditions"))

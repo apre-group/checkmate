@@ -5,7 +5,38 @@
 #include "subtree_mode.hpp"
 #include "run.hpp"
 
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "../style.hpp"
+
 namespace cefg {
+
+static std::string join(const std::vector<std::string> &parts, const std::string &separator) {
+	std::string result;
+	for (size_t i = 0; i < parts.size(); i++)
+		result += (i ? separator : "") + parts[i];
+	return result;
+}
+
+// a history for people to read, as in the compact format: a → b → {if CONDITION → c; if CONDITION}
+static std::string history_text(const HonestHistory &history) {
+	std::vector<std::string> parts;
+	for (const HonestHistoryElement &element : history) {
+		if (std::holds_alternative<std::string>(element)) {
+			parts.push_back(style::play(std::get<std::string>(element)));
+			continue;
+		}
+		std::vector<std::string> conditions;
+		for (const HonestHistoryCondition &c : std::get<std::vector<HonestHistoryCondition>>(element)) {
+			std::string path = history_text(c.path);
+			conditions.push_back("if " + style::condition(z3::pretty(c.condition)) + (c.path.empty() ? "" : " → " + path));
+		}
+		parts.push_back("{" + join(conditions, "; ") + "}");
+	}
+	return parts.empty() ? style::play("(empty)") : join(parts, " → ");
+}
 
 int run(char **argv, const nlohmann::json &game) {
 	z3::initialize();
@@ -54,7 +85,7 @@ int run(char **argv, const nlohmann::json &game) {
 		for (const std::vector<const SubtreeEntry *> &subtrees_history : honest_subtree_histories(subtrees)) {
 			mark_honest_subtree_histories(subtrees, subtrees_history);
 			HonestHistory full_history = extend_honest_history(input.root.get(), history);
-			std::cout << std::endl << std::endl << "Checking history " << full_history << std::endl;
+			style::heading("Honest history:", history_text(full_history));
 
 			UtilityTuplesSet ustar;
 			if (options.collusion_resilience || options.practicality) {
@@ -75,7 +106,7 @@ int run(char **argv, const nlohmann::json &game) {
 		Options other_options = options;
 		other_options.collusion_resilience = false;
 		if (other_options.weak_immunity || other_options.weaker_immunity || other_options.practicality) {
-			std::cout << std::endl << std::endl << "Checking no honest history" << std::endl;
+			style::heading("Without an honest history:", "");
 			run(other_options, UtilityTuplesSet(), std::monostate(), nullptr, {{"history", nullptr}});
 		}
 
@@ -85,7 +116,9 @@ int run(char **argv, const nlohmann::json &game) {
 		if (cr_options.collusion_resilience) {
 			for (size_t i = 0; i < input.honest_utilities.size(); i++) {
 				const HonestUtilityTuple &honest_utility = input.honest_utilities[i];
-				std::cout << std::endl << std::endl << "Checking honest utility " << honest_utility.element << std::endl;
+				std::ostringstream utility;
+				utility << honest_utility.element;
+				style::heading("Honest utility:", utility.str());
 				run(cr_options, compute_ustar(honest_utility.element), honest_utility.element, nullptr,
 					{{"history", nullptr}, {"honest_utility", i}});
 			}

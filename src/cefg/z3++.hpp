@@ -55,6 +55,8 @@ namespace z3 {
 		friend std::ostream &operator<<(std::ostream &, Bool);
 		// sets BOOL_SORT and REAL_SORT
 		friend void initialize();
+		// writes expressions for people to read (see pretty)
+		friend struct Pretty;
 
 	public:
 		Expression() = default;
@@ -792,6 +794,10 @@ namespace z3 {
 
 	std::ostream &operator<<(std::ostream &out, z3::Real expr);
 	std::ostream &operator<<(std::ostream &out, z3::Bool expr);
+
+	// expressions for people to read, e.g. "y = 0 and x > 1/2": only the parentheses that precedence needs
+	// (operator<< writes what CheckMate reads back, e.g. in subtree results)
+	std::string pretty(Bool expr);
 }
 
 

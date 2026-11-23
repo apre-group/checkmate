@@ -34,6 +34,11 @@ struct Options {
 	// write verdicts, cases, strategies and counterexamples as JSON to this file
 	const char *json_out = nullptr;
 
+	// terminal colours: always, never, or if the output is a terminal (and NO_COLOR is not set)
+	enum class Color { AUTO, ALWAYS, NEVER } color = Color::AUTO;
+	// also print how the analysis splits into cases
+	bool verbose = false;
+
 	// options for "compositionality feature"
 	// reason over a subtree, to be plugged into a supertree later
 	bool subtree = false;

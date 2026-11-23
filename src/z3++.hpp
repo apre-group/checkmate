@@ -470,6 +470,20 @@ namespace z3 {
 			DIV
 		};
 
+		// the value of a numeral, e.g. -2 or 9/20
+		std::string numeral() const {
+			std::string text = Z3_get_numeral_string(CONTEXT, ast);
+			check_error();
+			return text;
+		}
+
+		// the name of a constant
+		std::string name() const {
+			std::string text = Z3_ast_to_string(CONTEXT, ast);
+			check_error();
+			return text;
+		}
+
 		// what kind of operator we have
 		Operator op() const {
 			Z3_app app = Z3_to_app(CONTEXT, ast);
@@ -665,6 +679,11 @@ namespace z3 {
 
 	std::ostream &operator<<(std::ostream &out, z3::Real expr);
 	std::ostream &operator<<(std::ostream &out, z3::Bool expr);
+
+	// expressions for people to read, e.g. "-b >= b": only the parentheses that precedence needs, and numbers as
+	// 2 or 9/20 (operator<< writes what CheckMate reads back, e.g. in subtree results)
+	std::string pretty(Real expr);
+	std::string pretty(Bool expr);
 }
 
 

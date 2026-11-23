@@ -1,12 +1,15 @@
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 #include "game_type.hpp"
 #include "input.hpp"
 #include "options.hpp"
 #include "property.hpp"
+#include "style.hpp"
 #include "validate.hpp"
 #include "cefg/run.hpp"
 #include "cefg/z3++.hpp"
@@ -16,6 +19,8 @@ static int run_cefg(char **argv, const nlohmann::json &game) {
 	// options the CEFG analysis understands
 	static const char *SUPPORTED[] = {"--weak_immunity", "--weaker_immunity", "--collusion_resilience", "--practicality", "--subtree",
 		"--no_validate_conditions"};
+	// options that main handles for both analyses
+	static const char *BOTH[] = {"--color", "--color=auto", "--color=always", "--color=never", "--verbose"};
 	// options of the EFG analysis that the CEFG analysis does not have yet
 	static const char *NOT_YET[] = {"--counterexamples", "--all_counterexamples", "--preconditions", "--strategies"};
 
@@ -33,6 +38,8 @@ static int run_cefg(char **argv, const nlohmann::json &game) {
 	for (char **option = argv + 2; *option; option++) {
 		if (among(*option, SUPPORTED, sizeof SUPPORTED / sizeof *SUPPORTED)) {
 			arguments.push_back(*option);
+		} else if (among(*option, BOTH, sizeof BOTH / sizeof *BOTH)) {
+			continue;
 		} else if (!std::strcmp(*option, "--json-out")) {
 			// Options already checked that a file name follows
 			arguments.push_back(*option);
@@ -53,6 +60,13 @@ static int analyse(char **argv) {
 	z3::initialize();
 	// checks all options, also those that are ignored for CEFGs
 	Options options(argv);
+#ifdef __EMSCRIPTEN__
+	// the WebAssembly build's output is never a terminal (the web page asks for colours with --color=always)
+	bool terminal = false;
+#else
+	bool terminal = isatty(STDOUT_FILENO) && !std::getenv("NO_COLOR");
+#endif
+	style::on = options.color == Options::Color::ALWAYS || (options.color == Options::Color::AUTO && terminal);
 	GameFile file = read_game(options.input_path);
 
 	std::string reason;

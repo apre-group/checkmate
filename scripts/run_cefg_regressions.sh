@@ -24,7 +24,7 @@ done
 {
   for game in "$WORK"/conditional_actions/*.json; do
     echo "== $(basename "$game")"
-    (cd "$WORK/conditional_actions" && "$CHECKMATE" "$(basename "$game")" 2>&1) | grep -E '^(Checking|YES|NO|UNKNOWN|checkmate:)'
+    (cd "$WORK/conditional_actions" && "$CHECKMATE" "$(basename "$game")" 2>&1) | grep -E '^(Honest history|Without an honest history|Honest utility|  [a-z ]+: (YES|NO|UNKNOWN)|    could not decide|checkmate:)'
   done
   # the checks of the conditions (overlaps, gaps, conditions that cannot hold); *-unchecked.json without them
   mkdir -p "$WORK/cefg_conditions"
@@ -33,7 +33,7 @@ done
     flags=()
     case "$game" in *-unchecked.json) flags=(--no_validate_conditions);; esac
     echo "== cefg_conditions/$(basename "$game")"
-    (cd "$WORK/cefg_conditions" && "$CHECKMATE" "$(basename "$game")" "${flags[@]}" 2>&1) | grep -E '^(Checking|YES|NO|UNKNOWN|checkmate:)'
+    (cd "$WORK/cefg_conditions" && "$CHECKMATE" "$(basename "$game")" "${flags[@]}" 2>&1) | grep -E '^(Honest history|Without an honest history|Honest utility|  [a-z ]+: (YES|NO|UNKNOWN)|    could not decide|checkmate:)'
   done
 } > "$WORK/actual.txt"
 

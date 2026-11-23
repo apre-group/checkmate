@@ -1,6 +1,7 @@
 #include "default_mode.hpp"
 #include "property_checks.hpp"
 #include "selectors.hpp"
+#include "../style.hpp"
 
 // imported from the cefg branch (c9c6e6f); wrapped in namespace cefg next to the EFG engine in src/
 namespace cefg {
@@ -15,10 +16,10 @@ void default_mode(const Options &options, const Input &input, const UtilityTuple
 		const char *json_name;
 	};
 	std::vector<ChosenProperty> properties = {
-		{options.weak_immunity, PropertyType::WeakImmunity, "weak immune", "weak_immunity"},
-		{options.weaker_immunity, PropertyType::WeakerImmunity, "weaker immune", "weaker_immunity"},
-		{options.collusion_resilience, PropertyType::CollusionResilience, "collusion resilient", "collusion_resilience"},
-		{options.practicality, PropertyType::Practicality, "practical", "practicality"}
+		{options.weak_immunity, PropertyType::WeakImmunity, "weak immunity", "weak_immunity"},
+		{options.weaker_immunity, PropertyType::WeakerImmunity, "weaker immunity", "weaker_immunity"},
+		{options.collusion_resilience, PropertyType::CollusionResilience, "collusion resilience", "collusion_resilience"},
+		{options.practicality, PropertyType::Practicality, "practicality", "practicality"}
 	};
 
 	for (const ChosenProperty &property : properties) {
@@ -27,14 +28,9 @@ void default_mode(const Options &options, const Input &input, const UtilityTuple
 		}
 		std::string undecided;
 		std::optional<bool> satisfied = satisfiesProperty(input, ustar, property.property, undecided);
-		if (!satisfied) {
-			std::cout << "UNKNOWN, could not decide whether the game is " << property.name << " for the analyzed history: "
-				<< undecided << "." << std::endl;
-		} else if (*satisfied) {
-			std::cout << "YES, the game is " << property.name << " for the analyzed history." << std::endl;
-		} else {
-			std::cout << "NO, the game is not " << property.name << " for the analyzed history." << std::endl;
-		}
+		std::cout << "  " << property.name << ": " << (satisfied ? style::verdict(*satisfied) : style::unknown()) << std::endl;
+		if (!satisfied)
+			std::cout << "    could not decide it: " << undecided << std::endl;
 
 		// as for EFGs, but `holds` is null if undecided (strategies and counterexamples are not implemented yet)
 		nlohmann::json entry = run;

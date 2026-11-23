@@ -267,6 +267,8 @@ There are several options:
 * `--all_counterexamples`: If a property is not fulfilled, provide **all** counterexamples for the considered problematic case(s). The number of considered problematic cases depends on whether the `all_cases` flag was set. For collusion resilience, identical counterexamples are shown only once, and at most 100 counterexamples are shown per case.
 * `--all_cases`: If a property is not fulfilled, keep looking for all problematic cases.
 * `--strategies`: If a property is satisfied, provide a witness strategy.
+* `--color=auto|always|never`: Colour the output (YES in green, NO in red, conditions and actions in their own colours). By default, CheckMate colours its output when it is a terminal and `NO_COLOR` is not set; `--color` alone means `--color=always`.
+* `--verbose`: Also print how the analysis splits into cases (`splitting on ...`).
 * `--json-out FILE`: Also write the results as JSON to `FILE`: for each honest history and property, the verdict, every case checked (as a list of SMT-LIB 2 conditions) with whether the property holds in it, the strategies and counterexamples, exactly when the text output shows them, and the weakest precondition with `--preconditions`. With `--subtree`, `FILE` gets the subtree result instead: the same as `SUBTREE.out`, but with cases as SMT-LIB 2 conditions and utilities as SMT-LIB 2 real and infinitesimal parts.
 * If not all security properties should be analyzed, users can specify properties individually with some combination of `--weak_immunity`, `--weaker_immunity`, `--collusion_resilience`, and `--practicality`.
 * `--subtree` is used for [compositional analysis](#compositional-analysis). For games without condition nodes, it cannot be combined with `--counterexamples`, `--all_counterexamples`, `--strategies` or `--preconditions`.
@@ -285,55 +287,70 @@ python3 examples/key_examples/closing_game.py > closing_game.json
 build/checkmate closing_game.json --counterexamples --weak_immunity --collusion_resilience
 ```
 
+The output has a block for each honest history, with a line per property and, indented below it, the cases (if the analysis split on the values of the constants), strategies (`--strategies`), counterexamples (`--counterexamples`) and weakest preconditions (`--preconditions`).
+For the loan of `examples/readable/loan.rules`, with `--counterexamples`:
+
+```
+Honest history: lend → repay
+  weak immunity: NO
+    Alice can get a negative payoff while playing honestly, if Bob plays keep after lend.
+  weaker immunity: NO
+    Alice can get a negative payoff (apart from infinitesimals) while playing honestly, if Bob plays keep after lend.
+  collusion resilience: NO
+    Bob deviates to keep after lend, and at lend → keep, Bob gets more than on the honest history.
+  practicality: NO
+    Bob is better off deviating: Bob plays keep after lend, and rational play then ends the game at lend → keep.
+```
+
+A case reads `when CONDITION: holds` (or `does not hold`), and a strategy or counterexample for a case starts with `when CONDITION:`.
+Games without an honest history (subtrees off the honest history) have blocks `Without an honest history:` and `Honest utility: ...` instead, and with `--subtree`, the lines say for which player or group a property holds.
+
 ## Counterexamples
 
 ### Weak immunity counterexamples
 
 A counterexample for weak (or weaker) immunity describes how the other players can harm one player, i.e. force a negative utility on them, whatever that player does.
-For example, for history `[r_A, l_B]` of `running_example.json`:
+For example, for history `r_A → l_B` of `running_example.json`:
 
 ```
-Counterexample for case: [((a - 2.0) >= 0.0), (b < 0.0)]
-Player A can be harmed, if
-	Player B takes one of the actions [r_B] after history [r_A]
+  weak immunity: NO
+    when a - 2 >= 0 and b >= 0: holds
+    when a - 2 >= 0 and b < 0: A can get a negative payoff while playing honestly, if B plays r_B after r_A.
 ```
 
-Each line lists the actions of another player that lead to harm after the given history.
+The counterexample lists the actions of the other players that lead to harm, each after its history.
 The harmed player follows the honest history; after leaving it, all of their choices are covered, and each one leads to harm.
-With `--all_counterexamples`, a line can list several actions, each of which leads to harm.
-If the honest history itself yields a negative utility, the counterexample reads `Player P is harmed, if they follow the honest history`.
+With `--all_counterexamples`, a player can have several actions (`plays x or y`), each of which leads to harm.
+If the honest history itself yields a negative utility, the counterexample reads `P gets a negative payoff when everyone plays honestly`.
 
 ### Collusion resilience counterexamples
 
 A counterexample for collusion resilience describes how a group of players can deviate profitably in a case where the property is violated.
-For example, for history `[e, s]` of `market_entry_game.json`:
+For example, for history `e → s` of `market_entry_game.json`:
 
 ```
-Counterexample for case: []
-	Player E deviates to [i] after history [e]
-	After history [e, i]: group [E] gains more than on the honest history
+  collusion resilience: NO
+    E deviates to i after e, and at e → i, E gets more than on the honest history.
 ```
 
-The first line is the deviation from the honest history.
-Further lines of the form `Player P chooses [a] after history h` are choices the deviating players make afterwards (no action is prescribed there anymore).
+It starts with the deviation from the honest history.
+Further parts of the form `then P plays a after h` are choices the deviating players make afterwards (no action is prescribed there anymore).
 Players that act after the deviation without being listed stay honest: the counterexample covers all of their choices, and they are never part of a group.
-Finally, the counterexample lists every leaf reached, together with all groups that obtain a higher joint utility there than on the honest history.
+Finally, the counterexample lists every leaf reached (one per line if there are several), together with all groups that obtain a higher joint utility there than on the honest history.
 If the game contains subtree results, a counterexample can end in a subtree; run that subtree on its own with `--counterexamples` to see the rest.
 
 ### Practicality counterexamples
 
 A counterexample for practicality shows a player who is better off deviating from the honest history.
-For example, for history `[o]` of `market_entry_game.json`:
+For example, for history `o` of `market_entry_game.json`:
 
 ```
-Counterexample for case: []
-For player N all practical histories after [e] yield a better utility than the honest one.
-Practical histories:
-[e, i]
+  practicality: NO
+    N is better off deviating: N plays e at the start, and rational play then ends the game at e → i.
 ```
 
 Here, player N deviates from the honest history by choosing `e` at the root.
-Afterwards, all players continue practically, i.e. in a subgame perfect way, which leads to the listed practical histories.
+Afterwards, all players continue practically, i.e. in a subgame perfect way, which leads to the listed practical histories (`e → i`, here; several are joined by `or`).
 Each of them gives N a higher utility than the honest history.
 If the game contains subtree results, the counterexample can instead say that a subtree is not practical; run that subtree on its own with `--counterexamples` to see the rest.
 

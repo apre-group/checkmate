@@ -12,6 +12,7 @@
 #include "z3++.hpp"
 #include "options.hpp"
 #include "game_type.hpp"
+#include "report.hpp"
 
 // forward declarations for Node methods
 class Leaf;
@@ -821,26 +822,18 @@ struct Input {
 		}
 	}
 
-	void print_strategies(const Options &options, bool is_wi) const {
-		std::cout << std::endl;
-		for (StrategyCase strategy_case : strategies) {
-			std::cout << "Strategy for case: " <<  strategy_case._case << std::endl;
-			for (HistoryChoice hist_choice : strategy_case.strategy){
-				std::cout
-					<< "\tPlayer "
-					<< hist_choice.player
-					<< " takes action "
-					<< hist_choice.choice
-					<< " after history "
-					<< hist_choice.history
-					<< std::endl;
-			}
-			if (is_wi) {
-				std::cout << "\tPlayers can choose the rest of the actions arbitrarily." << std::endl;	
-			}
-			if(has_subtrees) {
-				std::cout << "\tYou need to run subtrees in default mode with option strategies for complete strategies." << std::endl;
-			}
+	// below the verdict: per case, the moves of the strategy
+	void print_strategies(const Options &, bool is_wi) const {
+		for (const StrategyCase &strategy_case : strategies) {
+			std::cout << "    strategy" << (strategy_case._case.empty() ? "" : " when " + report::conditions(strategy_case._case))
+				<< ":" << std::endl;
+			for (const HistoryChoice &hist_choice : strategy_case.strategy)
+				std::cout << "      " << hist_choice.player << " plays " << style::play(hist_choice.choice) << " "
+					<< report::after(hist_choice.history) << std::endl;
+			if (is_wi)
+				std::cout << "      the other actions can be anything" << std::endl;
+			if (has_subtrees)
+				std::cout << "      (for the whole strategy, analyse the subtrees with --strategies)" << std::endl;
 		}
 	}
 
@@ -873,101 +866,79 @@ struct Input {
 		}
 	}
 
-	void print_counterexamples(const Options &options, bool is_wi, bool is_cr) const {
-		int no_counterexamples = 0;
-		if (is_cr) {
-			std::cout << std::endl;
-			for (const CeCase &ce_case : counterexamples){
-				no_counterexamples++;
-				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
+	// below the verdict: per case, how the property is violated
+	void print_counterexamples(const Options &, bool is_wi, bool is_cr, bool weaker = false) const {
+		const std::string subtrees = "(for the whole counterexample, analyse the subtrees with --counterexamples)";
+		for (const CeCase &ce_case : counterexamples) {
+			std::cout << "    " << report::when(ce_case._case);
+			if (is_cr) {
 				// the first choice (sorted by history) leaves the honest history, all others are taken after it,
 				// where no action is prescribed anymore
-				bool first = true;
-				for (const CeChoice &ce_choice : ce_case.counterexample){
-					std::cout
-						<< "\tPlayer "
-						<< ce_choice.player
-						<< (first ? " deviates to " : " chooses ")
-						<< ce_choice.choices
-						<< " after history "
-						<< ce_choice.history
-						<< std::endl;
-					first = false;
-				}
+				std::vector<std::string> moves;
+				for (const CeChoice &ce_choice : ce_case.counterexample)
+					moves.push_back(ce_choice.player + (moves.empty() ? " deviates to " : " plays ") +
+						report::actions(ce_choice.choices) + " " + report::after(ce_choice.history));
+				std::vector<std::string> leaves;
 				for (const CrLeafViolation &leaf : ce_case.cr_leaves) {
-					std::cout << "\tAfter history " << leaf.history << ": ";
+					std::string text = "at " + report::history(leaf.history) + ", ";
 					if (leaf.subtree) {
-						std::cout << "the subtree is not collusion resilient against some supergroup of " << leaf.groups[0]
-							<< ". Run subtree in default mode with option counterexamples." << std::endl;
+						leaves.push_back(text + "the subtree is not collusion resilient against a group containing " +
+							report::list(leaf.groups[0]) + " (analyse it with --counterexamples)");
 						continue;
 					}
-					std::cout << (leaf.groups.size() == 1 ? "group " : "groups ");
-					for (size_t i = 0; i < leaf.groups.size(); i++) {
-						std::cout << (i > 0 ? ", " : "") << leaf.groups[i];
-					}
-					std::cout << (leaf.groups.size() == 1 ? " gains" : " gain") << " more than on the honest history" << std::endl;
+					std::vector<std::string> groups;
+					for (const auto &group : leaf.groups)
+						groups.push_back(report::group(group));
+					bool one = leaf.groups.size() == 1 && leaf.groups[0].size() == 1;
+					leaves.push_back(text + report::join(groups, ", and also ") + (one ? " gets" : " get") +
+						" more than on the honest history");
 				}
-				if (ce_case.cr_more_omitted) {
-					std::cout << "There are more counterexamples for this case, only the first ones are shown." << std::endl;
-				}
-			}
-		} else if(is_wi) {
-			std::cout << std::endl;
-			for (CeCase ce_case : counterexamples){
-				no_counterexamples++;
-				std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-				if(ce_case.counterexample.size() == 0) {
-					if(has_subtrees) {
-						std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history. Run subtree along honest history in default mode with option counterexamples." << std::endl;
-					} else {
-						std::cout << "Player " << ce_case.player_group[0] << " is harmed, if they follow the honest history." << std::endl;
-					}
+				// one sentence for one leaf, else a line per leaf
+				if (leaves.size() == 1) {
+					std::cout << report::join(moves, ", then ") << (moves.empty() ? "" : ", and ") << leaves[0] << "." << std::endl;
 				} else {
-					std::cout << "Player " << ce_case.player_group[0] << " can be harmed, if" << std::endl;
-					for (CeChoice ce_choice : ce_case.counterexample){
-						std::cout
-							<< "\tPlayer "
-							<< ce_choice.player
-							<< " takes one of the actions "
-							<< ce_choice.choices
-							<< " after history "
-							<< ce_choice.history
-							<< std::endl;
-					}
-					if(has_subtrees) {
-						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
-					}
+					std::cout << report::join(moves, ", then ") << ":" << std::endl;
+					for (const std::string &leaf : leaves)
+						std::cout << "      " << leaf << std::endl;
 				}
-				
-			}
-		} else {
-			for (CeCase ce_case : counterexamples){
-				no_counterexamples++;
-				if(ce_case.player_group.size() == 0) {
-					// the counterexample ends in a subtree: user should check ce in the subtree manually
-					std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-					std::cout << "The subtree after history " << ce_case.counterexample[0].history << " is not practical. Run subtree in default mode with option counterexamples." << std::endl;
+				if (ce_case.cr_more_omitted)
+					std::cout << "      (there are more counterexamples in this case; only the first ones are shown)" << std::endl;
+			} else if (is_wi) {
+				const std::string &player = ce_case.player_group[0];
+				const std::string negative = weaker ? "a negative payoff (apart from infinitesimals)" : "a negative payoff";
+				if (ce_case.counterexample.empty()) {
+					std::cout << player << " gets " << negative << " when everyone plays honestly." << std::endl;
 				} else {
-					std::cout << "Counterexample for case: " <<  ce_case._case << std::endl;
-					std::cout << "For player " << ce_case.player_group[0] << " all practical histories after " << ce_case.counterexample[0].history <<" yield a better utility than the honest one." << std::endl;
-					std::cout << "Practical histories:" << std::endl;
-					for(auto history : ce_case.counterexample) {
-						std::vector<std::string> history_to_print;
-						history_to_print.insert(history_to_print.end(), ce_case.counterexample[0].history.begin(), ce_case.counterexample[0].history.end());
-						history_to_print.insert(history_to_print.end(), history.choices.begin(), history.choices.end());
-						std::cout << history_to_print << std::endl;	
-					}
-					if(has_subtrees) {
-						std::cout << "You might need to run subtrees in default mode with option counterexamples for complete counterexamples." << std::endl;
-					}
+					std::vector<std::string> moves;
+					for (const CeChoice &ce_choice : ce_case.counterexample)
+						moves.push_back(ce_choice.player + " plays " + report::actions(ce_choice.choices) + " " +
+							report::after(ce_choice.history));
+					std::cout << player << " can get " << negative << " while playing honestly, if " << report::list(moves) << "." << std::endl;
 				}
+				if (has_subtrees)
+					std::cout << "      " << subtrees << std::endl;
+			} else if (ce_case.player_group.empty()) {
+				// the counterexample ends in a subtree: user should check ce in the subtree manually
+				std::cout << "the subtree after " << report::history(ce_case.counterexample[0].history)
+					<< " is not practical (analyse it with --counterexamples)." << std::endl;
+			} else {
+				// the history ends with the deviating action; the choices are how rational play continues
+				const std::string &player = ce_case.player_group[0];
+				const std::vector<std::string> &deviation = ce_case.counterexample[0].history;
+				std::vector<std::string> before(deviation.begin(), deviation.end() - (deviation.empty() ? 0 : 1));
+				std::vector<std::string> ends;
+				for (const CeChoice &continuation : ce_case.counterexample) {
+					std::vector<std::string> path = deviation;
+					path.insert(path.end(), continuation.choices.begin(), continuation.choices.end());
+					ends.push_back(report::history(path));
+				}
+				std::cout << player << " is better off deviating: " << player << " plays "
+					<< style::play(deviation.empty() ? "?" : deviation.back()) << " " << report::after(before)
+					<< ", and rational play then ends the game at " << report::join(ends, " or ") << "." << std::endl;
+				if (has_subtrees)
+					std::cout << "      " << subtrees << std::endl;
 			}
 		}
-
-		std::cout << std::endl;
-		std::cout << std::endl;
-		std::cout << "----> Number of counterexamples found: " << no_counterexamples << std::endl;
-		
 	}
 
 	void add_unsat_case(std::vector<z3::Bool> _case) const {
