@@ -1,0 +1,30 @@
+# Closing a payment channel, as in examples/key_examples/closing_game-simplified.json. Alice closes the
+# channel on her own, or asks Bob to close it together with her. She could also cheat by closing with an
+# old state of the channel, in which she had more; Bob can then punish her and take her balance.
+players: Alice
+players: Bob
+constants: bal_A   # Alice's balance in the channel
+constants: bal_B   # Bob's balance in the channel
+constants: fee     # what punishing costs Bob
+constants: stolen  # how much more Alice has in the old state
+infinitesimals: closed  # the benefit of having the channel closed
+infinitesimals: wait    # what closing on her own costs Alice: she has to wait for her money
+initial: closed > wait
+initial: wait > 0
+initial: bal_A > 0
+initial: bal_B > 0
+initial: fee > 0
+initial: stolen > 0
+initial: bal_B >= stolen
+weak_immunity: bal_A >= fee
+weaker_immunity: bal_A >= fee
+practicality: bal_A >= fee
+
+Alice
+  honest close_alone -> Alice: closed - wait, Bob: closed
+  honest propose_close -> Bob  # asks Bob to sign the closing
+    ignore -> Alice: -bal_A, Bob: -bal_B  # the money stays locked in the channel
+    honest sign -> Alice: closed, Bob: closed
+  close_old_state -> Bob  # cheats
+    ignore -> Alice: stolen + closed - wait, Bob: -stolen + closed
+    punish -> Alice: -bal_A, Bob: bal_A - fee + closed

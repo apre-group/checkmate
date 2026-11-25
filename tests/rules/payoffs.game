@@ -1,0 +1,8 @@
+players: A, B
+constants: x, y
+infinitesimals: e
+
+B
+  honest add -> A
+    honest cancel -> A: e - y - 0.25 * x - 0.6, B: 0.25 * x + 0.6 + y - e + 3 * x * y
+    keep -> A: e - y, B: 0.25 * x + 0.6 + 0.2 * e

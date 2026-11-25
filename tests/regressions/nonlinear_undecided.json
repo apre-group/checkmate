@@ -1,0 +1,131 @@
+{
+  "actions": [
+    "up",
+    "quit",
+    "left",
+    "fold"
+  ],
+  "constants": [
+    "c0",
+    "c1",
+    "c2"
+  ],
+  "honest_histories": [
+    [
+      "up",
+      "up",
+      "left"
+    ]
+  ],
+  "infinitesimals": [],
+  "initial_constraints": [
+    "c2 > 0"
+  ],
+  "players": [
+    "Ann",
+    "Bob"
+  ],
+  "property_constraints": {
+    "collusion_resilience": [],
+    "practicality": [],
+    "weak_immunity": [],
+    "weaker_immunity": []
+  },
+  "tree": {
+    "children": [
+      {
+        "action": "up",
+        "child": {
+          "children": [
+            {
+              "action": "up",
+              "child": {
+                "children": [
+                  {
+                    "action": "fold",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "Ann",
+                          "value": "0"
+                        },
+                        {
+                          "player": "Bob",
+                          "value": "4*c2-c1*c1-c1"
+                        }
+                      ]
+                    },
+                    "description": "a < b & c"
+                  },
+                  {
+                    "action": "quit",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "Ann",
+                          "value": "0"
+                        },
+                        {
+                          "player": "Bob",
+                          "value": "-3*c0"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "action": "left",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "Ann",
+                          "value": "c2-c0-0.45"
+                        },
+                        {
+                          "player": "Bob",
+                          "value": "-3*c0"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "player": "Ann"
+              }
+            },
+            {
+              "action": "quit",
+              "child": {
+                "utility": [
+                  {
+                    "player": "Ann",
+                    "value": "0"
+                  },
+                  {
+                    "player": "Bob",
+                    "value": "-2*c0"
+                  }
+                ]
+              }
+            },
+            {
+              "action": "left",
+              "child": {
+                "utility": [
+                  {
+                    "player": "Ann",
+                    "value": "0"
+                  },
+                  {
+                    "player": "Bob",
+                    "value": "2 * c2 - 2 * c0"
+                  }
+                ]
+              }
+            }
+          ],
+          "player": "Ann"
+        }
+      }
+    ],
+    "player": "Ann"
+  }
+}

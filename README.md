@@ -51,7 +51,10 @@ We support an extension of the original CheckMate input format, i.e. a dictionar
 Each **leaf node** is encoded as a dictionary with the only key `utility`. As a leaf node represents one way of terminating the game, it contains the pay-off information for each player in this scenario. Hence, `utility` is a list containing the players' utilities. Therefore, each element is a dictionary with the two following keys:
     * `player`: the name of the player whose utility it specified, and
     * `value`: the utility for the player. This can be any term over an infinitesimal occurring in `infinitesimals`, a constant contained in `constants`, and reals.
+A branch can also have a `description`, a text that CheckMate ignores (the web page shows it).
 Each **subtree** is a dictionary with exactly one key `subtree`. A subtree represents the *result* of analysing a subtree in the game, and is thus usually generated automatically (see [Compositional analysis](#compositional-analysis)). The value is another dictionary with values `honest_utility` (the utility at the end of the honest history inside the subtree, which the supertree needs; only relevant for the honest subtree, and not to be confused with the input key `honest_utilities`), and property results `weak_immunity`, `weaker_immunity`, `collusion_resilience` and `practicality`. Practicality results are a list of cases and utilities for each case. Other security properties are a list of player groups together with the cases in which the property holds for that player group. For collusion resilience, the list contains every group except the group of all players, including the empty group `[]`, which the supertree looks up when no player has deviated before reaching the subtree.
+
+10. `descriptions` (optional): texts describing players, constants and infinitesimals, as `{"NAME": "text", ...}`; CheckMate ignores them.
 
 Games with condition nodes are described in [Conditional games](#conditional-games-cefgs).
 
@@ -63,27 +66,35 @@ Additionally, all (real) numbers and all constants and infinitesimals declared i
 ### Compact format
 
 CheckMate also reads a compact, line-based format, which is easier to write and read than JSON.
-Here is the game of `examples/key_examples/splits_wi.json`:
+Here is the market entry game of `examples/readable/market_entry.game`, a version of `examples/key_examples/market_entry_game.json` with longer names:
 
 ```
-players: D, G
-constants: a, b
-initial: a > 0
-honest: q
-honest: l r
-honest: l y
+players: Newcomer   # a firm that considers entering the market
+players: Incumbent  # the firm that has the market to itself
+constants: profit   # what a firm makes in the market
+constants: war_cost # what a price war costs each firm
+initial: profit > 0
+initial: war_cost > 0
 
-D
-  q -> D: a, G: a
-  l -> G
-    r -> D: a, G: b
-    y -> D: a, G: -b
+Newcomer
+  honest stay_out -> Newcomer: 0, Incumbent: profit * profit  # the incumbent keeps the whole market
+  honest enter -> Incumbent
+    honest share -> Newcomer: profit, Incumbent: profit
+    honest fight -> Newcomer: -war_cost, Incumbent: -war_cost  # a price war
 ```
 
-The header lines are `players:`, `constants:` and `infinitesimals:` (comma-separated names), and then one line per constraint or history:
+The header lines are `players:`, `constants:` and `infinitesimals:` (comma-separated names, possibly over several lines), and then one line per constraint or history:
 `initial:` for an initial constraint, `weak_immunity:`, `weaker_immunity:`, `collusion_resilience:` or `practicality:` for a property constraint, `honest:` for an honest history (actions separated by spaces), and `honest_utility:` for an honest utility (`PLAYER: utility, ...`).
 The tree starts at the first line that is not a header: the player at the root, and then one line per branch, indented below its node: `action -> PLAYER` for an internal node (whose branches follow, indented further), `action -> PLAYER: utility, ...` for a leaf, or `action -> subtree {...}` for a subtree result in JSON.
 The `actions` list is not needed; it is derived from the tree. `#` starts a comment.
+
+Instead of `honest:` lines, the honest histories can be marked in the tree, by writing `honest` before their actions: they are then the paths from the root along marked actions to a leaf or subtree, in the order of the tree.
+Above, these are `stay_out`, `enter share` and `enter fight`, which CheckMate analyzes one after the other; with `honest: enter share` instead, only `enter` and `share` would be marked.
+Every node that such a path reaches needs a marked action, and a game gives its honest histories either by `honest:` lines or by marks, not both.
+`checkmate-convert` marks them whenever that gives the same histories in the same order.
+
+A comment at the end of a branch describes its action, and one at the end of a `players:`, `constants:` or `infinitesimals:` line with a single name describes that name.
+CheckMate ignores descriptions, but keeps them when converting to JSON (as `description` in the branch and `descriptions` in the game), and the web page shows them.
 
 [Conditional games](#conditional-games-cefgs) have a compact form as well:
 
@@ -107,10 +118,54 @@ A
 Unknown constants and infinitesimals are declared with `unknown_constants:` and `unknown_infinitesimals:`.
 A condition node is `?` (`action -> ?`, or `?` at the root), or `? reveals CONSTANT, ...` to reveal further unknowns, and its conditions follow, indented below it: `if CONDITION -> ...`, or `if NAME: CONDITION -> ...` for a named condition, followed by a node as after `action ->`.
 At a condition node, an honest history continues in every condition, in braces at its end: `{if CONDITION -> history; ...}`, where `if CONDITION` alone is a condition after which the history ends.
+Marked in the tree instead, by `honest dev`, `honest risk` and `honest l`, an honest path continues in every condition of a condition node.
 An honest utility that depends on conditions is written in the same way: `honest_utility: {if CONDITION -> PLAYER: utility, ...; ...}`.
 
 CheckMate treats a file as JSON if it starts with `{`, and as the compact format otherwise.
 `build/checkmate-convert GAME [OUTPUT]` converts a game from one format to the other.
+
+### Rules
+
+Instead of writing the tree, a game can be described by its rules: who may make which move when, how it changes the state of the game and the payoffs, and who moves next.
+`scripts/rules.mjs GAME.rules [OUTPUT]` plays out every possible way the game can go and writes the tree in the compact format; the web page does this as you type.
+Here is the centipede game of `examples/readable/centipede.rules`, which gives a tree of 7 leaves:
+
+```
+players: Ann, Bob
+constants: coin  # the value of a coin
+initial: coin > 0
+
+start: Ann
+state: round = 1
+
+move take by Ann, Bob  # takes the larger part of the pile, which ends the game
+  pay me: (round + 1) * coin, other: (round - 1) * coin
+  end
+
+honest move pass by Ann, Bob  # lets the pile grow
+  if round < 6
+  set round = round + 1
+  next other
+
+honest move pass by Ann, Bob  # the last round: they share the pile
+  if round = 6
+  pay Ann: 6 * coin, Bob: 6 * coin
+  end
+```
+
+The `players:`, `constants:`, `infinitesimals:`, `initial:` and property constraint lines are as in the compact format, and are copied into the tree.
+`start: PLAYER` says who moves first (by default the first player), and `state: NAME = value, ...` lists what the game keeps track of: `yes`/`no`, numbers, or names (such as `phase = open`).
+Each move starts with `move NAME by PLAYER, ...`, or `honest move ...` for a move of the honest play, and has lines indented below it:
+- `if CONDITION`: the move is possible only when the condition holds (several `if` lines must all hold); conditions use `=`, `!=`, `<`, `<=`, `>`, `>=`, `and`, `or`, `not`, `+`, `-`, `*`, `/` and parentheses,
+- `set NAME = value, ...`: changes the state (all values are computed from the state before the move),
+- `pay PLAYER: amount, ...`: adds the amount, an expression over constants, infinitesimals and numbers in the state (before the move), to the player's payoff,
+- `next PLAYER` (any expression that gives a player) or `end`.
+
+In a move by several players, `me` is the player who moves, and in a game of two players, `other` is the other one.
+The tree has a node wherever a player moves: its branches are the moves of that player that are possible, in the order of the rules, and the payoff at a leaf is the sum of everything paid on the way, simplified.
+The honest histories are the plays along honest moves from the start; where several honest moves are possible, each gives an honest history.
+It is an error if a player who moves has no possible move, if two possible moves have the same name, if the honest play reaches a player without a possible honest move, if a number in the state gets larger than 2^64, or if the game does not end within 100 moves; errors name the line of the rules.
+A comment after a move describes it, as a comment after a branch does in the compact format.
 
 ### Validation
 
@@ -119,7 +174,8 @@ Before analyzing a game, CheckMate checks that it is well-formed, in either form
 - every internal node has children with distinct actions, 
 - every leaf has exactly one utility per player, 
 - all utilities and constraints parse,
-- every honest history exists in the tree and ends at a leaf or a subtree.
+- every honest history exists in the tree and ends at a leaf or a subtree,
+- descriptions are texts, of declared players, constants and infinitesimals.
 A game with honest utilities instead of honest histories (a subtree off the honest history) is accepted as well.
 For conditional games, CheckMate also checks that:
 - constants and infinitesimals are a list or `{"known": [...], "unknown": [...]}`,
@@ -181,13 +237,18 @@ Troubleshooting:
 ### In the browser
 
 `html/` contains a page that runs CheckMate in the browser, compiled to WebAssembly: pick an example or paste a game, run it, and see the verdicts, cases, strategies and counterexamples drawn on the game tree.
-To build it, install [Emscripten](https://emscripten.org/), get the [Z3](https://github.com/Z3Prover/z3) sources, and run, from the repository root:
+To build it, install [Emscripten](https://emscripten.org/) and run, from the repository root:
 
 ```shell
-source /path/to/emsdk/emsdk_env.sh
-scripts/build_emscripten.sh /path/to/z3 [/path/to/cvc5]   # builds Z3 (and cvc5) for WebAssembly once, then CheckMate
-cd html && python3 -m http.server                         # then open http://localhost:8000
+scripts/build_emscripten.sh [/path/to/z3 [/path/to/cvc5]]   # builds Z3 (and cvc5) for WebAssembly once, then CheckMate
+cd html && python3 -m http.server                           # then open http://localhost:8000
 ```
+
+Without a Z3 path, the script uses `../z3-4.16.0` next to the repository, cloning the [Z3](https://github.com/Z3Prover/z3) 4.16.0 sources there if it does not exist.
+If `emcc` is not on `PATH`, it sources `../emsdk/emsdk_env.sh` next to the repository, or `$EMSDK_ENV` if set.
+The page is written in TypeScript (`html/src/`), which the script compiles into `html/js/` with the TypeScript compiler from npm (`npm ci` installs it); to work on the page alone, `npm run watch` recompiles it on every change.
+`npm test` runs its unit tests (`tests/ts/`), and `npm run check` type-checks the page and the tests.
+After a build, `scripts/test_page.mjs` tests the page itself in headless Chromium (or `$CHROME`): it loads every example, runs some, and checks the drawing, the results in words and the error messages.
 
 With the [cvc5](https://github.com/cvc5/cvc5) sources (which need Emscripten 6.0.8 or later), the page also uses cvc5 for the practicality of conditional games, as CheckMate does (see [Conditional games](#conditional-games-cefgs)); it loads cvc5 only for runs of conditional games that check practicality.
 The page must be served over HTTP (not opened as a file), but needs no special server headers.
@@ -206,6 +267,8 @@ There are several options:
 * `--all_counterexamples`: If a property is not fulfilled, provide **all** counterexamples for the considered problematic case(s). The number of considered problematic cases depends on whether the `all_cases` flag was set. For collusion resilience, identical counterexamples are shown only once, and at most 100 counterexamples are shown per case.
 * `--all_cases`: If a property is not fulfilled, keep looking for all problematic cases.
 * `--strategies`: If a property is satisfied, provide a witness strategy.
+* `--color=auto|always|never`: Colour the output (YES in green, NO in red, conditions and actions in their own colours). By default, CheckMate colours its output when it is a terminal and `NO_COLOR` is not set; `--color` alone means `--color=always`.
+* `--verbose`: Also print how the analysis splits into cases (`splitting on ...`).
 * `--json-out FILE`: Also write the results as JSON to `FILE`: for each honest history and property, the verdict, every case checked (as a list of SMT-LIB 2 conditions) with whether the property holds in it, the strategies and counterexamples, exactly when the text output shows them, and the weakest precondition with `--preconditions`. With `--subtree`, `FILE` gets the subtree result instead: the same as `SUBTREE.out`, but with cases as SMT-LIB 2 conditions and utilities as SMT-LIB 2 real and infinitesimal parts.
 * If not all security properties should be analyzed, users can specify properties individually with some combination of `--weak_immunity`, `--weaker_immunity`, `--collusion_resilience`, and `--practicality`.
 * `--subtree` is used for [compositional analysis](#compositional-analysis). For games without condition nodes, it cannot be combined with `--counterexamples`, `--all_counterexamples`, `--strategies` or `--preconditions`.
@@ -224,55 +287,70 @@ python3 examples/key_examples/closing_game.py > closing_game.json
 build/checkmate closing_game.json --counterexamples --weak_immunity --collusion_resilience
 ```
 
+The output has a block for each honest history, with a line per property and, indented below it, the cases (if the analysis split on the values of the constants), strategies (`--strategies`), counterexamples (`--counterexamples`) and weakest preconditions (`--preconditions`).
+For the loan of `examples/readable/loan.rules`, with `--counterexamples`:
+
+```
+Honest history: lend → repay
+  weak immunity: NO
+    Alice can get a negative payoff while playing honestly, if Bob plays keep after lend.
+  weaker immunity: NO
+    Alice can get a negative payoff (apart from infinitesimals) while playing honestly, if Bob plays keep after lend.
+  collusion resilience: NO
+    Bob deviates to keep after lend, and at lend → keep, Bob gets more than on the honest history.
+  practicality: NO
+    Bob is better off deviating: Bob plays keep after lend, and rational play then ends the game at lend → keep.
+```
+
+A case reads `when CONDITION: holds` (or `does not hold`), and a strategy or counterexample for a case starts with `when CONDITION:`.
+Games without an honest history (subtrees off the honest history) have blocks `Without an honest history:` and `Honest utility: ...` instead, and with `--subtree`, the lines say for which player or group a property holds.
+
 ## Counterexamples
 
 ### Weak immunity counterexamples
 
 A counterexample for weak (or weaker) immunity describes how the other players can harm one player, i.e. force a negative utility on them, whatever that player does.
-For example, for history `[r_A, l_B]` of `running_example.json`:
+For example, for history `r_A → l_B` of `running_example.json`:
 
 ```
-Counterexample for case: [((a - 2.0) >= 0.0), (b < 0.0)]
-Player A can be harmed, if
-	Player B takes one of the actions [r_B] after history [r_A]
+  weak immunity: NO
+    when a - 2 >= 0 and b >= 0: holds
+    when a - 2 >= 0 and b < 0: A can get a negative payoff while playing honestly, if B plays r_B after r_A.
 ```
 
-Each line lists the actions of another player that lead to harm after the given history.
+The counterexample lists the actions of the other players that lead to harm, each after its history.
 The harmed player follows the honest history; after leaving it, all of their choices are covered, and each one leads to harm.
-With `--all_counterexamples`, a line can list several actions, each of which leads to harm.
-If the honest history itself yields a negative utility, the counterexample reads `Player P is harmed, if they follow the honest history`.
+With `--all_counterexamples`, a player can have several actions (`plays x or y`), each of which leads to harm.
+If the honest history itself yields a negative utility, the counterexample reads `P gets a negative payoff when everyone plays honestly`.
 
 ### Collusion resilience counterexamples
 
 A counterexample for collusion resilience describes how a group of players can deviate profitably in a case where the property is violated.
-For example, for history `[e, s]` of `market_entry_game.json`:
+For example, for history `e → s` of `market_entry_game.json`:
 
 ```
-Counterexample for case: []
-	Player E deviates to [i] after history [e]
-	After history [e, i]: group [E] gains more than on the honest history
+  collusion resilience: NO
+    E deviates to i after e, and at e → i, E gets more than on the honest history.
 ```
 
-The first line is the deviation from the honest history.
-Further lines of the form `Player P chooses [a] after history h` are choices the deviating players make afterwards (no action is prescribed there anymore).
+It starts with the deviation from the honest history.
+Further parts of the form `then P plays a after h` are choices the deviating players make afterwards (no action is prescribed there anymore).
 Players that act after the deviation without being listed stay honest: the counterexample covers all of their choices, and they are never part of a group.
-Finally, the counterexample lists every leaf reached, together with all groups that obtain a higher joint utility there than on the honest history.
+Finally, the counterexample lists every leaf reached (one per line if there are several), together with all groups that obtain a higher joint utility there than on the honest history.
 If the game contains subtree results, a counterexample can end in a subtree; run that subtree on its own with `--counterexamples` to see the rest.
 
 ### Practicality counterexamples
 
 A counterexample for practicality shows a player who is better off deviating from the honest history.
-For example, for history `[o]` of `market_entry_game.json`:
+For example, for history `o` of `market_entry_game.json`:
 
 ```
-Counterexample for case: []
-For player N all practical histories after [e] yield a better utility than the honest one.
-Practical histories:
-[e, i]
+  practicality: NO
+    N is better off deviating: N plays e at the start, and rational play then ends the game at e → i.
 ```
 
 Here, player N deviates from the honest history by choosing `e` at the root.
-Afterwards, all players continue practically, i.e. in a subgame perfect way, which leads to the listed practical histories.
+Afterwards, all players continue practically, i.e. in a subgame perfect way, which leads to the listed practical histories (`e → i`, here; several are joined by `or`).
 Each of them gives N a higher utility than the honest history.
 If the game contains subtree results, the counterexample can instead say that a subtree is not practical; run that subtree on its own with `--counterexamples` to see the rest.
 

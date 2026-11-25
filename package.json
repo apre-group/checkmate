@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "tsc -p html",
+    "watch": "tsc -p html --watch",
+    "check": "tsc -p html --noEmit && tsc -p tests/ts",
+    "test": "node --test 'tests/ts/*.test.ts'"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
+  }
+}

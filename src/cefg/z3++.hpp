@@ -9,8 +9,10 @@
  **/
 
 #include <cassert>
+#include <cstdlib>
 #include <iostream>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <cctype>
 #include <sstream>
@@ -32,7 +34,12 @@ namespace z3 {
 
 	// check for Z3 errors in debug mode
 	inline void check_error() {
-		assert(Z3_get_error_code(CONTEXT) == Z3_OK);
+		// Z3 reports errors here rather than exiting (see initialize)
+		Z3_error_code code = Z3_get_error_code(CONTEXT);
+		if (code != Z3_OK) {
+			std::cerr << "checkmate: Z3 error: " << Z3_get_error_msg(CONTEXT, code) << std::endl;
+			std::exit(EXIT_FAILURE);
+		}
 	}
 
 	class Solver;
@@ -48,6 +55,8 @@ namespace z3 {
 		friend std::ostream &operator<<(std::ostream &, Bool);
 		// sets BOOL_SORT and REAL_SORT
 		friend void initialize();
+		// writes expressions for people to read (see pretty)
+		friend struct Pretty;
 
 	public:
 		Expression() = default;
@@ -623,6 +632,11 @@ namespace z3 {
 		return out << (result == Result::SAT ? "sat" : "unsat");
 	}
 
+	// Z3 could not decide a check, not even with nlsat: e.g. a quantified nonlinear problem
+	struct Undecided : std::runtime_error {
+		using std::runtime_error::runtime_error;
+	};
+
 	// wrapper around a Z3 solver object
 	class Solver {
 	public:
@@ -660,14 +674,15 @@ namespace z3 {
 		// invoke the solver
 		Result solve() {
 			Z3_lbool result = Z3_solver_check(CONTEXT, solver);
-			check_error();
+			if (Z3_get_error_code(CONTEXT) != Z3_OK)
+				return solve_nonlinear({});
 			switch (result) {
 				case Z3_L_FALSE:
 					return Result::UNSAT;
 				case Z3_L_TRUE:
 					return Result::SAT;
 				default:
-					throw std::logic_error("Z3_solver_check() returned UNDEF - this shouldn't happen");
+					return solve_nonlinear({});
 			}
 		}
 
@@ -680,14 +695,16 @@ namespace z3 {
 					// safety: Z3_ast should have the same size/alignment as Bool
 					reinterpret_cast<const Z3_ast *>(assumptions.data())
 			);
-			check_error();
+			// the default solver can also fail with an error on nonlinear arithmetic, such as "canceled"
+			if (Z3_get_error_code(CONTEXT) != Z3_OK)
+				return solve_nonlinear(assumptions);
 			switch (result) {
 				case Z3_L_FALSE:
 					return Result::UNSAT;
 				case Z3_L_TRUE:
 					return Result::SAT;
 				default:
-					throw std::logic_error("Z3_solver_check_assumptions() returned UNDEF - this shouldn't happen");
+					return solve_nonlinear(assumptions);
 			}
 		}
 
@@ -712,7 +729,8 @@ namespace z3 {
 					// safety: Z3_ast should have the same size/alignment as Bool
 					reinterpret_cast<const Z3_ast *>(assumptions.data())
 			);
-			check_error();
+			if (Z3_get_error_code(CONTEXT) != Z3_OK)
+				return std::nullopt;
 			switch (result) {
 				case Z3_L_FALSE:
 					return Result::UNSAT;
@@ -737,12 +755,49 @@ namespace z3 {
 		}
 
 	private:
+		// The default solver is incomplete for nonlinear arithmetic (e.g. x * x in a utility) and can give up on it.
+		// nlsat decides quantifier-free nonlinear real arithmetic, but not incrementally: it gets a fresh solver with
+		// everything asserted so far and the assumptions.
+		Result solve_nonlinear(const std::vector<Bool> &assumptions) {
+			Z3_tactic tactic = Z3_mk_tactic(CONTEXT, "qfnra-nlsat");
+			Z3_tactic_inc_ref(CONTEXT, tactic);
+			Z3_solver nlsat = Z3_mk_solver_from_tactic(CONTEXT, tactic);
+			Z3_solver_inc_ref(CONTEXT, nlsat);
+			Z3_ast_vector assertions = Z3_solver_get_assertions(CONTEXT, solver);
+			Z3_ast_vector_inc_ref(CONTEXT, assertions);
+			for (unsigned i = 0; i < Z3_ast_vector_size(CONTEXT, assertions); i++)
+				Z3_solver_assert(CONTEXT, nlsat, Z3_ast_vector_get(CONTEXT, assertions, i));
+			for (Bool assumption : assumptions)
+				Z3_solver_assert(CONTEXT, nlsat, assumption.ast);
+			check_error();
+			Z3_lbool result = Z3_solver_check(CONTEXT, nlsat);
+			Z3_error_code code = Z3_get_error_code(CONTEXT);
+			std::string reason = code != Z3_OK ? Z3_get_error_msg(CONTEXT, code)
+				: result == Z3_L_UNDEF ? Z3_solver_get_reason_unknown(CONTEXT, nlsat) : "";
+			if (code != Z3_OK)
+				result = Z3_L_UNDEF;
+			Z3_ast_vector_dec_ref(CONTEXT, assertions);
+			Z3_solver_dec_ref(CONTEXT, nlsat);
+			Z3_tactic_dec_ref(CONTEXT, tactic);
+			check_error();
+			if (result == Z3_L_FALSE)
+				return Result::UNSAT;
+			if (result == Z3_L_TRUE)
+				return Result::SAT;
+			throw Undecided("Z3 could not decide a check (" + std::string(Z3_solver_get_reason_unknown(CONTEXT, solver)) +
+				"), not even with nlsat (" + reason + ")");
+		}
+
 		// wrapper solver
 		Z3_solver solver;
 	};
 
 	std::ostream &operator<<(std::ostream &out, z3::Real expr);
 	std::ostream &operator<<(std::ostream &out, z3::Bool expr);
+
+	// expressions for people to read, e.g. "y = 0 and x > 1/2": only the parentheses that precedence needs
+	// (operator<< writes what CheckMate reads back, e.g. in subtree results)
+	std::string pretty(Bool expr);
 }
 
 

@@ -1,0 +1,14 @@
+# The market entry game of examples/key_examples/market_entry_game.json. Each of the three ways the
+# game can go is checked as the honest one, in turn.
+players: Newcomer   # a firm that considers entering the market
+players: Incumbent  # the firm that has the market to itself
+constants: profit   # what a firm makes in the market
+constants: war_cost # what a price war costs each firm
+initial: profit > 0
+initial: war_cost > 0
+
+Newcomer
+  honest stay_out -> Newcomer: 0, Incumbent: profit * profit  # the incumbent keeps the whole market
+  honest enter -> Incumbent
+    honest share -> Newcomer: profit, Incumbent: profit
+    honest fight -> Newcomer: -war_cost, Incumbent: -war_cost  # a price war

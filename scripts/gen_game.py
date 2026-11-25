@@ -30,9 +30,13 @@ def lin_term(rng, names, max_coef, constant_range, nonneg=False):
     return s
 
 
-def gen_utility(rng, constants, infinitesimals, pos_rate, real_pool, inf_rate):
+def gen_utility(rng, constants, infinitesimals, pos_rate, real_pool, inf_rate, nonlinear=False):
     nonneg = rng.random() < pos_rate
     s = rng.choice(real_pool) if real_pool else lin_term(rng, constants, 2, 3, nonneg)
+    # products of constants (such as c0*c0), on which Z3's default solver can give up
+    if nonlinear and rng.random() < 0.5:
+        k = rng.randint(1 if nonneg else -2, 2) or 1
+        s = "%s + %d*%s*%s" % (s, k, rng.choice(constants), rng.choice(constants))
     if infinitesimals and rng.random() < inf_rate:
         inf = lin_term(rng, infinitesimals, 2, 0, nonneg and rng.random() < 0.5)
         if inf != "0":
@@ -114,7 +118,8 @@ def gen_game(rng):
         real_pool = ["0"] + [lin_term(rng, constants, 2, 3, rng.random() < pos_rate)
                              for _ in range(rng.randint(1, 2))]
         inf_rate = 0.8
-    term = lambda: gen_utility(rng, constants, infinitesimals, pos_rate, real_pool, inf_rate)
+    nonlinear = rng.random() < 0.15
+    term = lambda: gen_utility(rng, constants, infinitesimals, pos_rate, real_pool, inf_rate, nonlinear)
     # Repeated terms and whole repeated leaves give ties and exercise the caches keyed by utilities.
     if rng.random() < 0.4:
         pool = [term() for _ in range(rng.randint(2, 5))]

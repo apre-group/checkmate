@@ -1,0 +1,191 @@
+{
+  "players": [
+    "A",
+    "B"
+  ],
+  "actions": [
+    "x",
+    "y"
+  ],
+  "infinitesimals": [
+    "e0"
+  ],
+  "constants": [
+    "c0",
+    "c1",
+    "c2"
+  ],
+  "initial_constraints": [],
+  "property_constraints": {
+    "weak_immunity": [],
+    "weaker_immunity": [],
+    "collusion_resilience": [],
+    "practicality": []
+  },
+  "honest_histories": [
+    [
+      "x",
+      "x",
+      "y",
+      "y"
+    ]
+  ],
+  "tree": {
+    "player": "A",
+    "children": [
+      {
+        "action": "x",
+        "child": {
+          "player": "B",
+          "children": [
+            {
+              "action": "x",
+              "child": {
+                "player": "B",
+                "children": [
+                  {
+                    "action": "y",
+                    "child": {
+                      "player": "A",
+                      "children": [
+                        {
+                          "action": "y",
+                          "child": {
+                            "utility": [
+                              {
+                                "player": "A",
+                                "value": "0"
+                              },
+                              {
+                                "player": "B",
+                                "value": "0"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "action": "x",
+                    "child": {
+                      "player": "A",
+                      "children": [
+                        {
+                          "action": "y",
+                          "child": {
+                            "utility": [
+                              {
+                                "player": "A",
+                                "value": "1*c0*c1"
+                              },
+                              {
+                                "player": "B",
+                                "value": "0"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "action": "x",
+                          "child": {
+                            "utility": [
+                              {
+                                "player": "A",
+                                "value": "1*c2*c2"
+                              },
+                              {
+                                "player": "B",
+                                "value": "0"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "action": "y",
+              "child": {
+                "player": "B",
+                "children": [
+                  {
+                    "action": "x",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "0"
+                        },
+                        {
+                          "player": "B",
+                          "value": "0"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "action": "y",
+                    "child": {
+                      "utility": [
+                        {
+                          "player": "A",
+                          "value": "0"
+                        },
+                        {
+                          "player": "B",
+                          "value": "-2*c0-c2+4"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "action": "y",
+        "child": {
+          "player": "B",
+          "children": [
+            {
+              "action": "x",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "0"
+                  },
+                  {
+                    "player": "B",
+                    "value": "3 + 1*c0*c2"
+                  }
+                ]
+              }
+            },
+            {
+              "action": "y",
+              "child": {
+                "utility": [
+                  {
+                    "player": "A",
+                    "value": "0"
+                  },
+                  {
+                    "player": "B",
+                    "value": "1*c1*c1+(0+2*e0)"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

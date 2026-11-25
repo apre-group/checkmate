@@ -1,10 +1,30 @@
 #!/usr/bin/env bash
-# Build checkmate as WebAssembly into html/. Usage (emsdk_env.sh sourced):
-#   scripts/build_emscripten.sh Z3_SOURCE_TREE [CVC5_SOURCE_TREE]
+# Build checkmate as WebAssembly, and the web page, into html/. Usage:
+#   scripts/build_emscripten.sh [Z3_SOURCE_TREE [CVC5_SOURCE_TREE]]
+# Z3_SOURCE_TREE defaults to ../z3-4.16.0 next to the repository, cloned if missing.
+# Unless emcc is on PATH, sources $EMSDK_ENV (default: ../emsdk/emsdk_env.sh next to the repository).
 # With cvc5, the page also decides the practicality of conditional games that Z3 cannot decide, as checkmate does.
 set -euo pipefail
 
-Z3=$(realpath "$1")
+PARENT=$(dirname "$(realpath "$0")")/../..
+if ! command -v emcc >/dev/null; then
+    EMSDK_ENV=${EMSDK_ENV:-$PARENT/emsdk/emsdk_env.sh}
+    [ -f "$EMSDK_ENV" ] || { echo "emcc not on PATH and $EMSDK_ENV not found; set EMSDK_ENV" >&2; exit 1; }
+    set +u  # emsdk_env.sh reads unset variables
+    source "$EMSDK_ENV" >/dev/null 2>&1
+    set -u
+fi
+
+# the page's TypeScript (html/src) into html/js; `npm run watch` rebuilds just that
+[ -d node_modules ] || npm ci
+npx tsc -p html
+
+Z3_VERSION=4.16.0
+Z3=${1:-$PARENT/z3-$Z3_VERSION}
+if [ -z "${1:-}" ] && [ ! -d "$Z3" ]; then
+    git clone --depth 1 -b "z3-$Z3_VERSION" https://github.com/Z3Prover/z3 "$Z3"
+fi
+Z3=$(realpath "$Z3")
 CVC5=${2:+$(realpath "$2")}
 # Single-threaded so the page needs no SharedArrayBuffer (and hence no COOP/COEP headers).
 if [ ! -f "$Z3/build-wasm/libz3.a" ]; then
@@ -36,5 +56,6 @@ echo "{\"id\": \"$(date +%s)\"}" > html/build.json
 # examples over 1 MB (routing_game-four-supertree.json is 57 MB) would hang the page while loading
 rm -rf html/examples
 mkdir -p html/examples
-find examples -name '*.json' -size -1024k -exec cp {} html/examples/ \;
-(cd html/examples && ls *.json | grep -v '^index.json$' | python3 -c 'import json, sys; print(json.dumps(sys.stdin.read().split()))' > index.json)
+find examples \( -name '*.json' -o -name '*.game' -o -name '*.rules' \) -size -1024k -exec cp {} html/examples/ \;
+# the readable games (rules, and trees in the compact format) first
+(cd html/examples && { ls *.rules; ls *.game; ls *.json | grep -v '^index.json$'; } | python3 -c 'import json, sys; print(json.dumps(sys.stdin.read().split()))' > index.json)

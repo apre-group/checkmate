@@ -1,0 +1,4 @@
+# expect: line 3: the game does not end within 100 moves
+players: A, B
+honest move go by A, B
+  next other

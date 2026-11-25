@@ -1,7 +1,16 @@
 // Random games for the web page, a port of scripts/gen_game.py. Constraints are kept satisfiable
 // by construction: every atom is checked against a random witness point instead of a solver.
 
-function makeRng(seed) {
+import type { Game, TreeNode, Utility } from './game.ts';
+
+export interface Rng {
+    random(): number;
+    int(lo: number, hi: number): number;
+    choice<T>(xs: readonly T[]): T;
+    sample<T>(xs: readonly T[], k: number): T[];
+}
+
+export function makeRng(seed: number): Rng {
     // mulberry32
     let a = seed >>> 0;
     const next = () => {
@@ -27,10 +36,12 @@ function makeRng(seed) {
 }
 
 // A linear term as a string and as coefficients, so it can be evaluated at the witness.
-function linTerm(rng, names, maxCoef, constRange, nonneg) {
+type Witness = Record<string, number>;
+
+function linTerm(rng: Rng, names: string[], maxCoef: number, constRange: number, nonneg: boolean) {
     const c = rng.int(nonneg ? 0 : -constRange, constRange);
-    const coefs = {};
-    const parts = [];
+    const coefs: Record<string, number> = {};
+    const parts: string[] = [];
     if (c !== 0 || rng.random() < 0.3) parts.push(String(c));
     for (const n of names) {
         if (rng.random() < 0.5) continue;
@@ -41,19 +52,20 @@ function linTerm(rng, names, maxCoef, constRange, nonneg) {
     }
     let s = parts.length ? parts[0] : '0';
     for (const p of parts.slice(1)) s += p.startsWith('-') ? ' - ' + p.slice(1) : ' + ' + p;
-    return { text: s, value: w => c + Object.entries(coefs).reduce((acc, [n, k]) => acc + k * w[n], 0) };
+    return { text: s, value: (w: Witness) => c + Object.entries(coefs).reduce((acc, [n, k]) => acc + k * w[n], 0) };
 }
 
-const SIZES = {
+interface Size { weight: number; players: [number, number]; depth: [number, number]; branch: [number, number]; stop: number }
+const SIZES: Record<string, Size> = {
     small: { weight: 0.4, players: [2, 3], depth: [1, 3], branch: [2, 3], stop: 0.3 },
     medium: { weight: 0.45, players: [2, 4], depth: [2, 4], branch: [2, 3], stop: 0.25 },
     large: { weight: 0.15, players: [3, 5], depth: [3, 5], branch: [2, 3], stop: 0.2 },
 };
 
-const COMPARE = { '<': (a, b) => a < b, '<=': (a, b) => a <= b, '>': (a, b) => a > b,
+const COMPARE: Record<string, (a: number, b: number) => boolean> = { '<': (a, b) => a < b, '<=': (a, b) => a <= b, '>': (a, b) => a > b,
                   '>=': (a, b) => a >= b, '=': (a, b) => a === b, '!=': (a, b) => a !== b };
 
-function genGame(seed) {
+export function genGame(seed: number): Game {
     const rng = makeRng(seed);
     let r = rng.random(), size = 'large';
     for (const [name, s] of Object.entries(SIZES)) { if ((r -= s.weight) < 0) { size = name; break; } }
@@ -67,7 +79,7 @@ function genGame(seed) {
     const posRate = rng.choice([0, 0.5, 0.9, 1]);
 
     // infinitesimals only matter when real parts tie, so real parts often come from a small pool
-    let realPool = null, infRate = 0.4;
+    let realPool: string[] | null = null, infRate = 0.4;
     if (infinitesimals.length && rng.random() < 0.7) {
         realPool = ['0'].concat(Array.from({ length: rng.int(1, 2) },
             () => linTerm(rng, constants, 2, 3, rng.random() < posRate).text));
@@ -82,8 +94,8 @@ function genGame(seed) {
         }
         return s;
     };
-    const newLeaf = () => players.map(p => ({ player: p, value: term() }));
-    const genTree = (d, root) => {
+    const newLeaf = (): Utility[] => players.map(p => ({ player: p, value: term() }));
+    const genTree = (d: number, root: boolean): TreeNode => {
         if (!root && (d === 0 || rng.random() < S.stop)) return { utility: newLeaf() };
         const n = rng.int(root ? 2 : 1, maxBranch);
         return { player: rng.choice(players),
@@ -92,7 +104,7 @@ function genGame(seed) {
     const tree = genTree(depth, true);
 
     // constraints: atoms that hold at a random witness point, so they are satisfiable together
-    const witness = {};
+    const witness: Witness = {};
     constants.forEach(c => { witness[c] = rng.int(posRate > 0 ? 1 : -3, 5); });
     infinitesimals.forEach(e => { witness[e] = rng.int(1, 3); });
     const atom = () => {
@@ -105,16 +117,16 @@ function genGame(seed) {
     };
     const initial = constants.concat(infinitesimals).filter(c => witness[c] > 0 && rng.random() < 0.7).map(c => c + ' > 0');
     for (let i = rng.int(0, 2); i > 0; i--) { const a = atom(); if (a) initial.push(a); }
-    const props = {};
+    const props: Record<string, string[]> = {};
     for (const p of ['weak_immunity', 'weaker_immunity', 'collusion_resilience', 'practicality']) {
         const a = rng.random() < 0.25 ? atom() : null;
         props[p] = a ? [a] : [];
     }
 
-    const histories = [];
-    (function leaves(t, h) {
+    const histories: string[][] = [];
+    (function leaves(t: TreeNode, h: string[]) {
         if (t.utility) { histories.push(h); return; }
-        t.children.forEach(c => leaves(c.child, h.concat([c.action])));
+        t.children!.forEach(c => leaves(c.child, h.concat([c.action])));
     })(tree, []);
     const longest = Math.max(...histories.map(h => h.length));
     const candidates = rng.random() < 0.6 ? histories.filter(h => h.length >= longest - 1) : histories;
@@ -123,8 +135,8 @@ function genGame(seed) {
     if (rng.random() < 0.6) {
         for (const h of honest) {
             let node = tree;
-            for (const a of h) node = node.children.find(c => c.action === a).child;
-            node.utility.forEach(u => { u.value = u.value + ' + 4'; });
+            for (const a of h) node = node.children!.find(c => c.action === a)!.child;
+            node.utility!.forEach(u => { u.value = u.value + ' + 4'; });
         }
     }
     return { players, actions, infinitesimals, constants, initial_constraints: initial,

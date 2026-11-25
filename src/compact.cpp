@@ -95,21 +95,50 @@ void check_condition(const std::string &condition) {
 		throw CompactError("cannot write condition " + json(condition).dump() + " compactly: it contains one of : ; { } ->");
 }
 
+// a description, as a comment at the end of the line; read back trimmed, so it must be trimmed already
+std::string description_text(const json &description) {
+	if (!description.is_string())
+		throw CompactError("cannot write description " + description.dump() + " compactly: it is not a string");
+	std::string text = description.get<std::string>();
+	if (text.empty() || text != trim(text) || text.find('\n') != std::string::npos)
+		throw CompactError("cannot write description " + description.dump() +
+			" compactly: it is empty, has spaces around it, or contains a newline");
+	return "  # " + text;
+}
+
+// `key: name, ...` lines for `names`; a name with a description gets a line of its own, with the description after #
+void write_names(std::ostringstream &out, const std::string &key, const json &names, const json &descriptions,
+		std::set<std::string> &described) {
+	std::vector<std::string> plain;
+	auto flush = [&]() {
+		if (!plain.empty())
+			out << key << ": " << join(plain, ", ") << "\n";
+		plain.clear();
+	};
+	for (const json &name : names) {
+		check_name(name, key.c_str());
+		const std::string &n = name.get_ref<const std::string &>();
+		if (!descriptions.contains(n)) {
+			plain.push_back(n);
+			continue;
+		}
+		flush();
+		out << key << ": " << n << description_text(descriptions[n]) << "\n";
+		described.insert(n);
+	}
+	flush();
+}
+
 // constants or infinitesimals: a list, or {"known": [...], "unknown": [...]} in CEFGs
-void write_declarations(std::ostringstream &out, const json &game, const std::string &key) {
+void write_declarations(std::ostringstream &out, const json &game, const std::string &key, const json &descriptions,
+		std::set<std::string> &described) {
 	if (!game.contains(key))
 		return;
 	const json &d = game[key];
 	json known = d.is_object() ? d.value("known", json::array()) : d;
 	json unknown = d.is_object() ? d.value("unknown", json::array()) : json::array();
-	for (const json &c : known)
-		check_name(c, "constant");
-	for (const json &c : unknown)
-		check_name(c, "constant");
-	if (!known.empty())
-		out << key << ": " << join(known, ", ") << "\n";
-	if (!unknown.empty())
-		out << "unknown_" << key << ": " << join(unknown, ", ") << "\n";
+	write_names(out, key, known, descriptions, described);
+	write_names(out, "unknown_" + key, unknown, descriptions, described);
 }
 
 // an honest history; in CEFGs, it continues at a condition node in every condition: {if CONDITION -> history; ...}
@@ -165,24 +194,32 @@ std::string head(const json &node) {
 	return "? reveals " + join(node["reveals"], ", ");
 }
 
-void write_node(std::ostringstream &out, const json &node, size_t indent);
+// the branches (elements of "children") on the honest histories, to be marked honest in the tree
+using Marks = std::set<const json *>;
 
-// the rest of the line after "->", and the lines below it
-void write_child(std::ostringstream &out, const json &c, size_t indent) {
+void write_node(std::ostringstream &out, const json &node, size_t indent, const Marks &marks);
+
+// the rest of the line after "->" of `branch` (an element of "children", or a condition), and the lines below it
+void write_child(std::ostringstream &out, const json &branch, size_t indent, const Marks &marks) {
+	const json &c = branch["child"];
+	std::string description = branch.contains("description") ? description_text(branch["description"]) : "";
 	if (c.contains("children") || condition_node(c)) {
-		out << head(c) << "\n";
-		write_node(out, c, indent + 2);
+		out << head(c) << description << "\n";
+		write_node(out, c, indent + 2, marks);
 	} else if (c.contains("utility")) {
-		out << utilities_text(c["utility"]) << "\n";
+		out << utilities_text(c["utility"]) << description << "\n";
 	} else if (c.contains("subtree")) {
-		out << "subtree " << c["subtree"].dump() << "\n";
+		std::string result = c["subtree"].dump();
+		if (result.find('#') != std::string::npos)
+			throw CompactError("cannot write subtree result compactly: it contains #");
+		out << "subtree " << result << description << "\n";
 	} else {
 		throw CompactError("unexpected node " + c.dump());
 	}
 }
 
 // the lines of the actions or conditions of `node`
-void write_node(std::ostringstream &out, const json &node, size_t indent) {
+void write_node(std::ostringstream &out, const json &node, size_t indent, const Marks &marks) {
 	if (condition_node(node)) {
 		for (const json &c : node["condition"]) {
 			std::string condition = c["constraint"];
@@ -193,15 +230,47 @@ void write_node(std::ostringstream &out, const json &node, size_t indent) {
 				out << c["name"].get<std::string>() << ": ";
 			}
 			out << condition << " -> ";
-			write_child(out, c["child"], indent);
+			write_child(out, c, indent, marks);
 		}
 		return;
 	}
 	for (const json &child : node["children"]) {
 		check_name(child["action"], "action");
-		out << std::string(indent, ' ') << child["action"].get<std::string>() << " -> ";
-		write_child(out, child["child"], indent);
+		out << std::string(indent, ' ') << (marks.count(&child) ? "honest " : "") << child["action"].get<std::string>() << " -> ";
+		write_child(out, child, indent, marks);
 	}
+}
+
+// marks the branches along `history` from `node`; false if it is not a path in the tree
+bool mark(const json &node, const json &history, size_t from, Marks &marks) {
+	if (from == history.size())
+		return true;
+	const json &element = history[from];
+	if (element.is_string()) {
+		if (!node.contains("children") || !node["children"].is_array())
+			return false;
+		for (const json &child : node["children"])
+			if (child.is_object() && child.value("action", json()) == element && child.contains("child")) {
+				marks.insert(&child);
+				return mark(child["child"], history, from + 1, marks);
+			}
+		return false;
+	}
+	if (!element.is_array() || from + 1 != history.size() || !condition_node(node))
+		return false;
+	for (const json &e : element) {
+		bool found = false;
+		for (const json &c : node["condition"])
+			if (e.is_object() && c.is_object() && c.contains("child") && c.value("constraint", json()) == e.value("condition", json())) {
+				if (!e.contains("path") || !e["path"].is_array() || !mark(c["child"], e["path"], 0, marks))
+					return false;
+				found = true;
+				break;
+			}
+		if (!found)
+			return false;
+	}
+	return true;
 }
 
 // ---- reading -----------------------------------------------------------------
@@ -210,16 +279,23 @@ struct Node {
 	std::string player;                                            // branches
 	json utility;                                                  // leaves
 	json subtree;                                                  // subtree results
-	std::vector<std::pair<std::string, std::unique_ptr<Node>>> children;
+	struct Child {
+		std::string action, description;
+		bool honest;
+		size_t line;
+		std::unique_ptr<Node> child;
+	};
+	std::vector<Child> children;
 	// condition nodes of CEFGs
 	bool is_condition = false;
 	std::vector<std::string> reveals;
 	struct Condition {
-		std::string constraint, name;
+		std::string constraint, name, description;
 		std::unique_ptr<Node> child;
 	};
 	std::vector<Condition> conditions;
 	std::string key;                                               // "tree/a/condition 1/b", for the line map
+	size_t line = 0;
 };
 
 [[noreturn]] void fail(size_t line, const std::string &message) {
@@ -237,6 +313,8 @@ json node_json(const Node &node, std::vector<std::string> &actions, std::set<std
 			json condition = {{"constraint", c.constraint}, {"child", node_json(*c.child, actions, seen)}};
 			if (!c.name.empty())
 				condition["name"] = c.name;
+			if (!c.description.empty())
+				condition["description"] = c.description;
 			conditions.push_back(condition);
 		}
 		json result = {{"condition", conditions}};
@@ -245,12 +323,73 @@ json node_json(const Node &node, std::vector<std::string> &actions, std::set<std
 		return result;
 	}
 	json children = json::array();
-	for (const auto &child : node.children) {
-		if (seen.insert(child.first).second)
-			actions.push_back(child.first);
-		children.push_back({{"action", child.first}, {"child", node_json(*child.second, actions, seen)}});
+	for (const auto &c : node.children) {
+		if (seen.insert(c.action).second)
+			actions.push_back(c.action);
+		json child = {{"action", c.action}, {"child", node_json(*c.child, actions, seen)}};
+		if (!c.description.empty())
+			child["description"] = c.description;
+		children.push_back(child);
 	}
 	return {{"player", node.player}, {"children", children}};
+}
+
+// The honest histories that the actions marked honest give: every path from `node` along them to a leaf or
+// subtree, with the line where it ends. At a condition node of a CEFG, a history continues in every condition,
+// so there is one for each combination of the histories below the conditions.
+std::vector<std::pair<json, size_t>> marked_histories(const Node &node, std::set<const Node *> &reached) {
+	reached.insert(&node);
+	if (!node.utility.is_null() || !node.subtree.is_null())
+		return {{json::array(), node.line}};
+	std::vector<std::pair<json, size_t>> result;
+	if (node.is_condition) {
+		std::vector<json> combinations = {json::array()};
+		for (const auto &c : node.conditions) {
+			std::vector<json> longer;
+			auto below = marked_histories(*c.child, reached);
+			for (const json &combination : combinations)
+				for (const auto &path : below) {
+					json more = combination;
+					more.push_back({{"condition", c.constraint}, {"path", path.first}});
+					longer.push_back(more);
+				}
+			combinations = longer;
+		}
+		for (const json &combination : combinations)
+			result.push_back({json::array({combination}), node.line});
+		return result;
+	}
+	for (const auto &c : node.children)
+		if (c.honest)
+			for (auto &below : marked_histories(*c.child, reached)) {
+				json history = json::array({c.action});
+				history.insert(history.end(), below.first.begin(), below.first.end());
+				result.push_back({history, below.second});
+			}
+	if (result.empty())
+		fail(node.line, "the honest history reaches " + node.player + " here, but none of its actions is marked honest");
+	return result;
+}
+
+// the first action marked honest below `node` that no honest history reaches
+void check_reached(const Node &node, const std::set<const Node *> &reached) {
+	for (const auto &c : node.children) {
+		if (c.honest && !reached.count(&node))
+			fail(c.line, "action " + c.action + " is marked honest, but the honest history does not reach it");
+		check_reached(*c.child, reached);
+	}
+	for (const auto &c : node.conditions)
+		check_reached(*c.child, reached);
+}
+
+bool any_marked(const Node &node) {
+	for (const auto &c : node.children)
+		if (c.honest || any_marked(*c.child))
+			return true;
+	for (const auto &c : node.conditions)
+		if (any_marked(*c.child))
+			return true;
+	return false;
 }
 
 json parse_utilities(size_t line, const std::string &text, const std::vector<std::string> &players) {
@@ -410,13 +549,21 @@ bool looks_like_json(const std::string &text) {
 	return first != std::string::npos && text[first] == '{';
 }
 
-std::string to_compact(const json &game) {
+namespace {
+
+std::string write_game(const json &game, const Marks &marks) {
 	std::ostringstream out;
-	for (const json &p : game["players"])
-		check_name(p, "player");
-	out << "players: " << join(game["players"], ", ") << "\n";
-	write_declarations(out, game, "constants");
-	write_declarations(out, game, "infinitesimals");
+	const json descriptions = game.value("descriptions", json::object());
+	if (!descriptions.is_object())
+		throw CompactError("cannot write descriptions compactly: they must be an object");
+	std::set<std::string> described;
+	write_names(out, "players", game["players"], descriptions, described);
+	write_declarations(out, game, "constants", descriptions, described);
+	write_declarations(out, game, "infinitesimals", descriptions, described);
+	for (const auto &d : descriptions.items())
+		if (!described.count(d.key()))
+			throw CompactError("cannot write the description of " + d.key() +
+				" compactly: only players, constants and infinitesimals have descriptions");
 	if (game.contains("initial_constraints"))
 		for (const json &c : game["initial_constraints"]) {
 			check_text(c.get<std::string>());
@@ -429,7 +576,7 @@ std::string to_compact(const json &game) {
 					check_text(c.get<std::string>());
 					out << p << ": " << c.get<std::string>() << "\n";
 				}
-	if (game.contains("honest_histories"))
+	if (game.contains("honest_histories") && marks.empty())
 		for (const json &h : game["honest_histories"]) {
 			std::string text = honest_text(h);
 			out << "honest:" << (text.empty() ? "" : " " + text) << "\n";
@@ -441,8 +588,29 @@ std::string to_compact(const json &game) {
 	if (!tree.contains("children") && !condition_node(tree))
 		throw CompactError("the root of the tree must be a node with actions or conditions");
 	out << "\n" << head(tree) << "\n";
-	write_node(out, tree, 2);
+	write_node(out, tree, 2, marks);
 	return out.str();
+}
+
+}
+
+// Honest histories are marked in the tree when reading that back gives exactly the same histories, in the same
+// order; otherwise (e.g. a history listed twice) they are written as honest: lines.
+std::string to_compact(const json &game) {
+	Marks marks;
+	const json &histories = game.value("honest_histories", json::array());
+	bool markable = histories.is_array() && !histories.empty() && game.contains("tree");
+	for (size_t i = 0; markable && i < histories.size(); i++)
+		markable = histories[i].is_array() && !histories[i].empty() && mark(game["tree"], histories[i], 0, marks);
+	if (markable) {
+		std::string text = write_game(game, marks);
+		try {
+			if (from_compact(text)["honest_histories"] == histories)
+				return text;
+		} catch (const CompactError &) {
+		}
+	}
+	return write_game(game, Marks());
 }
 
 json from_compact(const std::string &text, LineMap *lines) {
@@ -450,7 +618,8 @@ json from_compact(const std::string &text, LineMap *lines) {
 	LineMap &at = lines ? *lines : ignored;
 	std::vector<std::string> players, constants, infinitesimals, unknown_constants, unknown_infinitesimals;
 	json initial = json::array(), honest = json::array(), honest_utilities = json::array();
-	json property = json::object();
+	json property = json::object(), descriptions = json::object();
+	size_t first_honest_line = 0;
 	for (const char *p : PROPERTIES)
 		property[p] = json::array();
 	bool has_players = false;
@@ -465,6 +634,8 @@ json from_compact(const std::string &text, LineMap *lines) {
 		line++;
 		size_t hash = raw.find('#');
 		std::string content = raw.substr(0, hash);
+		// a comment at the end of a line that declares one name, or of a branch, describes it
+		std::string description = hash == std::string::npos ? "" : trim(raw.substr(hash + 1));
 		if (trim(content).empty())
 			continue;
 		if (content.find('\t') != std::string::npos)
@@ -480,12 +651,15 @@ json from_compact(const std::string &text, LineMap *lines) {
 			if (indent == 0 && colon != std::string::npos && colon < arrow) {
 				std::string key = trim(body.substr(0, colon)), value = trim(body.substr(colon + 1));
 				auto names = [&](std::vector<std::string> &into) {
-					for (const std::string &n : split(value, ",")) {
+					std::vector<std::string> parts = split(value, ",");
+					for (const std::string &n : parts) {
 						std::string name = trim(n);
 						if (!plain_name(name))
 							fail(line, "bad name \"" + name + "\" in " + key);
 						into.push_back(name);
 					}
+					if (parts.size() == 1 && !description.empty())
+						descriptions[trim(parts[0])] = description;
 				};
 				if (key == "players" || key == "constants" || key == "infinitesimals" ||
 						key == "unknown_constants" || key == "unknown_infinitesimals")
@@ -508,6 +682,8 @@ json from_compact(const std::string &text, LineMap *lines) {
 					at["property/" + key + "/" + std::to_string(property[key].size())] = line;
 					property[key].push_back(value);
 				} else if (key == "honest") {
+					if (!first_honest_line)
+						first_honest_line = line;
 					at["honest/" + std::to_string(honest.size())] = line;
 					Value v{line, value};
 					honest.push_back(v.history());
@@ -533,6 +709,7 @@ json from_compact(const std::string &text, LineMap *lines) {
 			if (!parse_node(line, body, players, *root))
 				fail(line, "the root of the tree must be a node with actions or conditions");
 			root->key = "tree";
+			root->line = line;
 			at["tree"] = line;
 			stack.push_back({indent, root.get()});
 			continue;
@@ -559,12 +736,13 @@ json from_compact(const std::string &text, LineMap *lines) {
 				fail(line, "missing condition after if");
 			std::unique_ptr<Node> child(new Node());
 			child->key = parent->key + "/condition " + std::to_string(parent->conditions.size() + 1);
+			child->line = line;
 			at[child->key] = line;
 			std::string rest = trim(body.substr(arrow + 2));
 			if (rest.empty())
 				fail(line, "missing node after ->");
 			Node *open = parse_node(line, rest, players, *child) ? child.get() : nullptr;
-			parent->conditions.push_back({condition, name, std::move(child)});
+			parent->conditions.push_back({condition, name, description, std::move(child)});
 			if (open)
 				stack.push_back({indent, open});
 			continue;
@@ -572,19 +750,23 @@ json from_compact(const std::string &text, LineMap *lines) {
 		if (arrow == std::string::npos)
 			fail(line, "expected ACTION -> ..., got \"" + body + "\"");
 		std::string action = trim(body.substr(0, arrow)), rest = trim(body.substr(arrow + 2));
+		bool marked = action.compare(0, 7, "honest ") == 0;
+		if (marked)
+			action = trim(action.substr(7));
 		if (!plain_name(action))
 			fail(line, "bad action name \"" + action + "\"");
 		for (const auto &c : parent->children)
-			if (c.first == action)
+			if (c.action == action)
 				fail(line, "action " + action + " appears twice at the same node");
 
 		std::unique_ptr<Node> child(new Node());
 		child->key = parent->key + "/" + action;
+		child->line = line;
 		at[child->key] = line;
 		if (rest.empty())
 			fail(line, "missing node after ->");
 		Node *open = parse_node(line, rest, players, *child) ? child.get() : nullptr;
-		parent->children.push_back({action, std::move(child)});
+		parent->children.push_back({action, description, marked, line, std::move(child)});
 		if (open)
 			stack.push_back({indent, open});
 	}
@@ -593,6 +775,17 @@ json from_compact(const std::string &text, LineMap *lines) {
 		throw CompactError("the game has no players: line");
 	if (!root)
 		throw CompactError("the game has no tree");
+
+	if (any_marked(*root)) {
+		if (first_honest_line)
+			fail(first_honest_line, "honest histories are given both by honest: lines and by actions marked honest in the tree");
+		std::set<const Node *> reached;
+		for (const auto &h : marked_histories(*root, reached)) {
+			at["honest/" + std::to_string(honest.size())] = h.second;
+			honest.push_back(h.first);
+		}
+		check_reached(*root, reached);
+	}
 
 	std::vector<std::string> actions;
 	std::set<std::string> seen;
@@ -612,6 +805,8 @@ json from_compact(const std::string &text, LineMap *lines) {
 	};
 	if (!honest_utilities.empty())
 		game["honest_utilities"] = honest_utilities;
+	if (!descriptions.empty())
+		game["descriptions"] = descriptions;
 	game["tree"] = tree;
 	return game;
 }

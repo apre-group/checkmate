@@ -459,9 +459,9 @@ CONDITION_FLAGS = []
 CONDITION_ERRORS = {"overlap": re.compile(r"checkmate: .*\boverlap: both hold for some values"),
                     "gap": re.compile(r"checkmate: .*(leave a gap: no condition holds|no condition of .* can hold)")}
 
-VERDICT = re.compile(r"^(YES|NO|UNKNOWN), .*?\b(weaker immune|weak immune|collusion resilient|practical)\b")
-PROPERTY = {"weak immune": "weak_immunity", "weaker immune": "weaker_immunity",
-            "collusion resilient": "collusion_resilience", "practical": "practicality"}
+VERDICT = re.compile(r"^  (weak immunity|weaker immunity|collusion resilience|practicality): (YES|NO|UNKNOWN)$")
+PROPERTY = {"weak immunity": "weak_immunity", "weaker immunity": "weaker_immunity",
+            "collusion resilience": "collusion_resilience", "practicality": "practicality"}
 
 
 def parse_verdicts(text):
@@ -470,14 +470,14 @@ def parse_verdicts(text):
     "none" for the run without honest history and "utility" for the index-th honest utility."""
     verdicts, kind, counts = {}, None, {}
     for line in text.split("\n"):
-        for prefix, k in [("Checking history ", "history"), ("Checking no honest history", "none"),
-                          ("Checking honest utility ", "utility")]:
+        for prefix, k in [("Honest history: ", "history"), ("Without an honest history:", "none"),
+                          ("Honest utility: ", "utility")]:
             if line.startswith(prefix):
                 kind = (k, counts.get(k, 0))
                 counts[k] = counts.get(k, 0) + 1
         m = VERDICT.match(line)
         if m and kind is not None:
-            verdicts[kind + (PROPERTY[m.group(2)],)] = {"YES": True, "NO": False, "UNKNOWN": None}[m.group(1)]
+            verdicts[kind + (PROPERTY[m.group(1)],)] = {"YES": True, "NO": False, "UNKNOWN": None}[m.group(2)]
     return verdicts
 
 

@@ -19,3 +19,5 @@ html/checkmate-convert.wasm
 html/build.json
 html/cvc5.js
 html/cvc5.wasm
+node_modules/
+html/js/

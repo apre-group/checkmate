@@ -1,0 +1,27 @@
+# A first example. Alice can lend Bob money, which Bob can use to make a profit. The honest play: Alice lends,
+# and Bob pays the money back with interest. But nothing stops Bob from keeping it; run CheckMate to see what
+# that means, and loan_with_deposit.rules for a fix.
+players: Alice  # has money to lend
+players: Bob    # needs money for a business
+constants: loan      # what Alice lends Bob
+constants: interest  # what Bob pays on top when he repays
+constants: profit    # what Bob makes with the money
+initial: loan > 0
+initial: interest > 0
+initial: profit > interest
+
+start: Alice
+
+honest move lend by Alice
+  next Bob
+
+move refuse by Alice  # nobody gains or loses anything
+  end
+
+honest move repay by Bob  # pays the loan back, with interest
+  pay Alice: interest, Bob: profit - interest
+  end
+
+move keep by Bob  # keeps the money
+  pay Alice: -loan, Bob: profit + loan
+  end

@@ -1,0 +1,429 @@
+{
+  "results": [
+    {
+      "cases": [
+        {
+          "case": [],
+          "holds": true
+        }
+      ],
+      "counterexamples": [],
+      "history": [
+        "stay_out"
+      ],
+      "holds": true,
+      "property": "weak_immunity",
+      "strategies": [
+        {
+          "case": [],
+          "strategy": [
+            {
+              "action": "stay_out",
+              "history": [],
+              "player": "Newcomer"
+            },
+            {
+              "action": "share",
+              "history": [
+                "enter"
+              ],
+              "player": "Incumbent"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case": [],
+          "holds": true
+        }
+      ],
+      "counterexamples": [],
+      "history": [
+        "stay_out"
+      ],
+      "holds": true,
+      "property": "weaker_immunity",
+      "strategies": [
+        {
+          "case": [],
+          "strategy": [
+            {
+              "action": "stay_out",
+              "history": [],
+              "player": "Newcomer"
+            },
+            {
+              "action": "share",
+              "history": [
+                "enter"
+              ],
+              "player": "Incumbent"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case": [],
+          "holds": true
+        }
+      ],
+      "counterexamples": [],
+      "history": [
+        "stay_out"
+      ],
+      "holds": true,
+      "property": "collusion_resilience",
+      "strategies": [
+        {
+          "case": [],
+          "strategy": [
+            {
+              "action": "stay_out",
+              "history": [],
+              "player": "Newcomer"
+            },
+            {
+              "action": "fight",
+              "history": [
+                "enter"
+              ],
+              "player": "Incumbent"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case": [],
+          "holds": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "case": [],
+          "choices": [
+            {
+              "actions": [
+                "share"
+              ],
+              "history": [
+                "enter"
+              ],
+              "player": ""
+            }
+          ],
+          "cr_leaves": [],
+          "cr_more_omitted": false,
+          "player_group": [
+            "Newcomer"
+          ]
+        }
+      ],
+      "history": [
+        "stay_out"
+      ],
+      "holds": false,
+      "property": "practicality",
+      "strategies": []
+    },
+    {
+      "cases": [
+        {
+          "case": [],
+          "holds": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "case": [],
+          "choices": [
+            {
+              "actions": [
+                "fight"
+              ],
+              "history": [
+                "enter"
+              ],
+              "player": "Incumbent"
+            }
+          ],
+          "cr_leaves": [],
+          "cr_more_omitted": false,
+          "player_group": [
+            "Newcomer"
+          ]
+        }
+      ],
+      "history": [
+        "enter",
+        "share"
+      ],
+      "holds": false,
+      "property": "weak_immunity",
+      "strategies": []
+    },
+    {
+      "cases": [
+        {
+          "case": [],
+          "holds": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "case": [],
+          "choices": [
+            {
+              "actions": [
+                "fight"
+              ],
+              "history": [
+                "enter"
+              ],
+              "player": "Incumbent"
+            }
+          ],
+          "cr_leaves": [],
+          "cr_more_omitted": false,
+          "player_group": [
+            "Newcomer"
+          ]
+        }
+      ],
+      "history": [
+        "enter",
+        "share"
+      ],
+      "holds": false,
+      "property": "weaker_immunity",
+      "strategies": []
+    },
+    {
+      "cases": [
+        {
+          "case": [],
+          "holds": true
+        }
+      ],
+      "counterexamples": [],
+      "history": [
+        "enter",
+        "share"
+      ],
+      "holds": true,
+      "property": "collusion_resilience",
+      "strategies": [
+        {
+          "case": [],
+          "strategy": [
+            {
+              "action": "enter",
+              "history": [],
+              "player": "Newcomer"
+            },
+            {
+              "action": "share",
+              "history": [
+                "enter"
+              ],
+              "player": "Incumbent"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case": [],
+          "holds": true
+        }
+      ],
+      "counterexamples": [],
+      "history": [
+        "enter",
+        "share"
+      ],
+      "holds": true,
+      "property": "practicality",
+      "strategies": [
+        {
+          "case": [],
+          "strategy": [
+            {
+              "action": "enter",
+              "history": [],
+              "player": "Newcomer"
+            },
+            {
+              "action": "share",
+              "history": [
+                "enter"
+              ],
+              "player": "Incumbent"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "cases": [
+        {
+          "case": [],
+          "holds": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "case": [],
+          "choices": [
+            {
+              "actions": [
+                "enter"
+              ],
+              "history": [],
+              "player": "Newcomer"
+            }
+          ],
+          "cr_leaves": [],
+          "cr_more_omitted": false,
+          "player_group": [
+            "Incumbent"
+          ]
+        }
+      ],
+      "history": [
+        "enter",
+        "fight"
+      ],
+      "holds": false,
+      "property": "weak_immunity",
+      "strategies": []
+    },
+    {
+      "cases": [
+        {
+          "case": [],
+          "holds": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "case": [],
+          "choices": [
+            {
+              "actions": [
+                "enter"
+              ],
+              "history": [],
+              "player": "Newcomer"
+            }
+          ],
+          "cr_leaves": [],
+          "cr_more_omitted": false,
+          "player_group": [
+            "Incumbent"
+          ]
+        }
+      ],
+      "history": [
+        "enter",
+        "fight"
+      ],
+      "holds": false,
+      "property": "weaker_immunity",
+      "strategies": []
+    },
+    {
+      "cases": [
+        {
+          "case": [],
+          "holds": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "case": [],
+          "choices": [
+            {
+              "actions": [
+                "share"
+              ],
+              "history": [
+                "enter"
+              ],
+              "player": "Incumbent"
+            }
+          ],
+          "cr_leaves": [
+            {
+              "groups": [
+                [
+                  "Incumbent"
+                ]
+              ],
+              "history": [
+                "enter",
+                "share"
+              ],
+              "subtree": false
+            }
+          ],
+          "cr_more_omitted": false,
+          "player_group": []
+        }
+      ],
+      "history": [
+        "enter",
+        "fight"
+      ],
+      "holds": false,
+      "property": "collusion_resilience",
+      "strategies": []
+    },
+    {
+      "cases": [
+        {
+          "case": [],
+          "holds": false
+        }
+      ],
+      "counterexamples": [
+        {
+          "case": [],
+          "choices": [
+            {
+              "actions": [],
+              "history": [
+                "enter",
+                "share"
+              ],
+              "player": ""
+            }
+          ],
+          "cr_leaves": [],
+          "cr_more_omitted": false,
+          "player_group": [
+            "Incumbent"
+          ]
+        }
+      ],
+      "history": [
+        "enter",
+        "fight"
+      ],
+      "holds": false,
+      "property": "practicality",
+      "strategies": []
+    }
+  ],
+  "version": 1
+}

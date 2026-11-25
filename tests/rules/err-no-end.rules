@@ -1,0 +1,5 @@
+# expect: line 4: move go needs "next PLAYER" or "end" below it
+players: A, B
+
+honest move go by A
+  pay A: 1

@@ -1,0 +1,55 @@
+# Closing a payment channel (as examples/readable/closing_channel.game), described by its rules. Alice
+# closes the channel on her own, or asks Bob to close it together with her. She could also cheat by closing
+# with an old state of the channel, in which she had more; Bob can then punish her and take her balance.
+players: Alice
+players: Bob
+constants: bal_A   # Alice's balance in the channel
+constants: bal_B   # Bob's balance in the channel
+constants: fee     # what punishing costs Bob
+constants: stolen  # how much more Alice has in the old state
+infinitesimals: closed  # the benefit of having the channel closed
+infinitesimals: wait    # what closing on her own costs Alice: she has to wait for her money
+initial: closed > wait
+initial: wait > 0
+initial: bal_A > 0
+initial: bal_B > 0
+initial: fee > 0
+initial: stolen > 0
+initial: bal_B >= stolen
+weak_immunity: bal_A >= fee
+weaker_immunity: bal_A >= fee
+practicality: bal_A >= fee
+
+start: Alice
+state: cheated = no
+
+honest move close_alone by Alice
+  pay Alice: closed - wait, Bob: closed
+  end
+
+honest move propose_close by Alice  # asks Bob to sign the closing
+  next Bob
+
+move close_old_state by Alice  # cheats
+  set cheated = yes
+  next Bob
+
+honest move sign by Bob
+  if not cheated
+  pay Alice: closed, Bob: closed
+  end
+
+move ignore by Bob  # the money stays locked in the channel
+  if not cheated
+  pay Alice: -bal_A, Bob: -bal_B
+  end
+
+move ignore by Bob
+  if cheated
+  pay Alice: stolen + closed - wait, Bob: -stolen + closed
+  end
+
+honest move punish by Bob  # takes Alice's balance
+  if cheated
+  pay Alice: -bal_A, Bob: bal_A - fee + closed
+  end

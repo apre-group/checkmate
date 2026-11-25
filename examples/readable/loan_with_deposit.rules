@@ -1,0 +1,29 @@
+# The loan of loan.rules, made safe: before Alice lends, Bob leaves a deposit with her, which she keeps if he
+# does not pay the money back, and returns if he does. With a deposit at least as large as the loan and the
+# interest together, keeping the money no longer pays off for Bob. Try making the deposit smaller.
+players: Alice  # has money to lend
+players: Bob    # needs money for a business
+constants: loan      # what Alice lends Bob
+constants: interest  # what Bob pays on top when he repays
+constants: profit    # what Bob makes with the money
+constants: deposit   # what Bob leaves with Alice
+initial: loan > 0
+initial: interest > 0
+initial: profit > interest
+initial: deposit >= loan + interest
+
+start: Alice
+
+honest move lend by Alice
+  next Bob
+
+move refuse by Alice  # nobody gains or loses anything
+  end
+
+honest move repay by Bob  # pays the loan back, with interest, and gets the deposit back
+  pay Alice: interest, Bob: profit - interest
+  end
+
+move keep by Bob  # keeps the money, and loses the deposit
+  pay Alice: deposit - loan, Bob: profit + loan - deposit
+  end

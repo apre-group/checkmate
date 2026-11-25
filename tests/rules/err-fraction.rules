@@ -1,0 +1,5 @@
+# expect: line 3: the payoff has the coefficient 1/3
+players: A, B
+honest move go by A
+  pay A: 1 / 3
+  end

@@ -1,0 +1,22 @@
+# payoffs add up along a play and are simplified; numbers in the state can be paid
+players: A, B
+constants: x, y
+infinitesimals: e
+state: n = 0.5, done = no
+
+start: B
+honest move add by A, B
+  if not done
+  set n = n * 2, done = yes
+  pay me: x / 4 + 0.1 + n, other: e - y
+  next other
+
+honest move cancel by A
+  if done
+  pay A: -x / 4 - 0.6, B: y - e + x * y * 2 + y * x
+  end
+
+move keep by A
+  if done
+  pay A: 3 * (x - x) + 0, B: 0.2 * e
+  end

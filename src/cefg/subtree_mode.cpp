@@ -2,6 +2,7 @@
 #include <sstream>
 
 #include "subtree_mode.hpp"
+#include "../style.hpp"
 #include "property_checks.hpp"
 #include "selectors.hpp"
 
@@ -41,12 +42,16 @@ static SubtreeResult subtree_result(const std::vector<std::string> &player_group
 	return subtree_result;
 }
 
-static void print_result(const char *what, const std::vector<std::string> &player_group, bool holds) {
-	if (holds) {
-		std::cout << "YES, the subtree is " << what << player_group << "." << std::endl;
-	} else {
-		std::cout << "NO, the subtree is not " << what << player_group << "." << std::endl;
-	}
+// e.g. "  weak immunity for A: YES"
+static void print_result(const std::string &what, bool holds) {
+	std::cout << "  " << what << ": " << style::verdict(holds) << std::endl;
+}
+
+static std::string players_text(const std::vector<std::string> &players) {
+	std::string text;
+	for (size_t i = 0; i < players.size(); i++)
+		text += (i ? (i + 1 == players.size() ? " and " : ", ") : "") + players[i];
+	return players.size() > 1 ? text + " together" : text;
 }
 
 SubtreeResults subtree_mode(const Options &options, const Input &input, const UtilityTuplesSet &ustar) {
@@ -64,12 +69,11 @@ SubtreeResults subtree_mode(const Options &options, const Input &input, const Ut
 		for (unsigned player = 0; player < input.players.size(); player++) {
 			z3::Bool result = computeCWI(input, input.root.get(), ic, player, weaker);
 			bool holds_for_player = !violated_somewhere(ic, result);
-			print_result(weaker ? "weaker immune for player " : "weak immune for player ", {input.players[player]}, holds_for_player);
+			print_result(std::string(weaker ? "weaker immunity" : "weak immunity") + " for " + input.players[player], holds_for_player);
 			holds = holds && holds_for_player;
 			property_results.push_back(subtree_result({input.players[player]}, ic, result, holds_for_player));
 		}
-		std::cout << (holds ? "YES, the subtree is " : "NO, the subtree is not ") << (weaker ? "weaker immune" : "weak immune")
-			<< " for the analyzed history." << std::endl;
+		print_result(weaker ? "weaker immunity" : "weak immunity", holds);
 	}
 
 	// collusion resilience: ComputeCCR for every group except the group of all players
@@ -82,10 +86,11 @@ SubtreeResults subtree_mode(const Options &options, const Input &input, const Ut
 		for (uint64_t group = 0; group < all_players; group++) {
 			z3::Bool result = computeCCR(input, input.root.get(), ustar, ic, z3::Bool(true), group, cache);
 			bool holds = !violated_somewhere(ic, result);
-			print_result("collusion resilient against group ", group_names(input, group), holds);
+			print_result(group == 0 ? "collusion resilience before anyone deviated"
+				: "collusion resilience against " + players_text(group_names(input, group)), holds);
 			results.collusion_resilience.push_back(subtree_result(group_names(input, group), ic, result, holds));
 			if (group == 0) {
-				std::cout << (holds ? "YES, the subtree is " : "NO, the subtree is not ") << "collusion resilient for the analyzed history." << std::endl;
+				print_result("collusion resilience", holds);
 			}
 		}
 	}
@@ -101,9 +106,9 @@ SubtreeResults subtree_mode(const Options &options, const Input &input, const Ut
 			Answer answer = check_practicality(input, ic, result, how);
 			bool holds = answer == Answer::YES;
 			if (answer == Answer::UNKNOWN) {
-				std::cout << "UNKNOWN, could not decide whether the subtree is practical for the analyzed history: " << how << "." << std::endl;
+				std::cout << "  practicality: " << style::unknown() << std::endl << "    could not decide it: " << how << std::endl;
 			} else {
-				std::cout << (holds ? "YES, the subtree is " : "NO, the subtree is not ") << "practical for the analyzed history." << std::endl;
+				print_result("practicality", holds);
 			}
 			SubtreeResult normalised = subtree_result({}, ic, result, holds);
 			if (!normalised.satisfied_in_case.empty()) {
@@ -126,8 +131,8 @@ SubtreeResults subtree_mode(const Options &options, const Input &input, const Ut
 				}
 				results.practicality.push_back(std::move(rationalizable));
 			}
-			std::cout << "The subtree has " << candidates.size() << " rationalizable utility set"
-				<< (candidates.size() == 1 ? "" : "s") << " off the honest history." << std::endl;
+			std::cout << "  practicality: " << candidates.size() << " rationalizable utility set"
+				<< (candidates.size() == 1 ? "" : "s") << " off the honest history" << std::endl;
 		}
 	}
 

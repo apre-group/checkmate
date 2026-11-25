@@ -24,6 +24,40 @@ struct Context {
 	}
 };
 
+// "descriptions": {NAME: text} for players, constants and infinitesimals, and "description" on branches and
+// conditions; CheckMate itself does not use them
+void check_descriptions(const Context &ctx, const json &game) {
+	if (game.contains("descriptions")) {
+		const json &d = game["descriptions"];
+		if (!d.is_object())
+			throw GameError("descriptions must be an object from names to texts");
+		for (const auto &item : d.items()) {
+			if (!ctx.players.count(item.key()) && !ctx.symbols.count(item.key()))
+				throw GameError("descriptions: " + item.key() + " is not a player, constant or infinitesimal");
+			if (!item.value().is_string())
+				throw GameError("descriptions: the description of " + item.key() + " must be a string");
+		}
+	}
+	std::vector<const json *> todo = {&game["tree"]};
+	while (!todo.empty()) {
+		const json &node = *todo.back();
+		todo.pop_back();
+		if (!node.is_object())
+			continue;
+		for (const char *key : {"children", "condition"})
+			if (node.contains(key) && node[key].is_array())
+				for (const json &branch : node[key]) {
+					if (!branch.is_object())
+						continue;
+					if (branch.contains("description") && !branch["description"].is_string())
+						throw GameError("the description of " + (branch.contains("action") ? "action " + branch["action"].dump()
+							: "condition " + branch.value("constraint", json()).dump()) + " must be a string");
+					if (branch.contains("child"))
+						todo.push_back(&branch["child"]);
+				}
+	}
+}
+
 std::string history_text(const std::vector<std::string> &history) {
 	std::string s;
 	for (const std::string &a : history)
@@ -608,7 +642,8 @@ void validate_game(const json &game, const LineMap *lines) {
 		honest += us.size();
 	}
 	if (!honest)
-		throw GameError("the game needs an honest history (honest: ...), or honest utilities for a subtree");
+		throw GameError("the game needs an honest history (honest: ..., or actions marked honest in the tree), or honest utilities for a subtree");
+	check_descriptions(ctx, game);
 }
 
 
@@ -665,4 +700,5 @@ void validate_cefg(const json &game, const LineMap *lines) {
 	}
 	if (!honest)
 		throw GameError("the game needs honest_histories, or honest_utilities for a subtree");
+	check_descriptions(cefg.ctx, game);
 }

@@ -1,3 +1,5 @@
+#include <sstream>
+
 #include "z3++.hpp"
 
 // imported from the cefg branch (c9c6e6f); wrapped in namespace cefg next to the EFG engine in src/
@@ -17,6 +19,8 @@ namespace z3 {
 	void initialize() {
 		Z3_config config = Z3_mk_config();
 		CONTEXT = Z3_mk_context(config);
+		// errors are checked for after each call (check_error), so a failing check can be handled
+		Z3_set_error_handler(CONTEXT, nullptr);
 		Z3_del_config(config);
 		check_error();
 		Expression::BOOL_SORT = Z3_mk_bool_sort(CONTEXT);
@@ -137,6 +141,132 @@ namespace z3 {
 		}
 		assert(false);
 		UNREACHABLE;
+	}
+
+	// as pretty in src/z3++.cpp; anything unusual (quantifiers, selectors) is written as operator<< does
+	struct Pretty {
+		enum { SUM = 1, PRODUCT, NEGATION, ATOM };
+		enum { OR = 1, AND, NOT, COMPARISON };
+
+		static std::string wrap(const std::string &text, int precedence, int outer) {
+			return precedence < outer ? "(" + text + ")" : text;
+		}
+
+		static std::string streamed(Real expr) {
+			std::ostringstream out;
+			out << expr;
+			return out.str();
+		}
+
+		static std::string streamed(Bool expr) {
+			std::ostringstream out;
+			out << expr;
+			return out.str();
+		}
+
+		static std::string numeral(Real expr) {
+			std::string text = Z3_get_numeral_string(CONTEXT, expr.ast);
+			check_error();
+			return text;
+		}
+
+		static bool negative(Real expr) {
+			return expr.op() == Real::Operator::MIN || (expr.op() == Real::Operator::NUMERAL && numeral(expr)[0] == '-');
+		}
+
+		static std::string negated(Real expr, int outer) {
+			if (expr.op() == Real::Operator::MIN)
+				return real(expr.real_child(0), outer);
+			std::string number = numeral(expr);
+			return wrap(number.substr(1), number.find('/') != std::string::npos ? PRODUCT : ATOM, outer);
+		}
+
+		static std::string real(Real expr, int outer) {
+			switch (expr.op()) {
+			case Real::Operator::NUMERAL: {
+				std::string number = numeral(expr);
+				return wrap(number, number[0] == '-' ? NEGATION : number.find('/') != std::string::npos ? PRODUCT : ATOM, outer);
+			}
+			case Real::Operator::CONSTANT:
+				return streamed(expr);
+			case Real::Operator::MIN:
+				return wrap("-" + real(expr.real_child(0), NEGATION), NEGATION, outer);
+			case Real::Operator::ADD:
+			case Real::Operator::SUB: {
+				std::string text = real(expr.real_child(0), SUM);
+				for (unsigned i = 1; i < expr.num_args(); i++) {
+					Real child = expr.real_child(i);
+					bool minus = expr.op() == Real::Operator::SUB;
+					if (negative(child))
+						text += (minus ? " + " : " - ") + negated(child, minus ? SUM : PRODUCT);
+					else
+						text += (minus ? " - " : " + ") + real(child, minus ? PRODUCT : SUM);
+				}
+				return wrap(text, SUM, outer);
+			}
+			case Real::Operator::MUL:
+			case Real::Operator::DIV: {
+				std::string text = real(expr.real_child(0), PRODUCT);
+				for (unsigned i = 1; i < expr.num_args(); i++)
+					text += expr.op() == Real::Operator::MUL ? " * " + real(expr.real_child(i), PRODUCT)
+						: " / " + real(expr.real_child(i), NEGATION);
+				return wrap(text, PRODUCT, outer);
+			}
+			}
+			return streamed(expr);
+		}
+
+		static const char *comparison(Bool::Operator op, bool inverted) {
+			switch (op) {
+			case Bool::Operator::EQ: return inverted ? "!=" : "=";
+			case Bool::Operator::NE: return inverted ? "=" : "!=";
+			case Bool::Operator::LT: return inverted ? ">=" : "<";
+			case Bool::Operator::LE: return inverted ? ">" : "<=";
+			case Bool::Operator::GT: return inverted ? "<=" : ">";
+			case Bool::Operator::GE: return inverted ? "<" : ">=";
+			default: return nullptr;
+			}
+		}
+
+		// a comparison of numbers (EQ and NE can also compare Bools)
+		static bool numeric(Bool expr) {
+			if (!comparison(expr.op(), false))
+				return false;
+			Z3_ast first = Z3_get_app_arg(CONTEXT, Z3_to_app(CONTEXT, expr.ast), 0);
+			bool result = Z3_get_sort(CONTEXT, first) == Expression::REAL_SORT;
+			check_error();
+			return result;
+		}
+
+		static std::string boolean(Bool expr, int outer) {
+			auto op = expr.op();
+			if (op == Bool::Operator::TRUE)
+				return "true";
+			if (op == Bool::Operator::FALSE)
+				return "false";
+			if (op == Bool::Operator::NOT) {
+				Bool child = expr.bool_child(0);
+				if (numeric(child))
+					return wrap(real(child.real_child(0), SUM) + " " + comparison(child.op(), true) + " " +
+						real(child.real_child(1), SUM), COMPARISON, outer);
+				return wrap("not " + boolean(child, NOT), NOT, outer);
+			}
+			if ((op == Bool::Operator::AND || op == Bool::Operator::OR) && expr.num_args() > 0) {
+				int precedence = op == Bool::Operator::AND ? AND : OR;
+				std::string text;
+				for (unsigned i = 0; i < expr.num_args(); i++)
+					text += (i ? (op == Bool::Operator::AND ? " and " : " or ") : "") + boolean(expr.bool_child(i), precedence);
+				return wrap(text, precedence, outer);
+			}
+			if (numeric(expr))
+				return wrap(real(expr.real_child(0), SUM) + " " + comparison(op, false) + " " + real(expr.real_child(1), SUM),
+					COMPARISON, outer);
+			return streamed(expr);
+		}
+	};
+
+	std::string pretty(Bool expr) {
+		return Pretty::boolean(expr, 0);
 	}
 }
 
